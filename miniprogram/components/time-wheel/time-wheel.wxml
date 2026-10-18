@@ -1,0 +1,65 @@
+<view class="tw">
+  <view class="tw-cols">
+    <view class="tw-col tw-col-left">
+      <scroll-view
+        class="tw-scroll"
+        scroll-y
+        enhanced
+        show-scrollbar="{{false}}"
+        scroll-with-animation="{{false}}"
+        scroll-top="{{hourTop}}"
+        style="height:{{wheelH}}px;"
+        bindscroll="onHourScroll"
+      >
+        <view style="height:{{padH}}px;"></view>
+        <view
+          wx:for="{{hourItems}}"
+          wx:key="key"
+          class="tw-item {{item.v === selH ? 'is-on' : ''}}"
+          style="height:{{rowH}}px;line-height:{{rowH}}px;"
+        >{{item.label}}</view>
+        <view style="height:{{padH}}px;"></view>
+      </scroll-view>
+    </view>
+
+    <view class="tw-col tw-col-right">
+      <scroll-view
+        class="tw-scroll"
+        scroll-y
+        enhanced
+        show-scrollbar="{{false}}"
+        scroll-with-animation="{{false}}"
+        scroll-top="{{minuteTop}}"
+        style="height:{{wheelH}}px;"
+        bindscroll="onMinuteScroll"
+      >
+        <view style="height:{{padH}}px;"></view>
+        <view
+          wx:for="{{minuteItems}}"
+          wx:key="key"
+          class="tw-item {{item.v === selM ? 'is-on' : ''}}"
+          style="height:{{rowH}}px;line-height:{{rowH}}px;"
+        >{{item.label}}</view>
+        <view style="height:{{padH}}px;"></view>
+      </scroll-view>
+    </view>
+
+    <view class="tw-band"></view>
+    <text class="tw-colon">:</text>
+    <view class="tw-mask tw-mask-top"></view>
+    <view class="tw-mask tw-mask-bottom"></view>
+  </view>
+
+  <view class="tw-period">
+    <view
+      class="tw-period-btn {{period === '上午' ? 'is-on' : ''}}"
+      data-period="上午"
+      bindtap="onPeriodTap"
+    >上午</view>
+    <view
+      class="tw-period-btn {{period === '下午' ? 'is-on' : ''}}"
+      data-period="下午"
+      bindtap="onPeriodTap"
+    >下午</view>
+  </view>
+</view>

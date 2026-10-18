@@ -1,0 +1,109 @@
+<ambient />
+<top-bar title="统计" style="display:block;width:100%;" />
+
+<view class="page stats-page">
+  <view class="stats-hero fade-up">
+    <text class="eyebrow">REVIEW</text>
+    <text class="title-xl">回顾</text>
+    <text class="sub">只看数据，不做评价</text>
+  </view>
+
+  <block wx:if="{{!hasData}}">
+    <empty-state
+      title="还没有记录"
+      desc="打一次卡，这里就会长出第一格。"
+      actionText="去入睡"
+      bind:action="goHome"
+    />
+  </block>
+
+  <block wx:else>
+    <view class="metrics fade-up">
+      <view class="metric sleep-glass-card">
+        <text class="metric-key">平均入睡</text>
+        <text class="metric-value">{{avgBed}}</text>
+      </view>
+      <view class="metric sleep-glass-card">
+        <text class="metric-key">平均起床</text>
+        <text class="metric-value">{{avgWake}}</text>
+      </view>
+      <view class="metric sleep-glass-card">
+        <text class="metric-key">平均时长</text>
+        <text class="metric-value is-small">{{avgDuration}}</text>
+      </view>
+    </view>
+
+    <view class="week-line fade-up">
+      <text>本周打卡 {{weekCount}} 天</text>
+      <text class="week-dot">·</text>
+      <text>连续 {{streak}} 天</text>
+    </view>
+
+    <view class="panel sleep-glass-card fade-up">
+      <view class="panel-head">
+        <text class="panel-title">打卡热力图</text>
+        <view class="seg">
+          <view
+            wx:for="{{rangeOptions}}"
+            wx:key="value"
+            class="seg-item {{range === item.value ? 'is-on' : ''}}"
+            data-value="{{item.value}}"
+            bindtap="onRangeTap"
+          >{{item.label}}</view>
+        </view>
+      </view>
+
+      <heatmap
+        cells="{{cells}}"
+        colCount="{{colCount}}"
+        months="{{months}}"
+        bind:celltap="onHeatTap"
+      />
+
+      <text class="heat-note">共 {{marked}} 天有完整记录</text>
+      <view class="poster-row">
+        <text class="poster-btn" bindtap="onMakePoster">生成月度海报</text>
+      </view>
+    </view>
+
+    <view wx:if="{{factState !== 'off' && factState !== 'idle'}}" class="panel sleep-glass-card fade-up">
+      <view class="panel-head">
+        <text class="panel-title">本周事实回顾</text>
+        <text class="panel-tag">只陈述数据</text>
+      </view>
+
+      <block wx:if="{{factState === 'loading'}}">
+        <text class="fact-muted">正在整理本周数据…</text>
+      </block>
+
+      <block wx:elif="{{factState === 'ok'}}">
+        <text class="fact-text">{{fact}}</text>
+      </block>
+
+      <block wx:elif="{{factState === 'insufficient'}}">
+        <text class="fact-muted">本周记录满 3 天后可查看回顾</text>
+      </block>
+
+      <block wx:elif="{{factState === 'error'}}">
+        <view class="fact-error">
+          <text class="fact-muted">回顾暂时不可用</text>
+          <text class="fact-retry" bindtap="onFactRetry">重试</text>
+        </view>
+      </block>
+    </view>
+  </block>
+
+  <view class="sync-card sleep-glass-card fade-up">
+    <view class="sync-info">
+      <text class="sync-title">云同步</text>
+      <text class="sync-sub">{{syncText}}</text>
+    </view>
+    <view class="sync-btn {{syncBusy ? 'is-busy' : ''}}" bindtap="onSyncTap">{{syncBusy ? '同步中…' : '同步'}}</view>
+  </view>
+
+  <view class="danger-link fade-up" bindtap="onClearData">清除数据（云端+本机）</view>
+
+  <canvas canvas-id="poster" class="poster-canvas"></canvas>
+
+  <view class="safe-bottom"></view>
+</view>

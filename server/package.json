@@ -1,0 +1,21 @@
+{
+  "name": "sleep-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "睡点 · 轻量 API（配置下发 / 音频解锁 / 事实总结 / 记录同步）",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "cos-nodejs-sdk-v5": "^3.0.0",
+    "express": "^4.21.2",
+    "multer": "^2.4.0",
+    "pg": "^8.13.1"
+  }
+}

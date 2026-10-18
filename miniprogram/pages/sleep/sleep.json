@@ -1,0 +1,9 @@
+{
+  "navigationBarTitleText": "入睡",
+  "backgroundColor": "#080B14",
+  "usingComponents": {
+    "ambient": "/components/ambient/ambient",
+    "top-bar": "/components/top-bar/top-bar",
+    "audio-dock": "/components/audio-dock/audio-dock"
+  }
+}

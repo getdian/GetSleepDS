@@ -1,0 +1,79 @@
+:host {
+  display: block;
+}
+
+.topbar-spacer {
+  width: 100%;
+  pointer-events: none;
+}
+
+.topbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  width: 100%;
+  background: transparent;
+  pointer-events: none;
+}
+
+.topbar-glow {
+  position: absolute;
+  top: -40rpx;
+  left: -60rpx;
+  width: 520rpx;
+  height: 220rpx;
+  pointer-events: none;
+  background: radial-gradient(50% 60% at 40% 50%, rgba(129, 140, 248, 0.16), transparent 72%);
+  opacity: 0.75;
+}
+
+.topbar-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding-left: 28rpx;
+  box-sizing: border-box;
+}
+
+.island {
+  display: inline-flex;
+  align-items: center;
+  gap: 10rpx;
+  padding: 10rpx 24rpx;
+  border-radius: var(--radius-pill);
+  border: 1rpx solid var(--border-moon-subtle);
+  background: var(--glass-card-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: 0 12rpx 32rpx rgba(0, 0, 0, 0.28);
+  pointer-events: auto;
+}
+
+.island-orb {
+  width: 14rpx;
+  height: 14rpx;
+  border-radius: 50%;
+  background: var(--color-accent-moon);
+  box-shadow: 0 0 18rpx var(--color-accent-moon);
+}
+
+.island-brand {
+  font-family: var(--font-cn-serif);
+  font-size: 22rpx;
+  letter-spacing: 4rpx;
+  color: var(--text-secondary);
+}
+
+.island-sep {
+  font-size: 18rpx;
+  color: var(--text-muted);
+}
+
+.island-title {
+  font-family: var(--font-cn-serif);
+  font-size: 24rpx;
+  letter-spacing: 3rpx;
+  color: var(--text-moon-pure);
+}

@@ -1,0 +1,12 @@
+{
+  "navigationBarTitleText": "统计",
+  "backgroundColor": "#080B14",
+  "enablePullDownRefresh": true,
+  "backgroundTextStyle": "light",
+  "usingComponents": {
+    "ambient": "/components/ambient/ambient",
+    "top-bar": "/components/top-bar/top-bar",
+    "heatmap": "/components/heatmap/heatmap",
+    "empty-state": "/components/empty-state/empty-state"
+  }
+}

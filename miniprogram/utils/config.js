@@ -1,0 +1,54 @@
+const FALLBACK = require('../config/fallback')
+const api = require('./api')
+const storage = require('./storage')
+
+const CACHE_TTL = 10 * 60 * 1000
+
+let memory = null
+
+function merge(raw) {
+  if (!raw) return FALLBACK
+  return {
+    version: raw.version || FALLBACK.version,
+    audio: Array.isArray(raw.audio) && raw.audio.length ? raw.audio : FALLBACK.audio,
+    unlock: Object.assign({}, FALLBACK.unlock, raw.unlock || {}),
+    features: Object.assign({}, FALLBACK.features, raw.features || {}),
+    cache: Object.assign({}, FALLBACK.cache, raw.cache || {}),
+    copy: Object.assign({}, FALLBACK.copy, raw.copy || {})
+  }
+}
+
+function getConfig() {
+  if (memory) return memory
+  const cache = storage.getConfigCache()
+  memory = merge(cache ? cache.data : null)
+  return memory
+}
+
+/**
+ * 拉取远程配置。任何失败都不抛出，返回缓存或内置兜底。
+ */
+function loadConfig(force) {
+  const cache = storage.getConfigCache()
+  if (!force && cache && Date.now() - cache.fetchedAt < CACHE_TTL) {
+    memory = merge(cache.data)
+    return Promise.resolve(memory)
+  }
+
+  return api
+    .fetchConfig()
+    .then((data) => {
+      storage.setConfigCache(data)
+      memory = merge(data)
+      return memory
+    })
+    .catch(() => {
+      memory = merge(cache ? cache.data : null)
+      return memory
+    })
+}
+
+module.exports = {
+  getConfig,
+  loadConfig
+}

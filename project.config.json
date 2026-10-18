@@ -1,0 +1,22 @@
+{
+  "appid": "wxaa4e654a147d030d",
+  "projectname": "get-sleep",
+  "compileType": "miniprogram",
+  "miniprogramRoot": "miniprogram/",
+  "libVersion": "3.5.5",
+  "setting": {
+    "urlCheck": false,
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": true,
+    "coverView": true,
+    "useCompilerModule": true,
+    "showShadowRootInWxmlPanel": true
+  },
+  "condition": {},
+  "editorSetting": {
+    "tabIndent": "space",
+    "tabSize": 2
+  }
+}

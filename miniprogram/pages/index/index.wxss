@@ -1,0 +1,348 @@
+.calc-page {
+  padding-top: 8rpx;
+}
+
+.calc-hero {
+  margin-bottom: 28rpx;
+}
+
+.calc-hero .title-xl {
+  margin-top: 10rpx;
+}
+
+.calc-hero .sub {
+  margin-top: 12rpx;
+}
+
+/* 入睡耗时 */
+.fall-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+  padding: 10rpx 14rpx 10rpx 24rpx;
+  border: 1rpx solid var(--border-moon-subtle);
+  border-radius: var(--radius-pill);
+  background: var(--glass-card-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+
+.fall-label {
+  flex: none;
+  font-size: 22rpx;
+  line-height: 1.2;
+  color: var(--text-secondary);
+  letter-spacing: 2rpx;
+}
+
+.fall-chips {
+  display: flex;
+  gap: 6rpx;
+}
+
+.fall-chip {
+  display: flex;
+  align-items: baseline;
+  gap: 2rpx;
+  padding: 8rpx 18rpx;
+  border-radius: var(--radius-pill);
+  border: 1rpx solid transparent;
+  font-size: 22rpx;
+  line-height: 1.2;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  transition: all 0.2s var(--ease-spring);
+}
+
+.fall-unit {
+  font-size: 18rpx;
+}
+
+.fall-chip.is-on {
+  color: var(--text-moon-pure);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+  box-shadow: 0 6rpx 18rpx rgba(99, 102, 241, 0.3);
+}
+
+/* 计算卡 */
+.calc-card {
+  margin-top: 24rpx;
+  padding: 0;
+  transition: border-color 0.35s ease, background 0.35s ease;
+}
+
+.calc-card.is-open {
+  border-color: var(--border-glow);
+  background: var(--glass-card-active);
+}
+
+.calc-head {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  padding: 30rpx 28rpx;
+}
+
+.calc-head:active {
+  opacity: 0.82;
+}
+
+.calc-glyph-wrap {
+  width: 72rpx;
+  height: 72rpx;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(129, 140, 248, 0.16);
+  border: 1rpx solid var(--border-glow);
+}
+
+.calc-glyph-wrap.is-sleep {
+  background: rgba(45, 212, 191, 0.12);
+  border-color: rgba(45, 212, 191, 0.4);
+}
+
+.calc-glyph {
+  font-family: var(--font-cn-serif);
+  font-size: 28rpx;
+  color: var(--color-primary);
+}
+
+.calc-glyph-wrap.is-sleep .calc-glyph {
+  color: var(--color-calm-teal);
+}
+
+.calc-head-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2rpx;
+}
+
+.calc-question {
+  font-family: var(--font-cn-serif);
+  font-size: 30rpx;
+  letter-spacing: 3rpx;
+  color: var(--text-primary);
+}
+
+.calc-sub {
+  font-size: 20rpx;
+  color: var(--text-muted);
+}
+
+.calc-time {
+  margin-top: 4rpx;
+  font-size: 44rpx;
+  font-weight: 300;
+  letter-spacing: 2rpx;
+  color: var(--text-moon-pure);
+  font-variant-numeric: tabular-nums;
+}
+
+.calc-toggle {
+  flex: none;
+  width: 52rpx;
+  height: 52rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1rpx solid var(--border-moon-subtle);
+  background: var(--glass-tint);
+  font-size: 28rpx;
+  color: var(--text-secondary);
+}
+
+.calc-body {
+  padding: 0 24rpx 28rpx;
+  perspective: 1200rpx;
+}
+
+.calc-flip {
+  position: relative;
+  height: 620rpx;
+  transform-style: preserve-3d;
+  transition: transform 0.6s var(--ease-gentle);
+}
+
+.calc-flip.is-flipped {
+  transform: rotateY(180deg);
+}
+
+.calc-face {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 620rpx;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.calc-front {
+  justify-content: space-between;
+}
+
+.calc-face .btn-lunar-capsule {
+  margin-top: 16rpx;
+}
+
+.calc-back {
+  transform: rotateY(180deg);
+  padding-top: 8rpx;
+  align-items: center;
+  justify-content: center;
+}
+
+.calc-action {
+  margin-top: 8rpx;
+}
+
+.action-moon {
+  font-size: 30rpx;
+  color: var(--color-accent-moon);
+}
+
+/* 现在时间 */
+.now-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4rpx 12rpx 12rpx;
+}
+
+.now-hint {
+  font-size: 20rpx;
+  color: var(--text-muted);
+}
+
+.now-link {
+  font-size: 22rpx;
+  color: var(--color-primary);
+  padding: 6rpx 0;
+}
+
+/* 结果 */
+.result-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4rpx 8rpx 0;
+}
+
+.result-label {
+  font-size: 20rpx;
+  letter-spacing: 6rpx;
+  color: var(--text-muted);
+}
+
+.result-main {
+  display: flex;
+  align-items: baseline;
+  gap: 12rpx;
+  margin-top: 10rpx;
+}
+
+.result-day {
+  font-size: 22rpx;
+  color: var(--color-accent-moon);
+  letter-spacing: 2rpx;
+}
+
+.result-time {
+  font-family: var(--font-cn-serif);
+  font-size: 96rpx;
+  line-height: 1.1;
+  letter-spacing: 4rpx;
+  color: var(--text-moon-pure);
+  font-variant-numeric: tabular-nums;
+}
+
+.result-time.is-compact {
+  font-size: 54rpx;
+  letter-spacing: 2rpx;
+}
+
+.result-meta {
+  margin-top: 6rpx;
+  font-size: 24rpx;
+  color: var(--text-secondary);
+}
+
+.result-note {
+  margin-top: 8rpx;
+  font-size: 20rpx;
+  color: var(--text-muted);
+}
+
+.result-list {
+  width: 100%;
+  margin-top: 26rpx;
+  border-top: 1rpx solid var(--border-moon-subtle);
+}
+
+.result-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  padding: 20rpx 4rpx;
+  border-bottom: 1rpx solid var(--border-moon-subtle);
+}
+
+.result-row.is-passed {
+  opacity: 0.4;
+}
+
+.result-row-left {
+  display: flex;
+  align-items: baseline;
+  gap: 10rpx;
+}
+
+.result-row-day {
+  font-size: 20rpx;
+  color: var(--text-muted);
+}
+
+.result-row-time {
+  font-size: 32rpx;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.result-row-tag {
+  padding: 2rpx 10rpx;
+  border-radius: var(--radius-pill);
+  border: 1rpx solid var(--border-moon-subtle);
+  font-size: 16rpx;
+  color: var(--text-muted);
+}
+
+.result-row-meta {
+  font-size: 20rpx;
+  color: var(--text-muted);
+}
+
+.result-reset {
+  width: 100%;
+  margin-top: 24rpx;
+}
+
+/* 脚注 */
+.calc-note {
+  margin-top: 32rpx;
+  padding: 0 20rpx;
+  text-align: center;
+  font-size: 20rpx;
+  line-height: 1.9;
+  color: var(--text-muted);
+}
+

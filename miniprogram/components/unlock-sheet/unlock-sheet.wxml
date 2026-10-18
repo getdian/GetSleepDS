@@ -1,0 +1,14 @@
+<view class="mask {{show ? 'mask-on' : ''}}" bindtap="onCancel" catchtouchmove="noop">
+  <view class="sheet {{show ? 'sheet-on' : ''}}" catchtap="noop">
+    <view class="sheet-bar"></view>
+    <text class="sheet-title">{{title}}</text>
+    <text class="sheet-desc">{{desc}}</text>
+
+    <view class="sheet-btn sheet-primary {{loading ? 'sheet-loading' : ''}}" bindtap="onConfirm">
+      <text>{{loading ? '处理中…' : confirmText}}</text>
+    </view>
+    <view class="sheet-btn sheet-ghost" bindtap="onCancel">
+      <text>{{cancelText}}</text>
+    </view>
+  </view>
+</view>

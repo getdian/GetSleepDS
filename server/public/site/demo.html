@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>睡点 · H5 交互演示</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/site.css">
+  <link rel="stylesheet" href="/demo.css">
+</head>
+<body>
+  <header class="nav">
+    <div class="container nav-inner">
+      <a class="brand" href="/"><span class="logo"></span>睡点</a>
+      <div class="demo-badge">H5 交互演示</div>
+      <nav class="nav-links">
+        <a href="/">返回落地页</a>
+        <a class="pill" href="/admin/">后台</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="demo-shell">
+    <div class="tabs">
+      <button type="button" class="tab on" data-tab="home">几点睡</button>
+      <button type="button" class="tab" data-tab="stats">回顾</button>
+      <button type="button" class="tab" data-tab="audio">环境音</button>
+    </div>
+
+    <section id="tab-home" class="tab-panel">
+      <div class="demo-head">
+        <span class="demo-date" id="home-date"></span>
+        <h1 id="home-greeting">夜深了，今天几点睡？</h1>
+      </div>
+
+      <div class="panel card">
+        <div class="row-between">
+          <div>
+            <div class="label">起床时间</div>
+            <div class="hint">按这个时间往前倒推</div>
+          </div>
+          <input id="wake-time" class="time-input" type="time" value="07:30">
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="label">入睡耗时</div>
+        <div class="chips" id="fall-chips">
+          <button type="button" class="chip" data-min="5">5 分钟</button>
+          <button type="button" class="chip" data-min="10">10 分钟</button>
+          <button type="button" class="chip on" data-min="15">15 分钟</button>
+          <button type="button" class="chip" data-min="20">20 分钟</button>
+        </div>
+      </div>
+
+      <div class="panel card">
+        <div class="label">如果 <b id="wake-label">07:30</b> 起床，你应该在</div>
+        <div class="roll-label" id="roll-label" hidden>今天的推荐时间已过，以下为下一晚</div>
+        <div class="slots" id="slots"></div>
+        <div class="divider"></div>
+        <div class="now-main" id="now-main"></div>
+        <div class="now-sub" id="now-sub"></div>
+      </div>
+
+      <div class="dial-wrap">
+        <div class="halo"></div>
+        <button type="button" class="dial" id="dial">
+          <span class="dial-title" id="dial-title">入睡打卡</span>
+          <span class="dial-sub" id="dial-sub">现在 23:41</span>
+        </button>
+      </div>
+
+      <div class="panel card done-card" id="done-card" hidden>
+        <div class="done-grid">
+          <div><span>入睡</span><b id="done-bed">--:--</b></div>
+          <div><span>起床</span><b id="done-wake">--:--</b></div>
+          <div><span>时长</span><b id="done-duration">--</b></div>
+        </div>
+        <button type="button" class="link-btn" id="undo">记录有误？撤销</button>
+      </div>
+
+      <p class="footnote">演示数据保存在浏览器 localStorage；正式版在小程序本地存储。</p>
+    </section>
+
+    <section id="tab-stats" class="tab-panel" hidden>
+      <div class="demo-head">
+        <span class="demo-date">只看数据，不做评价</span>
+        <h1>回顾</h1>
+      </div>
+
+      <div class="metrics">
+        <div class="metric"><span>平均入睡</span><b id="avg-bed">--:--</b></div>
+        <div class="metric"><span>平均起床</span><b id="avg-wake">--:--</b></div>
+        <div class="metric"><span>平均时长</span><b id="avg-duration" class="small">--</b></div>
+      </div>
+
+      <div class="week-line">
+        <span id="week-count">本周打卡 0 天</span>
+        <span class="dot-sep">·</span>
+        <span id="streak">连续 0 天</span>
+      </div>
+
+      <div class="panel card">
+        <div class="row-between">
+          <div class="label">打卡热力图</div>
+          <div class="seg">
+            <button type="button" class="seg-item on" data-range="30">近 30 天</button>
+            <button type="button" class="seg-item" data-range="120">近 4 个月</button>
+          </div>
+        </div>
+        <div class="heatmap-wrap">
+          <div class="heat-week" id="heat-week"></div>
+          <div class="heatmap" id="heatmap"></div>
+        </div>
+        <div class="heat-legend">
+          <span>少</span>
+          <i class="l1"></i><i class="l2"></i><i class="l3"></i><i class="l4"></i><i class="l5"></i>
+          <span>多</span>
+          <button type="button" class="link-btn right" id="fill-demo">填充演示数据</button>
+        </div>
+      </div>
+
+      <div class="panel card">
+        <div class="row-between">
+          <div class="label">本周事实回顾</div>
+          <span class="tag">只陈述数据</span>
+        </div>
+        <p class="fact" id="fact">本周记录满 3 天后可查看回顾</p>
+      </div>
+
+      <p class="footnote">演示页的回顾句由本地模板生成；正式版走服务端接口，并做禁词校验。</p>
+    </section>
+
+    <section id="tab-audio" class="tab-panel" hidden>
+      <div class="demo-head">
+        <span class="demo-date">循环播放 · 支持锁屏</span>
+        <h1>环境音</h1>
+      </div>
+
+      <div class="search">
+        <input id="audio-search" type="search" placeholder="搜索环境音">
+      </div>
+
+      <div class="cats" id="audio-cats"></div>
+
+      <div class="audio-list" id="audio-list"></div>
+      <p class="empty-line" id="audio-empty" hidden>没有匹配的环境音</p>
+
+      <div class="panel card cache-note">
+        <div class="label">缓存状态</div>
+        <p class="hint" id="cache-status">正在检查第一条音频…</p>
+      </div>
+
+      <p class="footnote">正式版在 Wi-Fi 下预加载前两条，观看广告时同步缓存；H5 用浏览器预加载模拟。若 COS 防盗链拦截带 Referer 的请求，这里会回退到本地测试音；正式小程序需在 COS 白名单放行微信域名。</p>
+    </section>
+  </main>
+
+  <div class="player" id="player" hidden>
+    <div class="player-main">
+      <b id="player-title">环境音</b>
+      <span id="player-sub">播放中</span>
+    </div>
+    <button type="button" class="player-btn" id="player-toggle">暂停</button>
+    <button type="button" class="player-close" id="player-close">✕</button>
+  </div>
+
+  <div class="modal" id="unlock-modal" hidden>
+    <div class="modal-mask" id="modal-mask"></div>
+    <div class="modal-card">
+      <div class="modal-bar"></div>
+      <h2 id="unlock-title">解锁环境音</h2>
+      <p id="unlock-desc">观看视频，解锁今晚的环境声音（24小时内有效）</p>
+      <button type="button" class="btn btn-primary full" id="unlock-confirm">观看广告（演示 5 秒）</button>
+      <button type="button" class="btn btn-ghost full" id="unlock-cancel">先不用</button>
+      <p class="modal-note">H5 用倒计时模拟激励视频；小程序里是微信广告。</p>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+  <audio id="player-audio" preload="auto" loop></audio>
+
+  <script src="/demo.js" defer></script>
+</body>
+</html>

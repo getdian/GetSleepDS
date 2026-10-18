@@ -1,0 +1,12 @@
+<view class="topbar-spacer" style="height:{{totalHeight}}px;"></view>
+<view class="topbar" style="padding-top:{{statusBarHeight}}px;">
+  <view class="topbar-glow"></view>
+  <view class="topbar-row" style="height:{{navHeight}}px; padding-right:{{capsuleGap}}px;">
+    <view class="island">
+      <view class="island-orb"></view>
+      <text class="island-brand">睡点</text>
+      <text class="island-sep">/</text>
+      <text class="island-title">{{title}}</text>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,38 @@
+<view class="hm">
+  <scroll-view class="hm-scroll" scroll-x enhanced show-scrollbar="{{false}}">
+    <view class="hm-inner">
+      <view class="hm-months" style="grid-template-columns: repeat({{colCount}}, 56rpx);">
+        <text
+          wx:for="{{months}}"
+          wx:key="col"
+          class="hm-month"
+          style="grid-column: {{item.col + 1}};"
+        >{{item.label}}</text>
+      </view>
+
+      <view
+        class="hm-grid"
+        style="grid-template-columns: repeat({{colCount}}, 56rpx);"
+      >
+        <view
+          wx:for="{{cells}}"
+          wx:key="key"
+          class="hm-cell {{item.pad ? 'hm-pad' : 'hm-l' + item.level}} {{item.partial ? 'hm-partial' : ''}} {{item.isToday ? 'hm-today' : ''}}"
+          data-index="{{index}}"
+          bindtap="onCellTap"
+        ></view>
+      </view>
+    </view>
+  </scroll-view>
+
+  <view class="hm-legend">
+    <text class="hm-legend-text">少</text>
+    <view class="hm-legend-cell hm-l1"></view>
+    <view class="hm-legend-cell hm-l2"></view>
+    <view class="hm-legend-cell hm-l3"></view>
+    <view class="hm-legend-cell hm-l4"></view>
+    <view class="hm-legend-cell hm-l5"></view>
+    <text class="hm-legend-text">多</text>
+    <text class="hm-legend-partial">◇ 仅入睡</text>
+  </view>
+</view>

@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>睡点 · 今晚几点睡，才算刚刚好</title>
+  <meta name="description" content="按 90 分钟睡眠周期倒推入睡时间，一键打卡，睡前听环境音。打开即用，不登录、不授权。">
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/site.css">
+  <link rel="stylesheet" href="/landing.css">
+</head>
+<body>
+  <header class="nav">
+    <div class="container nav-inner">
+      <a class="brand" href="/"><span class="logo"></span>睡点</a>
+      <nav class="nav-links">
+        <a href="#features">功能</a>
+        <a href="#how">怎么用</a>
+        <a href="#privacy">边界</a>
+        <a class="pill" href="/demo/">交互演示</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero container">
+      <div class="hero-copy">
+        <span class="eyebrow">微信小程序 · 睡眠时间计算与打卡</span>
+        <h1>今晚几点睡，<br>才算刚刚好？</h1>
+        <p class="lead">
+          按 90 分钟周期倒推三个入睡时间，一键记录入睡与起床，睡前放一段环境音。
+          打开即用，不登录、不授权、不弹窗。
+        </p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="/demo/">打开交互演示</a>
+          <a class="btn btn-ghost" href="#features">看看功能</a>
+        </div>
+        <p class="hero-note">H5 页面只用于预览交互；正式形态是微信小程序。</p>
+      </div>
+
+      <div class="phone-wrap">
+        <div class="phone-glow"></div>
+        <div class="phone">
+          <div class="phone-notch"></div>
+          <div class="screen">
+            <div class="statusbar">
+              <span>23:41</span>
+              <span class="status-icons">●●●</span>
+            </div>
+            <div class="app-head">
+              <span class="app-date">10月18日 周六</span>
+              <strong>夜深了，今天几点睡？</strong>
+            </div>
+
+            <div class="mock-card">
+              <div class="mock-row">
+                <span>起床时间</span>
+                <b>07:30</b>
+              </div>
+              <div class="mock-divider"></div>
+              <span class="mock-label">如果 07:30 起床，你应该在</span>
+              <div class="mock-slots">
+                <div><b>23:45</b><span>5 个周期</span></div>
+                <div><b>01:15</b><span>4 个周期</span></div>
+                <div><b>02:45</b><span>3 个周期</span></div>
+              </div>
+              <div class="mock-now">现在睡 · 约 4 个完整周期 · 6 小时</div>
+            </div>
+
+            <div class="mock-dial">
+              <span>入睡打卡</span>
+              <small>现在 23:41</small>
+            </div>
+
+            <div class="mock-tabbar">
+              <span class="on">几点睡</span>
+              <span>回顾</span>
+              <span>环境音</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="features" class="section container">
+      <div class="section-head">
+        <span class="eyebrow">三个功能，够用就好</span>
+        <h2>不做睡眠监测，只解决今晚的问题</h2>
+      </div>
+      <div class="feature-grid">
+        <article class="feature panel">
+          <div class="feature-icon icon-clock"></div>
+          <h3>90 分钟倒推</h3>
+          <p>给出 3 个入睡时刻，并实时算出“现在睡还能睡几个完整周期”。改起床时间，结果立刻变。</p>
+        </article>
+        <article class="feature panel">
+          <div class="feature-icon icon-check"></div>
+          <h3>一键打卡</h3>
+          <p>入睡按一下，起床按一下，自动算时长。数据存本地，开启备份后换设备也能找回。</p>
+        </article>
+        <article class="feature panel">
+          <div class="feature-icon icon-wave"></div>
+          <h3>环境音与缓存</h3>
+          <p>雨声、海浪或白噪音，锁屏继续放。Wi-Fi 下自动预热，看广告解锁时同步缓存到本地。</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="how" class="section container">
+      <div class="section-head">
+        <span class="eyebrow">怎么用</span>
+        <h2>从打开到放下手机，三步</h2>
+      </div>
+      <ol class="steps">
+        <li>
+          <span class="step-no">01</span>
+          <div>
+            <h3>看一个数字</h3>
+            <p>默认 07:30 起床、15 分钟入睡，首页直接给出 23:45 / 01:15 / 02:45。</p>
+          </div>
+        </li>
+        <li>
+          <span class="step-no">02</span>
+          <div>
+            <h3>按一下，睡觉</h3>
+            <p>“入睡打卡”记录当前时间，屏幕渐暗，显示晚安。</p>
+          </div>
+        </li>
+        <li>
+          <span class="step-no">03</span>
+          <div>
+            <h3>早上补一刀</h3>
+            <p>记录起床，自动算时长。回顾页看本周均值与近 30 天 / 4 个月热力图。</p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <section id="privacy" class="section container">
+      <div class="privacy panel">
+        <div>
+          <span class="eyebrow">产品边界</span>
+          <h2>只陈述事实，不做健康判断</h2>
+          <p>所有输出都是时间与时长本身：几点入睡、几点起床、平均多少。没有睡眠质量评分，也没有建议、诊断或治疗相关表述。</p>
+        </div>
+        <ul class="checks">
+          <li>零登录、零授权、无启动弹窗</li>
+          <li>不申请手机号、位置、通讯录、相册</li>
+          <li>打卡数据默认只存本机，备份可关闭</li>
+          <li>环境音仅用于放松，不宣称任何功效</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="cta container">
+      <div class="cta-panel panel">
+        <div>
+          <span class="eyebrow">先看效果</span>
+          <h2>完整交互，浏览器里就能点</h2>
+          <p>计算器、打卡、热力图、环境音、模拟广告解锁与缓存状态，都在 H5 演示里。</p>
+        </div>
+        <div class="cta-actions">
+          <a class="btn btn-primary" href="/demo/">进入交互演示</a>
+          <a class="btn btn-ghost" href="/admin/">后台入口</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <div>
+        <div class="footer-brand"><span class="logo"></span>睡点</div>
+        <p>深圳市牧码人网络科技有限公司 · 粤ICP备XXXXXXXX号（占位）</p>
+      </div>
+      <div class="footer-links">
+        <a href="/demo/">交互演示</a>
+        <a href="/admin/">后台管理</a>
+        <a href="#privacy">产品边界</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

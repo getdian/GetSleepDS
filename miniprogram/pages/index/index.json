@@ -1,0 +1,9 @@
+{
+  "navigationBarTitleText": "计算器",
+  "backgroundColor": "#080B14",
+  "usingComponents": {
+    "ambient": "/components/ambient/ambient",
+    "top-bar": "/components/top-bar/top-bar",
+    "time-wheel": "/components/time-wheel/time-wheel"
+  }
+}

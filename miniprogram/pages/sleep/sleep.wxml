@@ -1,0 +1,80 @@
+<ambient />
+<top-bar title="入睡" style="display:block;width:100%;" />
+
+<view class="page sleep-page">
+  <view class="sleep-hero fade-up">
+    <text class="eyebrow">TONIGHT</text>
+    <text class="sleep-date">{{dateText}}</text>
+    <text class="title-xl">我几点睡的</text>
+  </view>
+
+  <view wx:if="{{notice}}" class="notice" bindtap="onNoticeClose">
+    <text>{{notice}}</text>
+    <text class="notice-close">知道了</text>
+  </view>
+
+  <view class="record-card sleep-glass-card fade-up">
+    <view class="record-top">
+      <text class="record-kicker">{{greeting}}</text>
+      <text class="record-state pill-{{state}}">{{stateText}}</text>
+    </view>
+
+    <block wx:if="{{state !== 'done'}}">
+      <view class="dial-wrap">
+        <view class="dial-halo halo-one"></view>
+        <view class="dial-halo halo-two"></view>
+        <view class="dial dial--{{state}}" bindtap="onPrimaryTap">
+          <text class="dial-title">{{buttonTitle}}</text>
+          <text class="dial-sub">{{buttonSub}}</text>
+        </view>
+      </view>
+
+      <text class="record-hint">{{recordHint}}</text>
+
+      <view wx:if="{{state === 'sleeping'}}" class="undo-bed" bindtap="onUndoBed">
+        点错了？撤销本次入睡
+      </view>
+    </block>
+
+    <block wx:else>
+      <view class="done-grid">
+        <view class="done-item">
+          <text class="done-v">{{recordView.bed}}</text>
+          <text class="done-k">入睡</text>
+        </view>
+        <view class="done-item">
+          <text class="done-v">{{recordView.wake}}</text>
+          <text class="done-k">起床</text>
+        </view>
+        <view class="done-item">
+          <text class="done-v done-accent">{{recordView.duration}}</text>
+          <text class="done-k">在床时长</text>
+        </view>
+      </view>
+
+      <view class="undo" bindtap="onUndoTap">记录有误？撤销</view>
+    </block>
+  </view>
+
+  <view class="week-card sleep-glass-card is-tappable fade-up" bindtap="goStats">
+    <view class="week-head">
+      <text class="week-title">最近 7 天</text>
+      <text class="week-link">统计 ›</text>
+    </view>
+    <view class="week-days">
+      <view wx:for="{{weekDays}}" wx:key="key" class="week-day">
+        <view class="day-dot level-{{item.level}} {{item.partial ? 'is-partial' : ''}} {{item.today ? 'is-today' : ''}}"></view>
+        <text class="day-label {{item.today ? 'is-today-label' : ''}}">{{item.weekday}}</text>
+      </view>
+    </view>
+    <text class="week-summary">本周 {{weekCount}} 天 · 连续 {{streak}} 天</text>
+  </view>
+
+  <text class="sleep-quote font-poetic fade-up">{{footerText}}</text>
+</view>
+
+<audio-dock id="dock" />
+
+<view class="dim-mask {{dim ? 'is-on' : ''}}">
+  <text class="dim-text font-poetic">晚安</text>
+</view>

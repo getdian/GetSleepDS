@@ -1,0 +1,129 @@
+<!-- 收起态：悬浮声音钮 / 播放中的迷你播放器 -->
+<view wx:if="{{!currentId}}" class="dock-fab" bindtap="openSheet">
+  <text class="dock-fab-glyph">♪</text>
+  <text class="dock-fab-label">声音</text>
+</view>
+
+<view wx:if="{{currentId}}" class="dock-mini {{playing ? '' : 'is-paused'}}" bindtap="openSheet">
+  <view class="dock-eq">
+    <view class="eq-bar eq-1"></view>
+    <view class="eq-bar eq-2"></view>
+    <view class="eq-bar eq-3"></view>
+  </view>
+  <view class="dock-mini-main">
+    <text class="dock-mini-title">{{currentTitle}}</text>
+    <text class="dock-mini-sub">{{playerSub}}</text>
+  </view>
+  <view class="dock-mini-btn" catchtap="togglePlay">
+    <text>{{playing ? '暂停' : '播放'}}</text>
+  </view>
+  <view class="dock-mini-close" catchtap="stopPlayback">×</view>
+</view>
+
+<!-- 展开态：底部玻璃抽屉 -->
+<view class="dock-mask {{open ? 'is-show' : ''}}" bindtap="closeSheet" catchtouchmove="noop"></view>
+
+<view class="dock-sheet {{open ? 'is-show' : ''}}">
+  <view class="dock-grip"></view>
+
+  <view class="dock-head">
+    <text class="dock-title font-poetic">环境声音</text>
+    <view class="dock-close" catchtap="closeSheet">×</view>
+  </view>
+
+  <view class="dock-unlock">
+    <block wx:if="{{unlocked}}">
+      <text class="du-main">环境声音已解锁</text>
+      <text class="du-sub">{{unlockRemainText}}</text>
+    </block>
+    <block wx:elif="{{freeMode}}">
+      <text class="du-main">当前免费收听</text>
+      <text class="du-sub">未配置广告位，所有声音可直接播放</text>
+    </block>
+    <block wx:else>
+      <text class="du-main">观看一次视频，解锁 {{unlockHours}} 小时</text>
+      <text class="du-sub">完整观看后自动生效 · Wi-Fi 下自动缓存</text>
+    </block>
+  </view>
+
+  <view class="dock-search">
+    <input
+      class="dock-input"
+      value="{{keyword}}"
+      placeholder="搜索：雨声 / 白噪音…"
+      placeholder-class="dock-ph"
+      confirm-type="search"
+      bindinput="onKeywordInput"
+    />
+    <view wx:if="{{keyword}}" class="dock-clear" bindtap="onClearKeyword">×</view>
+  </view>
+
+  <scroll-view class="dock-cats" scroll-x enhanced show-scrollbar="{{false}}">
+    <view class="dock-cat-chips">
+      <view
+        wx:for="{{categories}}"
+        wx:key="*this"
+        class="dock-cat {{activeCategory === item ? 'cat-on' : ''}}"
+        data-cat="{{item}}"
+        bindtap="onPickCategory"
+      >{{item}}</view>
+    </view>
+  </scroll-view>
+
+  <scroll-view class="dock-list" scroll-y enhanced show-scrollbar="{{false}}">
+    <view
+      wx:for="{{filteredTracks}}"
+      wx:key="id"
+      class="dock-track {{currentId === item.id ? 'is-playing' : ''}}"
+      data-id="{{item.id}}"
+      bindtap="onTrackTap"
+    >
+      <image class="dock-icon" src="{{item.icon}}" mode="aspectFit" />
+      <view class="dock-tinfo">
+        <view class="dock-tname-row">
+          <text class="dock-tname">{{item.title}}</text>
+          <text class="dock-tcat">{{item.category}}</text>
+        </view>
+        <text class="dock-tstate">{{currentId === item.id ? (playing ? '播放中 · 点击暂停' : '已暂停 · 点击继续') : (item.cached ? '已缓存 · 点击播放' : '点击播放')}}</text>
+      </view>
+      <view class="dock-fav {{item.favorite ? 'is-on' : ''}}" data-id="{{item.id}}" catchtap="onToggleFavorite">
+        {{item.favorite ? '♥' : '♡'}}
+      </view>
+      <view class="dock-tbtn {{currentId === item.id ? 'tb-on' : ''}}">
+        <text>{{currentId === item.id && playing ? '暂停' : '播放'}}</text>
+      </view>
+    </view>
+    <view wx:if="{{!filteredTracks.length}}" class="dock-empty">没有匹配的声音</view>
+  </scroll-view>
+
+  <view wx:if="{{timerEnabled}}" class="dock-timer">
+    <text class="dock-timer-label">定时关闭</text>
+    <view class="dock-timer-chips">
+      <view
+        wx:for="{{timerOptions}}"
+        wx:key="value"
+        class="dock-timer-chip {{timerMinutes === item.value ? 'is-on' : ''}}"
+        data-value="{{item.value}}"
+        bindtap="onTimerTap"
+      >{{item.label}}</view>
+    </view>
+  </view>
+
+  <view class="dock-cache">
+    <text class="dock-cache-text">{{cacheText}}</text>
+    <text wx:if="{{cacheCount}}" class="dock-cache-clean" bindtap="onCleanCache">清理</text>
+  </view>
+
+  <view class="dock-tail">锁屏后继续播放；定时到点自动停止</view>
+</view>
+
+<unlock-sheet
+  show="{{sheetShow}}"
+  title="{{unlockTitle}}"
+  desc="{{unlocking && prepareText ? prepareText : unlockDesc}}"
+  confirmText="{{unlockConfirm}}"
+  cancelText="{{unlockCancel}}"
+  loading="{{unlocking}}"
+  bind:confirm="onSheetConfirm"
+  bind:cancel="onSheetCancel"
+/>

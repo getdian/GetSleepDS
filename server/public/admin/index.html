@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>睡点 · 后台管理</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="./admin.css">
+</head>
+<body>
+  <div class="page">
+    <header id="topbar" class="topbar" hidden>
+      <div class="brand">
+        <span class="logo"></span>
+        <div class="brand-text">
+          <strong>睡点 · 后台</strong>
+          <span class="sub" id="source-line">正在加载</span>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button type="button" id="refresh" class="ghost">刷新</button>
+        <button type="button" id="logout" class="ghost">退出</button>
+      </div>
+    </header>
+
+    <main id="boot-view" class="login-wrap">
+      <div class="panel login">
+        <h1>正在加载后台…</h1>
+        <p class="hint">正在校验登录状态，请稍候。</p>
+      </div>
+    </main>
+
+    <main id="login-view" class="login-wrap" hidden>
+      <form id="login-form" class="panel login">
+        <h1>后台管理</h1>
+        <p class="hint">
+          输入 <code>ADMIN_PASSWORD</code>。若服务端没有设置，启动日志里会打印本次临时密码。
+        </p>
+        <label class="field">
+          <span>密码</span>
+          <input id="password" type="password" autocomplete="current-password" placeholder="••••••••" required>
+        </label>
+        <p id="login-error" class="error" hidden></p>
+        <button type="submit" class="primary" id="login-btn">登录</button>
+      </form>
+    </main>
+
+    <main id="app-view" hidden>
+      <div class="admin-shell">
+        <aside class="admin-side">
+          <div class="side-card">
+            <p class="side-eyebrow">OPERATIONS</p>
+            <nav class="side-nav" id="admin-nav">
+              <button type="button" class="side-item is-active" data-panel="overview">
+                <span class="side-ico">◫</span><span>概览</span>
+              </button>
+              <button type="button" class="side-item" data-panel="audio">
+                <span class="side-ico">♪</span><span>环境音</span>
+              </button>
+              <button type="button" class="side-item" data-panel="unlock">
+                <span class="side-ico">▶</span><span>广告与解锁</span>
+              </button>
+              <button type="button" class="side-item" data-panel="features">
+                <span class="side-ico">◌</span><span>功能与缓存</span>
+              </button>
+              <button type="button" class="side-item" data-panel="copy">
+                <span class="side-ico">✎</span><span>解锁文案</span>
+              </button>
+              <button type="button" class="side-item" data-panel="storage">
+                <span class="side-ico">☁</span><span>存储与上传</span>
+              </button>
+              <button type="button" class="side-item" data-panel="advanced">
+                <span class="side-ico">⌘</span><span>配置 JSON</span>
+              </button>
+            </nav>
+            <div class="side-foot">
+              <span class="side-dot"></span>
+              <span id="side-save-state">已保存</span>
+            </div>
+          </div>
+        </aside>
+
+        <div class="admin-workspace">
+          <div class="workspace-head">
+            <div>
+              <p class="workspace-eyebrow">OPERATIONS</p>
+              <h1 id="workspace-title">概览</h1>
+              <p id="workspace-sub" class="hint">今天的打开、打卡、播放与 14 天趋势</p>
+            </div>
+            <span class="badge" id="workspace-badge">实时</span>
+          </div>
+
+          <div class="admin-panel" data-panel="overview">
+            <section class="stats">
+        <div class="stat">
+          <span>今日打开</span>
+          <strong id="stat-opens">–</strong>
+          <small id="stat-opens-sub">本周 –</small>
+        </div>
+        <div class="stat">
+          <span>今日打卡</span>
+          <strong id="stat-checkins">–</strong>
+          <small id="stat-checkins-sub">本周 –</small>
+        </div>
+        <div class="stat">
+          <span>今日播放</span>
+          <strong id="stat-plays">–</strong>
+          <small id="stat-plays-sub">本周 –</small>
+        </div>
+        <div class="stat">
+          <span>打卡用户</span>
+          <strong id="stat-users">–</strong>
+          <small id="stat-users-sub">有效解锁 –</small>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>近 14 天</h2>
+            <p class="hint">打开 / 打卡 / 播放来自小程序上报的匿名事件，只带 openid 与类型。</p>
+          </div>
+          <div class="legend">
+            <span><i class="dot open"></i>打开</span>
+            <span><i class="dot checkin"></i>打卡</span>
+            <span><i class="dot play"></i>播放</span>
+          </div>
+        </div>
+        <div id="trend" class="trend"></div>
+        <div class="top-tracks">
+          <h3>播放 Top 5</h3>
+          <ol id="top-tracks"><li class="empty-line">还没有播放数据</li></ol>
+        </div>
+      </section>
+          </div>
+
+      <form id="config-form" autocomplete="off">
+        <section class="panel admin-panel" data-panel="audio" hidden>
+          <div class="panel-head">
+            <div>
+              <h2>音频清单</h2>
+              <p class="hint">1–10 条。可填 COS 地址，也可直接上传到已配置的存储；“试听”在浏览器播放。</p>
+            </div>
+            <div class="panel-actions">
+              <label class="ghost file-label" for="audio-file">上传音频</label>
+              <input id="audio-file" type="file" accept="audio/mpeg,audio/mp4,audio/aac,audio/wav,audio/ogg" hidden>
+              <button type="button" id="add-audio" class="ghost">+ 添加</button>
+            </div>
+          </div>
+          <p id="upload-status" class="hint" hidden></p>
+          <div id="audio-list" class="audio-list"></div>
+          <p id="audio-empty" class="empty" hidden>还没有环境音，点右上角添加或上传。</p>
+        </section>
+
+        <section class="panel admin-panel" data-panel="unlock" hidden>
+          <div class="panel-head"><h2>解锁规则</h2></div>
+          <div class="grid">
+            <label class="field">
+              <span>解锁方式</span>
+              <select id="unlock-mode">
+                <option value="rewarded">激励视频</option>
+                <option value="free">免费</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>广告位 ID</span>
+              <input id="ad-unit" placeholder="adunit-xxxxxxxxxxxx" maxlength="64">
+            </label>
+            <label class="field">
+              <span>解锁有效期（小时）</span>
+              <input id="ttl" type="number" min="1" max="168" step="1">
+            </label>
+            <label class="field">
+              <span>广告加载失败时</span>
+              <select id="ad-error">
+                <option value="grant">直接放行</option>
+                <option value="deny">提示稍后再试</option>
+              </select>
+            </label>
+          </div>
+          <p class="hint">广告位留空 = 不弹广告，直接解锁（未开通流量主阶段）。</p>
+        </section>
+
+        <section class="panel admin-panel" data-panel="features" hidden>
+          <div class="panel-head"><h2>开关与缓存</h2></div>
+          <div class="switches">
+            <label class="switch"><input type="checkbox" id="feat-summary"><span>事实回顾</span></label>
+            <label class="switch"><input type="checkbox" id="feat-sync"><span>云端备份</span></label>
+            <label class="switch"><input type="checkbox" id="feat-timer"><span>定时关闭</span></label>
+            <label class="switch"><input type="checkbox" id="feat-preload"><span>进入即预加载</span></label>
+          </div>
+          <div class="grid grid-cache">
+            <label class="field">
+              <span>本地缓存上限（MB）</span>
+              <input id="cache-max" type="number" min="20" max="200" step="1">
+            </label>
+            <label class="field">
+              <span>缓存有效期（天）</span>
+              <input id="cache-ttl" type="number" min="1" max="30" step="1">
+            </label>
+          </div>
+          <p class="hint">预加载只在 Wi-Fi 下进行；观看广告时会同步下载并缓存该条音频。</p>
+        </section>
+
+        <section class="panel admin-panel" data-panel="copy" hidden>
+          <div class="panel-head"><h2>文案字段</h2></div>
+          <div class="grid">
+            <label class="field"><span>标题</span><input id="copy-title" maxlength="20"></label>
+            <label class="field"><span>确认按钮</span><input id="copy-confirm" maxlength="10"></label>
+            <label class="field field-wide"><span>说明</span><input id="copy-desc" maxlength="60"></label>
+            <label class="field"><span>取消按钮</span><input id="copy-cancel" maxlength="10"></label>
+          </div>
+        </section>
+
+      </form>
+
+      <section class="panel admin-panel" data-panel="storage" hidden>
+        <div class="panel-head">
+          <div>
+            <h2>COS 配置</h2>
+            <p class="hint">SecretKey 加密入库、不会回显。建议使用只有该桶权限的子账号。</p>
+          <p class="hint">音频能被小程序播放还需在 COS 防盗链放行 <code>servicewechat.com</code>（以及你的 H5 域名），或暂时关闭防盗链。</p>
+          </div>
+          <span id="storage-badge" class="badge">未配置</span>
+        </div>
+        <p id="security-warning" class="warning" hidden>
+          服务端未设置固定 ADMIN_PASSWORD 或 CONFIG_SECRET，COS 凭证无法安全保存。
+        </p>
+        <div class="grid">
+          <label class="field"><span>Bucket</span><input id="cos-bucket" placeholder="my-bucket-1250000000"></label>
+          <label class="field"><span>Region</span><input id="cos-region" placeholder="ap-shanghai"></label>
+          <label class="field"><span>访问域名（可选）</span><input id="cos-domain" placeholder="https://cdn.example.com"></label>
+          <label class="field"><span>存储路径</span><input id="cos-prefix" placeholder="sleep"></label>
+          <label class="field"><span>SecretId</span><input id="cos-secret-id" placeholder="AKID..."></label>
+          <label class="field"><span>SecretKey</span><input id="cos-secret-key" type="password" placeholder="留空则不修改"></label>
+        </div>
+        <div class="row-actions">
+          <button type="button" id="storage-save" class="primary">保存存储配置</button>
+          <button type="button" id="storage-test" class="ghost">测试连接</button>
+          <span id="storage-msg" class="hint"></span>
+        </div>
+      </section>
+
+      <section class="panel admin-panel" data-panel="advanced" hidden>
+        <div class="panel-head">
+          <h2>下发的 JSON</h2>
+          <button type="button" id="toggle-json" class="ghost">查看 JSON</button>
+        </div>
+        <pre id="json-view" class="json" hidden></pre>
+        <p class="hint">保存后，小程序最多 10 分钟内拉到新配置；重新打开小程序会立即拉取。</p>
+      </section>
+
+      <div class="savebar" id="global-savebar" hidden>
+        <span id="dirty" class="dirty">已保存</span>
+        <button type="submit" form="config-form" class="primary" id="save">保存并生效</button>
+      </div>
+        </div>
+      </div>
+    </main>
+
+    <div id="toast" class="toast" hidden></div>
+  </div>
+
+  <template id="audio-row">
+    <div class="audio-row">
+      <div class="audio-top">
+        <span class="index"></span>
+        <input class="title" placeholder="名称，如：雨声" maxlength="30">
+        <select class="icon" title="图标">
+          <option value="rain">雨</option>
+          <option value="wave">浪</option>
+          <option value="fire">火</option>
+          <option value="noise">噪</option>
+          <option value="night">夜</option>
+        </select>
+        <button type="button" class="icon-btn up" title="上移">↑</button>
+        <button type="button" class="icon-btn down" title="下移">↓</button>
+        <button type="button" class="icon-btn remove" title="删除">✕</button>
+      </div>
+      <div class="audio-sub">
+        <input class="subtitle" placeholder="副标题，如：循环播放 · 支持锁屏" maxlength="40">
+        <input class="category" list="category-options" placeholder="分类" maxlength="12">
+      </div>
+      <div class="audio-url">
+        <input class="url" placeholder="https://.../sleep/xxx.mp3" maxlength="500">
+        <button type="button" class="ghost preview">试听</button>
+      </div>
+    </div>
+  </template>
+
+  <datalist id="category-options"></datalist>
+
+  <script src="./admin.js" defer></script>
+</body>
+</html>

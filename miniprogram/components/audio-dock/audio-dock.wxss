@@ -1,0 +1,451 @@
+/* 悬浮声音入口 */
+.dock-fab {
+  position: fixed;
+  right: 32rpx;
+  bottom: 36rpx;
+  z-index: 40;
+  width: 116rpx;
+  height: 116rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2rpx;
+  border-radius: 50%;
+  border: 1rpx solid var(--border-glow);
+  background: var(--glass-card-active);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: 0 16rpx 40rpx rgba(0, 0, 0, 0.4);
+}
+
+.dock-fab:active {
+  transform: scale(0.94);
+}
+
+.dock-fab-glyph {
+  font-family: var(--font-cn-serif);
+  font-size: 34rpx;
+  line-height: 1;
+  color: var(--color-accent-moon);
+}
+
+.dock-fab-label {
+  font-family: var(--font-cn-serif);
+  font-size: 20rpx;
+  letter-spacing: 2rpx;
+  color: var(--text-secondary);
+}
+
+/* 迷你播放器 */
+.dock-mini {
+  position: fixed;
+  left: 24rpx;
+  right: 24rpx;
+  bottom: 24rpx;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  padding: 18rpx 22rpx 18rpx 26rpx;
+  border-radius: var(--radius-pill);
+  border: 1rpx solid var(--border-moon-subtle);
+  background: var(--glass-card-active);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--shadow-moon);
+}
+
+.dock-eq {
+  display: flex;
+  align-items: flex-end;
+  height: 34rpx;
+  flex: none;
+}
+
+.eq-bar {
+  width: 5rpx;
+  height: 28rpx;
+  margin-right: 6rpx;
+  border-radius: 3rpx;
+  background: var(--color-primary);
+  transform-origin: bottom;
+  animation: dockEq 1s ease-in-out infinite;
+}
+
+.eq-2 { animation-delay: 0.18s; height: 20rpx; }
+.eq-3 { animation-delay: 0.36s; height: 26rpx; }
+
+.dock-mini.is-paused .eq-bar {
+  animation-play-state: paused;
+  opacity: 0.5;
+}
+
+@keyframes dockEq {
+  0%, 100% { transform: scaleY(0.45); }
+  50% { transform: scaleY(1); }
+}
+
+.dock-mini-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2rpx;
+}
+
+.dock-mini-title {
+  font-size: 26rpx;
+  color: var(--text-primary);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dock-mini-sub {
+  font-size: 18rpx;
+  color: var(--text-muted);
+}
+
+.dock-mini-btn {
+  flex: none;
+  padding: 12rpx 24rpx;
+  border-radius: var(--radius-pill);
+  border: 1rpx solid var(--border-glow);
+  background: var(--glass-tint);
+  font-size: 22rpx;
+  color: var(--color-primary);
+}
+
+.dock-mini-close {
+  flex: none;
+  width: 40rpx;
+  text-align: center;
+  font-size: 24rpx;
+  color: var(--text-muted);
+}
+
+/* 遮罩与抽屉 */
+.dock-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 180;
+  background: transparent;
+  pointer-events: none;
+  transition: background 0.28s var(--ease-gentle);
+}
+
+.dock-mask.is-show {
+  background: var(--scrim);
+  pointer-events: auto;
+}
+
+.dock-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 200;
+  height: 86vh;
+  display: flex;
+  flex-direction: column;
+  padding: 20rpx 28rpx calc(20rpx + env(safe-area-inset-bottom));
+  background: var(--bg-night-surface);
+  border-top: 1.5rpx solid var(--border-moon-subtle);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  box-shadow: 0 -28rpx 90rpx rgba(0, 0, 0, 0.5);
+  transform: translateY(104%);
+  transition: transform 0.4s var(--ease-spring);
+}
+
+.dock-sheet.is-show {
+  transform: translateY(0);
+}
+
+.dock-grip {
+  width: 64rpx;
+  height: 5rpx;
+  margin: 0 auto 20rpx;
+  border-radius: 3rpx;
+  background: var(--border-moon-light);
+  flex: none;
+}
+
+.dock-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: none;
+}
+
+.dock-title {
+  font-size: 34rpx;
+  color: var(--text-moon-pure);
+}
+
+.dock-close {
+  width: 52rpx;
+  height: 52rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--glass-tint);
+  border: 1rpx solid var(--border-moon-subtle);
+  font-size: 30rpx;
+  color: var(--text-secondary);
+}
+
+/* 解锁条 */
+.dock-unlock {
+  margin-top: 18rpx;
+  padding: 18rpx 22rpx;
+  border-radius: var(--radius-md);
+  border: 1rpx solid var(--border-glow);
+  background: var(--glass-tint);
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+  flex: none;
+}
+
+.du-main {
+  font-size: 24rpx;
+  color: var(--text-primary);
+}
+
+.du-sub {
+  font-size: 20rpx;
+  color: var(--text-muted);
+}
+
+/* 搜索 */
+.dock-search {
+  position: relative;
+  margin-top: 18rpx;
+  flex: none;
+}
+
+.dock-input {
+  height: 76rpx;
+  padding: 0 64rpx 0 26rpx;
+  border-radius: var(--radius-pill);
+  border: 1rpx solid var(--border-moon-subtle);
+  background: var(--glass-tint);
+  font-size: 24rpx;
+  color: var(--text-primary);
+}
+
+.dock-ph {
+  color: var(--text-muted);
+}
+
+.dock-clear {
+  position: absolute;
+  right: 24rpx;
+  top: 22rpx;
+  font-size: 24rpx;
+  color: var(--text-muted);
+}
+
+/* 分类 */
+.dock-cats {
+  height: 70rpx;
+  margin-top: 12rpx;
+  white-space: nowrap;
+  flex: none;
+}
+
+.dock-cat-chips {
+  display: inline-flex;
+  gap: 10rpx;
+  padding-right: 20rpx;
+}
+
+.dock-cat {
+  padding: 8rpx 24rpx;
+  border-radius: var(--radius-pill);
+  border: 1rpx solid var(--border-moon-subtle);
+  background: var(--glass-tint);
+  font-size: 22rpx;
+  color: var(--text-secondary);
+}
+
+.dock-cat.cat-on {
+  border-color: var(--border-glow);
+  background: var(--glass-card-active);
+  color: var(--text-moon-pure);
+}
+
+/* 列表 */
+.dock-list {
+  flex: 1;
+  min-height: 0;
+  height: 0;
+  margin-top: 8rpx;
+}
+
+.dock-track {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  padding: 18rpx 20rpx;
+  margin-bottom: 10rpx;
+  border-radius: var(--radius-md);
+  border: 1rpx solid transparent;
+  background: var(--glass-tint);
+}
+
+.dock-track.is-playing {
+  border-color: var(--border-glow);
+  background: var(--glass-card-active);
+}
+
+.dock-track:active {
+  transform: scale(0.99);
+}
+
+.dock-icon {
+  width: 72rpx;
+  height: 72rpx;
+  flex: none;
+}
+
+.dock-tinfo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.dock-tname-row {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.dock-tname {
+  font-size: 27rpx;
+  color: var(--text-primary);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dock-tcat {
+  flex: none;
+  padding: 1rpx 10rpx;
+  border-radius: var(--radius-pill);
+  border: 1rpx solid var(--border-moon-subtle);
+  font-size: 16rpx;
+  color: var(--text-muted);
+}
+
+.dock-tstate {
+  font-size: 19rpx;
+  color: var(--text-muted);
+}
+
+.dock-tbtn {
+  flex: none;
+  padding: 10rpx 22rpx;
+  border-radius: var(--radius-pill);
+  border: 1rpx solid var(--border-moon-subtle);
+  font-size: 21rpx;
+  color: var(--text-secondary);
+}
+
+.dock-fav {
+  width: 48rpx;
+  flex: none;
+  text-align: center;
+  font-size: 30rpx;
+  line-height: 1;
+  color: var(--text-muted);
+  padding: 8rpx 0;
+}
+
+.dock-fav.is-on {
+  color: var(--color-accent-moon);
+  text-shadow: 0 0 18rpx rgba(253, 230, 138, 0.45);
+}
+
+.dock-tbtn.tb-on {
+  border-color: var(--border-glow);
+  color: var(--color-primary);
+}
+
+.dock-empty {
+  padding: 80rpx 0;
+  text-align: center;
+  font-size: 22rpx;
+  color: var(--text-muted);
+}
+
+/* 定时 */
+.dock-timer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+  margin-top: 10rpx;
+  padding-top: 18rpx;
+  border-top: 1rpx solid var(--border-moon-subtle);
+  flex: none;
+}
+
+.dock-timer-label {
+  font-size: 21rpx;
+  color: var(--text-muted);
+}
+
+.dock-timer-chips {
+  display: flex;
+  gap: 6rpx;
+}
+
+.dock-timer-chip {
+  padding: 8rpx 18rpx;
+  border-radius: var(--radius-pill);
+  border: 1rpx solid var(--border-moon-subtle);
+  font-size: 20rpx;
+  color: var(--text-muted);
+}
+
+.dock-timer-chip.is-on {
+  border-color: var(--border-glow);
+  background: var(--glass-card-active);
+  color: var(--text-primary);
+}
+
+/* 缓存 */
+.dock-cache {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 14rpx;
+  flex: none;
+}
+
+.dock-cache-text {
+  font-size: 19rpx;
+  color: var(--text-muted);
+}
+
+.dock-cache-clean {
+  font-size: 19rpx;
+  color: var(--color-primary);
+  padding: 4rpx 0 4rpx 16rpx;
+}
+
+.dock-tail {
+  margin-top: 6rpx;
+  text-align: center;
+  font-size: 18rpx;
+  color: var(--text-muted);
+  flex: none;
+}

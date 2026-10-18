@@ -1,0 +1,146 @@
+<ambient />
+<top-bar title="计算器" style="display:block;width:100%;" />
+
+<view class="page calc-page">
+  <view class="calc-hero fade-up">
+    <text class="eyebrow">SLEEP CYCLE</text>
+    <text class="title-xl">今晚，几点睡？</text>
+    <text class="sub">先选一个时间，再把入睡需要的时间算进去</text>
+  </view>
+
+  <view class="fall-row fade-up">
+    <text class="fall-label">入睡需要</text>
+    <view class="fall-chips">
+      <view
+        wx:for="{{fallOptions}}"
+        wx:key="*this"
+        class="fall-chip {{fallAsleep === item ? 'is-on' : ''}}"
+        data-min="{{item}}"
+        bindtap="onFallAsleepTap"
+      >
+        <text>{{item}}</text>
+        <text class="fall-unit">分</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 按起床算 -->
+  <view class="calc-card sleep-glass-card {{mode === 'wake' ? 'is-open' : ''}}">
+    <view class="calc-head" data-mode="wake" bindtap="toggleMode">
+      <view class="calc-glyph-wrap">
+        <text class="calc-glyph">醒</text>
+      </view>
+      <view class="calc-head-main">
+        <text class="calc-question">你想几点醒来？</text>
+        <text wx:if="{{mode !== 'wake'}}" class="calc-time">{{wakeTime}}</text>
+      </view>
+      <view class="calc-toggle">{{mode === 'wake' ? '−' : '+'}}</view>
+    </view>
+
+    <view wx:if="{{mode === 'wake'}}" class="calc-body">
+      <view class="calc-flip {{wakeFlipped ? 'is-flipped' : ''}}">
+        <!-- 正面：时间轮 + 计算 -->
+        <view class="calc-face calc-front">
+          <time-wheel value="{{wakeTime}}" bind:change="onWakeChange" />
+          <view class="calc-action">
+            <view class="btn-lunar-capsule" bindtap="calcWake">
+              <text>计算就寝时间</text>
+              <text class="action-moon">☾</text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 背面：结果 -->
+        <view class="calc-face calc-back">
+          <block wx:if="{{wakeView}}">
+            <text class="result-label">{{wakeView.label}}</text>
+            <view class="result-main">
+              <text wx:if="{{wakeView.mainDay}}" class="result-day">{{wakeView.mainDay}}</text>
+              <text class="result-time {{wakeView.compact ? 'is-compact' : ''}}">{{wakeView.mainTime}}</text>
+            </view>
+            <text class="result-meta">{{wakeView.mainMeta}}</text>
+            <text class="result-note">{{wakeView.note}}</text>
+
+            <view class="result-list">
+              <view
+                wx:for="{{wakeView.rows}}"
+                wx:key="cycles"
+                class="result-row {{item.passed ? 'is-passed' : ''}}"
+              >
+                <view class="result-row-left">
+                  <text class="result-row-day">{{item.day}}</text>
+                  <text class="result-row-time">{{item.time}}</text>
+                  <text wx:if="{{item.passed}}" class="result-row-tag">已过</text>
+                </view>
+                <text class="result-row-meta">{{item.cycles}} 个周期 · {{item.duration}}</text>
+              </view>
+            </view>
+
+            <view class="btn-moon-ghost result-reset" bindtap="resetWake">重新选择</view>
+          </block>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 按入睡算 -->
+  <view class="calc-card sleep-glass-card {{mode === 'sleep' ? 'is-open' : ''}}">
+    <view class="calc-head" data-mode="sleep" bindtap="toggleMode">
+      <view class="calc-glyph-wrap is-sleep">
+        <text class="calc-glyph">睡</text>
+      </view>
+      <view class="calc-head-main">
+        <text class="calc-question">你想几点睡觉？</text>
+        <text class="calc-sub">如果你现在想去睡觉的话</text>
+        <text wx:if="{{mode !== 'sleep'}}" class="calc-time">{{sleepTime}}</text>
+      </view>
+      <view class="calc-toggle">{{mode === 'sleep' ? '−' : '+'}}</view>
+    </view>
+
+    <view wx:if="{{mode === 'sleep'}}" class="calc-body">
+      <view class="calc-flip {{sleepFlipped ? 'is-flipped' : ''}}">
+        <view class="calc-face calc-front">
+          <time-wheel value="{{sleepTime}}" bind:change="onSleepChange" />
+          <view class="now-row">
+            <text class="now-hint">当前 {{nowText}}</text>
+            <text class="now-link" bindtap="onNowTap">用现在的时间</text>
+          </view>
+          <view class="calc-action">
+            <view class="btn-lunar-capsule" bindtap="calcSleep">
+              <text>计算唤醒时间</text>
+              <text class="action-moon">☾</text>
+            </view>
+          </view>
+        </view>
+
+        <view class="calc-face calc-back">
+          <block wx:if="{{sleepView}}">
+            <text class="result-label">{{sleepView.label}}</text>
+            <view class="result-main">
+              <text wx:if="{{sleepView.mainDay}}" class="result-day">{{sleepView.mainDay}}</text>
+              <text class="result-time">{{sleepView.mainTime}}</text>
+            </view>
+            <text class="result-meta">{{sleepView.mainMeta}}</text>
+            <text class="result-note">{{sleepView.note}}</text>
+
+            <view class="result-list">
+              <view wx:for="{{sleepView.rows}}" wx:key="cycles" class="result-row">
+                <view class="result-row-left">
+                  <text class="result-row-day">{{item.day}}</text>
+                  <text class="result-row-time">{{item.time}}</text>
+                </view>
+                <text class="result-row-meta">{{item.cycles}} 个周期 · {{item.duration}}</text>
+              </view>
+            </view>
+
+            <view class="btn-moon-ghost result-reset" bindtap="resetSleep">重新选择</view>
+          </block>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view class="calc-note fade-up">
+    <text>每个完整周期约 90 分钟。这里只做时间倒推，不做睡眠质量判断。</text>
+  </view>
+</view>

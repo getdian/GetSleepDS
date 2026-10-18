@@ -1,0 +1,243 @@
+.stats-page {
+  padding-top: 8rpx;
+}
+
+.stats-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+  margin-bottom: 30rpx;
+}
+
+.stats-hero .title-xl {
+  margin-top: 4rpx;
+}
+
+.metrics {
+  display: flex;
+  gap: 16rpx;
+}
+
+.metric {
+  flex: 1;
+  padding: 26rpx 16rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+  border-radius: var(--radius-lg);
+}
+
+.metric-key {
+  font-size: 20rpx;
+  color: var(--text-muted);
+  letter-spacing: 1rpx;
+}
+
+.metric-value {
+  font-family: var(--font-cn-serif);
+  font-size: 40rpx;
+  color: var(--text-moon-pure);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 1rpx;
+}
+
+.metric-value.is-small {
+  font-size: 30rpx;
+  padding-top: 8rpx;
+}
+
+.week-line {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  margin: 22rpx 4rpx 24rpx;
+  font-size: 22rpx;
+  color: var(--text-secondary);
+}
+
+.week-dot {
+  color: var(--text-muted);
+}
+
+.panel {
+  margin-bottom: 24rpx;
+  padding: 28rpx;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-bottom: 24rpx;
+}
+
+.panel-title {
+  font-family: var(--font-cn-serif);
+  font-size: 28rpx;
+  letter-spacing: 3rpx;
+  color: var(--text-primary);
+}
+
+.panel-tag {
+  padding: 4rpx 14rpx;
+  border-radius: var(--radius-pill);
+  border: 1rpx solid var(--border-moon-subtle);
+  font-size: 18rpx;
+  color: var(--text-muted);
+}
+
+/* 分段 */
+.seg {
+  display: flex;
+  padding: 4rpx;
+  border-radius: var(--radius-pill);
+  border: 1rpx solid var(--border-moon-subtle);
+  background: var(--glass-tint);
+}
+
+.seg-item {
+  padding: 6rpx 16rpx;
+  border-radius: var(--radius-pill);
+  font-size: 18rpx;
+  color: var(--text-muted);
+  transition: all 0.2s ease;
+}
+
+.seg-item.is-on {
+  background: var(--glass-card-active);
+  color: var(--text-primary);
+}
+
+/* 图例 */
+.legend {
+  display: flex;
+  align-items: center;
+  margin-top: 24rpx;
+}
+
+.legend-label {
+  margin: 0 8rpx;
+  font-size: 18rpx;
+  color: var(--text-muted);
+}
+
+.legend-cell {
+  width: 18rpx;
+  height: 18rpx;
+  margin-right: 6rpx;
+  border-radius: 5rpx;
+}
+
+.legend-cell.level-1 { background: var(--heat-1); }
+.legend-cell.level-2 { background: var(--heat-2); }
+.legend-cell.level-3 { background: var(--heat-3); }
+.legend-cell.level-4 { background: var(--heat-4); }
+.legend-cell.level-5 { background: var(--heat-5); }
+
+.legend-marked {
+  margin-left: auto;
+  font-size: 18rpx;
+  color: var(--text-muted);
+}
+
+/* 事实回顾 */
+.fact-text {
+  display: block;
+  font-size: 28rpx;
+  line-height: 1.95;
+  letter-spacing: 0.5rpx;
+  color: var(--text-primary);
+}
+
+.fact-muted {
+  display: block;
+  font-size: 24rpx;
+  color: var(--text-muted);
+}
+
+.fact-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.fact-retry {
+  padding: 8rpx 20rpx;
+  border-radius: var(--radius-pill);
+  border: 1rpx solid var(--border-glow);
+  font-size: 22rpx;
+  color: var(--color-primary);
+}
+
+.heat-note {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 18rpx;
+  color: var(--text-muted);
+}
+
+.poster-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14rpx;
+}
+
+.poster-btn {
+  padding: 8rpx 20rpx;
+  border-radius: var(--radius-pill);
+  border: 1rpx solid var(--border-glow);
+  font-size: 19rpx;
+  color: var(--color-primary);
+}
+
+.poster-canvas {
+  position: fixed;
+  left: -2000px;
+  top: 0;
+  width: 300px;
+  height: 480px;
+}
+
+/* 云同步 */
+.sync-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8rpx;
+  padding: 24rpx 28rpx;
+}
+
+.sync-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.sync-title {
+  font-size: 25rpx;
+  color: var(--text-primary);
+}
+
+.sync-sub {
+  font-size: 20rpx;
+  color: var(--text-muted);
+}
+
+.sync-btn {
+  padding: 10rpx 28rpx;
+  border-radius: var(--radius-pill);
+  border: 1rpx solid var(--border-glow);
+  font-size: 22rpx;
+  color: var(--color-primary);
+}
+
+.sync-btn.is-busy {
+  opacity: 0.5;
+}
+
+.stats-page .danger-link {
+  margin-top: 28rpx;
+}
+

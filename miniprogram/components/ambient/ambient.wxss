@@ -1,0 +1,83 @@
+.ambient {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: radial-gradient(120% 70% at 50% 0%, var(--bg-aurora-1) 0%, var(--bg-aurora-2) 52%, var(--bg-aurora-3) 100%);
+}
+
+.ambient__base {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(60% 40% at 78% 12%, rgba(129, 140, 248, 0.16), transparent 65%);
+}
+
+/* 极慢的星轨光斑，低透明度避免干扰阅读 */
+.ambient__rays {
+  position: absolute;
+  top: -30%;
+  left: -30%;
+  width: 160%;
+  height: 160%;
+  opacity: 0.5;
+  background: repeating-conic-gradient(
+    from 0deg,
+    rgba(129, 140, 248, 0) 0deg,
+    rgba(129, 140, 248, 0) 16deg,
+    rgba(129, 140, 248, 0.035) 17deg,
+    rgba(129, 140, 248, 0.035) 30deg
+  );
+  animation: lunarOrbit 180s linear infinite;
+}
+
+.ambient__glow {
+  position: absolute;
+  left: -20%;
+  bottom: -30%;
+  width: 140%;
+  height: 90%;
+  background:
+    radial-gradient(40% 55% at 30% 50%, rgba(45, 212, 191, 0.06), transparent 70%),
+    radial-gradient(45% 60% at 72% 40%, rgba(129, 140, 248, 0.12), transparent 72%);
+  animation: glowBreathe 9s ease-in-out infinite alternate;
+}
+
+/* 细碎星点，用重复径向渐变而不是大量节点 */
+.ambient__stars {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 70%;
+  opacity: 0.45;
+  background-image:
+    radial-gradient(1.5rpx 1.5rpx at 40rpx 60rpx, rgba(248, 250, 252, 0.5), transparent 60%),
+    radial-gradient(1.5rpx 1.5rpx at 180rpx 140rpx, rgba(248, 250, 252, 0.35), transparent 60%),
+    radial-gradient(1rpx 1rpx at 300rpx 40rpx, rgba(248, 250, 252, 0.45), transparent 60%),
+    radial-gradient(1.5rpx 1.5rpx at 90rpx 240rpx, rgba(248, 250, 252, 0.25), transparent 60%);
+  background-size: 360rpx 300rpx;
+  background-repeat: repeat;
+  animation: starDrift 60s linear infinite;
+}
+
+@keyframes lunarOrbit {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes glowBreathe {
+  0% { opacity: 0.55; transform: scale(0.98); }
+  100% { opacity: 0.95; transform: scale(1.03); }
+}
+
+@keyframes starDrift {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(0, -120rpx, 0); }
+}

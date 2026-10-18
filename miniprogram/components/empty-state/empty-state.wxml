@@ -1,0 +1,10 @@
+<view class="empty">
+  <view class="empty-orb">
+    <view class="empty-moon"></view>
+  </view>
+  <text class="empty-title">{{title}}</text>
+  <text wx:if="{{desc}}" class="empty-desc">{{desc}}</text>
+  <view wx:if="{{actionText}}" class="empty-btn hit" bindtap="onAction">
+    <text>{{actionText}}</text>
+  </view>
+</view>

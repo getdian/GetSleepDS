@@ -1,0 +1,6 @@
+<view class="ambient">
+  <view class="ambient__base"></view>
+  <view class="ambient__rays"></view>
+  <view class="ambient__glow"></view>
+  <view class="ambient__stars"></view>
+</view>

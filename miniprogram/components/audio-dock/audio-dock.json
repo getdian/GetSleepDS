@@ -1,0 +1,6 @@
+{
+  "component": true,
+  "usingComponents": {
+    "unlock-sheet": "/components/unlock-sheet/unlock-sheet"
+  }
+}
