@@ -27,6 +27,9 @@ module.exports = {
     stats: { enabled: false, unitId: '', type: 'template' },
     statsFooter: { enabled: false, unitId: '', type: 'template' }
   },
+  backgrounds: [],
+  defaultBackgroundId: '',
+  backgroundUnlockHours: 24,
   features: {
     summary: true,
     sync: true,

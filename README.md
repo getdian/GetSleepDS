@@ -10,19 +10,20 @@
 |---|---|
 | 3 个 tab（计算器 / 入睡 / 统计）+ audio-dock 声音抽屉 | ✅ 已实现，深色玻璃视觉 |
 | 通栏透明顶栏 + 悬浮“灵动岛” | ✅ 已实现，去掉固定原生导航条 |
-| 90 分钟双向倒推、时间轮、真 3D 翻转、A/B/C 打卡 | ✅ 已实现，有单测 |
+| 90 分钟双向倒推、12h 时间轮、单卡 3D 翻转、A/B/C 打卡 | ✅ 2026-10-20 首页重构为双向单卡，有单测 |
 | 云同步容错 / 单日墓碑 / 全量清除水位 / 解锁覆盖写 | ✅ 2026-10-19 加固，有回归测试 |
 | 云备份默认关闭（数据本地化） | ✅ 统计页显式开启后才上传，可随时关闭；可单独删除云端副本 |
 | 页面展示位（首页 / 入睡 / 统计 ×2） | ✅ 4 个槽位已接入，后台逐槽开关，默认全部关闭 |
 | 广告观测 | ✅ `ad_show` / `ad_error` 上报，后台展示今日/本周与分槽填充率 |
 | 跨页音频控制 | ✅ 声音入口仍在入睡页；播放后首页/统计页出现迷你播放器 |
 | 页内分享 | ✅ 计算器结果、入睡页、统计页均有转发入口，文案随场景变化 |
+| 首页 Hero 背景图 | ✅ 后台多图/分类/默认图/COS 上传；默认免费静默缓存，更换看广告解锁，到期回退默认 |
 | 横向 120 天热力图、周均值、海报、云同步/清除 | ✅ 已实现 |
 | 后端公共接口 + 后台上传/配置/看板/用户数据 + PG 连接池 + 内存模式 | ✅ 已实现，有单测 |
 | Dockerfile / docker-compose | ✅ 已实现，`docker compose config` 校验通过 |
 | 后台管理 `/admin` | ✅ 左侧主菜单 + 右侧分类面板，浏览器实测保存 |
 | 落地页 `/` + H5 交互演示 `/demo/` | ✅ 浏览器实测（H5 仍为旧版结构，色板已同步） |
-| 90 个单元测试 | ✅ 全部通过 |
+| 96 个单元测试 | ✅ 全部通过 |
 | AppID / 首条 COS 音频 | ✅ `wx378b0a7437d60998`；`https://img.qfmaster.com/sleep/sleep-10001.mp3` 可访问 |
 | 微信开发者工具渲染 | ✅ 三页已编译、截图、无 console error |
 | 真机音频 / 广告 / 锁屏 | ⚠️ 未验证，需要外部账号与真机 |
@@ -38,8 +39,8 @@
 miniprogram/            小程序（原生 WXML/WXSS/JS，无第三方 UI 库）
   config/env.js         ← API 域名（开发/体验/正式自动切换）
   config/fallback.js    ← 服务端不可达时的兜底配置
-  utils/                时间、统计、存储、请求、广告、展示位、同步、缓存、事件、跨页定时器
-  components/           ambient / top-bar / time-wheel / audio-dock / heatmap / unlock-sheet / ad-slot / share-btn / now-playing / empty-state
+  utils/                时间、统计、存储、请求、广告、展示位、背景图、同步、缓存、事件、跨页定时器
+  components/           ambient / top-bar / time-wheel / audio-dock / heatmap / unlock-sheet / ad-slot / share-btn / now-playing / background-picker / empty-state
   pages/                index（计算器）/ sleep（入睡）/ stats（统计）
   assets/               tabBar 与音频图标
 server/                 Express API（config / unlock / summary / sync / events / admin）
@@ -155,7 +156,8 @@ npm run pack -- -Label 20261019-l4
 | API 域名 | `miniprogram/config/env.js`（开发/体验/正式自动切换，通常不用改） |
 | 音频列表 / 解锁广告位 / 功能开关 / 缓存 / 解锁文案 | **后台 `/admin`**（写 `app_config` 表）；`server/config/app.config.json` 仅作种子与兜底 |
 | 页面展示位开关 / 广告位 ID / 类型 | **后台 `/admin` → 广告与解锁 → 页面展示位**（4 槽独立开关，默认关闭） |
-| COS 凭证与音频上传 | 后台 `/admin` → 存储与上传（SecretKey 加密入库） |
+| 首页背景图 / 默认图 / 解锁时长 / 上传 | **后台 `/admin` → 背景图**（多图、分类、默认图、COS 上传；用户更换需看广告解锁） |
+| COS 凭证与音频/背景图上传 | 后台 `/admin` → 存储与上传（SecretKey 加密入库） |
 | 后台登录密码 / 加密密钥 | `.env` 的 `ADMIN_PASSWORD`、`CONFIG_SECRET` |
 | 数据库、微信密钥、限流阈值 | `.env`（参考 `.env.example`） |
 | 颜色、圆角、字号 | `miniprogram/app.wxss` 与各页面 `wxss` |
@@ -165,14 +167,14 @@ npm run pack -- -Label 20261019-l4
 ## 验证
 
 ```bash
-npm test        # 90 个单测：时间、统计、双向倒推、热力图/墓碑、API、后台鉴权/事件/COS 配置/用户记录删除、启动来源归一化、看板聚合、小程序码服务、展示位配置校验、同步总闸、云端副本删除、本地事实回顾
+npm test        # 96 个单测：时间、统计、双向倒推、热力图/墓碑、API、后台鉴权/事件/COS 配置/用户记录删除、启动来源归一化、看板聚合、小程序码服务、展示位配置校验、同步总闸、云端副本删除、本地事实回顾、背景图逻辑与后台配置
 npm run check   # JSON / WXML 标签 / WXSS 括号 / 页面四件套 / 组件引用 / CSP inline 检查
 ```
 
 本次实际执行结果：
 
-- `npm test`：90 passed / 0 failed
-- `npm run check`：通过（18 JSON / 13 WXML / 14 WXSS），主包约 229.1 KB
+- `npm test`：96 passed / 0 failed
+- `npm run check`：通过（19 JSON / 14 WXML / 15 WXSS），主包约 245.2 KB
 - 后端内存模式冒烟：`/api/health`、`/api/config`、`/api/summary`、`/api/audio/unlock`、`/api/records/erase` 均符合预期
 - **PostgreSQL 16 容器端到端**：自动建表、解锁写入 24 小时、`sync` 幂等、空记录同步能取回 3 条（换机回填）、`summary` 正常返回、后台配置重启后仍在
 - **后台浏览器实测**：登录、保存（写库并立即改变 `/api/config` 与解锁 TTL）、环境音增删、COS 音频试听、存储面板、14 天趋势渲染、无未捕获 JS 错误
@@ -201,6 +203,7 @@ npm run check   # JSON / WXML 标签 / WXSS 括号 / 页面四件套 / 组件引
 - 页面展示位默认关闭；未开通流量主或广告位未审核时，即使后台勾选，`<ad>` 组件报错后也会静默隐藏，不影响页面布局。
 - 云备份默认关闭；关闭状态下睡眠记录不上传，本周事实回顾由本地模板生成。匿名事件只含类型、音频 id 与时间，不含睡眠明细，可在后台关闭。
 - 关闭云备份后可在统计页单独删除云端副本（`cloudOnly`，不写 erasure 水位，本机记录保留）。
+- 背景图：最多 20 张、单张 ≤5MB；后台上传时会在浏览器端压缩为 webp（最大 1440×1920、质量 0.82），webp 反而更大或编码失败时保留原图，服务端只负责存 COS。图片域名需在 `downloadFile` 合法域名内（当前复用 `img.qfmaster.com`）。默认图免费静默缓存，用户更换需看激励视频；解锁时长 1–168 小时，到期自动回退默认图。
 - 限流是进程内实现，多实例部署会失效。
 
 ## 文档

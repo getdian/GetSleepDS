@@ -52,11 +52,43 @@ function createUploader() {
   })
 }
 
+const IMAGE_TYPES = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp'
+}
+
+function imageExtension(file) {
+  const byMime = IMAGE_TYPES[file.mimetype]
+  if (byMime) return byMime
+  const ext = path.extname(file.originalname || '').replace('.', '').toLowerCase()
+  if (ext === 'jpeg') return 'jpg'
+  return ['jpg', 'png', 'webp'].indexOf(ext) >= 0 ? ext : 'jpg'
+}
+
+function createImageUploader() {
+  return multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter(req, file, callback) {
+      if (IMAGE_TYPES[file.mimetype] || /\.(jpg|jpeg|png|webp)$/i.test(file.originalname || '')) {
+        callback(null, true)
+        return
+      }
+      const error = new Error('只支持 jpg / png / webp 图片')
+      error.status = 400
+      error.code = 'INVALID_FILE_TYPE'
+      callback(error)
+    }
+  })
+}
+
 function createAdminRoute(options) {
   const { auth, store, db, storage, analytics, limitLogin, now, logger } = options
   const log = logger || console
   const router = express.Router()
   const upload = createUploader()
+  const imageUpload = createImageUploader()
 
   router.use('/admin', (req, res, next) => {
     res.set('Cache-Control', 'no-store')
@@ -273,6 +305,48 @@ function createAdminRoute(options) {
         size: req.file.size,
         title: title || '新环境音',
         category: String(req.body.category || '环境音').slice(0, 12)
+      })
+    })
+  )
+
+  // 首页背景图上传：只接受图片，5MB 上限，进 COS 的 backgrounds/ 前缀
+  router.post(
+    '/admin/backgrounds/upload',
+    auth.requireAuth,
+    imageUpload.single('file'),
+    wrap(async (req, res) => {
+      if (!req.file) throw invalidBody('没有收到图片文件')
+
+      const settings = await storage.getRaw()
+      if (!settings || !settings.bucket || !settings.secretId || !settings.secretKey) {
+        throw apiError('STORAGE_NOT_CONFIGURED', '请先在“存储与上传”里配置 COS', 400)
+      }
+
+      const prefix = (settings.prefix || 'sleep').replace(/^\/+|\/+$/g, '')
+      const key =
+        (prefix ? prefix + '/' : '') +
+        'backgrounds/bg-' +
+        Date.now() +
+        '-' +
+        crypto.randomBytes(4).toString('hex') +
+        '.' +
+        imageExtension(req.file)
+
+      try {
+        await cos.uploadBuffer(settings, {
+          key,
+          buffer: req.file.buffer,
+          contentType: IMAGE_TYPES[req.file.mimetype] || 'image/jpeg'
+        })
+      } catch (error) {
+        log.error('[cos] background upload failed:', error.code || error.message)
+        throw apiError('UPLOAD_FAILED', '上传失败，请检查 COS 配置与权限', 502)
+      }
+
+      res.json({
+        key,
+        url: cos.objectUrl(settings, key),
+        size: req.file.size
       })
     })
   )

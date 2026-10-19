@@ -3,6 +3,11 @@ Component({
     title: {
       type: String,
       value: ''
+    },
+    // 首页使用：只显示「睡点」品牌，右侧留给微信原生胶囊
+    brandOnly: {
+      type: Boolean,
+      value: false
     }
   },
 

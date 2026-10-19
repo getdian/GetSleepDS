@@ -20,7 +20,7 @@ const ADMIN_DIR = path.join(__dirname, '..', 'public', 'admin')
 const SITE_DIR = path.join(__dirname, '..', 'public', 'site')
 const ADMIN_CSP = [
   "default-src 'self'",
-  "img-src 'self' data:",
+  "img-src 'self' data: https:",
   "media-src https:",
   "style-src 'self'",
   "script-src 'self'",

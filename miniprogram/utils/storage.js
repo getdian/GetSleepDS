@@ -10,7 +10,9 @@ const KEYS = {
   meta: 'sleep:meta:v1',
   unlock: 'audio_unlock_expire',
   deleted: 'sleep:deleted:v1',
-  events: 'sleep:events:v1'
+  events: 'sleep:events:v1',
+  background: 'sleep:background:v1',
+  backgroundCache: 'sleep:background-cache:v1'
 }
 
 function safeGet(key, fallback) {
@@ -128,6 +130,37 @@ function setUnlockExpire(timestamp) {
   safeSet(KEYS.unlock, timestamp)
 }
 
+/** 首页背景图解锁：{ id, expireAt }；到期自动回退默认图 */
+function getBackgroundUnlock() {
+  const value = safeGet(KEYS.background, null)
+  if (!value || typeof value !== 'object') return null
+  if (!value.id || typeof value.expireAt !== 'number') return null
+  return value
+}
+
+function setBackgroundUnlock(value) {
+  return safeSet(KEYS.background, value)
+}
+
+/** 背景图本地缓存索引：{ [url]: { path, savedAt } }，最多保留 6 张 */
+function getBackgroundCache() {
+  const value = safeGet(KEYS.backgroundCache, {})
+  return value && typeof value === 'object' ? value : {}
+}
+
+function setBackgroundCache(url, path) {
+  if (!url || !path) return false
+  const cache = getBackgroundCache()
+  cache[url] = { path, savedAt: Date.now() }
+  const keys = Object.keys(cache).sort((a, b) => {
+    return (cache[b].savedAt || 0) - (cache[a].savedAt || 0)
+  })
+  keys.slice(6).forEach((key) => {
+    delete cache[key]
+  })
+  return safeSet(KEYS.backgroundCache, cache)
+}
+
 function getMeta() {
   const raw = safeGet(KEYS.meta, {})
   return raw && typeof raw === 'object' ? raw : {}
@@ -185,7 +218,7 @@ function toggleFavorite(id) {
 
 /** 清除全部个人数据（保留远程配置缓存，避免下次冷启动无配置） */
 function clearAll() {
-  ;[KEYS.records, KEYS.pending, KEYS.deleted, KEYS.unlock, KEYS.events].forEach(safeRemove)
+  ;[KEYS.records, KEYS.pending, KEYS.deleted, KEYS.unlock, KEYS.events, KEYS.background, KEYS.backgroundCache].forEach(safeRemove)
   // 保留一个单调递增的代际号，让清除前发出的 sync 响应在回来时被识别为过期
   safeSet(KEYS.meta, { syncEpoch: Date.now() })
 }
@@ -204,6 +237,10 @@ module.exports = {
   clearPending,
   getUnlockExpire,
   setUnlockExpire,
+  getBackgroundUnlock,
+  setBackgroundUnlock,
+  getBackgroundCache,
+  setBackgroundCache,
   getMeta,
   patchMeta,
   getSyncEnabled,

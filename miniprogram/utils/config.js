@@ -27,6 +27,13 @@ function merge(raw) {
     audio: Array.isArray(raw.audio) && raw.audio.length ? raw.audio : FALLBACK.audio,
     unlock: Object.assign({}, FALLBACK.unlock, raw.unlock || {}),
     ads: mergeAds(raw.ads),
+    backgrounds: Array.isArray(raw.backgrounds) ? raw.backgrounds : FALLBACK.backgrounds,
+    defaultBackgroundId:
+      typeof raw.defaultBackgroundId === 'string'
+        ? raw.defaultBackgroundId
+        : FALLBACK.defaultBackgroundId,
+    backgroundUnlockHours:
+      Number(raw.backgroundUnlockHours) || FALLBACK.backgroundUnlockHours,
     features: Object.assign({}, FALLBACK.features, raw.features || {}),
     cache: Object.assign({}, FALLBACK.cache, raw.cache || {}),
     copy: Object.assign({}, FALLBACK.copy, raw.copy || {})

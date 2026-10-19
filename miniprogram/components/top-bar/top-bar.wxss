@@ -80,3 +80,27 @@
   letter-spacing: 3rpx;
   color: var(--text-moon-pure);
 }
+
+/* 首页品牌模式：去掉胶囊实体，只留「☾ 睡点」，右侧交给微信原生胶囊 */
+.island.is-brand-only {
+  flex: none;
+  padding: 0;
+  border: none;
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+  pointer-events: none;
+}
+
+.island.is-brand-only .island-brand {
+  font-family: var(--font-sans);
+  font-size: 28rpx;
+  font-weight: 500;
+  letter-spacing: 3rpx;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.island.is-brand-only .island-orb {
+  box-shadow: 0 0 14rpx rgba(253, 230, 138, 0.55);
+}

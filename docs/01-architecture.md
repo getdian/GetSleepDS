@@ -204,6 +204,7 @@ CREATE INDEX IF NOT EXISTS idx_events_created_at ON events (created_at);
 | GET/PUT | `/api/admin/storage` | Cookie | 读取 / 保存 COS 配置（SecretKey 加密） |
 | POST | `/api/admin/storage/test` | Cookie | 测试 COS 连接 |
 | POST | `/api/admin/audio/upload` | Cookie | 上传音频到 COS（multipart，≤25MB） |
+| POST | `/api/admin/backgrounds/upload` | Cookie | 上传首页背景图到 COS `backgrounds/`（multipart，jpg/png/webp，≤5MB）；后台浏览器先压缩为 webp（最大 1440×1920、质量 0.82），webp 更大/失败时回退原图，服务端不转码 |
 
 ### 5.1 GET /api/config
 
@@ -227,6 +228,11 @@ CREATE INDEX IF NOT EXISTS idx_events_created_at ON events (created_at);
     "stats": { "enabled": false, "unitId": "", "type": "template" },
     "statsFooter": { "enabled": false, "unitId": "", "type": "template" }
   },
+  "backgrounds": [
+    { "id": "bg-lake", "title": "湖面月光", "category": "夜色", "url": "https://img.qfmaster.com/sleep/backgrounds/bg-lake.jpg", "sort": 0, "enabled": true }
+  ],
+  "defaultBackgroundId": "bg-lake",
+  "backgroundUnlockHours": 24,
   "features": { "summary": true, "sync": true, "timer": true, "preload": true },
   "cache": { "maxMB": 80, "ttlDays": 7 },
   "copy": {
@@ -342,6 +348,8 @@ CREATE INDEX IF NOT EXISTS idx_events_created_at ON events (created_at);
 | 云备份未开启 | 客户端 `syncNow` 直接跳过，不发请求（默认状态）；事实回顾用本地模板生成，零上传 |
 | 云备份未开启时的匿名事件 | 只上报类型/音频 id/时间，打卡事件不带睡眠日 |
 | 后台关闭匿名事件统计 | `events.track` 直接返回，不写本地队列也不上报 |
+| 首页未配置背景图 / 加载失败 | 不渲染 Hero 背景，保留 ambient 夜色；本地缓存失败回退远程 URL |
+| 背景图解锁到期 | 自动回退默认图；再次使用需重新看激励视频 |
 | 页面展示位未启用 / 广告位 ID 为空 | 不渲染组件，不占空间 |
 | 展示广告加载中 | 保留最小占位高度，避免下方内容跳动 |
 | 统计页无任何记录 | 内容位广告不渲染；云备份保留为「从云端恢复」入口 |

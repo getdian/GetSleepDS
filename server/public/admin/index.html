@@ -57,6 +57,9 @@
               <button type="button" class="side-item" data-panel="audio">
                 <span class="side-ico">♪</span><span>环境音</span>
               </button>
+              <button type="button" class="side-item" data-panel="backgrounds">
+                <span class="side-ico">▧</span><span>背景图</span>
+              </button>
               <button type="button" class="side-item" data-panel="unlock">
                 <span class="side-ico">▶</span><span>广告与解锁</span>
               </button>
@@ -184,6 +187,34 @@
           <p id="upload-status" class="hint" hidden></p>
           <div id="audio-list" class="audio-list"></div>
           <p id="audio-empty" class="empty" hidden>还没有环境音，点右上角添加或上传。</p>
+        </section>
+
+        <section class="panel admin-panel" data-panel="backgrounds" hidden>
+          <div class="panel-head">
+            <div>
+              <h2>首页背景图</h2>
+              <p class="hint">最多 20 张。默认背景免费、静默加载；用户主动更换需看激励视频，解锁时长由下方设置。上传时会在浏览器压缩为 webp（最大 1440×1920、质量 0.82）；webp 反而更大时保留原图。</p>
+            </div>
+            <div class="panel-actions">
+              <label class="ghost file-label" for="bg-file">上传背景图</label>
+              <input id="bg-file" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+              <button type="button" id="add-bg" class="ghost">+ 添加</button>
+            </div>
+          </div>
+          <p id="bg-upload-status" class="hint" hidden></p>
+          <div class="grid">
+            <label class="field">
+              <span>默认背景（免费）</span>
+              <select id="bg-default"><option value="">不使用默认背景</option></select>
+            </label>
+            <label class="field">
+              <span>解锁使用时长（小时）</span>
+              <input id="bg-unlock-hours" type="number" min="1" max="168" step="1" value="24">
+            </label>
+          </div>
+          <div id="bg-list" class="bg-list"></div>
+          <p id="bg-empty" class="empty" hidden>还没有背景图，点右上角添加或上传。</p>
+          <p class="hint">建议宽度 1080px 以上、主体放中间偏上（小程序按 aspectFill 裁切）；单张 ≤5MB，压缩后通常 &lt;500KB。默认背景会静默缓存，非默认背景在用户选择时下载。</p>
         </section>
 
         <section class="panel admin-panel" data-panel="unlock" hidden>
@@ -387,6 +418,25 @@
   </template>
 
   <datalist id="category-options"></datalist>
+
+  <template id="bg-row">
+    <div class="bg-row">
+      <div class="bg-thumb"><img class="bg-preview" alt=""></div>
+      <div class="bg-fields">
+        <div class="bg-top">
+          <input class="bg-title" placeholder="名称，如：湖面月光" maxlength="30">
+          <input class="bg-category" list="bg-category-options" placeholder="分类" maxlength="12">
+          <label class="switch"><input type="checkbox" class="bg-enabled"><span>启用</span></label>
+          <button type="button" class="icon-btn up" title="上移">↑</button>
+          <button type="button" class="icon-btn down" title="下移">↓</button>
+          <button type="button" class="icon-btn remove" title="删除">✕</button>
+        </div>
+        <input class="bg-url" placeholder="https://.../backgrounds/bg.jpg" maxlength="500">
+      </div>
+    </div>
+  </template>
+
+  <datalist id="bg-category-options"></datalist>
 
   <script src="./admin.js" defer></script>
 </body>

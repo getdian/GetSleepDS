@@ -302,6 +302,82 @@ test('重复的音频 ID 会被拒绝', async () => {
   assert.equal(res.status, 400)
 })
 
+test('背景图配置保存、校验与公开下发', async () => {
+  const basePayload = {
+    audio: [{ id: 'rain', title: '雨声', url: 'https://cdn.example.com/rain.mp3', icon: 'rain' }],
+    unlock: { mode: 'rewarded', adUnitId: '', ttlHours: 24, onAdError: 'grant' },
+    features: { summary: true, sync: true, timer: true },
+    cache: { maxMB: 80, ttlDays: 7 },
+    copy: {},
+    backgroundUnlockHours: 72
+  }
+
+  const saved = await call(
+    '/api/admin/config',
+    {
+      method: 'PUT',
+      body: Object.assign({}, basePayload, {
+        backgrounds: [
+          { id: 'bg-a', title: '湖面', category: '夜色', url: 'https://cdn.example.com/bg-a.jpg', enabled: true },
+          { id: 'bg-b', title: '山川', category: '山川', url: 'https://cdn.example.com/bg-b.jpg', enabled: true }
+        ],
+        defaultBackgroundId: 'bg-a'
+      })
+    },
+    true
+  )
+  assert.equal(saved.status, 200)
+
+  const publicConfig = await call('/api/config')
+  assert.equal(publicConfig.body.backgrounds.length, 2)
+  assert.equal(publicConfig.body.backgrounds[0].id, 'bg-a')
+  assert.equal(publicConfig.body.defaultBackgroundId, 'bg-a')
+  assert.equal(publicConfig.body.backgroundUnlockHours, 72)
+
+  const badUrl = await call(
+    '/api/admin/config',
+    {
+      method: 'PUT',
+      body: Object.assign({}, basePayload, {
+        backgrounds: [{ id: 'bg-a', title: '湖面', url: 'http://cdn.example.com/bg-a.jpg' }],
+        defaultBackgroundId: 'bg-a'
+      })
+    },
+    true
+  )
+  assert.equal(badUrl.status, 400)
+
+  const missingDefault = await call(
+    '/api/admin/config',
+    {
+      method: 'PUT',
+      body: Object.assign({}, basePayload, {
+        backgrounds: [{ id: 'bg-a', title: '湖面', url: 'https://cdn.example.com/bg-a.jpg' }],
+        defaultBackgroundId: 'missing'
+      })
+    },
+    true
+  )
+  assert.equal(missingDefault.status, 400)
+})
+
+test('背景图上传先校验登录与文件', async () => {
+  const unauth = await fetch(base + '/api/admin/backgrounds/upload', {
+    method: 'POST',
+    body: new FormData()
+  })
+  assert.equal(unauth.status, 401)
+
+  const empty = new FormData()
+  empty.append('note', 'no-file')
+  const res = await fetch(base + '/api/admin/backgrounds/upload', {
+    method: 'POST',
+    headers: { cookie: cookie },
+    body: empty
+  })
+  assert.equal(res.status, 400)
+})
+
 test('事件上报与看板聚合', async () => {
   const events = [
     { type: 'app_open', ts: FIXED_NOW },

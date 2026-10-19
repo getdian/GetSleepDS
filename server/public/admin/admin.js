@@ -19,12 +19,14 @@
 
   let toastTimer = null
   let confirmTimer = null
+  let bgConfirmTimer = null
 
   const loginView = $('#login-view')
   const appView = $('#app-view')
   const topbar = $('#topbar')
   const form = $('#config-form')
   const audioList = $('#audio-list')
+  const bgList = $('#bg-list')
   const jsonView = $('#json-view')
 
   /* ---------- 基础工具 ---------- */
@@ -125,6 +127,7 @@
   const PANEL_META = {
     overview: { title: '概览', sub: '今天的打开、打卡、播放与 14 天趋势', badge: '实时' },
     audio: { title: '环境音', sub: '上架、排序、分类、试听与缓存', badge: '内容' },
+    backgrounds: { title: '背景图', sub: '首页 Hero 背景、默认图与广告解锁', badge: '内容' },
     unlock: { title: '广告与解锁', sub: '激励视频、页面展示位与失败降级', badge: '变现' },
     features: { title: '功能与缓存', sub: '开关、预加载、容量与有效期', badge: '运行' },
     copy: { title: '解锁文案', sub: '抽屉里的标题、说明与按钮', badge: '文案' },
@@ -403,6 +406,67 @@
     refreshCategoryOptions(items)
   }
 
+  /* ---------- 背景图 ---------- */
+
+  function refreshBgCategoryOptions(list) {
+    const datalist = $('#bg-category-options')
+    if (!datalist) return
+    datalist.textContent = ''
+    const seen = {}
+    ;(list || []).forEach(function (item) {
+      const category = String(item.category || '').trim()
+      if (!category || seen[category]) return
+      seen[category] = true
+      const option = document.createElement('option')
+      option.value = category
+      datalist.appendChild(option)
+    })
+  }
+
+  function buildBgRow(item, index) {
+    const fragment = $('#bg-row').content.cloneNode(true)
+    const row = fragment.querySelector('.bg-row')
+    row.dataset.id = item.id || ''
+    row.querySelector('.bg-title').value = item.title || ''
+    row.querySelector('.bg-category').value = item.category || '夜色'
+    row.querySelector('.bg-url').value = item.url || ''
+    row.querySelector('.bg-enabled').checked = item.enabled !== false
+    const preview = row.querySelector('.bg-preview')
+    if (item.url) preview.src = item.url
+    preview.alt = item.title || ''
+    return row
+  }
+
+  function refreshBgDefaultOptions(list, selected) {
+    const select = $('#bg-default')
+    if (!select) return
+    select.textContent = ''
+    const empty = document.createElement('option')
+    empty.value = ''
+    empty.textContent = '不使用默认背景'
+    select.appendChild(empty)
+    ;(list || []).forEach(function (item) {
+      if (item.enabled === false) return
+      const option = document.createElement('option')
+      option.value = item.id
+      option.textContent = item.title || item.id
+      select.appendChild(option)
+    })
+    select.value = selected || ''
+  }
+
+  function renderBackgrounds(list, defaultId) {
+    if (!bgList) return
+    bgList.textContent = ''
+    const items = list || []
+    items.forEach(function (item, index) {
+      bgList.appendChild(buildBgRow(item, index))
+    })
+    $('#bg-empty').hidden = items.length > 0
+    refreshBgDefaultOptions(items, defaultId)
+    refreshBgCategoryOptions(items)
+  }
+
   function stopPreview() {
     if (!state.preview) return
     state.preview.audio.pause()
@@ -488,6 +552,16 @@
       }
     })
 
+    const backgrounds = $$('.bg-row', bgList).map(function (row) {
+      return {
+        id: row.dataset.id,
+        title: row.querySelector('.bg-title').value.trim(),
+        category: row.querySelector('.bg-category').value.trim(),
+        url: row.querySelector('.bg-url').value.trim(),
+        enabled: row.querySelector('.bg-enabled').checked
+      }
+    })
+
     return {
       audio: audio,
       unlock: {
@@ -497,6 +571,9 @@
         onAdError: $('#ad-error').value
       },
       ads: ads,
+      backgrounds: backgrounds,
+      defaultBackgroundId: $('#bg-default').value,
+      backgroundUnlockHours: Number($('#bg-unlock-hours').value),
       features: {
         summary: $('#feat-summary').checked,
         sync: $('#feat-sync').checked,
@@ -552,6 +629,8 @@
     $('#copy-cancel').value = config.copy.unlockCancel || ''
 
     renderAudio(config.audio)
+    renderBackgrounds(config.backgrounds || [], config.defaultBackgroundId || '')
+    $('#bg-unlock-hours').value = config.backgroundUnlockHours || 24
     updateMeta()
     updateJson()
     setDirty(false)
@@ -576,6 +655,29 @@
     for (let i = 0; i < adSlots.length; i += 1) {
       const item = payload.ads && payload.ads[adSlots[i]]
       if (item && item.enabled && !item.unitId) return '已启用的展示位必须填写广告位 ID'
+    }
+
+    const backgrounds = payload.backgrounds || []
+    if (backgrounds.length > 20) return '最多 20 张背景图'
+    for (let i = 0; i < backgrounds.length; i += 1) {
+      const item = backgrounds[i]
+      if (!item.title) return '第 ' + (i + 1) + ' 张背景图缺少名称'
+      if (!/^https:\/\//i.test(item.url)) return '第 ' + (i + 1) + ' 张背景图地址必须是 https'
+    }
+    if (
+      !Number.isInteger(payload.backgroundUnlockHours) ||
+      payload.backgroundUnlockHours < 1 ||
+      payload.backgroundUnlockHours > 168
+    ) {
+      return '背景图解锁时长需为 1–168 小时的整数'
+    }
+    if (
+      payload.defaultBackgroundId &&
+      !backgrounds.some(function (item) {
+        return item.id === payload.defaultBackgroundId
+      })
+    ) {
+      return '默认背景图不在列表中'
     }
     return ''
   }
@@ -843,6 +945,179 @@
     xhr.send(data)
   }
 
+  function readImage(file) {
+    return new Promise(function (resolve, reject) {
+      const reader = new FileReader()
+      reader.onload = function () {
+        const image = new Image()
+        image.onload = function () {
+          resolve(image)
+        }
+        image.onerror = reject
+        image.src = reader.result
+      }
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
+  }
+
+  // 浏览器端压缩：jpg/png/webp → 最大 1440×1920、webp 0.82；失败或更大时回退原图
+  function prepareBackgroundImage(file) {
+    const type = String(file.type || '').toLowerCase()
+    if (!/^image\/(jpeg|png|webp)$/.test(type)) {
+      return Promise.resolve({ file: file, fileName: file.name, compressed: false, displayName: file.name })
+    }
+
+    return readImage(file)
+      .then(function (image) {
+        const maxWidth = 1440
+        const maxHeight = 1920
+        const sourceWidth = image.naturalWidth || image.width
+        const sourceHeight = image.naturalHeight || image.height
+        const scale = Math.min(1, maxWidth / sourceWidth, maxHeight / sourceHeight)
+        const width = Math.max(1, Math.round(sourceWidth * scale))
+        const height = Math.max(1, Math.round(sourceHeight * scale))
+
+        const canvas = document.createElement('canvas')
+        canvas.width = width
+        canvas.height = height
+        canvas.getContext('2d').drawImage(image, 0, 0, width, height)
+
+        return new Promise(function (resolve) {
+          canvas.toBlob(
+            function (blob) {
+              if (!blob || blob.type !== 'image/webp') {
+                resolve({ file: file, fileName: file.name, compressed: false, displayName: file.name })
+                return
+              }
+              // 原图已经很小且 webp 反而更大时，不折腾
+              if (scale === 1 && blob.size >= file.size && file.size <= 1024 * 1024) {
+                resolve({ file: file, fileName: file.name, compressed: false, displayName: file.name })
+                return
+              }
+
+              const base = String(file.name || 'background').replace(/\.[^.]+$/, '')
+              const fileName = base + '.webp'
+              let output = blob
+              try {
+                output = new File([blob], fileName, { type: 'image/webp', lastModified: Date.now() })
+              } catch (e) {
+                output = blob
+              }
+
+              resolve({
+                file: output,
+                fileName: fileName,
+                compressed: true,
+                displayName: base,
+                width: width,
+                height: height,
+                size: blob.size
+              })
+            },
+            'image/webp',
+            0.82
+          )
+        })
+      })
+      .catch(function () {
+        return { file: file, fileName: file.name, compressed: false, displayName: file.name }
+      })
+  }
+
+  function uploadBackground(file) {
+    if ($$('.bg-row', bgList).length >= 20) {
+      toast('最多 20 张背景图', true)
+      return
+    }
+    if (!state.storage || !state.storage.configured) {
+      toast('先在“存储与上传”配置 COS', true)
+      return
+    }
+
+    const status = $('#bg-upload-status')
+    status.hidden = false
+    status.textContent = '压缩中…'
+
+    prepareBackgroundImage(file).then(function (prepared) {
+      uploadBackgroundFile(prepared, status)
+    })
+  }
+
+  function uploadBackgroundFile(prepared, status) {
+    const file = prepared.file
+    const fileName = prepared.fileName || file.name || 'background.webp'
+    status.textContent = '上传中 0%'
+
+    const data = new FormData()
+    data.append('file', file, fileName)
+
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', '/api/admin/backgrounds/upload')
+    xhr.withCredentials = true
+
+    xhr.upload.onprogress = function (event) {
+      if (!event.lengthComputable) return
+      status.textContent = '上传中 ' + Math.round((event.loaded / event.total) * 100) + '%'
+    }
+
+    xhr.onload = function () {
+      let body = null
+      try {
+        body = JSON.parse(xhr.responseText)
+      } catch (e) {
+        body = null
+      }
+
+      status.hidden = true
+
+      if (xhr.status === 401) {
+        showLogin('登录已过期，请重新登录')
+        return
+      }
+
+      if (xhr.status >= 200 && xhr.status < 300 && body && body.url) {
+        const name = String(prepared.displayName || fileName).replace(/\.[^.]+$/, '').slice(0, 30)
+        bgList.appendChild(
+          buildBgRow(
+            {
+              id: 'bg-' + Date.now().toString(36),
+              title: name || '新背景',
+              category: '夜色',
+              url: body.url,
+              enabled: true
+            },
+            $$('.bg-row', bgList).length
+          )
+        )
+        $('#bg-empty').hidden = true
+        const rows = collect().backgrounds
+        refreshBgCategoryOptions(rows)
+        refreshBgDefaultOptions(rows, $('#bg-default').value)
+        setDirty(true)
+        updateJson()
+        const sizeText = prepared.size ? ' · ' + Math.round(prepared.size / 1024) + 'KB' : ''
+        toast(
+          prepared.compressed
+            ? '已压缩为 webp' + sizeText + '，记得点“保存并生效”'
+            : '上传完成，记得点“保存并生效”'
+        )
+        return
+      }
+
+      const message =
+        body && body.error && body.error.message ? body.error.message : '上传失败（' + xhr.status + '）'
+      toast(message, true)
+    }
+
+    xhr.onerror = function () {
+      status.hidden = true
+      toast('上传失败，请检查网络', true)
+    }
+
+    xhr.send(data)
+  }
+
   /* ---------- 数据加载 ---------- */
 
   async function loadAll() {
@@ -945,6 +1220,75 @@
     const file = event.target.files && event.target.files[0]
     event.target.value = ''
     if (file) uploadAudio(file)
+  })
+
+  $('#add-bg').addEventListener('click', function () {
+    const rows = $$('.bg-row', bgList)
+    if (rows.length >= 20) {
+      toast('最多 20 张背景图', true)
+      return
+    }
+    const item = {
+      id: 'bg-' + Date.now().toString(36),
+      title: '新背景',
+      category: '夜色',
+      url: '',
+      enabled: true
+    }
+    bgList.appendChild(buildBgRow(item, rows.length))
+    $('#bg-empty').hidden = true
+    const list = collect().backgrounds
+    refreshBgCategoryOptions(list)
+    refreshBgDefaultOptions(list, $('#bg-default').value)
+    setDirty(true)
+    updateJson()
+    bgList.lastElementChild.querySelector('.bg-title').focus()
+  })
+
+  $('#bg-file').addEventListener('change', function (event) {
+    const file = event.target.files && event.target.files[0]
+    event.target.value = ''
+    if (file) uploadBackground(file)
+  })
+
+  bgList.addEventListener('click', function (event) {
+    const button = event.target.closest('button')
+    if (!button) return
+    const row = button.closest('.bg-row')
+    if (!row) return
+
+    if (button.classList.contains('remove')) {
+      if (row.dataset.confirm !== '1') {
+        row.dataset.confirm = '1'
+        button.classList.add('confirming')
+        button.textContent = '确认'
+        clearTimeout(bgConfirmTimer)
+        bgConfirmTimer = setTimeout(function () {
+          row.dataset.confirm = ''
+          button.classList.remove('confirming')
+          button.textContent = '✕'
+        }, 3000)
+        return
+      }
+      row.remove()
+      $('#bg-empty').hidden = $$('.bg-row', bgList).length > 0
+      const list = collect().backgrounds
+      refreshBgCategoryOptions(list)
+      refreshBgDefaultOptions(list, $('#bg-default').value)
+      setDirty(true)
+      updateJson()
+      return
+    }
+
+    if (button.classList.contains('up') || button.classList.contains('down')) {
+      const isUp = button.classList.contains('up')
+      const sibling = isUp ? row.previousElementSibling : row.nextElementSibling
+      if (!sibling) return
+      if (isUp) bgList.insertBefore(row, sibling)
+      else bgList.insertBefore(sibling, row)
+      setDirty(true)
+      updateJson()
+    }
   })
 
   audioList.addEventListener('click', function (event) {
