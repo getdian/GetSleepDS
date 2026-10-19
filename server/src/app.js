@@ -92,10 +92,20 @@ function createApp(options) {
 
   app.use((req, res, next) => {
     const start = Date.now()
-    // Express 会在路由/静态中间件里改写 req.url，这里先固化原始路径
-    const logPath = req.originalUrl.split('?')[0]
+    // Express 会在路由/静态中间件里改写 req.url，这里先固化原始路径。
+    // 后台按 openid 查询/删除的路径含用户标识，日志里必须脱敏。
+    const logPath = req.originalUrl
+      .split('?')[0]
+      .replace(/^\/api\/admin\/users\/[^/]+/, '/api/admin/users/:openid')
     req.id = req.headers['x-request-id'] || crypto.randomBytes(8).toString('hex')
     res.setHeader('X-Request-Id', req.id)
+    res.setHeader('X-Content-Type-Options', 'nosniff')
+    res.setHeader('Referrer-Policy', 'no-referrer')
+    res.setHeader('X-Frame-Options', 'DENY')
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+    if (config.nodeEnv === 'production') {
+      res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+    }
 
     res.on('finish', () => {
       logger.log(

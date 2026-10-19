@@ -53,7 +53,8 @@ Component({
 
       let width = 375
       try {
-        width = wx.getSystemInfoSync().windowWidth || 375
+        const info = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync()
+        width = info.windowWidth || 375
       } catch (e) {}
       const rowH = Math.max(36, Math.round((COMPONENT_WIDTH_RPX * width) / 750))
       this._rowH = rowH

@@ -41,11 +41,10 @@
       <view class="calc-flip {{wakeFlipped ? 'is-flipped' : ''}}">
         <!-- 正面：时间轮 + 计算 -->
         <view class="calc-face calc-front">
-          <time-wheel value="{{wakeTime}}" bind:change="onWakeChange" />
+          <time-wheel id="wake-wheel" value="{{wakeTime}}" bind:change="onWakeChange" />
           <view class="calc-action">
             <view class="btn-lunar-capsule" bindtap="calcWake">
               <text>计算就寝时间</text>
-              <text class="action-moon">☾</text>
             </view>
           </view>
         </view>
@@ -100,7 +99,7 @@
     <view wx:if="{{mode === 'sleep'}}" class="calc-body">
       <view class="calc-flip {{sleepFlipped ? 'is-flipped' : ''}}">
         <view class="calc-face calc-front">
-          <time-wheel value="{{sleepTime}}" bind:change="onSleepChange" />
+          <time-wheel id="sleep-wheel" value="{{sleepTime}}" bind:change="onSleepChange" />
           <view class="now-row">
             <text class="now-hint">当前 {{nowText}}</text>
             <text class="now-link" bindtap="onNowTap">用现在的时间</text>
@@ -108,7 +107,6 @@
           <view class="calc-action">
             <view class="btn-lunar-capsule" bindtap="calcSleep">
               <text>计算唤醒时间</text>
-              <text class="action-moon">☾</text>
             </view>
           </view>
         </view>

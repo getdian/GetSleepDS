@@ -50,13 +50,17 @@ async function post(path, body) {
   return { status: res.status, body: await res.json() }
 }
 
-test('health 返回进程与数据库状态', async () => {
+test('health 返回进程与数据库状态，并带基础安全头', async () => {
   const res = await fetch(base + '/api/health')
   const body = await res.json()
   assert.equal(res.status, 200)
   assert.equal(body.ok, true)
   assert.equal(body.db, 'ok')
   assert.equal(body.mode, 'memory')
+  assert.equal(res.headers.get('x-content-type-options'), 'nosniff')
+  assert.equal(res.headers.get('x-frame-options'), 'DENY')
+  assert.equal(res.headers.get('referrer-policy'), 'no-referrer')
+  assert.ok(res.headers.get('x-request-id'))
 })
 
 test('ready 探针在数据库可用时返回 200', async () => {

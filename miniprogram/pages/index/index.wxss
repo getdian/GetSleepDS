@@ -1,17 +1,17 @@
 .calc-page {
-  padding-top: 8rpx;
+  padding-top: 16rpx;
 }
 
 .calc-hero {
-  margin-bottom: 28rpx;
+  margin-bottom: 24rpx;
 }
 
 .calc-hero .title-xl {
-  margin-top: 10rpx;
+  margin-top: 8rpx;
 }
 
 .calc-hero .sub {
-  margin-top: 12rpx;
+  margin-top: 10rpx;
 }
 
 /* 入睡耗时 */
@@ -19,69 +19,65 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12rpx;
-  padding: 10rpx 14rpx 10rpx 24rpx;
-  border: 1rpx solid var(--border-moon-subtle);
+  gap: 10rpx;
+  padding: 6rpx 8rpx 6rpx 22rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.06);
   border-radius: var(--radius-pill);
-  background: var(--glass-card-bg);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
+  background: rgba(20, 27, 45, 0.46);
 }
 
 .fall-label {
   flex: none;
-  font-size: 22rpx;
+  font-size: 21rpx;
   line-height: 1.2;
   color: var(--text-secondary);
-  letter-spacing: 2rpx;
+  letter-spacing: 1rpx;
 }
 
 .fall-chips {
   display: flex;
-  gap: 6rpx;
+  gap: 2rpx;
 }
 
 .fall-chip {
   display: flex;
   align-items: baseline;
   gap: 2rpx;
-  padding: 8rpx 18rpx;
+  padding: 8rpx 16rpx;
   border-radius: var(--radius-pill);
-  border: 1rpx solid transparent;
-  font-size: 22rpx;
+  font-size: 21rpx;
   line-height: 1.2;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
-  transition: all 0.2s var(--ease-spring);
+  transition: color 0.2s ease, background 0.2s ease;
 }
 
 .fall-unit {
-  font-size: 18rpx;
+  font-size: 17rpx;
 }
 
 .fall-chip.is-on {
   color: var(--text-moon-pure);
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
-  box-shadow: 0 6rpx 18rpx rgba(99, 102, 241, 0.3);
+  background: #6366F1;
 }
 
 /* 计算卡 */
 .calc-card {
-  margin-top: 24rpx;
+  margin-top: 20rpx;
   padding: 0;
-  transition: border-color 0.35s ease, background 0.35s ease;
+  transition: background 0.3s ease, border-color 0.3s ease;
 }
 
 .calc-card.is-open {
-  border-color: var(--border-glow);
-  background: var(--glass-card-active);
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(22, 30, 50, 0.72);
 }
 
 .calc-head {
   display: flex;
   align-items: center;
-  gap: 20rpx;
-  padding: 30rpx 28rpx;
+  gap: 16rpx;
+  padding: 26rpx 26rpx;
 }
 
 .calc-head:active {
@@ -89,30 +85,28 @@
 }
 
 .calc-glyph-wrap {
-  width: 72rpx;
-  height: 72rpx;
+  width: 58rpx;
+  height: 58rpx;
   flex: none;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: rgba(129, 140, 248, 0.16);
-  border: 1rpx solid var(--border-glow);
+  background: rgba(255, 255, 255, 0.055);
 }
 
 .calc-glyph-wrap.is-sleep {
-  background: rgba(45, 212, 191, 0.12);
-  border-color: rgba(45, 212, 191, 0.4);
+  background: rgba(45, 212, 191, 0.08);
 }
 
 .calc-glyph {
   font-family: var(--font-cn-serif);
-  font-size: 28rpx;
-  color: var(--color-primary);
+  font-size: 25rpx;
+  color: var(--color-accent-moon);
 }
 
 .calc-glyph-wrap.is-sleep .calc-glyph {
-  color: var(--color-calm-teal);
+  color: #6EE7D8;
 }
 
 .calc-head-main {
@@ -120,54 +114,53 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2rpx;
+  gap: 1rpx;
 }
 
 .calc-question {
-  font-family: var(--font-cn-serif);
-  font-size: 30rpx;
-  letter-spacing: 3rpx;
+  font-family: var(--font-sans);
+  font-size: 29rpx;
+  font-weight: 500;
+  letter-spacing: 0;
   color: var(--text-primary);
 }
 
 .calc-sub {
-  font-size: 20rpx;
+  font-size: 19rpx;
   color: var(--text-muted);
 }
 
 .calc-time {
-  margin-top: 4rpx;
-  font-size: 44rpx;
+  margin-top: 3rpx;
+  font-size: 40rpx;
   font-weight: 300;
-  letter-spacing: 2rpx;
+  letter-spacing: 1rpx;
   color: var(--text-moon-pure);
   font-variant-numeric: tabular-nums;
 }
 
 .calc-toggle {
   flex: none;
-  width: 52rpx;
-  height: 52rpx;
+  width: 44rpx;
+  height: 44rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
-  border: 1rpx solid var(--border-moon-subtle);
-  background: var(--glass-tint);
-  font-size: 28rpx;
-  color: var(--text-secondary);
+  font-size: 34rpx;
+  font-weight: 300;
+  color: var(--text-muted);
 }
 
 .calc-body {
-  padding: 0 24rpx 28rpx;
-  perspective: 1200rpx;
+  padding: 0 24rpx 24rpx;
+  perspective: 1400rpx;
 }
 
 .calc-flip {
   position: relative;
-  height: 620rpx;
+  height: 600rpx;
   transform-style: preserve-3d;
-  transition: transform 0.6s var(--ease-gentle);
+  transition: transform 0.5s var(--ease-gentle);
 }
 
 .calc-flip.is-flipped {
@@ -179,7 +172,7 @@
   top: 0;
   left: 0;
   width: 100%;
-  height: 620rpx;
+  height: 600rpx;
   -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
   display: flex;
@@ -191,23 +184,18 @@
 }
 
 .calc-face .btn-lunar-capsule {
-  margin-top: 16rpx;
+  margin-top: 12rpx;
 }
 
 .calc-back {
   transform: rotateY(180deg);
-  padding-top: 8rpx;
+  padding-top: 4rpx;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 .calc-action {
   margin-top: 8rpx;
-}
-
-.action-moon {
-  font-size: 30rpx;
-  color: var(--color-accent-moon);
 }
 
 /* 现在时间 */
@@ -215,134 +203,127 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4rpx 12rpx 12rpx;
+  padding: 2rpx 10rpx 8rpx;
 }
 
 .now-hint {
-  font-size: 20rpx;
+  font-size: 19rpx;
   color: var(--text-muted);
 }
 
 .now-link {
-  font-size: 22rpx;
-  color: var(--color-primary);
-  padding: 6rpx 0;
+  font-size: 21rpx;
+  color: #A5B4FC;
+  padding: 4rpx 0;
 }
 
 /* 结果 */
-.result-panel {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 4rpx 8rpx 0;
-}
-
 .result-label {
-  font-size: 20rpx;
-  letter-spacing: 6rpx;
+  font-size: 19rpx;
+  letter-spacing: 5rpx;
   color: var(--text-muted);
 }
 
 .result-main {
   display: flex;
   align-items: baseline;
-  gap: 12rpx;
-  margin-top: 10rpx;
+  gap: 10rpx;
+  margin-top: 8rpx;
 }
 
 .result-day {
-  font-size: 22rpx;
+  font-size: 21rpx;
   color: var(--color-accent-moon);
-  letter-spacing: 2rpx;
+  letter-spacing: 1rpx;
 }
 
 .result-time {
-  font-family: var(--font-cn-serif);
-  font-size: 96rpx;
-  line-height: 1.1;
-  letter-spacing: 4rpx;
+  font-family: var(--font-sans);
+  font-size: 88rpx;
+  font-weight: 300;
+  line-height: 1.08;
+  letter-spacing: 0;
   color: var(--text-moon-pure);
   font-variant-numeric: tabular-nums;
 }
 
 .result-time.is-compact {
-  font-size: 54rpx;
-  letter-spacing: 2rpx;
+  font-size: 50rpx;
+  letter-spacing: 0;
 }
 
 .result-meta {
-  margin-top: 6rpx;
-  font-size: 24rpx;
+  margin-top: 4rpx;
+  font-size: 23rpx;
   color: var(--text-secondary);
 }
 
 .result-note {
-  margin-top: 8rpx;
-  font-size: 20rpx;
+  margin-top: 4rpx;
+  font-size: 19rpx;
   color: var(--text-muted);
 }
 
 .result-list {
   width: 100%;
-  margin-top: 26rpx;
-  border-top: 1rpx solid var(--border-moon-subtle);
+  margin-top: 20rpx;
+  border-top: 1rpx solid rgba(255, 255, 255, 0.06);
 }
 
 .result-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16rpx;
-  padding: 20rpx 4rpx;
-  border-bottom: 1rpx solid var(--border-moon-subtle);
+  gap: 14rpx;
+  padding: 16rpx 4rpx;
+  border-bottom: 1rpx solid rgba(255, 255, 255, 0.05);
 }
 
 .result-row.is-passed {
-  opacity: 0.4;
+  opacity: 0.36;
 }
 
 .result-row-left {
   display: flex;
   align-items: baseline;
-  gap: 10rpx;
+  gap: 8rpx;
 }
 
 .result-row-day {
-  font-size: 20rpx;
+  font-size: 19rpx;
   color: var(--text-muted);
 }
 
 .result-row-time {
-  font-size: 32rpx;
+  font-size: 30rpx;
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
 }
 
 .result-row-tag {
-  padding: 2rpx 10rpx;
+  padding: 2rpx 8rpx;
   border-radius: var(--radius-pill);
-  border: 1rpx solid var(--border-moon-subtle);
-  font-size: 16rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.08);
+  font-size: 15rpx;
   color: var(--text-muted);
 }
 
 .result-row-meta {
-  font-size: 20rpx;
+  font-size: 19rpx;
   color: var(--text-muted);
 }
 
 .result-reset {
   width: 100%;
-  margin-top: 24rpx;
+  margin-top: 18rpx;
 }
 
 /* 脚注 */
 .calc-note {
-  margin-top: 32rpx;
-  padding: 0 20rpx;
+  margin-top: 28rpx;
+  padding: 0 18rpx;
   text-align: center;
-  font-size: 20rpx;
+  font-size: 19rpx;
   line-height: 1.9;
   color: var(--text-muted);
 }
-

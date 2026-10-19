@@ -6,7 +6,7 @@
 
 - [ ] 深圳市牧码人网络科技有限公司完成微信开放平台 / 公众平台认证（企业）。
 - [ ] 注册小程序，拿到 AppID / AppSecret（AppSecret 只放服务端环境变量）。
-- [ ] 当前已配置 AppID `wxaa4e654a147d030d`；AppSecret 不要发在聊天里、不要提交，直接写进服务器 `.env`。
+- [ ] 当前已配置 AppID `wx378b0a7437d60998`；AppSecret 不要发在聊天里、不要提交，直接写进服务器 `.env`。
 - [ ] 在 `.env` 设置 `ADMIN_PASSWORD`（后台 `/admin` 登录用）；不设置会每次启动生成临时密码并打印在日志里。
 - [ ] 小程序名称「睡点」查重；简介不出现"助眠、改善睡眠、治疗、健康"。
 - [ ] 管理员、开发者、体验成员配置完成。
@@ -23,11 +23,11 @@
 ## 3. 域名、服务器、存储
 
 - [ ] 一台 2核4G/3M 轻量服务器，已装 Docker + Compose。
-- [ ] API 域名完成 ICP 备案 + HTTPS（443）。
+- [ ] API 域名 `sleep.qfmaster.com` 已解析到 `101.43.51.127`，完成 ICP 备案 + HTTPS（443）。
 - [ ] 公众平台 → 开发管理 → 服务器域名，添加：
-  - `request 合法域名`：API 域名
-  - `downloadFile 合法域名`：`qfmaster-1322402212.cos.ap-shanghai.myqcloud.com`（音频走这个）
-- [ ] 当前音频桶可公开读取（支持 Range）。若开启防盗链，**必须放行 `servicewechat.com`**（小程序请求会带该 Referer），H5 演示还要放行站点域名；否则小程序与演示页都会 403。
+  - `request 合法域名`：`https://sleep.qfmaster.com`
+  - `downloadFile 合法域名`：`https://img.qfmaster.com`（音频走这个）
+- [ ] 当前音频桶 `qfmaster-1322402212`（ap-shanghai）可公开读取（支持 Range）。若开启防盗链，**必须放行 `servicewechat.com` 与 `https://sleep.qfmaster.com`**，H5 演示还要放行站点域名；否则小程序与演示页都会 403。
 - [ ] 音频规格：建议 2–6 分钟无缝 loop、MP3 96–128kbps 单声道、单条 ≤ 3MB。当前 `sleep/sleep-10001.mp3` 为 48kHz/256kbps、5.7MB（约 3 分钟），首播偏慢，建议重压后再传一版。
 - [ ] 后台“存储与上传”填 Bucket / Region / SecretId / SecretKey（建议子账号，仅该桶 PutObject），上传后点“测试连接”和“试听”。
 - [ ] 验证：真机 `wx.getBackgroundAudioManager()` 播放 COS 地址，锁屏 10 分钟不断；弱网下首播等待可接受。
@@ -62,19 +62,17 @@
 ## 7. 部署
 
 ```bash
-cp .env.example .env      # 填 POSTGRES_PASSWORD / WX_APPID / WX_SECRET / ADMIN_PASSWORD / CONFIG_SECRET / DOMAIN
+cp .env.example .env      # 填 POSTGRES_PASSWORD / WX_APPID / WX_SECRET / ADMIN_PASSWORD / CONFIG_SECRET / TRUST_PROXY=1
 docker compose up -d --build
-curl https://api.example.com/api/ready
-
-# 需要自动 HTTPS 时
-docker compose --profile https up -d
+curl https://sleep.qfmaster.com/api/ready
 ```
 
 - [ ] `NODE_ENV=production`，`ALLOW_DEV_LOGIN` 必须为空（服务端会在生产环境强制校验）。
 - [ ] 固定 `ADMIN_PASSWORD` 与 `CONFIG_SECRET`；生产环境缺 `ADMIN_PASSWORD` 会直接启动失败。
 - [ ] `/api/ready` 返回 200；数据库挂掉时它应返回 503。
 - [ ] 数据库初始化：compose 会自动执行 `server/sql/001_init.sql`。
-- [ ] 反向代理（Caddy profile 或 Nginx）配置 HTTPS；上传需要 30MB 请求体上限。
+- [ ] 1Panel 反向代理 `sleep.qfmaster.com` → `http://127.0.0.1:3000`，证书 + 强制 HTTPS；`TRUST_PROXY=1`；上传需要 30MB 请求体上限。
+- [ ] 只放行 80/443，不对公网暴露 3000。
 - [ ] 生产环境后台 Cookie 带 `Secure`，**必须 HTTPS 访问 `/admin`**。
 - [ ] 登录 `/admin`，确认概览数字、音频试听、保存后 `/api/config` 立即变化。
 - [ ] 日志落盘 + 轮转；JSON 日志含 requestId，确认无敏感字段。

@@ -44,10 +44,7 @@
       </scroll-view>
     </view>
 
-    <view class="tw-band"></view>
     <text class="tw-colon">:</text>
-    <view class="tw-mask tw-mask-top"></view>
-    <view class="tw-mask tw-mask-bottom"></view>
   </view>
 
   <view class="tw-period">

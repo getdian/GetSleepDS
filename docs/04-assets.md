@@ -1,6 +1,6 @@
 # 睡点 · 素材清单与版权留证
 
-- 更新：2026-10-18
+- 更新：2026-10-19
 - 用途：上线前自查，也给审核/维权留证据
 
 ## 1. 音频
@@ -9,10 +9,10 @@
 |---|---|---|---|---|---|---|
 | `sleep-10001` | `sleep/sleep-10001.mp3` | 约 2:59 | MP3 48kHz / 256kbps | 5,712,384 B（5.7MB） | **待补**（目标 CC0 或自制） | 已在 COS，可用 |
 
-- 地址：`https://qfmaster-1322402212.cos.ap-shanghai.myqcloud.com/sleep/sleep-10001.mp3`
-- 实测：`HEAD 200`，`Content-Type: audio/mpeg`，`Accept-Ranges: bytes`，Range 请求返回 206；带 Referer 的请求会被 COS 防盗链拒绝（403），小程序需放行 `servicewechat.com`。
+- 地址：`https://img.qfmaster.com/sleep/sleep-10001.mp3`（同桶 `qfmaster-1322402212` / `ap-shanghai`）
+- 实测（2026-10-19）：`HEAD 200`，`Content-Type: audio/mpeg`，`Content-Length: 5712384`；带 `Referer: https://servicewechat.com/...` 与 `https://sleep.qfmaster.com/` 均 200，当前未开启防盗链。若后续开启，需放行 `servicewechat.com` 与 `https://sleep.qfmaster.com`。
 - 现在可以直接在后台 `/admin` → 存储与上传 → 上传音频，不必手动进 COS 控制台；上传后自动追加到音频列表。
-- 标题暂定“环境音 01”：确认内容（雨声/海浪/篝火/白噪音）后，在后台 `/admin` 改名称与图标（写数据库；两处配置文件仅作兜底）。
+- 标题已定“雨声”、分类“自然之声”：在后台 `/admin` 改名称与图标（写数据库；两处配置文件仅作兜底）。
 - 优化建议：256kbps 对睡眠环境音明显偏高。重压到 96–128kbps 单声道，文件可降到 2MB 左右，首播更快、流量更省；loop 接缝用 0.5–1s 淡入淡出处理。
 
 ## 2. 音频合规要求

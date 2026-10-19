@@ -102,6 +102,21 @@ function createMemoryDb() {
       return count
     },
 
+    async deleteUserData(openid) {
+      const bucket = records.get(openid)
+      const recordCount = bucket ? bucket.size : 0
+      records.delete(openid)
+      const unlockCount = unlocks.delete(openid) ? 1 : 0
+      let eventCount = 0
+      for (let i = events.length - 1; i >= 0; i -= 1) {
+        if (events[i].openid === openid) {
+          events.splice(i, 1)
+          eventCount += 1
+        }
+      }
+      return { records: recordCount, unlocks: unlockCount, events: eventCount }
+    },
+
     async getAppConfig() {
       if (!appConfig) return null
       return { value: JSON.parse(JSON.stringify(appConfig.value)), updatedAt: appConfig.updatedAt }
@@ -271,6 +286,27 @@ function createPostgresDb(connectionString) {
     async deleteRecords(openid) {
       const result = await pool.query('DELETE FROM sleep_records WHERE openid = $1', [openid])
       return result.rowCount
+    },
+
+    async deleteUserData(openid) {
+      const client = await pool.connect()
+      try {
+        await client.query('BEGIN')
+        const records = await client.query('DELETE FROM sleep_records WHERE openid = $1', [openid])
+        const unlocks = await client.query('DELETE FROM audio_unlocks WHERE openid = $1', [openid])
+        const events = await client.query('DELETE FROM events WHERE openid = $1', [openid])
+        await client.query('COMMIT')
+        return {
+          records: records.rowCount,
+          unlocks: unlocks.rowCount,
+          events: events.rowCount
+        }
+      } catch (error) {
+        await client.query('ROLLBACK')
+        throw error
+      } finally {
+        client.release()
+      }
     },
 
     async getAppConfig() {

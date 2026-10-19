@@ -1,6 +1,7 @@
 .tw {
   display: flex;
-  gap: 12rpx;
+  align-items: stretch;
+  gap: 4rpx;
   height: 440rpx;
   width: 100%;
 }
@@ -10,9 +11,6 @@
   flex: 1;
   height: 440rpx;
   overflow: hidden;
-  border-radius: var(--radius-lg);
-  border: 1rpx solid var(--border-moon-subtle);
-  background: rgba(8, 11, 20, 0.32);
 }
 
 .tw-col {
@@ -37,10 +35,10 @@
 
 .tw-item {
   text-align: center;
-  font-size: 34rpx;
+  font-size: 31rpx;
   color: #94A3B8;
   color: var(--text-secondary, #94A3B8);
-  opacity: 0.68;
+  opacity: 0.78;
   font-variant-numeric: tabular-nums;
   transition: color 0.2s ease, opacity 0.2s ease;
 }
@@ -51,30 +49,7 @@
   opacity: 1;
   font-size: 48rpx;
   font-weight: 600;
-  letter-spacing: 2rpx;
-  text-shadow: 0 0 28rpx rgba(129, 140, 248, 0.55);
-}
-
-/* 中央高亮带 */
-.tw-band {
-  position: absolute;
-  top: 50%;
-  left: 12rpx;
-  right: 12rpx;
-  height: 88rpx;
-  transform: translateY(-50%);
-  border-radius: var(--radius-md);
-  border-top: 1rpx solid var(--border-glow, rgba(129, 140, 248, 0.35));
-  border-bottom: 1rpx solid var(--border-glow, rgba(129, 140, 248, 0.35));
-  background: linear-gradient(
-    90deg,
-    rgba(129, 140, 248, 0.02) 0%,
-    rgba(129, 140, 248, 0.18) 50%,
-    rgba(129, 140, 248, 0.02) 100%
-  );
-  box-shadow: inset 0 0 36rpx rgba(129, 140, 248, 0.12);
-  pointer-events: none;
-  z-index: 0;
+  letter-spacing: 1rpx;
 }
 
 .tw-colon {
@@ -82,62 +57,41 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  font-size: 38rpx;
-  font-weight: 600;
-  color: #818CF8;
-  color: var(--color-primary, #818CF8);
-  opacity: 0.85;
+  font-size: 34rpx;
+  font-weight: 500;
+  color: #94A3B8;
+  color: var(--text-secondary, #94A3B8);
+  opacity: 1;
   pointer-events: none;
   z-index: 4;
 }
 
-.tw-mask {
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 120rpx;
-  pointer-events: none;
-  z-index: 3;
-}
-
-.tw-mask-top {
-  top: 0;
-  background: linear-gradient(180deg, rgba(8, 11, 20, 0.88), rgba(8, 11, 20, 0));
-}
-
-.tw-mask-bottom {
-  bottom: 0;
-  background: linear-gradient(0deg, rgba(8, 11, 20, 0.88), rgba(8, 11, 20, 0));
-}
-
-/* 上午 / 下午 */
+/* 上午 / 下午：文字切换，不再做成两个方块 */
 .tw-period {
-  width: 112rpx;
+  width: 76rpx;
   height: 440rpx;
   display: flex;
   flex-direction: column;
-  align-items: stretch;
+  align-items: center;
   justify-content: center;
-  gap: 12rpx;
+  gap: 32rpx;
   flex: none;
 }
 
 .tw-period-btn {
-  height: 88rpx;
-  line-height: 88rpx;
+  position: relative;
+  width: 100%;
+  padding: 8rpx 0;
   text-align: center;
-  border-radius: var(--radius-md);
-  border: 1rpx solid var(--border-moon-subtle);
-  background: var(--glass-tint);
   color: var(--text-muted);
-  font-size: 22rpx;
-  letter-spacing: 2rpx;
-  transition: all 0.2s var(--ease-spring);
+  font-size: 21rpx;
+  letter-spacing: 1rpx;
+  border-radius: var(--radius-pill);
+  transition: color 0.2s ease, background 0.2s ease;
 }
 
 .tw-period-btn.is-on {
-  border-color: var(--border-glow);
-  background: var(--glass-card-active);
   color: var(--text-moon-pure);
-  box-shadow: 0 0 24rpx rgba(129, 140, 248, 0.18);
+  font-weight: 500;
+  background: rgba(99, 102, 241, 0.2);
 }

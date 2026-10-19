@@ -2,7 +2,7 @@
 
 极简睡眠时间计算 + 一键打卡 + 环境音。零登录、零授权、只有深色主题，前后端分离。
 
-当前是 **L4 商业交付候选**：三 tab 小程序、audio-dock、Express/PG 后端、后台管理、H5 演示与部署文件已就位。融合了同产品另一实现的 audio-dock、真 3D 翻转、A/B/C 打卡态、横向热力图与海报/清除数据。还缺 AppSecret、API 域名、广告位与真机验收。
+当前是 **L4 商业交付候选**：三 tab 小程序、audio-dock、Express/PG 后端、后台管理、H5 演示与部署文件已就位。融合了同产品另一实现的 audio-dock、真 3D 翻转、A/B/C 打卡态、横向热力图与海报/清除数据。AppID 已切到 `wx378b0a7437d60998`，开发者工具已跑通；还缺 AppSecret、1Panel 线上部署、广告位与真机音频验收。
 
 ## 当前状态
 
@@ -12,13 +12,17 @@
 | 通栏透明顶栏 + 悬浮“灵动岛” | ✅ 已实现，去掉固定原生导航条 |
 | 90 分钟双向倒推、时间轮、真 3D 翻转、A/B/C 打卡 | ✅ 已实现，有单测 |
 | 横向 120 天热力图、周均值、海报、云同步/清除 | ✅ 已实现 |
-| 后端公共接口 + 后台 11 个接口 + PG 连接池 + 内存模式 | ✅ 已实现，有单测 |
+| 后端公共接口 + 后台上传/配置/看板/用户数据 + PG 连接池 + 内存模式 | ✅ 已实现，有单测 |
 | Dockerfile / docker-compose | ✅ 已实现，`docker compose config` 校验通过 |
 | 后台管理 `/admin` | ✅ 左侧主菜单 + 右侧分类面板，浏览器实测保存 |
 | 落地页 `/` + H5 交互演示 `/demo/` | ✅ 浏览器实测（H5 仍为旧版结构，色板已同步） |
-| 51 个单元测试 | ✅ 全部通过 |
-| AppID / 首条 COS 音频 | ✅ 已写入配置（`wxaa4e654a147d030d`，1 条雨声） |
-| 微信开发者工具渲染 / 真机音频 / 广告 | ⚠️ 未验证，需要外部账号与环境 |
+| 53 个单元测试 | ✅ 全部通过 |
+| AppID / 首条 COS 音频 | ✅ `wx378b0a7437d60998`；`https://img.qfmaster.com/sleep/sleep-10001.mp3` 可访问 |
+| 微信开发者工具渲染 | ✅ 三页已编译、截图、无 console error |
+| 真机音频 / 广告 / 锁屏 | ⚠️ 未验证，需要外部账号与真机 |
+
+![计算器](docs/assets/mini-calculator.png)
+![入睡](docs/assets/mini-sleep.png)
 
 设计取舍与验收口径见 [修订版 PRD](docs/00-prd-revised.md)，接口与数据模型见 [架构说明](docs/01-architecture.md)。
 
@@ -26,7 +30,7 @@
 
 ```
 miniprogram/            小程序（原生 WXML/WXSS/JS，无第三方 UI 库）
-  config/env.js         ← API 域名，唯一必须改的前端配置
+  config/env.js         ← API 域名（开发/体验/正式自动切换）
   config/fallback.js    ← 服务端不可达时的兜底配置
   utils/                时间、统计、存储、请求、广告、同步、缓存、事件、跨页定时器
   components/           ambient / top-bar / time-wheel / audio-dock / heatmap / unlock-sheet / empty-state
@@ -38,7 +42,7 @@ server/                 Express API（config / unlock / summary / sync / events 
   public/site/           ← 落地页 + H5 交互演示
   sql/001_init.sql
   test/
-docs/                   10 份文档
+docs/                   10 份文档 + 根目录 DECISIONS.md
 tests/                  小程序纯逻辑单测
 tools/                  资源生成、静态检查
 ```
@@ -48,13 +52,13 @@ tools/                  资源生成、静态检查
 ### 1. 小程序（不需要后端也能看计算器/入睡）
 
 1. 微信开发者工具 → 导入项目 → 选择仓库根目录（`project.config.json` 已指向 `miniprogram/`）。
-2. AppID 已写入 `wxaa4e654a147d030d`，用该小程序的管理员/开发者微信扫码登录工具即可。
-3. 详情 → 本地设置 → 勾选 **不校验合法域名**（`config/env.js` 默认指向 `http://127.0.0.1:3000`）。
+2. AppID 已写入 `wx378b0a7437d60998`，用该小程序的管理员/开发者微信扫码登录工具即可。
+3. 详情 → 本地设置 → 勾选 **不校验合法域名**。开发版自动请求 `http://127.0.0.1:3100`，体验版/正式版自动请求 `https://sleep.qfmaster.com`（`config/env.js` 按 `envVersion` 切换，不用手改）。
 4. 编译，计算器页直接可用；打卡数据写本地存储。
 
 底部 tab 是 **计算器 / 入睡 / 统计**。声音不在 tabBar：从「入睡」页右下角“声音”进入底部抽屉，播放后变成迷你播放器，收起/切 tab 继续播放。视觉系统见 [改版说明](docs/09-redesign.md)。
 
-环境音已接入 1 条 COS 音频（约 3 分钟，5.7MB）。真机播放前，必须把 `qfmaster-1322402212.cos.ap-shanghai.myqcloud.com` 加入公众平台 → 开发管理 → 服务器域名 → **downloadFile 合法域名**；开发者工具里勾了“不校验合法域名”可直接试听。
+环境音已接入 1 条 COS 音频（约 3 分钟，5.7MB），对外地址 `https://img.qfmaster.com/sleep/sleep-10001.mp3`。真机播放前，必须把 `https://img.qfmaster.com` 加入公众平台 → 开发管理 → 服务器域名 → **downloadFile 合法域名**；开发者工具里勾了“不校验合法域名”可直接试听。
 
 ### 2. 后端（内存模式，不需要 PostgreSQL）
 
@@ -62,14 +66,14 @@ tools/                  资源生成、静态检查
 cd server
 npm install
 # macOS / Linux
-DB_MODE=memory ALLOW_DEV_LOGIN=1 ADMIN_PASSWORD=local-admin node src/index.js
+PORT=3100 DB_MODE=memory ALLOW_DEV_LOGIN=1 ADMIN_PASSWORD=local-admin node src/index.js
 # Windows PowerShell
-$env:DB_MODE='memory'; $env:ALLOW_DEV_LOGIN='1'; $env:ADMIN_PASSWORD='local-admin'; node src/index.js
+$env:PORT='3100'; $env:DB_MODE='memory'; $env:ALLOW_DEV_LOGIN='1'; $env:ADMIN_PASSWORD='local-admin'; node src/index.js
 ```
 
 ```bash
-curl http://127.0.0.1:3000/api/health
-curl http://127.0.0.1:3000/api/config
+curl http://127.0.0.1:3100/api/health
+curl http://127.0.0.1:3100/api/config
 ```
 
 内存模式重启即丢，只用于联调；生产必须用 PostgreSQL。
@@ -79,7 +83,7 @@ curl http://127.0.0.1:3000/api/config
 启动后端后打开：
 
 ```
-http://127.0.0.1:3000/admin
+http://127.0.0.1:3100/admin
 ```
 
 ![后台管理](docs/assets/admin.png)
@@ -108,13 +112,12 @@ H5 读取同一份 `/api/config`，后台改音频或文案会同步反映；演
 ### 5. 后端 + 数据库（Docker）
 
 ```bash
-cp .env.example .env      # 填 POSTGRES_PASSWORD、WX_APPID、WX_SECRET、ADMIN_PASSWORD、CONFIG_SECRET、DOMAIN
+cp .env.example .env      # 填 POSTGRES_PASSWORD、WX_APPID、WX_SECRET、ADMIN_PASSWORD、CONFIG_SECRET、TRUST_PROXY=1
 docker compose up -d --build
 curl http://127.0.0.1:3000/api/ready
-
-# 有域名、80/443 可放行时，用 Caddy 自动 HTTPS
-docker compose --profile https up -d
 ```
+
+生产推荐 **1Panel 反向代理**：域名 `sleep.qfmaster.com` → `http://127.0.0.1:3000`，证书由 1Panel 申请；完整步骤见 [部署 Runbook](docs/08-deploy-runbook.md)。只有没有 1Panel/Nginx 时才用 `docker compose --profile https up -d` 的 Caddy。
 
 `/api/ready` 会在数据库不可用时返回 503；`/api/health` 只用于看进程状态。生产环境缺少 `ADMIN_PASSWORD` 会直接启动失败。
 
@@ -124,7 +127,7 @@ docker compose --profile https up -d
 
 | 要改什么 | 改哪里 |
 |---|---|
-| API 域名 | `miniprogram/config/env.js` |
+| API 域名 | `miniprogram/config/env.js`（开发/体验/正式自动切换，通常不用改） |
 | 音频列表 / 广告位 / 功能开关 / 缓存 / 解锁文案 | **后台 `/admin`**（写 `app_config` 表）；`server/config/app.config.json` 仅作种子与兜底 |
 | COS 凭证与音频上传 | 后台 `/admin` → 存储与上传（SecretKey 加密入库） |
 | 后台登录密码 / 加密密钥 | `.env` 的 `ADMIN_PASSWORD`、`CONFIG_SECRET` |
@@ -136,13 +139,13 @@ docker compose --profile https up -d
 ## 验证
 
 ```bash
-npm test        # 51 个单测：时间、统计、双向倒推、热力图/墓碑、API、后台鉴权/事件/COS 配置
+npm test        # 53 个单测：时间、统计、双向倒推、热力图/墓碑、API、后台鉴权/事件/COS 配置/用户记录删除
 npm run check   # JSON / WXML 标签 / WXSS 括号 / 页面四件套 / 组件引用 / CSP inline 检查
 ```
 
 本次实际执行结果：
 
-- `npm test`：51 passed / 0 failed
+- `npm test`：53 passed / 0 failed
 - `npm run check`：通过，主包约 178 KB
 - 后端内存模式冒烟：`/api/health`、`/api/config`、`/api/summary`、`/api/audio/unlock`、`/api/records/erase` 均符合预期
 - **PostgreSQL 16 容器端到端**：自动建表、解锁写入 24 小时、`sync` 幂等、空记录同步能取回 3 条（换机回填）、`summary` 正常返回、后台配置重启后仍在
@@ -151,11 +154,13 @@ npm run check   # JSON / WXML 标签 / WXSS 括号 / 页面四件套 / 组件引
 - `docker compose config`：通过
 - 生产配置三道保护：均按预期启动失败
 
-**没有验证**：WXML 实际渲染、新 audio-dock 抽屉/3D 翻转/热力图/海报、真机后台音频、锁屏续播、激励视频、真机网络请求。这些必须在微信开发者工具与真机上逐项过 [验收清单](docs/00-prd-revised.md#8-验收清单)。
+**已补验**：微信开发者工具三页真实编译/截图、时间轮 12h 循环与上午/下午、透明顶栏/灵动岛、后端配置拉取、控制台无 error。
+
+**仍未验证**：audio-dock 抽屉完整交互、海报、真机后台音频、锁屏续播、激励视频、真机网络请求。这些必须在真机上逐项过 [验收清单](docs/00-prd-revised.md#8-验收清单)。
 
 ## 已知限制
 
-- 环境音目前只有 1 条（`sleep/sleep-10001.mp3`），标题暂用“环境音 01”，确认内容后可直接在 `/admin` 改；COS 域名需加入 `downloadFile` 合法域名。
+- 环境音目前只有 1 条（`https://img.qfmaster.com/sleep/sleep-10001.mp3`，标题“雨声”），更多音频在 `/admin` 上传；COS 域名需加入 `downloadFile` 合法域名。
 - 服务端 AppSecret 未写入仓库，必须自己填到 `.env`；不填时只能以 `ALLOW_DEV_LOGIN=1` 做本地联调。
 - 内存模式下后台保存的配置重启会丢（页面会提示“内存（重启丢失）”），正式环境请用 PostgreSQL。
 - 若 COS 开了防盗链，必须放行 `servicewechat.com`，否则小程序内音频会 403；H5 演示还需放行站点域名（演示页失败会回退本地测试音）。
@@ -172,6 +177,7 @@ npm run check   # JSON / WXML 标签 / WXSS 括号 / 页面四件套 / 组件引
 ## 文档
 
 0. [当前上下文 context.md](context.md) —— 代码事实、配置边界、部署幂等与待决策
+0.5 [设计决策 DECISIONS.md](DECISIONS.md) —— 14 条 ADR（睡眠日、圆均值、LWW、模板总结、午休范围、1Panel 等）
 1. [修订版 PRD](docs/00-prd-revised.md) —— 范围、页面规格、算法口径、与原始 PRD 的 10 处差异、验收清单
 2. [架构与接口](docs/01-architecture.md) —— 目录、数据模型、API 契约、降级矩阵、安全
 3. [实施计划](docs/02-implementation-plan.md) —— 阶段、验证命令、待外部输入

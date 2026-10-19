@@ -122,6 +122,7 @@
     unlock: { title: '广告与解锁', sub: '激励视频、有效期与失败降级', badge: '变现' },
     features: { title: '功能与缓存', sub: '开关、预加载、容量与有效期', badge: '运行' },
     copy: { title: '解锁文案', sub: '抽屉里的标题、说明与按钮', badge: '文案' },
+    users: { title: '用户数据', sub: '按 openid 查询与删除云端记录', badge: '客服 / 合规' },
     storage: { title: '存储与上传', sub: 'COS 凭证、加密保存与连通性测试', badge: '安全' },
     advanced: { title: '配置 JSON', sub: '只读检查当前下发的完整配置', badge: '只读' }
   }
@@ -457,6 +458,111 @@
       return '缓存有效期需为 1–30 天'
     }
     return ''
+  }
+
+  /* ---------- 用户数据 ---------- */
+
+  function formatRecordTime(value) {
+    const ts = Number(value)
+    if (!Number.isFinite(ts) || ts <= 0) return '—'
+    const date = new Date(ts)
+    const pad = function (n) {
+      return n < 10 ? '0' + n : String(n)
+    }
+    return (
+      date.getMonth() + 1 + '月' + date.getDate() + '日 ' +
+      pad(date.getHours()) + ':' + pad(date.getMinutes())
+    )
+  }
+
+  function renderUser(data) {
+    $('#user-result').hidden = false
+    $('#user-count').textContent = data.count || 0
+    $('#user-openid-label').textContent = data.openid || ''
+    $('#user-delete').disabled = !data.count
+
+    const box = $('#user-records')
+    box.textContent = ''
+    const records = data.records || []
+
+    if (!records.length) {
+      const empty = document.createElement('div')
+      empty.className = 'user-empty'
+      empty.textContent = '这个 openid 还没有云端睡眠记录。'
+      box.appendChild(empty)
+      return
+    }
+
+    records.forEach(function (record) {
+      const row = document.createElement('div')
+      row.className = 'user-record'
+
+      const day = document.createElement('strong')
+      day.textContent = record.day || '—'
+
+      const bed = document.createElement('span')
+      bed.textContent = '入睡 ' + formatRecordTime(record.bedAt)
+
+      const wake = document.createElement('span')
+      wake.textContent = '起床 ' + formatRecordTime(record.wakeAt)
+
+      const duration = document.createElement('span')
+      duration.className = 'num'
+      duration.textContent = (record.durationMin || 0) + ' 分钟'
+
+      row.appendChild(day)
+      row.appendChild(bed)
+      row.appendChild(wake)
+      row.appendChild(duration)
+      box.appendChild(row)
+    })
+  }
+
+  async function queryUser() {
+    const openid = $('#user-openid').value.trim()
+    if (!/^[A-Za-z0-9_-]{6,64}$/.test(openid)) {
+      toast('请输入正确的 openid', true)
+      return
+    }
+
+    const button = $('#user-query')
+    button.disabled = true
+    $('#user-msg').textContent = '查询中…'
+    try {
+      const data = await api('/api/admin/users/' + encodeURIComponent(openid))
+      renderUser(data)
+      $('#user-msg').textContent = '查询完成，仅显示云端记录。'
+    } catch (error) {
+      $('#user-result').hidden = true
+      $('#user-msg').textContent = ''
+      toast(error.message || '查询失败', true)
+    } finally {
+      button.disabled = false
+    }
+  }
+
+  async function deleteUser() {
+    const openid = $('#user-openid').value.trim()
+    if (!/^[A-Za-z0-9_-]{6,64}$/.test(openid)) {
+      toast('请先查询要删除的 openid', true)
+      return
+    }
+
+    if (!window.confirm('确认删除 ' + openid + ' 的全部云端记录（睡眠 / 解锁 / 事件）？此操作不可撤销。')) return
+
+    const button = $('#user-delete')
+    button.disabled = true
+    try {
+      const result = await api('/api/admin/users/' + encodeURIComponent(openid) + '/records', {
+        method: 'DELETE'
+      })
+      toast('已删除 ' + (result.deleted || 0) + ' 条云端记录')
+      await queryUser()
+    } catch (error) {
+      toast(error.message || '删除失败', true)
+    } finally {
+      button.disabled = $('#user-result').hidden || $('#user-count').textContent === '0'
+    }
   }
 
   /* ---------- COS 存储 ---------- */
@@ -815,6 +921,14 @@
 
   $('#storage-save').addEventListener('click', saveStorage)
   $('#storage-test').addEventListener('click', testStorage)
+  $('#user-query').addEventListener('click', queryUser)
+  $('#user-delete').addEventListener('click', deleteUser)
+  $('#user-openid').addEventListener('keydown', function (event) {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      queryUser()
+    }
+  })
 
   $('#toggle-json').addEventListener('click', function () {
     jsonView.hidden = !jsonView.hidden

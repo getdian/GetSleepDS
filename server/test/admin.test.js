@@ -251,6 +251,44 @@ test('事件上报与看板聚合', async () => {
   assert.equal(board.body.topTracks[0].title, '雨声')
 })
 
+test('后台可按 openid 查询并删除用户记录', async () => {
+  const records = [
+    {
+      day: '2026-10-14',
+      bedAt: Date.UTC(2026, 9, 14, 15, 50),
+      wakeAt: Date.UTC(2026, 9, 14, 23, 30),
+      updatedAt: FIXED_NOW
+    }
+  ]
+  const synced = await call('/api/records/sync', {
+    method: 'POST',
+    body: { code: 'admin-user-code', records }
+  })
+  assert.equal(synced.status, 200)
+
+  const found = await call('/api/admin/users/dev_openid', {}, true)
+  assert.equal(found.status, 200)
+  assert.equal(found.body.openid, 'dev_openid')
+  assert.equal(found.body.count, 1)
+  assert.equal(found.body.records[0].day, '2026-10-14')
+
+  const removed = await call('/api/admin/users/dev_openid/records', { method: 'DELETE' }, true)
+  assert.equal(removed.status, 200)
+  assert.equal(removed.body.deleted, 1)
+
+  const after = await call('/api/admin/users/dev_openid', {}, true)
+  assert.equal(after.status, 200)
+  assert.equal(after.body.count, 0)
+})
+
+test('后台用户查询拒绝非法 openid，且未登录不可用', async () => {
+  const bad = await call('/api/admin/users/x', {}, true)
+  assert.equal(bad.status, 400)
+
+  const unauth = await call('/api/admin/users/dev_openid')
+  assert.equal(unauth.status, 401)
+})
+
 test('上传接口先校验登录与文件', async () => {
   const unauth = await fetch(base + '/api/admin/audio/upload', {
     method: 'POST',

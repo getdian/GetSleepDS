@@ -25,6 +25,16 @@ function fileExtension(file) {
   return /^[a-z0-9]{2,5}$/.test(ext) ? ext : 'mp3'
 }
 
+function readOpenid(value) {
+  const openid = String(value || '').trim()
+  if (!/^[A-Za-z0-9_-]{6,64}$/.test(openid)) throw invalidBody('openid 格式不正确')
+  return openid
+}
+
+function openidTag(openid) {
+  return crypto.createHash('sha256').update(openid).digest('hex').slice(0, 12)
+}
+
 function createUploader() {
   return multer({
     storage: multer.memoryStorage(),
@@ -131,6 +141,56 @@ function createAdminRoute(options) {
       } catch (e) {
         throw dbUnavailable()
       }
+    })
+  )
+
+  // 客服/合规：按 openid 精确查询与删除。openid 不写入日志，只记录哈希前缀。
+  router.get(
+    '/admin/users/:openid',
+    auth.requireAuth,
+    wrap(async (req, res) => {
+      const openid = readOpenid(req.params.openid)
+      let records = []
+      try {
+        records = await db.getRecords(openid)
+      } catch (e) {
+        throw dbUnavailable()
+      }
+      records.sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : 0))
+      res.json({ openid, count: records.length, records })
+    })
+  )
+
+  router.delete(
+    '/admin/users/:openid/records',
+    auth.requireAuth,
+    wrap(async (req, res) => {
+      const openid = readOpenid(req.params.openid)
+      let result = null
+      try {
+        result = db.deleteUserData
+          ? await db.deleteUserData(openid)
+          : { records: await db.deleteRecords(openid), unlocks: 0, events: 0 }
+      } catch (e) {
+        throw dbUnavailable()
+      }
+      log.log(
+        JSON.stringify({
+          level: 'warn',
+          action: 'admin_delete_user_data',
+          requestId: req.id || '',
+          openidTag: openidTag(openid),
+          deleted: result.records,
+          unlocks: result.unlocks,
+          events: result.events
+        })
+      )
+      res.json({
+        openid,
+        deleted: result.records,
+        deletedUnlocks: result.unlocks,
+        deletedEvents: result.events
+      })
     })
   )
 

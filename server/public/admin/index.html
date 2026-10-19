@@ -66,6 +66,9 @@
               <button type="button" class="side-item" data-panel="copy">
                 <span class="side-ico">✎</span><span>解锁文案</span>
               </button>
+              <button type="button" class="side-item" data-panel="users">
+                <span class="side-ico">◎</span><span>用户数据</span>
+              </button>
               <button type="button" class="side-item" data-panel="storage">
                 <span class="side-ico">☁</span><span>存储与上传</span>
               </button>
@@ -213,6 +216,32 @@
         </section>
 
       </form>
+
+      <section class="panel admin-panel" data-panel="users" hidden>
+        <div class="panel-head">
+          <div>
+            <h2>用户记录</h2>
+            <p class="hint">按 openid 精确查询、导出核对或删除该用户的云端记录（睡眠记录 / 解锁 / 事件）；删除只影响云端，用户本机数据需在“统计 → 清除数据”处理。</p>
+          </div>
+          <span class="badge">客服 / 合规</span>
+        </div>
+        <div class="user-search">
+          <input id="user-openid" placeholder="用户 openid，例如 o6zAJs..." maxlength="64" autocomplete="off">
+          <button type="button" id="user-query" class="primary">查询</button>
+        </div>
+        <p id="user-msg" class="hint">openid 只在本次查询中使用，不写入页面日志。</p>
+        <div id="user-result" hidden>
+          <div class="user-summary">
+            <strong id="user-count">0</strong>
+            <span>条云端记录</span>
+            <code id="user-openid-label"></code>
+          </div>
+          <div id="user-records" class="user-records"></div>
+          <div class="row-actions">
+            <button type="button" id="user-delete" class="danger">删除该用户云端记录</button>
+          </div>
+        </div>
+      </section>
 
       <section class="panel admin-panel" data-panel="storage" hidden>
         <div class="panel-head">

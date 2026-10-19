@@ -42,14 +42,21 @@ function createRecordsRoute(options) {
       if (!code) throw invalidBody('缺少 code')
 
       const openid = await codeToOpenid(code, config.wx)
-      let deleted = 0
+      let result = null
       try {
-        deleted = await db.deleteRecords(openid)
+        result = db.deleteUserData
+          ? await db.deleteUserData(openid)
+          : { records: await db.deleteRecords(openid), unlocks: 0, events: 0 }
       } catch (e) {
         throw dbUnavailable()
       }
 
-      res.json({ deleted, serverTime: now() })
+      res.json({
+        deleted: result.records,
+        deletedUnlocks: result.unlocks,
+        deletedEvents: result.events,
+        serverTime: now()
+      })
     })
   )
 

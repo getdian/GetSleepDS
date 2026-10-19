@@ -20,7 +20,7 @@ Component({
       let capsuleGap = 16
 
       try {
-        const info = wx.getSystemInfoSync()
+        const info = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync()
         statusBarHeight = info.statusBarHeight || 20
         const menu = wx.getMenuButtonBoundingClientRect
           ? wx.getMenuButtonBoundingClientRect()

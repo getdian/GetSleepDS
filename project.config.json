@@ -1,5 +1,5 @@
 {
-  "appid": "wxaa4e654a147d030d",
+  "appid": "wx378b0a7437d60998",
   "projectname": "get-sleep",
   "compileType": "miniprogram",
   "miniprogramRoot": "miniprogram/",
@@ -16,7 +16,7 @@
   },
   "condition": {},
   "editorSetting": {
-    "tabIndent": "space",
+    "tabIndent": "insertSpaces",
     "tabSize": 2
   }
 }

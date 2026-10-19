@@ -105,21 +105,10 @@ picker-view {
   background: var(--glass-card-bg);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
-  border: 1.5rpx solid var(--border-moon-subtle);
+  border: 1rpx solid var(--border-moon-subtle);
   border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-moon);
+  box-shadow: 0 12rpx 36rpx rgba(0, 0, 0, 0.26);
   transition: transform 0.3s var(--ease-spring), border-color 0.3s ease, background 0.3s ease;
-}
-
-.sleep-glass-card::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 12%;
-  right: 12%;
-  height: 1rpx;
-  background: linear-gradient(90deg, transparent, var(--border-moon-light), transparent);
-  pointer-events: none;
 }
 
 .is-tappable:active {
@@ -135,16 +124,16 @@ picker-view {
   justify-content: center;
   gap: 12rpx;
   width: 100%;
-  height: 96rpx;
-  padding: 0 48rpx;
-  border: 1rpx solid var(--border-glow);
+  height: 92rpx;
+  padding: 0 40rpx;
+  border: none;
   border-radius: var(--radius-pill);
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+  background: linear-gradient(135deg, #7178E8 0%, #5357DA 100%);
   color: var(--text-moon-pure);
-  font-size: 30rpx;
+  font-size: 28rpx;
   font-weight: 500;
-  letter-spacing: 2rpx;
-  box-shadow: 0 10rpx 30rpx rgba(99, 102, 241, 0.35);
+  letter-spacing: 1rpx;
+  box-shadow: 0 8rpx 20rpx rgba(79, 70, 229, 0.18);
   transition: transform 0.25s var(--ease-spring), opacity 0.2s ease;
 }
 
@@ -181,24 +170,25 @@ picker-view {
 
 .eyebrow {
   display: block;
-  font-size: 20rpx;
-  letter-spacing: 6rpx;
+  font-size: 18rpx;
+  letter-spacing: 5rpx;
   color: var(--text-muted);
   text-transform: uppercase;
 }
 
 .title-xl {
   display: block;
-  font-family: var(--font-cn-serif);
+  font-family: var(--font-sans);
   font-size: 56rpx;
-  letter-spacing: 4rpx;
-  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.24;
   color: var(--text-moon-pure);
 }
 
 .sub {
   display: block;
-  font-size: 24rpx;
+  font-size: 23rpx;
   color: var(--text-secondary);
 }
 

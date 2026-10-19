@@ -175,7 +175,7 @@ CREATE INDEX IF NOT EXISTS idx_events_created_at ON events (created_at);
 | POST | `/api/audio/unlock` | code | 校验 code → openid，写入 24h 解锁 |
 | POST | `/api/summary` | 无 | 由记录生成本周事实描述 |
 | POST | `/api/records/sync` | code | 上传近 60 天记录（幂等 upsert，返回云端记录用于回填） |
-| POST | `/api/records/erase` | code | 合规删除：物理删除该 openid 全部云端记录（3 次/分钟/IP） |
+| POST | `/api/records/erase` | code | 合规删除：物理删除该 openid 的记录、解锁与事件（3 次/分钟/IP） |
 | POST | `/api/events` | code | 上报轻量事件（app_open / checkin / audio_play / audio_unlock） |
 | POST | `/api/admin/login` | 密码 | 后台登录，写 HttpOnly + SameSite=Strict Cookie |
 | POST | `/api/admin/logout` | Cookie | 清除后台会话 |
@@ -184,6 +184,8 @@ CREATE INDEX IF NOT EXISTS idx_events_created_at ON events (created_at);
 | PUT | `/api/admin/config` | Cookie | 严格校验后保存，版本号自增 |
 | GET | `/api/admin/stats` | Cookie | 基础计数 |
 | GET | `/api/admin/analytics` | Cookie | 看板聚合（今日/本周/14 天/ Top 5） |
+| GET | `/api/admin/users/:openid` | Cookie | 按 openid 查询云端记录（客服/合规） |
+| DELETE | `/api/admin/users/:openid/records` | Cookie | 删除该 openid 的记录、解锁与事件，并写审计日志 |
 | GET/PUT | `/api/admin/storage` | Cookie | 读取 / 保存 COS 配置（SecretKey 加密） |
 | POST | `/api/admin/storage/test` | Cookie | 测试 COS 连接 |
 | POST | `/api/admin/audio/upload` | Cookie | 上传音频到 COS（multipart，≤25MB） |
@@ -196,11 +198,11 @@ CREATE INDEX IF NOT EXISTS idx_events_created_at ON events (created_at);
   "audio": [
     {
       "id": "sleep-10001",
-      "title": "环境音 01",
-      "subtitle": "循环播放 · 支持锁屏",
-      "category": "环境音",
-      "url": "https://qfmaster-1322402212.cos.ap-shanghai.myqcloud.com/sleep/sleep-10001.mp3",
-      "icon": "noise"
+      "title": "雨声",
+      "subtitle": "循环雨声 · 支持锁屏",
+      "category": "自然之声",
+      "url": "https://img.qfmaster.com/sleep/sleep-10001.mp3",
+      "icon": "rain"
     }
   ],
   "unlock": { "mode": "rewarded", "adUnitId": "", "ttlHours": 24, "onAdError": "grant" },
@@ -308,10 +310,10 @@ CREATE INDEX IF NOT EXISTS idx_events_created_at ON events (created_at);
 - AppSecret 只存在于服务端环境变量，永不进入小程序包、日志、响应。
 - 后台密码来自 `ADMIN_PASSWORD`；未设置时启动期生成临时密码并打印日志，不落库。
 - 后台会话是 HMAC 签名 Cookie（HttpOnly、SameSite=Strict、生产加 Secure），有效期 7 天；登录 5 次/分钟/IP，管理接口 401 保护。
-- 后台页面走 CSP `default-src 'self'`，禁止 inline 脚本与 iframe 嵌入。
+- 后台页面走 CSP `default-src 'self'`，禁止 inline 脚本与 iframe 嵌入；所有 API 响应带 `X-Content-Type-Options: nosniff`、`Referrer-Policy: no-referrer`、`X-Frame-Options: DENY`、`Permissions-Policy`，生产加 HSTS。
 - COS SecretKey 用 AES-256-GCM 加密后存 `app_config`，密钥来自 `CONFIG_SECRET`（缺省回退 `ADMIN_SECRET`/`ADMIN_PASSWORD`）；接口只返回 `hasSecret`，日志不回显。
 - 事件只保存 openid、类型、音频 id、时间，不包含睡眠记录内容、设备信息、位置。
-- 日志不打印 `code`、`openid` 明文、请求体，也不打印后台密码（仅未配置时在启动日志提示一次）。
+- 日志不打印 `code`、`openid` 明文、请求体，也不打印后台密码（仅未配置时在启动日志提示一次）；后台按 openid 查询的路径统一脱敏为 `/api/admin/users/:openid`，删除审计只记哈希前缀。
 - 请求体限制 64KB；CORS 不开放（小程序不需要）。
 - 限流中间件为进程内存实现，单实例足够；多实例需换 Redis，本期不做。
 - 小程序端不调用 `wx.getUserProfile`、`getPhoneNumber`、`getLocation` 等任何授权类接口。

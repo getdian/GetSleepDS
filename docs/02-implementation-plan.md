@@ -51,8 +51,8 @@ npm run check
 # 3. 后端本地冒烟（内存模式，不需要 PG）
 cd server && npm install
 DB_MODE=memory ALLOW_DEV_LOGIN=1 PORT=3000 node src/index.js
-curl http://127.0.0.1:3000/api/health
-curl http://127.0.0.1:3000/api/config
+curl http://127.0.0.1:3100/api/health
+curl http://127.0.0.1:3100/api/config
 # summary 的请求体见《架构与接口》5.3；用 curl 时注意 day 必须等于入睡时间的睡眠日
 
 # 4. PostgreSQL 端到端（可选，用一次性容器）
@@ -60,12 +60,12 @@ curl http://127.0.0.1:3000/api/config
 
 # 5. 后台（可选）
 ADMIN_PASSWORD=local-admin node src/index.js
-# 浏览器打开 http://127.0.0.1:3000/admin 登录，改广告位/音频后保存
+# 浏览器打开 http://127.0.0.1:3100/admin 登录，改广告位/音频后保存
 ```
 
-本次已实测：51 个单测通过、静态检查通过、内存模式接口符合预期、PostgreSQL 16 容器端到端通过（建表 / 解锁 24h / sync 幂等 / 回填 / summary / erase / 后台配置持久化）、后台浏览器端到端（登录、保存写库、公共配置与解锁 TTL 即时生效、音频增删与试听、存储面板）、H5 落地页与演示页浏览器验收（打卡、热力图、音频解锁、缓存状态）、compose 配置通过、生产环境启动保护生效。
+本次已实测：53 个单测通过、静态检查通过、内存模式接口符合预期、PostgreSQL 16 容器端到端通过（建表 / 解锁 24h / sync 幂等 / 回填 / summary / erase / 后台配置持久化）、后台浏览器端到端（登录、保存写库、公共配置与解锁 TTL 即时生效、音频增删与试听、存储面板）、H5 落地页与演示页浏览器验收（打卡、热力图、音频解锁、缓存状态）、compose 配置通过、生产环境启动保护生效。
 
-小程序端需要在微信开发者工具中导入仓库根目录（`project.config.json` 已指向 `miniprogram/`），AppID 已配置为 `wxaa4e654a147d030d`，需用有该小程序开发者权限的微信登录工具。**本次无法在命令行验证 WXML 渲染与真机音频**，需按 08 验收清单逐项过。
+小程序端在微信开发者工具中导入仓库根目录（`project.config.json` 已指向 `miniprogram/`），AppID 已配置为 `wx378b0a7437d60998`。**2026-10-19 已在开发者工具完成三页编译、时间轮 23:55 循环/上午下午切换/3D 结果、通栏灵动岛截图；真机音频与广告仍需按 08 验收清单逐项过。**
 
 ---
 
@@ -73,7 +73,7 @@ ADMIN_PASSWORD=local-admin node src/index.js
 
 | # | 事项 | 影响 | 谁提供 |
 |---|---|---|---|
-| 1 | 小程序 AppID / AppSecret | 真机登录、解锁接口 | AppID 已提供 `wxaa4e654a147d030d`；AppSecret 仍需写入服务端 `.env` |
+| 1 | 小程序 AppID / AppSecret | 真机登录、解锁接口 | AppID 已提供 `wx378b0a7437d60998`；AppSecret 仍需写入服务端 `.env` |
 | 2 | 已备案 API 域名 + HTTPS 证书 | 请求合法域名、上架 | 运维 |
 | 3 | COS 音频 + 域名白名单 | 环境音播放、`downloadFile` 白名单 | 已提供 1 条 `sleep-10001`；还需 3–5 条与白名单配置 |
 | 4 | 后台密码 / 加密密钥 | `/admin` 登录、COS 凭证保存 | 运维在 `.env` 设置 `ADMIN_PASSWORD`、`CONFIG_SECRET` |
