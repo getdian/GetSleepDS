@@ -95,12 +95,19 @@
 
 .island.is-brand-only .island-brand {
   font-family: var(--font-sans);
-  font-size: 28rpx;
-  font-weight: 500;
-  letter-spacing: 3rpx;
-  color: rgba(255, 255, 255, 0.92);
+  font-size: 32rpx;
+  font-weight: 600;
+  letter-spacing: 2rpx;
+  color: #FFFFFF;
+  text-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.4);
 }
 
 .island.is-brand-only .island-orb {
-  box-shadow: 0 0 14rpx rgba(253, 230, 138, 0.55);
+  width: 22rpx;
+  height: 22rpx;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: inset -6rpx 4rpx 0 0 #FFFFFF, 0 0 16rpx rgba(255, 255, 255, 0.9);
+  transform: rotate(-25deg);
+  margin-right: 6rpx;
 }

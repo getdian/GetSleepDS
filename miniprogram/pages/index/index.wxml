@@ -15,7 +15,7 @@
 <view class="page calc-page">
   <view class="calc-hero">
     <text class="hero-title">今晚，几点睡？</text>
-    <text class="hero-sub">根据你的时间，找到今晚合适的睡点。</text>
+    <text class="hero-sub">选一个时间，找到适合你的睡点。</text>
 
     <view class="hero-tools">
       <view class="hero-bg-btn" bindtap="openBgPicker">
@@ -26,116 +26,127 @@
   </view>
 
   <!-- 玻璃卡外壳：静态不翻转，作为视觉锚点 -->
-  <view class="calc-card">
-    <!-- 模式切换：常驻卡片顶部，不参与翻转 -->
-    <view class="mode-row">
-      <view class="mode-pill" bindtap="toggleMode">
-        <text class="mode-ico">{{mode === 'wake' ? '☀️' : '🌙'}}</text>
-        <text class="mode-text">{{mode === 'wake' ? '我想几点醒' : '我想几点睡'}}</text>
-      </view>
-      <view class="mode-swap" bindtap="toggleMode">
-        <text class="mode-swap-ico">⇄</text>
-      </view>
-    </view>
-
-    <!-- 3D 翻转只作用于内容层 -->
-    <view class="calc-stage">
-      <view class="calc-flip {{flipped ? 'is-flipped' : ''}}">
-        <!-- 正面：选择与计算 -->
-        <view class="calc-face calc-front">
-          <view class="wheel-frame">
-            <time-wheel
-              id="calc-wheel"
-              value="{{mode === 'wake' ? wakeTime : sleepTime}}"
-              bind:change="onTimeChange"
-            />
+  <view class="calc-card-wrap">
+    <view class="calc-card">
+      <!-- 模式切换：一体化胶囊常驻卡片顶部，不参与翻转 -->
+      <view class="mode-row">
+        <view class="mode-capsule" bindtap="toggleMode">
+          <view class="mode-pill-active">
+            <text class="mode-ico">{{mode === 'wake' ? '☼' : '🌙'}}</text>
+            <text class="mode-text">{{mode === 'wake' ? '我想几点醒' : '我想几点睡'}}</text>
           </view>
-
-          <view wx:if="{{mode === 'sleep'}}" class="now-row">
-            <text class="now-hint">当前 {{nowText}}</text>
-            <text class="now-link" bindtap="onNowTap">用现在的时间</text>
-          </view>
-
-          <view class="fall-block">
-            <view class="fall-head">
-              <view class="fall-ico"></view>
-              <text class="fall-label">入睡耗时</text>
-            </view>
-            <view class="fall-chips">
-              <view
-                wx:for="{{fallOptions}}"
-                wx:key="*this"
-                class="fall-chip {{fallAsleep === item ? 'is-on' : ''}}"
-                data-min="{{item}}"
-                bindtap="onFallAsleepTap"
-              >
-                <text>{{item}}</text>
-                <text class="fall-unit">分</text>
-              </view>
-            </view>
-          </view>
-
-          <view class="calc-action" bindtap="onCalc">
-            <text>{{mode === 'wake' ? '计算我的睡点' : '计算我的起床时间'}}</text>
-            <text class="action-arrow">→</text>
+          <view class="mode-swap">
+            <text class="mode-swap-ico">⇄</text>
           </view>
         </view>
+      </view>
 
-        <!-- 背面：推荐结果（参考图下方推荐列表的翻转实现） -->
-        <view class="calc-face calc-back">
-          <block wx:if="{{view}}">
-            <view class="result-head">
-              <view class="result-moon"></view>
-              <text class="result-label">{{view.label}}</text>
+      <!-- 3D 翻转只作用于内容层 -->
+      <view class="calc-stage">
+        <view class="calc-flip {{flipped ? 'is-flipped' : ''}}">
+          <!-- 正面：选择与计算 -->
+          <view class="calc-face calc-front">
+            <view class="wheel-frame">
+              <time-wheel
+                id="calc-wheel"
+                value="{{mode === 'wake' ? wakeTime : sleepTime}}"
+                bind:change="onTimeChange"
+              />
             </view>
 
-            <view class="result-main">
-              <view class="result-bar"></view>
-              <view class="result-body">
-                <view class="result-line">
-                  <text wx:if="{{view.mainDay}}" class="result-day">{{view.mainDay}}</text>
-                  <text class="result-time {{view.compact ? 'is-compact' : ''}}">{{view.mainTime}}</text>
+            <view wx:if="{{mode === 'sleep'}}" class="now-row">
+              <text class="now-hint">当前 {{nowText}}</text>
+              <text class="now-link" bindtap="onNowTap">用现在的时间</text>
+            </view>
+
+            <view class="fall-block">
+              <view class="fall-head">
+                <view class="fall-ico"></view>
+                <text class="fall-label">入睡耗时</text>
+              </view>
+              <view class="fall-chips">
+                <view
+                  wx:for="{{fallOptions}}"
+                  wx:key="*this"
+                  class="fall-chip {{fallAsleep === item ? 'is-on' : ''}}"
+                  data-min="{{item}}"
+                  bindtap="onFallAsleepTap"
+                >
+                  <text>{{item}}</text>
+                  <text class="fall-unit">分</text>
                 </view>
-                <text class="result-meta">{{view.mainMeta}}</text>
-                <text class="result-note">{{view.note}}</text>
-              </view>
-              <view wx:if="{{!view.compact}}" class="result-badge">
-                <text class="result-badge-star">★</text>
-                <text>推荐</text>
               </view>
             </view>
 
-            <view class="result-list">
-              <view
-                wx:for="{{view.rows}}"
-                wx:key="cycles"
-                class="result-row {{item.passed ? 'is-passed' : ''}}"
-              >
-                <view class="result-row-left">
-                  <text class="result-row-day">{{item.day}}</text>
-                  <text class="result-row-time">{{item.time}}</text>
-                  <text wx:if="{{item.passed}}" class="result-row-tag">已过</text>
+            <view class="calc-action" bindtap="onCalc">
+              <text>{{mode === 'wake' ? '计算我的睡点' : '计算我的起床时间'}}</text>
+              <text class="action-arrow">→</text>
+            </view>
+          </view>
+
+          <!-- 背面：推荐结果（参考图下方推荐列表的翻转实现） -->
+          <view class="calc-face calc-back">
+            <block wx:if="{{view}}">
+              <view class="result-head">
+                <text class="result-moon">🌙</text>
+                <text class="result-label">{{view.label}}</text>
+              </view>
+
+              <view class="result-main">
+                <view class="result-bar"></view>
+                <view class="result-body">
+                  <view class="result-line">
+                    <text wx:if="{{view.mainDay && view.mainDay !== '今天'}}" class="result-day">{{view.mainDay}}</text>
+                    <text class="result-time {{view.compact ? 'is-compact' : ''}}">{{view.mainTime}}</text>
+                    <block wx:if="{{!view.compact}}">
+                      <text class="result-dot">·</text>
+                      <text class="result-meta-inline">{{view.mainMeta}}</text>
+                    </block>
+                  </view>
+                  <text wx:if="{{view.compact}}" class="result-meta">{{view.mainMeta}}</text>
+                  <text wx:if="{{view.note}}" class="result-note">{{view.note}}</text>
                 </view>
-                <text class="result-row-meta">{{item.cycles}} 个周期 · {{item.duration}}</text>
+                <view wx:if="{{!view.compact}}" class="result-badge">
+                  <text class="result-badge-star">★</text>
+                  <text>推荐</text>
+                </view>
               </view>
-            </view>
 
-            <view class="result-actions">
-              <view class="result-reset" bindtap="reset">↻ 重新选择</view>
-              <view class="result-switch" bindtap="toggleMode">{{mode === 'wake' ? '换成我想几点睡' : '换成我想几点醒'}} ⇄</view>
-            </view>
+              <view class="result-list">
+                <view
+                  wx:for="{{view.rows}}"
+                  wx:key="cycles"
+                  class="result-row {{item.passed ? 'is-passed' : ''}}"
+                >
+                  <view class="result-row-left">
+                    <text wx:if="{{item.day && item.day !== '今天'}}" class="result-row-day">{{item.day}}</text>
+                    <text class="result-row-time">{{item.time}}</text>
+                    <text wx:if="{{item.passed}}" class="result-row-tag">已过</text>
+                  </view>
+                  <view class="result-row-right">
+                    <text class="result-row-dot">·</text>
+                    <text class="result-row-meta">{{item.cycles}} 个周期 · {{item.duration}}</text>
+                  </view>
+                </view>
+              </view>
 
-            <view class="result-share">
-              <share-btn text="分享给朋友" variant="link" />
-            </view>
-          </block>
+              <view class="result-actions">
+                <view class="result-reset" bindtap="reset">↻ 重新选择</view>
+                <view class="result-switch" bindtap="toggleMode">{{mode === 'wake' ? '换成我想几点睡' : '换成我想几点醒'}} ⇄</view>
+              </view>
+
+              <view class="result-share">
+                <share-btn text="分享给朋友" variant="link" />
+              </view>
+            </block>
+          </view>
         </view>
       </view>
     </view>
   </view>
 
   <view class="calc-note">
-    <text>每个完整周期约 90 分钟。这里只做时间倒推，不做睡眠评价。</text>
+    <text>按 90 分钟周期计算，仅作时间参考</text>
   </view>
 
   <ad-slot slot-name="home" enabled="{{ads.home.enabled}}" unit-id="{{ads.home.unitId}}" type="{{ads.home.type}}" />

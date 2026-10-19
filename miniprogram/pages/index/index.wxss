@@ -56,36 +56,37 @@
   font-family: var(--font-sans);
   font-size: 72rpx;
   font-weight: 700;
-  line-height: 1.2;
+  line-height: 1.15;
   letter-spacing: 2rpx;
-  color: var(--c-text);
-  text-shadow: 0 6rpx 28rpx rgba(2, 6, 18, 0.5);
+  color: #FFFFFF;
+  text-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.5);
 }
 
 .hero-sub {
   display: block;
   margin-top: 14rpx;
   font-size: 26rpx;
-  line-height: 1.6;
-  color: rgba(255, 255, 255, 0.68);
+  line-height: 1.5;
+  color: rgba(220, 230, 255, 0.78);
 }
 
 .hero-tools {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 14rpx;
+  position: absolute;
+  right: 8rpx;
+  top: 24rpx;
 }
 
 .hero-bg-btn {
   display: flex;
   align-items: center;
-  gap: 8rpx;
+  gap: 6rpx;
   padding: 8rpx 18rpx;
   border-radius: 999rpx;
-  background: rgba(255, 255, 255, 0.07);
-  border: 1rpx solid rgba(255, 255, 255, 0.08);
-  font-size: 20rpx;
-  color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1rpx solid rgba(255, 255, 255, 0.12);
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(16rpx);
 }
 
 .hero-bg-btn:active {
@@ -96,110 +97,107 @@
   color: var(--c-primary-soft);
 }
 
-/* 玻璃卡外壳：静态容器，不参与 3D 翻转 */
+/* 极简无框外壳：去掉边框和厚重背景，让时钟滚轮自然漂浮在夜空中 */
+.calc-card-wrap {
+  position: relative;
+  width: 100%;
+}
+
 .calc-card {
   position: relative;
-  padding: 30rpx 28rpx 32rpx;
-  border-radius: 44rpx;
-  border: 1rpx solid rgba(255, 255, 255, 0.12);
-  background:
-    linear-gradient(
-      168deg,
-      rgba(255, 255, 255, 0.10) 0%,
-      rgba(255, 255, 255, 0.04) 42%,
-      rgba(139, 135, 255, 0.08) 100%
-    ),
-    rgba(15, 22, 44, 0.56);
-  -webkit-backdrop-filter: blur(28rpx) saturate(150%);
-  backdrop-filter: blur(28rpx) saturate(150%);
-  box-shadow: 0 30rpx 70rpx rgba(2, 6, 18, 0.5);
+  padding: 10rpx 4rpx 20rpx;
+  background: transparent;
+  border: none;
+  box-shadow: none;
 }
 
-/* 卡片顶缘高光：玻璃质感的点睛，不加别的装饰 */
-.calc-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 12%;
-  right: 12%;
-  height: 1rpx;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.34), transparent);
-}
-
-/* 模式切换：常驻卡片顶部，不翻转 */
+/* 模式切换：一体化极简胶囊 */
 .mode-row {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 14rpx;
-  margin-bottom: 10rpx;
+  margin-bottom: 20rpx;
 }
 
-.mode-pill {
-  display: flex;
+.mode-capsule {
+  display: inline-flex;
   align-items: center;
-  gap: 10rpx;
-  height: 68rpx;
-  padding: 0 26rpx;
+  height: 72rpx;
+  padding: 6rpx 14rpx 6rpx 6rpx;
+  box-sizing: border-box;
   border-radius: 999rpx;
-  background: linear-gradient(135deg, rgba(139, 135, 255, 0.38), rgba(139, 135, 255, 0.16));
-  border: 1rpx solid rgba(167, 164, 255, 0.28);
+  background: rgba(18, 26, 56, 0.6);
+  border: 1rpx solid rgba(255, 255, 255, 0.09);
+  box-shadow: 0 6rpx 20rpx rgba(4, 8, 24, 0.35);
   transition: opacity 0.16s ease;
 }
 
-.mode-pill:active {
+.mode-capsule:active {
   opacity: 0.82;
 }
 
+.mode-pill-active {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  height: 60rpx;
+  padding: 0 24rpx;
+  border-radius: 999rpx;
+  background: rgba(60, 75, 145, 0.85);
+  box-shadow: 0 4rpx 12rpx rgba(20, 30, 80, 0.4);
+}
+
 .mode-ico {
-  font-size: 26rpx;
+  font-size: 24rpx;
   line-height: 1;
+  color: #FFFFFF;
 }
 
 .mode-text {
-  font-size: 27rpx;
+  font-size: 26rpx;
   font-weight: 500;
   letter-spacing: 1rpx;
-  color: var(--c-text);
+  color: #FFFFFF;
 }
 
 .mode-swap {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 68rpx;
-  height: 68rpx;
-  border-radius: 999rpx;
-  background: rgba(255, 255, 255, 0.07);
-  border: 1rpx solid rgba(255, 255, 255, 0.1);
-  transition: opacity 0.16s ease;
-}
-
-.mode-swap:active {
-  opacity: 0.75;
+  width: 52rpx;
+  height: 52rpx;
+  margin-left: 8rpx;
 }
 
 .mode-swap-ico {
-  font-size: 30rpx;
+  font-size: 28rpx;
   line-height: 1;
-  color: var(--c-primary-soft);
+  color: rgba(180, 205, 250, 0.75);
 }
 
-/* 3D 翻转：只翻内容层，玻璃壳保持不动 */
+/* 3D 翻转舞台与卡片：完全消除抖动与穿透 */
 .calc-stage {
-  perspective: 1500rpx;
+  position: relative;
+  perspective: 1600rpx;
+  -webkit-perspective: 1600rpx;
+  width: 100%;
+  height: 720rpx;
 }
 
 .calc-flip {
   position: relative;
-  height: 720rpx;
+  width: 100%;
+  height: 100%;
   transform-style: preserve-3d;
-  transition: transform 0.62s cubic-bezier(0.45, 0.05, 0.2, 1);
+  -webkit-transform-style: preserve-3d;
+  transition: transform 0.6s cubic-bezier(0.4, 0.0, 0.2, 1);
+  -webkit-transition: -webkit-transform 0.6s cubic-bezier(0.4, 0.0, 0.2, 1);
   will-change: transform;
 }
 
 .calc-flip.is-flipped {
   transform: rotateY(180deg);
+  -webkit-transform: rotateY(180deg);
 }
 
 .calc-face {
@@ -210,79 +208,88 @@
   height: 100%;
   display: flex;
   flex-direction: column;
-  -webkit-backface-visibility: hidden;
+  box-sizing: border-box;
   backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
 }
 
-/* 交叉淡入兜底：内容层里嵌着滚筒的嵌套 3D，
-   个别 WebKit 上 backface-visibility 会失效造成正反穿透 */
 .calc-front {
-  opacity: 1;
-  transition: opacity 0.26s ease 0.22s;
+  transform: rotateY(0deg) translateZ(1px);
+  -webkit-transform: rotateY(0deg) translateZ(1px);
+  z-index: 2;
   pointer-events: auto;
+  visibility: visible;
+  transition: visibility 0s linear 0.3s;
 }
 
 .calc-flip.is-flipped .calc-front {
-  opacity: 0;
-  transition: opacity 0.26s ease;
+  visibility: hidden;
   pointer-events: none;
+  transition: visibility 0s linear 0.3s;
 }
 
 .calc-back {
-  transform: rotateY(180deg);
-  opacity: 0;
-  transition: opacity 0.26s ease;
+  transform: rotateY(180deg) translateZ(1px);
+  -webkit-transform: rotateY(180deg) translateZ(1px);
+  z-index: 1;
   pointer-events: none;
+  visibility: hidden;
+  transition: visibility 0s linear 0.3s;
+  padding: 0 12rpx;
 }
 
 .calc-flip.is-flipped .calc-back {
-  opacity: 1;
-  transition: opacity 0.26s ease 0.22s;
+  visibility: visible;
   pointer-events: auto;
+  z-index: 2;
+  transition: visibility 0s linear 0.3s;
 }
 
-/* 时间轮：不套厚边框，让时间漂浮在夜色里 */
+/* 时间轮：自然漂浮在夜色里 */
 .wheel-frame {
-  margin-top: 10rpx;
+  margin-top: 6rpx;
 }
 
 .now-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10rpx 8rpx 0;
+  padding: 10rpx 14rpx 0;
 }
 
 .now-hint {
-  font-size: 18rpx;
+  font-size: 20rpx;
   color: var(--c-text-3);
 }
 
 .now-link {
   padding: 4rpx 0;
-  font-size: 20rpx;
+  font-size: 22rpx;
   color: var(--c-primary-soft);
 }
 
-/* 入睡耗时 */
+/* 入睡耗时保留 */
 .fall-block {
-  margin-top: 22rpx;
+  margin-top: 24rpx;
+  padding: 0 12rpx;
 }
 
 .fall-head {
   display: flex;
   align-items: center;
   gap: 10rpx;
-  margin-bottom: 14rpx;
+  margin-bottom: 16rpx;
 }
 
-/* 极简 CSS 时钟图标：与主色同调，不引素材 */
+/* 极简 CSS 时钟图标 */
 .fall-ico {
   position: relative;
   width: 24rpx;
   height: 24rpx;
   border-radius: 50%;
-  border: 3rpx solid rgba(167, 164, 255, 0.85);
+  border: 2.5rpx solid rgba(150, 175, 235, 0.85);
 }
 
 .fall-ico::before {
@@ -292,7 +299,7 @@
   top: 50%;
   width: 2rpx;
   height: 7rpx;
-  background: rgba(167, 164, 255, 0.9);
+  background: rgba(150, 175, 235, 0.9);
   transform: translate(-50%, -100%);
   border-radius: 2rpx;
 }
@@ -302,21 +309,22 @@
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 6rpx;
+  width: 5rpx;
   height: 2rpx;
-  background: rgba(167, 164, 255, 0.9);
+  background: rgba(150, 175, 235, 0.9);
   transform: translate(0, -50%);
   border-radius: 2rpx;
 }
 
 .fall-label {
-  font-size: 22rpx;
-  color: var(--c-text-2);
+  font-size: 24rpx;
+  font-weight: 500;
+  color: rgba(190, 210, 245, 0.8);
 }
 
 .fall-chips {
   display: flex;
-  gap: 12rpx;
+  gap: 16rpx;
 }
 
 .fall-chip {
@@ -325,134 +333,168 @@
   align-items: center;
   justify-content: center;
   gap: 2rpx;
-  height: 68rpx;
+  height: 72rpx;
   border-radius: 999rpx;
-  font-size: 24rpx;
-  color: rgba(255, 255, 255, 0.5);
-  background: rgba(255, 255, 255, 0.055);
-  transition: color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+  font-size: 25rpx;
+  font-weight: 500;
+  color: rgba(160, 180, 220, 0.7);
+  background: rgba(22, 32, 64, 0.5);
+  border: 1rpx solid rgba(255, 255, 255, 0.08);
+  transition: all 0.2s ease;
 }
 
 .fall-chip.is-on {
   color: #FFFFFF;
-  font-weight: 500;
-  background: linear-gradient(135deg, #ABA8FF, #8B87FF);
-  box-shadow: 0 8rpx 22rpx rgba(139, 135, 255, 0.32);
+  font-weight: 600;
+  background: rgba(65, 82, 155, 0.85);
+  border-color: rgba(145, 175, 255, 0.4);
+  box-shadow: 0 4rpx 16rpx rgba(30, 45, 100, 0.45);
 }
 
 .fall-unit {
-  font-size: 18rpx;
+  font-size: 20rpx;
 }
 
-/* 主按钮 */
+/* 主按钮：参考效果图的平滑长药丸 + 深靛蓝文字 */
 .calc-action {
   margin-top: auto;
+  margin-left: 12rpx;
+  margin-right: 12rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 14rpx;
-  height: 108rpx;
-  border-radius: 32rpx;
-  background: linear-gradient(180deg, #ABA8FF 0%, #8B87FF 100%);
-  color: #FFFFFF;
+  gap: 12rpx;
+  height: 104rpx;
+  border-radius: 999rpx;
+  background: linear-gradient(135deg, #8E98FF 0%, #7683FB 100%);
+  color: #212868;
   font-size: 31rpx;
   font-weight: 600;
   letter-spacing: 2rpx;
-  box-shadow: 0 16rpx 36rpx rgba(139, 135, 255, 0.34);
+  box-shadow: 0 14rpx 36rpx rgba(118, 131, 251, 0.35);
   transition: transform 0.16s ease, opacity 0.16s ease;
 }
 
 .calc-action:active {
   transform: scale(0.98);
-  opacity: 0.94;
+  opacity: 0.92;
 }
 
 .action-arrow {
-  font-size: 28rpx;
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #212868;
 }
 
-/* 结果面 */
+
+/* 结果面：与参考图设计完全对齐 */
 .result-head {
   display: flex;
   align-items: center;
   gap: 12rpx;
-  margin-top: 8rpx;
+  margin-top: 6rpx;
+  margin-bottom: 18rpx;
 }
 
-/* 极简 CSS 弯月：不引素材 */
 .result-moon {
-  width: 26rpx;
-  height: 26rpx;
-  border-radius: 50%;
-  box-shadow: inset -8rpx 5rpx 0 0 rgba(167, 164, 255, 0.95);
-  transform: rotate(-18deg);
+  font-size: 28rpx;
+  line-height: 1;
 }
 
 .result-label {
-  font-size: 25rpx;
+  font-size: 28rpx;
+  font-weight: 600;
   letter-spacing: 1rpx;
-  color: rgba(255, 255, 255, 0.82);
+  color: #FFFFFF;
 }
 
+/* 第一推荐大卡片：与参考图一致的微光容器 */
 .result-main {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 16rpx;
-  margin-top: 26rpx;
+  justify-content: space-between;
+  padding: 22rpx 24rpx;
+  border-radius: 24rpx;
+  background: linear-gradient(90deg, rgba(65, 85, 175, 0.35) 0%, rgba(45, 60, 130, 0.25) 100%);
+  border: 1.5rpx solid rgba(140, 175, 255, 0.3);
+  box-shadow: 0 8rpx 28rpx rgba(15, 25, 70, 0.4);
+  margin-bottom: 20rpx;
 }
 
 .result-bar {
-  flex: none;
-  width: 6rpx;
-  height: 76rpx;
-  border-radius: 4rpx;
-  background: linear-gradient(180deg, #A7A4FF, #8B87FF);
-  box-shadow: 0 0 14rpx rgba(139, 135, 255, 0.5);
+  position: absolute;
+  left: 0;
+  top: 18rpx;
+  bottom: 18rpx;
+  width: 8rpx;
+  border-radius: 0 4rpx 4rpx 0;
+  background: #818CF8;
+  box-shadow: 0 0 16rpx rgba(129, 140, 248, 0.85);
 }
 
 .result-body {
   flex: 1;
   min-width: 0;
+  padding-left: 14rpx;
 }
 
 .result-line {
   display: flex;
   align-items: baseline;
-  gap: 12rpx;
+  gap: 10rpx;
+  white-space: nowrap;
+  flex-wrap: nowrap;
 }
 
 .result-day {
-  font-size: 22rpx;
+  font-size: 20rpx;
   color: var(--c-primary-soft);
+  flex-shrink: 0;
 }
 
 .result-time {
   font-family: var(--font-sans);
-  font-size: 84rpx;
-  font-weight: 600;
-  line-height: 1.05;
+  font-size: 48rpx;
+  font-weight: 700;
+  line-height: 1.1;
   letter-spacing: 1rpx;
-  color: var(--c-text);
+  color: #FFFFFF;
   font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
 }
 
 .result-time.is-compact {
-  font-size: 50rpx;
-  font-weight: 500;
+  font-size: 44rpx;
+  font-weight: 600;
+}
+
+.result-dot {
+  font-size: 22rpx;
+  color: rgba(180, 200, 240, 0.6);
+  flex-shrink: 0;
+}
+
+.result-meta-inline {
+  font-size: 22rpx;
+  color: rgba(205, 220, 255, 0.85);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .result-meta {
   display: block;
-  margin-top: 8rpx;
+  margin-top: 6rpx;
   font-size: 23rpx;
-  color: var(--c-text-2);
+  color: rgba(200, 215, 250, 0.8);
 }
 
 .result-note {
   display: block;
-  margin-top: 6rpx;
-  font-size: 19rpx;
-  color: var(--c-text-3);
+  margin-top: 4rpx;
+  font-size: 20rpx;
+  color: rgba(160, 180, 225, 0.6);
 }
 
 .result-badge {
@@ -460,37 +502,42 @@
   display: flex;
   align-items: center;
   gap: 6rpx;
-  height: 46rpx;
+  height: 48rpx;
   padding: 0 20rpx;
   border-radius: 999rpx;
-  background: rgba(139, 135, 255, 0.24);
-  border: 1rpx solid rgba(167, 164, 255, 0.3);
+  background: linear-gradient(135deg, rgba(120, 120, 250, 0.5), rgba(90, 95, 240, 0.4));
+  border: 1rpx solid rgba(170, 185, 255, 0.45);
   color: #FFFFFF;
-  font-size: 20rpx;
-  box-shadow: 0 6rpx 18rpx rgba(139, 135, 255, 0.2);
+  font-size: 21rpx;
+  font-weight: 500;
+  box-shadow: 0 4rpx 14rpx rgba(100, 110, 250, 0.35);
 }
 
 .result-badge-star {
-  font-size: 18rpx;
-  color: var(--c-primary-soft);
+  font-size: 19rpx;
+  color: #FFFFFF;
 }
 
+/* 后续推荐行列表 */
 .result-list {
-  margin-top: 26rpx;
-  border-top: 1rpx solid var(--c-border);
+  display: flex;
+  flex-direction: column;
 }
 
 .result-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14rpx;
-  padding: 22rpx 4rpx;
-  border-bottom: 1rpx solid var(--c-border);
+  padding: 20rpx 8rpx;
+  border-bottom: 1rpx solid rgba(255, 255, 255, 0.08);
+}
+
+.result-row:last-child {
+  border-bottom: none;
 }
 
 .result-row.is-passed {
-  opacity: 0.36;
+  opacity: 0.38;
 }
 
 .result-row-left {
@@ -500,28 +547,39 @@
 }
 
 .result-row-day {
-  font-size: 16rpx;
-  color: var(--c-text-3);
+  font-size: 20rpx;
+  color: rgba(160, 180, 225, 0.65);
 }
 
 .result-row-time {
-  font-size: 36rpx;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.88);
+  font-size: 38rpx;
+  font-weight: 600;
+  color: rgba(230, 240, 255, 0.95);
   font-variant-numeric: tabular-nums;
 }
 
 .result-row-tag {
   padding: 2rpx 10rpx;
   border-radius: 999rpx;
-  border: 1rpx solid var(--c-border);
-  font-size: 15rpx;
-  color: var(--c-text-3);
+  border: 1rpx solid rgba(255, 255, 255, 0.15);
+  font-size: 17rpx;
+  color: rgba(200, 215, 250, 0.6);
+}
+
+.result-row-right {
+  display: flex;
+  align-items: baseline;
+  gap: 8rpx;
+}
+
+.result-row-dot {
+  font-size: 22rpx;
+  color: rgba(160, 180, 225, 0.5);
 }
 
 .result-row-meta {
-  font-size: 19rpx;
-  color: var(--c-text-3);
+  font-size: 23rpx;
+  color: rgba(175, 195, 235, 0.72);
 }
 
 .result-actions {
@@ -529,24 +587,26 @@
   align-items: center;
   justify-content: space-between;
   margin-top: auto;
-  padding-top: 20rpx;
+  padding-top: 16rpx;
 }
 
 .result-reset {
   padding: 10rpx 0;
-  font-size: 23rpx;
-  color: rgba(255, 255, 255, 0.74);
+  font-size: 24rpx;
+  font-weight: 500;
+  color: rgba(220, 235, 255, 0.85);
 }
 
 .result-switch {
-  font-size: 21rpx;
+  font-size: 23rpx;
+  font-weight: 500;
   color: var(--c-primary-soft);
 }
 
 .result-share {
   display: flex;
   justify-content: center;
-  margin-top: 12rpx;
+  margin-top: 10rpx;
 }
 
 /* 脚注 */

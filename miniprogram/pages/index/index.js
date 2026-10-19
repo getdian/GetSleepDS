@@ -81,7 +81,7 @@ Page({
     const key = this.data.mode === 'wake' ? 'wakeTime' : 'sleepTime'
     if (value === this.data[key]) return
 
-    const patch = { view: null, flipped: false }
+    const patch = { flipped: false }
     patch[key] = value
     this.setData(patch)
 
@@ -92,7 +92,7 @@ Page({
 
   toggleMode() {
     const next = this.data.mode === 'wake' ? 'sleep' : 'wake'
-    this.setData({ mode: next, view: null, flipped: false })
+    this.setData({ mode: next, flipped: false })
   },
 
   onNowTap() {
@@ -102,7 +102,6 @@ Page({
       sleepTime: value,
       nowText: value,
       mode: 'sleep',
-      view: null,
       flipped: false
     })
     // “用现在的时间”是瞬时动作，不写入偏好
@@ -183,7 +182,7 @@ Page({
   },
 
   reset() {
-    this.setData({ view: null, flipped: false })
+    this.setData({ flipped: false })
   },
 
   /* ---------------- 背景图 ---------------- */
