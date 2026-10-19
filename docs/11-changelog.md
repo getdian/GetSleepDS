@@ -12,7 +12,7 @@
 ### 背景图
 
 - 后台新增「背景图」：≤20 张、分类、启用、排序、COS 上传（jpg/png/webp ≤5MB）、默认图、解锁时长 1–168 小时。
-- 上传前浏览器端压缩：jpg/png/webp → 最大 1440×1920、webp 质量 0.82；webp 反而更大或编码失败时保留原图；服务端仍按上传格式存 COS，不做二次转码。
+- 上传前浏览器端压缩：jpg/png/webp → 最大 1440×1920、webp 质量 0.82；webp 反而更大或编码失败时保留原图；服务端仍按上传格式存 COS，不做二次转码。上传处提供「保留原图」开关，默认不勾选。
 - 服务端配置新增 `backgrounds` / `defaultBackgroundId` / `backgroundUnlockHours`；图片上传进 COS `backgrounds/` 前缀；后台 CSP `img-src` 允许 https 预览。
 - 小程序新增 `background-picker`：分类、解锁状态、使用中；默认图免费并静默缓存；非默认图看激励视频解锁，当前图 `{ id, expireAt }` 到期回退默认；选择默认图结束付费图使用。
 

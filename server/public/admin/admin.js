@@ -147,7 +147,12 @@
     $('#workspace-title').textContent = meta.title
     $('#workspace-sub').textContent = meta.sub
     $('#workspace-badge').textContent = meta.badge
-    const configPanel = name === 'audio' || name === 'unlock' || name === 'features' || name === 'copy'
+    const configPanel =
+      name === 'audio' ||
+      name === 'backgrounds' ||
+      name === 'unlock' ||
+      name === 'features' ||
+      name === 'copy'
     $('#global-savebar').hidden = !configPanel
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -1037,8 +1042,24 @@
 
     const status = $('#bg-upload-status')
     status.hidden = false
-    status.textContent = '压缩中…'
 
+    const keepOriginal = !!($('#bg-keep-original') && $('#bg-keep-original').checked)
+    if (keepOriginal) {
+      status.textContent = '上传中 0%'
+      uploadBackgroundFile(
+        {
+          file: file,
+          fileName: file.name,
+          compressed: false,
+          keepOriginal: true,
+          displayName: file.name
+        },
+        status
+      )
+      return
+    }
+
+    status.textContent = '压缩中…'
     prepareBackgroundImage(file).then(function (prepared) {
       uploadBackgroundFile(prepared, status)
     })
@@ -1097,11 +1118,12 @@
         setDirty(true)
         updateJson()
         const sizeText = prepared.size ? ' · ' + Math.round(prepared.size / 1024) + 'KB' : ''
-        toast(
-          prepared.compressed
-            ? '已压缩为 webp' + sizeText + '，记得点“保存并生效”'
-            : '上传完成，记得点“保存并生效”'
-        )
+        const prefix = prepared.compressed
+          ? '已压缩为 webp' + sizeText
+          : prepared.keepOriginal
+            ? '已按原图上传'
+            : '上传完成'
+        toast(prefix + '，记得点“保存并生效”')
         return
       }
 
@@ -1342,12 +1364,18 @@
     }
   })
 
-  form.addEventListener('input', function () {
+  function isUploadOnly(target) {
+    return !!target && target.id === 'bg-keep-original'
+  }
+
+  form.addEventListener('input', function (event) {
+    if (isUploadOnly(event.target)) return
     setDirty(true)
     updateJson()
   })
 
-  form.addEventListener('change', function () {
+  form.addEventListener('change', function (event) {
+    if (isUploadOnly(event.target)) return
     setDirty(true)
     updateJson()
   })

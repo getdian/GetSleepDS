@@ -204,7 +204,7 @@ CREATE INDEX IF NOT EXISTS idx_events_created_at ON events (created_at);
 | GET/PUT | `/api/admin/storage` | Cookie | 读取 / 保存 COS 配置（SecretKey 加密） |
 | POST | `/api/admin/storage/test` | Cookie | 测试 COS 连接 |
 | POST | `/api/admin/audio/upload` | Cookie | 上传音频到 COS（multipart，≤25MB） |
-| POST | `/api/admin/backgrounds/upload` | Cookie | 上传首页背景图到 COS `backgrounds/`（multipart，jpg/png/webp，≤5MB）；后台浏览器先压缩为 webp（最大 1440×1920、质量 0.82），webp 更大/失败时回退原图，服务端不转码 |
+| POST | `/api/admin/backgrounds/upload` | Cookie | 上传首页背景图到 COS `backgrounds/`（multipart，jpg/png/webp，≤5MB）；后台浏览器默认压缩为 webp（最大 1440×1920、质量 0.82），webp 更大/失败时回退原图；勾选「保留原图」可跳过压缩。服务端不转码 |
 
 ### 5.1 GET /api/config
 

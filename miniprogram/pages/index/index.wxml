@@ -4,7 +4,7 @@
   <image
     class="hero-bg-img"
     src="{{background.localPath || background.url}}"
-    mode="aspectFill"
+    mode="widthFix"
     binderror="onBackgroundError"
   />
   <view class="hero-bg-scrim"></view>

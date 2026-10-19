@@ -196,6 +196,7 @@
               <p class="hint">最多 20 张。默认背景免费、静默加载；用户主动更换需看激励视频，解锁时长由下方设置。上传时会在浏览器压缩为 webp（最大 1440×1920、质量 0.82）；webp 反而更大时保留原图。</p>
             </div>
             <div class="panel-actions">
+              <button type="submit" form="config-form" class="primary" id="bg-save">保存并生效</button>
               <label class="ghost file-label" for="bg-file">上传背景图</label>
               <input id="bg-file" type="file" accept="image/jpeg,image/png,image/webp" hidden>
               <button type="button" id="add-bg" class="ghost">+ 添加</button>
@@ -212,6 +213,10 @@
               <input id="bg-unlock-hours" type="number" min="1" max="168" step="1" value="24">
             </label>
           </div>
+          <label class="switch bg-keep-original">
+            <input type="checkbox" id="bg-keep-original">
+            <span>保留原图（不压缩为 webp，默认关闭）</span>
+          </label>
           <div id="bg-list" class="bg-list"></div>
           <p id="bg-empty" class="empty" hidden>还没有背景图，点右上角添加或上传。</p>
           <p class="hint">建议宽度 1080px 以上、主体放中间偏上（小程序按 aspectFill 裁切）；单张 ≤5MB，压缩后通常 &lt;500KB。默认背景会静默缓存，非默认背景在用户选择时下载。</p>

@@ -12,12 +12,13 @@
 }
 
 /* Hero 背景图：从状态栏后开始，底部渐隐到现有夜色 */
+/* 高度跟随图片：按宽度等比显示，整张图完整可见，不做裁切 */
 .hero-bg {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  height: 760rpx;
+  min-height: 560rpx;
   z-index: 0;
   overflow: hidden;
   pointer-events: none;
@@ -26,7 +27,7 @@
 .hero-bg-img {
   display: block;
   width: 100%;
-  height: 100%;
+  height: auto;
 }
 
 .hero-bg-scrim {
