@@ -16,11 +16,18 @@
     "ttlHours": 24,
     "onAdError": "grant"
   },
+  "ads": {
+    "home": { "enabled": false, "unitId": "", "type": "template" },
+    "sleep": { "enabled": false, "unitId": "", "type": "template" },
+    "stats": { "enabled": false, "unitId": "", "type": "template" },
+    "statsFooter": { "enabled": false, "unitId": "", "type": "template" }
+  },
   "features": {
     "summary": true,
     "sync": true,
     "timer": true,
-    "preload": true
+    "preload": true,
+    "events": true
   },
   "cache": {
     "maxMB": 80,

@@ -1,0 +1,32 @@
+.share-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0 28rpx;
+  height: 64rpx;
+  line-height: 1;
+  border: 1rpx solid var(--border-moon-subtle);
+  border-radius: var(--radius-pill);
+  background: var(--glass-tint);
+  color: var(--text-secondary);
+  font-size: 22rpx;
+  font-weight: normal;
+}
+
+.share-btn::after {
+  border: none;
+}
+
+.share-btn--link {
+  height: auto;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-primary);
+  font-size: 18rpx;
+}
+
+.share-btn--active {
+  opacity: 0.65;
+}

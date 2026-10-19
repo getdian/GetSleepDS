@@ -2,9 +2,11 @@ const T = require('../../utils/time')
 const F = require('../../utils/format')
 const P = require('../../utils/plan')
 const storage = require('../../utils/storage')
+const adSlots = require('../../utils/ads')
 
 Page({
   data: {
+    ads: adSlots.empty(),
     mode: 'wake',
     wakeTime: '07:30',
     sleepTime: '23:00',
@@ -30,12 +32,14 @@ Page({
       fallAsleep: typeof prefs.fallAsleep === 'number' ? prefs.fallAsleep : 15,
       nowText: F.fmtClock(Math.round(T.minutesOf(now) / 5) * 5)
     })
+    adSlots.apply(this)
   },
 
   onShow() {
     this._alive = true
     const now = Date.now()
     this.setData({ nowText: F.fmtClock(Math.round(T.minutesOf(now) / 5) * 5) })
+    adSlots.apply(this)
   },
 
   onUnload() {
@@ -71,7 +75,7 @@ Page({
       sleepFlipped: false,
       mode: 'sleep'
     })
-    this.savePrefs({ sleepTime: value })
+    // “用现在的时间”是瞬时动作，不写入偏好，避免覆盖白天的智能默认
   },
 
   onFallAsleepTap(event) {
@@ -168,8 +172,10 @@ Page({
   },
 
   onShareAppMessage() {
+    const view = this.data.mode === 'wake' ? this.data.wakeView : this.data.sleepView
+    const time = view && view.mainTime && view.mainTime.indexOf(':') >= 0 ? view.mainTime : ''
     return {
-      title: '今晚，几点睡？算算你的睡眠周期',
+      title: time ? '按 90 分钟周期，' + time + ' 入睡刚刚好' : '今晚，几点睡？算算你的睡眠周期',
       path: '/pages/index/index?from=share'
     }
   },

@@ -55,7 +55,7 @@ function createConfigStore(options) {
 
   async function save(input) {
     const current = await get()
-    const clean = validateConfig(input)
+    const clean = validateConfig(input, current.config)
     const next = Object.assign({}, clean, {
       version: (current.config.version || 1) + 1
     })

@@ -139,6 +139,15 @@ function patchMeta(patch) {
   return next
 }
 
+/** 云备份默认关闭：数据本地化是产品默认状态，用户显式开启后才会上传 */
+function getSyncEnabled() {
+  return getMeta().syncEnabled === true
+}
+
+function setSyncEnabled(enabled) {
+  return patchMeta({ syncEnabled: enabled === true })
+}
+
 function getConfigCache() {
   const raw = safeGet(KEYS.config, null)
   if (!raw || !raw.data || !raw.fetchedAt) return null
@@ -197,6 +206,8 @@ module.exports = {
   setUnlockExpire,
   getMeta,
   patchMeta,
+  getSyncEnabled,
+  setSyncEnabled,
   getConfigCache,
   setConfigCache,
   getPrefs,

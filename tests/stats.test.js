@@ -43,6 +43,20 @@ test('本周均值与连续天数', () => {
   assert.equal(weekly.streak, 3)
 })
 
+test('本地事实回顾：满 3 条生成模板文案，不出现建议类词', () => {
+  const fact = S.localFact(RECORDS, NOW)
+  assert.equal(fact.available, true)
+  assert.match(fact.text, /本周你记录了 3 次睡眠/)
+  assert.equal(/建议|应该|改善|治疗|健康|质量/.test(fact.text), false)
+})
+
+test('本地事实回顾：不足 3 条不生成', () => {
+  const two = { '2026-10-15': RECORDS['2026-10-15'], '2026-10-16': RECORDS['2026-10-16'] }
+  const fact = S.localFact(two, NOW)
+  assert.equal(fact.available, false)
+  assert.equal(fact.text, '')
+})
+
 test('热力图按周对齐且能标出打卡天数', () => {
   const heat = S.heatmapCells(RECORDS, NOW, 30, '2026-10-18')
 

@@ -6,7 +6,7 @@ function dayKey(timestamp) {
 }
 
 function emptyBucket(day) {
-  return { day, opens: new Set(), checkins: 0, plays: 0, unlocks: 0 }
+  return { day, opens: new Set(), checkins: 0, plays: 0, unlocks: 0, adShows: 0, adErrors: 0 }
 }
 
 /**
@@ -39,8 +39,11 @@ function createAnalytics(options) {
     let weekCheckins = 0
     let weekPlays = 0
     let weekUnlocks = 0
+    let weekAdShows = 0
+    let weekAdErrors = 0
     const top = new Map()
     const sources = new Map()
+    const adSlots = new Map()
 
     events.forEach((event) => {
       const bucket = days.get(dayKey(event.ts))
@@ -62,11 +65,26 @@ function createAnalytics(options) {
       }
       if (event.type === 'audio_unlock') bucket.unlocks += 1
 
+      if (event.type === 'ad_show' || event.type === 'ad_error') {
+        const key = event.target || 'unknown'
+        const slot = adSlots.get(key) || { slot: key, shows: 0, errors: 0 }
+        if (event.type === 'ad_show') {
+          bucket.adShows += 1
+          slot.shows += 1
+        } else {
+          bucket.adErrors += 1
+          slot.errors += 1
+        }
+        adSlots.set(key, slot)
+      }
+
       if (bucket.day >= weekStart) {
         if (event.type === 'app_open') weekOpens.add(event.openid)
         if (event.type === 'checkin') weekCheckins += 1
         if (event.type === 'audio_play') weekPlays += 1
         if (event.type === 'audio_unlock') weekUnlocks += 1
+        if (event.type === 'ad_show') weekAdShows += 1
+        if (event.type === 'ad_error') weekAdErrors += 1
       }
     })
 
@@ -86,6 +104,12 @@ function createAnalytics(options) {
       .slice(0, 5)
       .map((entry) => ({ source: entry[0], opens: entry[1] }))
 
+    const adBySlot = Array.from(adSlots.values()).sort((a, b) => {
+      return b.shows + b.errors - (a.shows + a.errors)
+    })
+    const adShows = adBySlot.reduce((sum, item) => sum + item.shows, 0)
+    const adErrors = adBySlot.reduce((sum, item) => sum + item.errors, 0)
+
     return {
       totals: Object.assign({}, totals, {
         users: Math.max(totals.users || 0, checkinUsers.size)
@@ -94,13 +118,27 @@ function createAnalytics(options) {
         opens: todayBucket.opens.size,
         checkins: todayBucket.checkins,
         plays: todayBucket.plays,
-        unlocks: todayBucket.unlocks
+        unlocks: todayBucket.unlocks,
+        adShows: todayBucket.adShows,
+        adErrors: todayBucket.adErrors
       },
       week: {
         opens: weekOpens.size,
         checkins: weekCheckins,
         plays: weekPlays,
-        unlocks: weekUnlocks
+        unlocks: weekUnlocks,
+        adShows: weekAdShows,
+        adErrors: weekAdErrors
+      },
+      ads: {
+        todayShows: todayBucket.adShows,
+        todayErrors: todayBucket.adErrors,
+        weekShows: weekAdShows,
+        weekErrors: weekAdErrors,
+        shows: adShows,
+        errors: adErrors,
+        fillRate: adShows + adErrors ? Math.round((adShows / (adShows + adErrors)) * 100) : null,
+        bySlot: adBySlot
       },
       trend: Array.from(days.values()).map((bucket) => ({
         day: bucket.day,

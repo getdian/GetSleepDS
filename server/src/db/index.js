@@ -204,6 +204,27 @@ function createMemoryDb() {
       return { records: recordCount, unlocks: unlockCount, events: eventCount, erasedAt }
     },
 
+    /**
+     * 只删除云端副本，不写 erasure 水位。
+     * 用于“关闭云备份后删除云端历史，但保留本机记录”：
+     * 本机数据不会在下次同步时被水位清掉，重新开启备份后仍可再次上传。
+     */
+    async eraseCloudData(openid) {
+      const bucket = records.get(openid)
+      const recordCount = bucket ? bucket.size : 0
+      records.delete(openid)
+      deletions.delete(openid)
+      const unlockCount = unlocks.delete(openid) ? 1 : 0
+      let eventCount = 0
+      for (let i = events.length - 1; i >= 0; i -= 1) {
+        if (events[i].openid === openid) {
+          events.splice(i, 1)
+          eventCount += 1
+        }
+      }
+      return { records: recordCount, unlocks: unlockCount, events: eventCount, erasedAt: 0 }
+    },
+
     // 兼容旧调用：全量删除等同于 erasure
     async deleteUserData(openid) {
       return this.eraseUserData(openid)
@@ -544,6 +565,31 @@ function createPostgresDb(connectionString) {
           unlocks: unlocks.rowCount,
           events: events.rowCount,
           erasedAt
+        }
+      } catch (error) {
+        await client.query('ROLLBACK')
+        throw error
+      } finally {
+        client.release()
+      }
+    },
+
+    /** 只删除云端副本，不写 user_erasures（本机记录保留） */
+    async eraseCloudData(openid) {
+      const client = await pool.connect()
+      try {
+        await client.query('BEGIN')
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1)::bigint)', [openid])
+        const records = await client.query('DELETE FROM sleep_records WHERE openid = $1', [openid])
+        const unlocks = await client.query('DELETE FROM audio_unlocks WHERE openid = $1', [openid])
+        const events = await client.query('DELETE FROM events WHERE openid = $1', [openid])
+        await client.query('DELETE FROM sleep_record_deletions WHERE openid = $1', [openid])
+        await client.query('COMMIT')
+        return {
+          records: records.rowCount,
+          unlocks: unlocks.rowCount,
+          events: events.rowCount,
+          erasedAt: 0
         }
       } catch (error) {
         await client.query('ROLLBACK')

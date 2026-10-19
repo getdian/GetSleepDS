@@ -1,0 +1,15 @@
+<view wx:if="{{visible}}" class="now-playing">
+  <view class="np-main" bindtap="goSleep">
+    <view class="np-eq {{playing ? '' : 'is-paused'}}">
+      <view class="np-bar np-1"></view>
+      <view class="np-bar np-2"></view>
+      <view class="np-bar np-3"></view>
+    </view>
+    <view class="np-info">
+      <text class="np-title">{{title}}</text>
+      <text class="np-sub">{{playing ? '正在播放 · 点击回到声音' : '已暂停'}}</text>
+    </view>
+  </view>
+  <view class="np-btn" catchtap="toggle">{{playing ? '暂停' : '播放'}}</view>
+  <view class="np-close" catchtap="close">×</view>
+</view>

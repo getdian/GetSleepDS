@@ -141,6 +141,48 @@ function weekly(records, now) {
   }
 }
 
+function durationText(minutes) {
+  const total = Math.max(0, Math.round(minutes))
+  if (total < 60) return total + ' 分钟'
+  return Math.floor(total / 60) + ' 小时 ' + T.pad2(total % 60) + ' 分'
+}
+
+/**
+ * 本地事实回顾：与服务端模板同口径（ADR-007），未开启云备份时使用，零上传。
+ * 只陈述均值、差值、0 点后入睡天数，不做任何评价或建议。
+ */
+function localFact(records, now) {
+  const w = weekly(records, now)
+  const cur = w.current
+  if (!cur || cur.count < 3 || cur.avgBedMin === null || cur.avgWakeMin === null) {
+    return { available: false, text: '', stats: cur }
+  }
+
+  const avgBed = T.pad2(Math.floor(cur.avgBedMin / 60)) + ':' + T.pad2(cur.avgBedMin % 60)
+  const avgWake = T.pad2(Math.floor(cur.avgWakeMin / 60)) + ':' + T.pad2(cur.avgWakeMin % 60)
+  const avgDurationText = durationText(cur.avgDurationMin)
+  const sentences = [
+    '本周你记录了 ' + cur.count + ' 次睡眠，平均 ' + avgBed + ' 入睡、' + avgWake + ' 起床，平均 ' + avgDurationText + '。',
+    '本周 ' + cur.count + ' 次记录里，平均 ' + avgBed + ' 入睡、' + avgWake + ' 起床，平均 ' + avgDurationText + '。',
+    '本周共 ' + cur.count + ' 次打卡：平均 ' + avgBed + ' 入睡、' + avgWake + ' 起床，平均 ' + avgDurationText + '。'
+  ]
+
+  let second = ''
+  if (w.delta.bed !== null) {
+    if (w.delta.bed === 0) second = '平均入睡时间与上周持平'
+    else second = '平均入睡时间比上周' + (w.delta.bed > 0 ? '晚' : '早') + '了 ' + Math.abs(w.delta.bed) + ' 分钟'
+  }
+  if (cur.afterMidnightDays > 0) {
+    second += (second ? '，' : '') + '有 ' + cur.afterMidnightDays + ' 天在 0 点后入睡'
+  }
+
+  return {
+    available: true,
+    text: sentences[cur.count % sentences.length] + (second ? second + '。' : ''),
+    stats: cur
+  }
+}
+
 /**
  * 热力图格子：周一为一周起点，返回按周补齐的数组。
  * level: -1 占位, 0 未打卡, 1-5 时长分级
@@ -252,10 +294,11 @@ module.exports = {
   durationOf,
   levelOf,
   digest,
+  weekly,
+  localFact,
   weekBounds,
   inRange,
   streakDays,
-  weekly,
   heatmapCells,
   monthsSpan,
   summaryPayload

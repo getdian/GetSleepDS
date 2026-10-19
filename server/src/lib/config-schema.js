@@ -2,11 +2,40 @@ const { invalidBody } = require('./errors')
 
 const ICONS = ['rain', 'wave', 'fire', 'noise', 'night']
 const MAX_AUDIO = 10
-const DEFAULT_FEATURES = { summary: true, sync: true, timer: true, preload: true }
+const DEFAULT_FEATURES = { summary: true, sync: true, timer: true, preload: true, events: true }
 const DEFAULT_CACHE = { maxMB: 80, ttlDays: 7 }
+// 页面展示位：默认全部关闭，运营在后台按需开启并填广告位 ID
+const AD_SLOTS = ['home', 'sleep', 'stats', 'statsFooter']
+const AD_TYPES = ['template', 'banner']
 
 function isObject(value) {
   return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+
+function normalizeAdSlot(raw, fallback) {
+  const source = isObject(raw) ? raw : {}
+  const base = isObject(fallback) ? fallback : {}
+  return {
+    enabled: source.enabled === undefined ? base.enabled === true : source.enabled === true,
+    unitId:
+      typeof source.unitId === 'string'
+        ? source.unitId
+        : typeof base.unitId === 'string'
+          ? base.unitId
+          : '',
+    type: AD_TYPES.indexOf(source.type) >= 0 ? source.type : AD_TYPES.indexOf(base.type) >= 0 ? base.type : 'template'
+  }
+}
+
+/** 旧配置没有 ads 字段时补默认值，保证升级后客户端不崩 */
+function normalizeAds(input, fallback) {
+  const source = isObject(input) ? input : {}
+  const base = isObject(fallback) ? fallback : {}
+  const out = {}
+  AD_SLOTS.forEach((slot) => {
+    out[slot] = normalizeAdSlot(source[slot], base[slot])
+  })
+  return out
 }
 
 function readText(value, label, max, required) {
@@ -45,14 +74,18 @@ function normalizeConfig(input, base) {
     version: Number(source.version) || Number(fallback.version) || 1,
     audio,
     unlock: Object.assign({}, fallback.unlock || {}, isObject(source.unlock) ? source.unlock : {}),
+    ads: normalizeAds(source.ads, fallback.ads),
     features: Object.assign({}, DEFAULT_FEATURES, fallback.features || {}, isObject(source.features) ? source.features : {}),
     cache: Object.assign({}, DEFAULT_CACHE, fallback.cache || {}, isObject(source.cache) ? source.cache : {}),
     copy: Object.assign({}, fallback.copy || {}, isObject(source.copy) ? source.copy : {})
   }
 }
 
-/** 后台保存时的严格校验，返回可直接下发的配置（不含 version） */
-function validateConfig(input) {
+/**
+ * 后台保存时的严格校验，返回可直接下发的配置（不含 version）。
+ * base 为当前已生效配置：请求体未携带 ads 时沿用旧值，避免旧后台标签页/脚本把展示位静默清零。
+ */
+function validateConfig(input, base) {
   if (!isObject(input)) throw invalidBody('配置格式错误')
 
   if (!Array.isArray(input.audio) || !input.audio.length) {
@@ -127,7 +160,8 @@ function validateConfig(input) {
     summary: featuresInput.summary !== false,
     sync: featuresInput.sync !== false,
     timer: featuresInput.timer !== false,
-    preload: featuresInput.preload !== false
+    preload: featuresInput.preload !== false,
+    events: featuresInput.events !== false
   }
 
   const cacheInput = isObject(input.cache) ? input.cache : {}
@@ -150,6 +184,34 @@ function validateConfig(input) {
     ttlDays = value
   }
 
+  const adsInput = isObject(input.ads) ? input.ads : {}
+  const baseAds = isObject(base) && isObject(base.ads) ? base.ads : {}
+  const ads = {}
+  AD_SLOTS.forEach((slot) => {
+    // 整个 ads 缺失或只提交部分槽位时，未提交的槽位沿用当前配置
+    const raw = isObject(adsInput[slot])
+      ? adsInput[slot]
+      : isObject(baseAds[slot])
+        ? baseAds[slot]
+        : {}
+    let type = 'template'
+    if (raw.type !== undefined) {
+      if (AD_TYPES.indexOf(raw.type) < 0) {
+        throw invalidBody('展示位类型只能是 template 或 banner')
+      }
+      type = raw.type
+    }
+    const unitId = readText(raw.unitId, '展示位广告位 ID', 64, false)
+    if (raw.enabled === true && !unitId) {
+      throw invalidBody('已启用的展示位必须填写广告位 ID')
+    }
+    ads[slot] = {
+      enabled: raw.enabled === true,
+      unitId,
+      type
+    }
+  })
+
   const copyInput = isObject(input.copy) ? input.copy : {}
   const copy = {
     unlockTitle: readText(copyInput.unlockTitle, '解锁标题', 20, false) || '解锁环境音',
@@ -168,6 +230,7 @@ function validateConfig(input) {
       ttlHours,
       onAdError
     },
+    ads,
     features,
     cache: { maxMB, ttlDays },
     copy
@@ -177,6 +240,8 @@ function validateConfig(input) {
 module.exports = {
   ICONS,
   MAX_AUDIO,
+  AD_SLOTS,
+  AD_TYPES,
   normalizeConfig,
   validateConfig
 }

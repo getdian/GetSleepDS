@@ -1,0 +1,14 @@
+/* 展示位只负责间距；广告本体由微信原生组件绘制 */
+.ad-slot {
+  display: block;
+  margin: 32rpx 0 8rpx;
+}
+
+/* 广告异步填充前保留占位，避免下方内容整体位移 */
+.ad-slot.is-pending {
+  min-height: 180rpx;
+}
+
+.ad-slot.is-pending-banner {
+  min-height: 100rpx;
+}

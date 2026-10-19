@@ -89,6 +89,7 @@ function loadConfig(env) {
     app: {
       version: file.version,
       audio: file.audio,
+      ads: file.ads,
       features: file.features,
       cache: file.cache,
       copy: file.copy,

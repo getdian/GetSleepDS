@@ -1,0 +1,3 @@
+<button class="share-btn share-btn--{{variant}}" open-type="share" hover-class="share-btn--active">
+  {{text}}
+</button>

@@ -21,6 +21,10 @@ function rateLimited() {
   return apiError('RATE_LIMITED', '操作太频繁，稍后再试', 429)
 }
 
+function featureOff(message) {
+  return apiError('FEATURE_OFF', message || '功能暂未开放', 403)
+}
+
 function dbUnavailable() {
   return apiError('DB_UNAVAILABLE', '数据库暂时不可用', 503)
 }
@@ -31,5 +35,6 @@ module.exports = {
   invalidCode,
   payloadTooLarge,
   rateLimited,
+  featureOff,
   dbUnavailable
 }

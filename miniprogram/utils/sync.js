@@ -100,6 +100,11 @@ function mergeServerRecords(serverRecords, options) {
  * 失败不抛给调用方，也不影响打卡。
  */
 function syncNow(force) {
+  // 数据默认只存本机；用户未在统计页显式开启云备份时，一次请求都不发
+  if (!storage.getSyncEnabled()) {
+    return Promise.resolve({ skipped: 'sync_off' })
+  }
+
   const config = getConfig()
   if (!config.features || !config.features.sync) {
     return Promise.resolve({ skipped: 'feature_off' })

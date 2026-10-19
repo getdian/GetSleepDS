@@ -120,6 +120,33 @@
       <section class="panel">
         <div class="panel-head">
           <div>
+            <h2>广告位观测</h2>
+            <p class="hint">来自 ad_show / ad_error 事件；填充率 = 成功 /（成功 + 失败），近 14 天累计。</p>
+          </div>
+        </div>
+        <section class="stats ad-stats">
+          <div class="stat">
+            <span>今日展示</span>
+            <strong id="stat-ad-shows">–</strong>
+            <small id="stat-ad-shows-sub">本周 –</small>
+          </div>
+          <div class="stat">
+            <span>今日失败</span>
+            <strong id="stat-ad-errors">–</strong>
+            <small id="stat-ad-errors-sub">本周 –</small>
+          </div>
+          <div class="stat">
+            <span>填充率</span>
+            <strong id="stat-ad-fill">–</strong>
+            <small>近 14 天</small>
+          </div>
+        </section>
+        <ol id="ad-slots" class="top-tracks"><li class="empty-line">还没有展示位数据</li></ol>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
             <h2>近 14 天</h2>
             <p class="hint">打开 / 打卡 / 播放来自小程序上报的匿名事件，只带 openid 与类型。</p>
           </div>
@@ -186,6 +213,43 @@
             </label>
           </div>
           <p class="hint">广告位留空 = 不弹广告，直接解锁（未开通流量主阶段）。</p>
+
+          <div class="panel-head"><h2>页面展示位</h2></div>
+          <div class="ad-slots">
+            <div class="ad-slot-row">
+              <label class="switch"><input type="checkbox" id="ad-home-enabled"><span>首页最下方</span></label>
+              <input id="ad-home-unit" placeholder="adunit-xxxxxxxxxxxx" maxlength="64">
+              <select id="ad-home-type">
+                <option value="template">原生模板</option>
+                <option value="banner">Banner</option>
+              </select>
+            </div>
+            <div class="ad-slot-row">
+              <label class="switch"><input type="checkbox" id="ad-sleep-enabled"><span>入睡按钮下方</span></label>
+              <input id="ad-sleep-unit" placeholder="adunit-xxxxxxxxxxxx" maxlength="64">
+              <select id="ad-sleep-type">
+                <option value="template">原生模板</option>
+                <option value="banner">Banner</option>
+              </select>
+            </div>
+            <div class="ad-slot-row">
+              <label class="switch"><input type="checkbox" id="ad-stats-enabled"><span>统计页内容下方</span></label>
+              <input id="ad-stats-unit" placeholder="adunit-xxxxxxxxxxxx" maxlength="64">
+              <select id="ad-stats-type">
+                <option value="template">原生模板</option>
+                <option value="banner">Banner</option>
+              </select>
+            </div>
+            <div class="ad-slot-row">
+              <label class="switch"><input type="checkbox" id="ad-statsFooter-enabled"><span>统计页最下方</span></label>
+              <input id="ad-statsFooter-unit" placeholder="adunit-xxxxxxxxxxxx" maxlength="64">
+              <select id="ad-statsFooter-type">
+                <option value="template">原生模板</option>
+                <option value="banner">Banner</option>
+              </select>
+            </div>
+          </div>
+          <p class="hint">默认全部关闭，未启用时不渲染、不占空间。填写广告位 ID 并勾选启用后，小程序对应位置才会出现；广告位需先在微信公众平台创建并审核通过。</p>
         </section>
 
         <section class="panel admin-panel" data-panel="features" hidden>
@@ -193,6 +257,7 @@
           <div class="switches">
             <label class="switch"><input type="checkbox" id="feat-summary"><span>事实回顾</span></label>
             <label class="switch"><input type="checkbox" id="feat-sync"><span>云端备份</span></label>
+            <label class="switch"><input type="checkbox" id="feat-events"><span>匿名事件统计</span></label>
             <label class="switch"><input type="checkbox" id="feat-timer"><span>定时关闭</span></label>
             <label class="switch"><input type="checkbox" id="feat-preload"><span>进入即预加载</span></label>
           </div>

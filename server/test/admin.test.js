@@ -172,6 +172,12 @@ test('保存配置后公共接口与解锁有效期立即生效', async () => {
       }
     ],
     unlock: { mode: 'rewarded', adUnitId: 'adunit-test', ttlHours: 12, onAdError: 'deny' },
+    ads: {
+      home: { enabled: true, unitId: 'adunit-home', type: 'template' },
+      sleep: { enabled: false, unitId: '', type: 'banner' },
+      stats: { enabled: false, unitId: '', type: 'template' },
+      statsFooter: { enabled: false, unitId: '', type: 'template' }
+    },
     features: { summary: true, sync: false, timer: true, preload: false },
     cache: { maxMB: 120, ttlDays: 5 },
     copy: {
@@ -196,6 +202,10 @@ test('保存配置后公共接口与解锁有效期立即生效', async () => {
   assert.equal(publicConfig.body.audio[0].category, '环境音')
   assert.equal(publicConfig.body.unlock.adUnitId, 'adunit-test')
   assert.equal(publicConfig.body.unlock.ttlHours, 12)
+  assert.equal(publicConfig.body.ads.home.enabled, true)
+  assert.equal(publicConfig.body.ads.home.unitId, 'adunit-home')
+  assert.equal(publicConfig.body.ads.sleep.type, 'banner')
+  assert.equal(publicConfig.body.ads.stats.enabled, false)
   assert.equal(publicConfig.body.features.sync, false)
   assert.equal(publicConfig.body.features.preload, false)
   assert.equal(publicConfig.body.cache.ttlDays, 5)
@@ -215,6 +225,61 @@ test('后台概览返回记录与解锁数量', async () => {
   assert.equal(res.body.records, 0)
   assert.equal(res.body.users, 0)
   assert.equal(res.body.activeUnlocks, 1)
+})
+
+test('服务端关闭云同步后 sync 返回 403', async () => {
+  const sync = await call('/api/records/sync', {
+    method: 'POST',
+    body: { code: 'sync-gate-code', records: [] }
+  })
+  assert.equal(sync.status, 403)
+  assert.equal(sync.body.error.code, 'FEATURE_OFF')
+})
+
+test('保存配置未携带 ads 时保留已有展示位，不会被静默清零', async () => {
+  const res = await call(
+    '/api/admin/config',
+    {
+      method: 'PUT',
+      body: {
+        audio: [{ id: 'rain', title: '雨声', url: 'https://cdn.example.com/rain.mp3', icon: 'rain' }],
+        unlock: { mode: 'rewarded', adUnitId: '', ttlHours: 24, onAdError: 'grant' },
+        features: { summary: true, sync: true, timer: true },
+        cache: { maxMB: 80, ttlDays: 7 },
+        copy: {}
+      }
+    },
+    true
+  )
+  assert.equal(res.status, 200)
+
+  const publicConfig = await call('/api/config')
+  assert.equal(publicConfig.body.ads.home.enabled, true)
+  assert.equal(publicConfig.body.ads.home.unitId, 'adunit-home')
+})
+
+test('启用的页面展示位缺少广告位 ID 会被拒绝', async () => {
+  const res = await call(
+    '/api/admin/config',
+    {
+      method: 'PUT',
+      body: {
+        audio: [{ id: 'rain', title: '雨声', url: 'https://cdn.example.com/rain.mp3', icon: 'rain' }],
+        unlock: { mode: 'rewarded', adUnitId: '', ttlHours: 24, onAdError: 'grant' },
+        ads: {
+          home: { enabled: true, unitId: '', type: 'template' },
+          sleep: { enabled: false, unitId: '', type: 'template' },
+          stats: { enabled: false, unitId: '', type: 'template' },
+          statsFooter: { enabled: false, unitId: '', type: 'template' }
+        },
+        features: { summary: true, sync: true, timer: true },
+        copy: {}
+      }
+    },
+    true
+  )
+  assert.equal(res.status, 400)
+  assert.equal(res.body.error.code, 'INVALID_BODY')
 })
 
 test('重复的音频 ID 会被拒绝', async () => {
@@ -240,13 +305,15 @@ test('重复的音频 ID 会被拒绝', async () => {
 test('事件上报与看板聚合', async () => {
   const events = [
     { type: 'app_open', ts: FIXED_NOW },
-    { type: 'checkin', target: '2026-10-14', ts: FIXED_NOW },
-    { type: 'audio_play', target: 'rain', ts: FIXED_NOW }
+    { type: 'checkin', target: '', ts: FIXED_NOW },
+    { type: 'audio_play', target: 'rain', ts: FIXED_NOW },
+    { type: 'ad_show', target: 'home', ts: FIXED_NOW },
+    { type: 'ad_error', target: 'sleep', ts: FIXED_NOW }
   ]
 
   const sent = await call('/api/events', { method: 'POST', body: { code: 'events-code', events } })
   assert.equal(sent.status, 200)
-  assert.equal(sent.body.accepted, 3)
+  assert.equal(sent.body.accepted, 5)
 
   const bad = await call('/api/events', {
     method: 'POST',
@@ -257,6 +324,10 @@ test('事件上报与看板聚合', async () => {
   const board = await call('/api/admin/analytics', {}, true)
   assert.equal(board.status, 200)
   assert.equal(board.body.today.opens, 1)
+  assert.equal(board.body.ads.todayShows, 1)
+  assert.equal(board.body.ads.todayErrors, 1)
+  assert.equal(board.body.ads.fillRate, 50)
+  assert.equal(board.body.ads.bySlot.length, 2)
   assert.equal(board.body.today.checkins, 1)
   assert.equal(board.body.today.plays, 1)
   assert.equal(board.body.trend.length, 14)

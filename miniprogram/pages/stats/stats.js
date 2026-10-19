@@ -8,6 +8,7 @@ const { withLogin } = require('../../utils/login')
 const { syncNow } = require('../../utils/sync')
 const audioTimer = require('../../utils/audio-timer')
 const events = require('../../utils/events')
+const adSlots = require('../../utils/ads')
 const { getConfig } = require('../../utils/config')
 
 const RANGE_MONTHS = 'm3'
@@ -15,6 +16,9 @@ const RANGE_SMALL = 30
 
 Page({
   data: {
+    ads: adSlots.empty(),
+    syncEnabled: false,
+    hasCloudCopy: false,
     range: RANGE_MONTHS,
     rangeOptions: [
       { value: RANGE_MONTHS, label: '近 3 个月' },
@@ -41,11 +45,15 @@ Page({
     this._alive = true
     this._factLoading = false
     this._records = {}
+    // 先在 onLoad 渲染一次，避免首帧先画“还没有记录”再被 onShow 覆盖
+    this.refresh(false)
+    adSlots.apply(this)
   },
 
   onShow() {
     this._alive = true
     this.refresh(false)
+    adSlots.apply(this)
   },
 
   onUnload() {
@@ -54,6 +62,8 @@ Page({
 
   onPullDownRefresh() {
     this.refresh(true)
+    // 运营改完广告位后，下拉刷新可立即拿到新配置（绕过 10 分钟 TTL）
+    adSlots.reload(this)
     wx.stopPullDownRefresh()
   },
 
@@ -73,6 +83,7 @@ Page({
     const heat = S.heatmapCells(records, now, days, partialDay, span ? span.endOffsetDays : 0)
     const current = weekly.current
     const meta = storage.getMeta()
+    const syncEnabled = storage.getSyncEnabled()
 
     this.setData({
       hasData: list.length > 0 || !!pending,
@@ -85,7 +96,13 @@ Page({
       colCount: heat.colCount,
       months: heat.months,
       marked: heat.marked,
-      syncText: meta.lastSyncAt ? '上次同步 ' + F.fmtClockTs(meta.lastSyncAt) : '尚未同步'
+      syncEnabled,
+      hasCloudCopy: !!meta.lastSyncAt,
+      syncText: syncEnabled
+        ? meta.lastSyncAt
+          ? '上次同步 ' + F.fmtClockTs(meta.lastSyncAt)
+          : '已开启，尚未同步'
+        : '仅存本机 · 未开启云备份'
     })
 
     this.refreshFact(weekly, records, now, forceSummary)
@@ -95,6 +112,16 @@ Page({
     const config = getConfig()
     if (!config.features || !config.features.summary) {
       this.setData({ factState: 'off', fact: '' })
+      return
+    }
+
+    // 未开启云备份时用本地模板生成，零上传；开启后才走服务端模板
+    if (!storage.getSyncEnabled()) {
+      const local = S.localFact(records, now)
+      this.setData({
+        factState: local.available ? 'ok' : 'insufficient',
+        fact: local.text
+      })
       return
     }
 
@@ -162,7 +189,53 @@ Page({
     wx.showToast({ title: text, icon: 'none' })
   },
 
+  onSyncSwitch(event) {
+    const enabled = !!(event.detail && event.detail.value)
+    if (!enabled) {
+      storage.setSyncEnabled(false)
+      this.setData({ syncEnabled: false, syncText: '仅存本机 · 未开启云备份' })
+      if (this.data.hasCloudCopy) {
+        wx.showModal({
+          title: '已关闭云备份',
+          content: '云端历史副本仍会保留。是否同时删除云端副本？本机记录与偏好不受影响。',
+          confirmText: '删除云端',
+          cancelText: '保留云端',
+          success: (res) => {
+            if (res.confirm) this.eraseCloudOnly()
+          }
+        })
+      } else {
+        wx.showToast({ title: '已关闭云备份，本地记录不受影响', icon: 'none' })
+      }
+      return
+    }
+
+    wx.showModal({
+      title: '开启云备份？',
+      content: '仅上传睡眠时间，不含手机号、位置等信息；以微信匿名标识归属，不获取头像和昵称。此前已备份的云端记录，开启后可恢复。可随时关闭。',
+      confirmText: '开启',
+      cancelText: '保持本地',
+      success: (res) => {
+        if (!res.confirm) {
+          // switch 组件已切到开启态；先同步到 true 再回到 false，确保受控 checked 真正重渲染
+          this.setData({ syncEnabled: true }, () => {
+            this.setData({ syncEnabled: false })
+          })
+          return
+        }
+        storage.setSyncEnabled(true)
+        this.setData({ syncEnabled: true, syncText: '已开启，正在首次同步…' })
+        this.runSync()
+      }
+    })
+  },
+
   onSyncTap() {
+    if (!storage.getSyncEnabled()) return
+    this.runSync()
+  },
+
+  runSync() {
     if (this.data.syncBusy) return
     this.setData({ syncBusy: true })
     syncNow(true)
@@ -170,7 +243,19 @@ Page({
         if (!this._alive) return
         this.setData({ syncBusy: false })
         if (res && res.skipped === 'feature_off') {
-          wx.showToast({ title: '云同步未开启', icon: 'none' })
+          // 服务端总闸关闭时回滚开关，避免界面显示开启但永远同步不了
+          storage.setSyncEnabled(false)
+          this.setData({ syncEnabled: false, syncText: '仅存本机 · 未开启云备份' })
+          wx.showToast({ title: '服务端暂未开放云备份', icon: 'none' })
+          return
+        }
+        if (res && res.skipped === 'sync_off') {
+          wx.showToast({ title: '云备份未开启', icon: 'none' })
+          return
+        }
+        if (res && res.skipped === 'stale') {
+          // 清除数据期间发出的旧请求已被丢弃，不能再提示“已同步”
+          wx.showToast({ title: '上一次同步已取消', icon: 'none' })
           return
         }
         this.refresh(false)
@@ -178,15 +263,18 @@ Page({
       })
       .catch(() => {
         if (!this._alive) return
-        this.setData({ syncBusy: false })
+        this.setData({ syncBusy: false, syncText: '同步失败 · 请稍后重试' })
         wx.showToast({ title: '同步失败，请稍后重试', icon: 'none' })
       })
   },
 
   onClearData() {
+    const synced = storage.getSyncEnabled()
     wx.showModal({
       title: '清除全部睡眠数据',
-      content: '将删除云端与本机的打卡记录、进行中的会话和音频缓存，不可恢复。',
+      content: synced
+        ? '将删除云端与本机的打卡记录、进行中的会话和音频缓存，不可恢复。'
+        : '将删除本机的打卡记录、进行中的会话和音频缓存，不可恢复。',
       confirmText: '全部清除',
       confirmColor: '#F87171',
       cancelText: '取消',
@@ -197,28 +285,84 @@ Page({
     })
   },
 
+  /** 只删除云端副本：本机记录保留，且不会再自动上传 */
+  eraseCloudOnly() {
+    if (this._cloudBusy) return
+    wx.showModal({
+      title: '删除云端副本？',
+      content: '只删除云端备份，本机记录与偏好不受影响。删除后本机数据不会再自动上传。',
+      confirmText: '删除云端',
+      confirmColor: '#F87171',
+      cancelText: '取消',
+      success: (res) => {
+        if (!res.confirm) return
+        this._cloudBusy = true
+        wx.showLoading({ title: '删除中', mask: true })
+        withLogin((code) => api.eraseRecords(code, { cloudOnly: true }))
+          .then(() => {
+            storage.setSyncEnabled(false)
+            storage.patchMeta({ lastSyncAt: 0 })
+            this._cloudBusy = false
+            wx.hideLoading()
+            this.refresh(false)
+            wx.showToast({ title: '云端副本已删除', icon: 'none' })
+          })
+          .catch(() => {
+            this._cloudBusy = false
+            wx.hideLoading()
+            wx.showToast({ title: '云端删除失败，请稍后重试', icon: 'none' })
+          })
+      }
+    })
+  },
+
+  clearLocalData() {
+    storage.clearAll()
+    events.clearQueue()
+    // clearAll 会移除 meta；写入新 epoch，让清除前发出的 sync 响应失效
+    storage.patchMeta({ syncEpoch: Date.now(), lastTrackActive: false })
+    cache.cleanAll()
+    audioTimer.clear()
+    try {
+      wx.getBackgroundAudioManager().stop()
+    } catch (e) {}
+    this._factWeek = null
+    this.refresh(true)
+  },
+
   eraseThenClear() {
+    const synced = storage.getSyncEnabled()
     wx.showLoading({ title: '清除中', mask: true })
+
+    // 未开启云备份：本地是唯一数据源，必须先删掉；云端历史副本尽力而为，失败不阻断
+    if (!synced) {
+      this.clearLocalData()
+      wx.hideLoading()
+      wx.showToast({ title: '已清除本机数据', icon: 'none' })
+      withLogin((code) => api.eraseRecords(code)).catch(() => {})
+      return
+    }
+
     withLogin((code) => api.eraseRecords(code))
       .then(() => {
-        storage.clearAll()
-        events.clearQueue()
-        // clearAll 会移除 meta；写入新 epoch，让清除前发出的 sync 响应失效
-        storage.patchMeta({ syncEpoch: Date.now(), lastTrackActive: false })
-        cache.cleanAll()
-        audioTimer.clear()
-        try {
-          wx.getBackgroundAudioManager().stop()
-        } catch (e) {}
+        this.clearLocalData()
         wx.hideLoading()
-        this._factWeek = null
-        this.refresh(true)
         wx.showToast({ title: '已全部清除', icon: 'none' })
       })
       .catch(() => {
         wx.hideLoading()
-        // 云端删除失败时不清本地，避免下次同步把记录拉回来
-        wx.showToast({ title: '清除失败，请稍后重试', icon: 'none' })
+        // 云端删不掉时给用户出口：至少把本机数据清掉，云端副本保留
+        wx.showModal({
+          title: '云端删除失败',
+          content: '云端记录暂时删不掉。可以只清除本机数据，云端副本会保留。',
+          confirmText: '只清本机',
+          cancelText: '稍后重试',
+          success: (res) => {
+            if (!res.confirm || !this._alive) return
+            this.clearLocalData()
+            wx.showToast({ title: '已清除本机数据', icon: 'none' })
+          }
+        })
       })
   },
 
@@ -404,11 +548,15 @@ Page({
   },
 
   onShareAppMessage() {
-    return {
-      title: '我的睡眠回顾 · 睡点',
-      path: '/pages/stats/stats',
-      imageUrl: this.data.posterPath || ''
+    const payload = {
+      title: this.data.hasData
+        ? '本周打卡 ' + this.data.weekCount + ' 天 · 连续 ' + this.data.streak + ' 天，来「睡点」记录睡眠'
+        : '睡点 · 只看数据、不做评价的睡眠记录',
+      path: '/pages/stats/stats?from=share'
     }
+    // 空字符串会让转发卡片变成空白图，只有生成过海报时才带上
+    if (this.data.posterPath) payload.imageUrl = this.data.posterPath
+    return payload
   },
 
   goHome() {

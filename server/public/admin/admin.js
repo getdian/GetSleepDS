@@ -125,7 +125,7 @@
   const PANEL_META = {
     overview: { title: '概览', sub: '今天的打开、打卡、播放与 14 天趋势', badge: '实时' },
     audio: { title: '环境音', sub: '上架、排序、分类、试听与缓存', badge: '内容' },
-    unlock: { title: '广告与解锁', sub: '激励视频、有效期与失败降级', badge: '变现' },
+    unlock: { title: '广告与解锁', sub: '激励视频、页面展示位与失败降级', badge: '变现' },
     features: { title: '功能与缓存', sub: '开关、预加载、容量与有效期', badge: '运行' },
     copy: { title: '解锁文案', sub: '抽屉里的标题、说明与按钮', badge: '文案' },
     users: { title: '用户数据', sub: '按 openid 查询与删除云端记录', badge: '客服 / 合规' },
@@ -296,6 +296,36 @@
     })
   }
 
+  const AD_SLOT_LABELS = {
+    home: '首页最下方',
+    sleep: '入睡页',
+    stats: '统计页内容下方',
+    statsFooter: '统计页最下方'
+  }
+
+  function renderAdSlots(list) {
+    const box = $('#ad-slots')
+    if (!box) return
+    box.textContent = ''
+
+    if (!list || !list.length) {
+      const empty = document.createElement('li')
+      empty.className = 'empty-line'
+      empty.textContent = '还没有展示位数据（广告加载成功后上报 ad_show）'
+      box.appendChild(empty)
+      return
+    }
+
+    list.forEach(function (item) {
+      const li = document.createElement('li')
+      const label = document.createElement('b')
+      label.textContent = AD_SLOT_LABELS[item.slot] || item.slot
+      li.appendChild(label)
+      li.appendChild(document.createTextNode(' · 展示 ' + item.shows + ' / 失败 ' + item.errors))
+      box.appendChild(li)
+    })
+  }
+
   async function loadAnalytics() {
     const data = await api('/api/admin/analytics')
     const today = data.today || {}
@@ -311,9 +341,18 @@
     $('#stat-users').textContent = totals.users || 0
     $('#stat-users-sub').textContent = '有效解锁 ' + (totals.activeUnlocks || 0)
 
+    const ads = data.ads || {}
+    $('#stat-ad-shows').textContent = ads.todayShows || 0
+    $('#stat-ad-shows-sub').textContent = '本周 ' + (ads.weekShows || 0)
+    $('#stat-ad-errors').textContent = ads.todayErrors || 0
+    $('#stat-ad-errors-sub').textContent = '本周 ' + (ads.weekErrors || 0)
+    $('#stat-ad-fill').textContent =
+      ads.fillRate === null || ads.fillRate === undefined ? '–' : ads.fillRate + '%'
+
     renderTrend(data.trend)
     renderTopTracks(data.topTracks)
     renderTopSources(data.topSources)
+    renderAdSlots(ads.bySlot)
   }
 
   /* ---------- 环境音 ---------- */
@@ -439,6 +478,16 @@
       }
     })
 
+    const adSlots = ['home', 'sleep', 'stats', 'statsFooter']
+    const ads = {}
+    adSlots.forEach(function (slot) {
+      ads[slot] = {
+        enabled: $('#ad-' + slot + '-enabled').checked,
+        unitId: $('#ad-' + slot + '-unit').value.trim(),
+        type: $('#ad-' + slot + '-type').value
+      }
+    })
+
     return {
       audio: audio,
       unlock: {
@@ -447,9 +496,11 @@
         ttlHours: Number($('#ttl').value),
         onAdError: $('#ad-error').value
       },
+      ads: ads,
       features: {
         summary: $('#feat-summary').checked,
         sync: $('#feat-sync').checked,
+        events: $('#feat-events').checked,
         timer: $('#feat-timer').checked,
         preload: $('#feat-preload').checked
       },
@@ -479,8 +530,16 @@
     $('#ttl').value = config.unlock.ttlHours
     $('#ad-error').value = config.unlock.onAdError || 'grant'
 
+    ;['home', 'sleep', 'stats', 'statsFooter'].forEach(function (slot) {
+      const item = (config.ads && config.ads[slot]) || {}
+      $('#ad-' + slot + '-enabled').checked = item.enabled === true
+      $('#ad-' + slot + '-unit').value = item.unitId || ''
+      $('#ad-' + slot + '-type').value = item.type === 'banner' ? 'banner' : 'template'
+    })
+
     $('#feat-summary').checked = config.features.summary !== false
     $('#feat-sync').checked = config.features.sync !== false
+    $('#feat-events').checked = config.features.events !== false
     $('#feat-timer').checked = config.features.timer !== false
     $('#feat-preload').checked = config.features.preload !== false
 
@@ -512,6 +571,11 @@
     }
     if (!Number.isInteger(payload.cache.ttlDays) || payload.cache.ttlDays < 1 || payload.cache.ttlDays > 30) {
       return '缓存有效期需为 1–30 天'
+    }
+    const adSlots = ['home', 'sleep', 'stats', 'statsFooter']
+    for (let i = 0; i < adSlots.length; i += 1) {
+      const item = payload.ads && payload.ads[adSlots[i]]
+      if (item && item.enabled && !item.unitId) return '已启用的展示位必须填写广告位 ID'
     }
     return ''
   }

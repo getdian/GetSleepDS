@@ -28,7 +28,7 @@
 
 .fall-label {
   flex: none;
-  font-size: 21rpx;
+  font-size: 20rpx;
   line-height: 1.2;
   color: var(--text-secondary);
   letter-spacing: 1rpx;
@@ -45,7 +45,7 @@
   gap: 2rpx;
   padding: 8rpx 16rpx;
   border-radius: var(--radius-pill);
-  font-size: 21rpx;
+  font-size: 20rpx;
   line-height: 1.2;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
@@ -61,23 +61,16 @@
   background: #6366F1;
 }
 
-/* 计算卡 */
+/* 计算区：标题与按钮都在框外，边框只框住滑轮 */
 .calc-card {
-  margin-top: 20rpx;
-  padding: 0;
-  transition: background 0.3s ease, border-color 0.3s ease;
-}
-
-.calc-card.is-open {
-  border-color: rgba(255, 255, 255, 0.1);
-  background: rgba(22, 30, 50, 0.72);
+  margin-top: 28rpx;
 }
 
 .calc-head {
   display: flex;
   align-items: center;
   gap: 16rpx;
-  padding: 26rpx 26rpx;
+  padding: 4rpx 6rpx 20rpx;
 }
 
 .calc-head:active {
@@ -126,7 +119,7 @@
 }
 
 .calc-sub {
-  font-size: 19rpx;
+  font-size: 18rpx;
   color: var(--text-muted);
 }
 
@@ -151,8 +144,16 @@
   color: var(--text-muted);
 }
 
+/* 边框只框滑轮：与「入睡需要」条同款视觉（月影描边 + 夜面底色） */
+.wheel-frame {
+  padding: 10rpx 0;
+  border: 1rpx solid var(--border-moon-subtle);
+  border-radius: var(--radius-lg);
+  background: rgba(20, 27, 45, 0.46);
+}
+
 .calc-body {
-  padding: 0 24rpx 24rpx;
+  padding: 0;
   perspective: 1400rpx;
 }
 
@@ -180,7 +181,7 @@
 }
 
 .calc-front {
-  justify-content: space-between;
+  justify-content: flex-start;
   pointer-events: auto;
 }
 
@@ -189,7 +190,7 @@
 }
 
 .calc-face .btn-lunar-capsule {
-  margin-top: 12rpx;
+  margin-top: 0;
 }
 
 .calc-back {
@@ -205,7 +206,7 @@
 }
 
 .calc-action {
-  margin-top: 8rpx;
+  margin: 26rpx 4rpx 0;
 }
 
 /* 现在时间 */
@@ -213,23 +214,23 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 2rpx 10rpx 8rpx;
+  padding: 16rpx 10rpx 0;
 }
 
 .now-hint {
-  font-size: 19rpx;
+  font-size: 18rpx;
   color: var(--text-muted);
 }
 
 .now-link {
-  font-size: 21rpx;
+  font-size: 20rpx;
   color: #A5B4FC;
   padding: 4rpx 0;
 }
 
 /* 结果 */
 .result-label {
-  font-size: 19rpx;
+  font-size: 18rpx;
   letter-spacing: 5rpx;
   color: var(--text-muted);
 }
@@ -264,13 +265,13 @@
 
 .result-meta {
   margin-top: 4rpx;
-  font-size: 23rpx;
+  font-size: 22rpx;
   color: var(--text-secondary);
 }
 
 .result-note {
   margin-top: 4rpx;
-  font-size: 19rpx;
+  font-size: 18rpx;
   color: var(--text-muted);
 }
 
@@ -300,7 +301,7 @@
 }
 
 .result-row-day {
-  font-size: 19rpx;
+  font-size: 18rpx;
   color: var(--text-muted);
 }
 
@@ -319,7 +320,7 @@
 }
 
 .result-row-meta {
-  font-size: 19rpx;
+  font-size: 18rpx;
   color: var(--text-muted);
 }
 
@@ -328,12 +329,18 @@
   margin-top: 18rpx;
 }
 
+.result-share {
+  display: flex;
+  justify-content: center;
+  margin-top: 16rpx;
+}
+
 /* 脚注 */
 .calc-note {
   margin-top: 28rpx;
   padding: 0 18rpx;
   text-align: center;
-  font-size: 19rpx;
+  font-size: 18rpx;
   line-height: 1.9;
   color: var(--text-muted);
 }

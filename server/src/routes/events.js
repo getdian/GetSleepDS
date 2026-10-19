@@ -2,7 +2,7 @@ const express = require('express')
 const { wrap } = require('../lib/http')
 const { invalidBody, payloadTooLarge, rateLimited, dbUnavailable } = require('../lib/errors')
 
-const TYPES = ['app_open', 'checkin', 'audio_play', 'audio_unlock']
+const TYPES = ['app_open', 'checkin', 'audio_play', 'audio_unlock', 'ad_show', 'ad_error']
 const MAX_EVENTS = 20
 const MAX_AGE = 7 * 24 * 60 * 60 * 1000
 

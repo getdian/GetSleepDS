@@ -8,7 +8,9 @@
 - 计算器：12 小时循环时间轮（时 / 分 / 上午·下午），按起床倒推入睡、按入睡推起床，真 3D 翻转结果；2026-10-19 已按参考图收敛视觉（无内层面板/光晕、无中央高亮带、标题改无衬线、弱化 CTA 阴影）。
 - 入睡：A 未记录 / B 睡梦中 / C 已完成；B 态可撤销，C 态展示入睡、起床、在床时长。
 - 统计：横向 120 天热力图、周均值、事实回顾、月度海报、云同步/清除数据。
-- 声音：`audio-dock` 悬浮钮 + 迷你播放器 + 底部抽屉；搜索、分类、收藏、缓存、广告解锁、定时关闭。
+- 声音：`audio-dock` 悬浮钮 + 迷你播放器 + 底部抽屉；搜索、分类、收藏、缓存、广告解锁、定时关闭。入口仍在入睡页；播放后首页/统计页显示 `now-playing` 迷你条，可跨页暂停/继续/停止。
+- 分享：计算器结果背面、入睡页、统计页海报区均有 `share-btn`（button open-type=share），`onShareAppMessage` 按场景动态生成标题。
+- 广告观测：`ad-slot` 加载成功/失败上报 `ad_show` / `ad_error`，后台概览显示今日/本周与分槽填充率。
 - 顶部：自定义 `navigationStyle: custom`，通栏透明 + 延伸到胶囊前的全宽玻璃“灵动岛”，不再有固定原生导航背景。
 - 后台：`/admin` 左侧主菜单 + 右侧单面板，8 个分类（含“用户数据”按 openid 查/删），sticky 保存条。
 - 身份：AppID `wx378b0a7437d60998`；开发版 API `http://127.0.0.1:3100`，体验/正式版 `https://sleep.qfmaster.com`（`config/env.js` 自动切换）。
@@ -26,6 +28,9 @@ miniprogram/
     audio-dock/   悬浮钮/迷你播放器/抽屉/解锁/缓存/收藏/定时
     heatmap/      7 行横向滚动热力图
     unlock-sheet/ 解锁底部面板
+    ad-slot/      页面展示位（4 槽，后台逐槽开关，未启用不渲染）
+    share-btn/    页内转发入口（button open-type=share）
+    now-playing/  跨页迷你播放器（仅播放后出现，入口仍在入睡页）
     empty-state/  空状态
   pages/
     index/        计算器
@@ -40,7 +45,7 @@ miniprogram/
     sync.js       云同步与回填
     audio-cache.js 下载/保存/巡检/监听
     audio-timer.js 跨页面定时关闭单例
-    config.js / api.js / request.js / login.js / ad.js / events.js
+    config.js / api.js / request.js / login.js / ad.js / ads.js / events.js
     launch-source.js  启动来源归一化（scene|path|from → app_open.target，看板来源分布）
   config/
     env.js        API 域名（唯一前端环境配置）
@@ -62,7 +67,8 @@ tests/            Node 纯逻辑测试
 | 配置 | 位置 | 是否可视化 |
 |---|---|---|
 | 音频清单/名称/分类/URL/排序/图标 | `/admin` 环境音 | 是 |
-| 广告位、解锁方式、有效期、失败策略 | `/admin` 广告与解锁 | 是 |
+| 解锁广告位、解锁方式、有效期、失败策略 | `/admin` 广告与解锁 | 是 |
+| 页面展示位（首页 / 入睡 / 统计 ×2）开关、广告位 ID、类型 | `/admin` 广告与解锁 → 页面展示位 | 是 |
 | 事实回顾、云同步、定时、预加载、缓存上限/TTL | `/admin` 功能与缓存 | 是 |
 | 解锁面板标题/说明/按钮 | `/admin` 解锁文案 | 是 |
 | COS Bucket/Region/域名/路径/SecretId/SecretKey | `/admin` 存储与上传 | 是（密钥加密、不回显） |
@@ -77,6 +83,7 @@ tests/            Node 纯逻辑测试
 ## 4. 数据与同步
 
 - 本地记录按睡眠日存 `sleep:records:v1`，一条夜间睡眠一条记录；`pending` 是进行中会话。
+- **云备份默认关闭**（`meta.syncEnabled !== true` 时 `syncNow` 直接跳过，不发任何请求）；用户在统计页显式开启后，才用静默 `wx.login → openid` 归属上传，不获取头像/昵称/手机号。
 - 服务端 `sleep_records` 主键 `(openid, day)`；`/api/records/sync` 幂等 upsert，`day` 由 `bedAt` 重算，单条脏记录丢弃并返回 `dropped`，不再整批 400。
 - 删除：`sleep_record_deletions` 存单日墓碑，`user_erasures` 存全量清除水位；客户端上传 `deletedDays`，并接收服务端墓碑/水位清理本机旧记录。
 - `POST /api/records/erase` 删除该 openid 的睡眠记录、解锁与事件并写 erasure 水位，客户端成功后才清本地；清除前发出的在途 sync 由 `syncEpoch` 丢弃。
@@ -86,8 +93,8 @@ tests/            Node 纯逻辑测试
 
 ## 5. 当前验证基线
 
-- `npm test`：**77 passed / 0 failed**（客户端纯逻辑/定时器/登录队列/启动来源归一化 + 服务端同步/删除/解封/配置/看板聚合/小程序码服务）。
-- `npm run check`：3 页面 / 15 JSON / 10 WXML / 11 WXSS，主包约 197.5 KB（以最新输出为准）。
+- `npm test`：**90 passed / 0 failed**（客户端纯逻辑/定时器/登录队列/启动来源归一化/本地事实回顾 + 服务端同步/删除/解封/配置/看板聚合/小程序码服务/展示位配置校验/同步总闸/云端副本删除）。
+- `npm run check`：3 页面 / 18 JSON / 13 WXML / 14 WXSS，主包约 229.1 KB（以最新输出为准）。
 - 分享归因冒烟（2026-10-19，内存模式）：`app_open` 带 `1007|pages/index/index|share` 上报 → `/api/admin/analytics` 的 `topSources` 聚合出现；`/api/share/qrcode` 无 code 返 400、密钥不可用返 503，均为优雅报错。
 - 微信开发者工具（AppID `wx378b0a7437d60998`）：三页真实编译；热力图滚到最新周；C 态“覆盖今晚”渲染；控制台无 error；实际触发 `/api/records/sync` 返回 20 条并带 `deletedDays/erasedAt`。
 - 本地 PostgreSQL + API（3100）：`/api/ready` 200；PG `syncRecords` 的 day 归一化/墓碑/erasure 事务、`saveUnlock` 单行覆盖均实测通过。
@@ -113,6 +120,8 @@ tests/            Node 纯逻辑测试
 7. **单实例**：限流、配置缓存、事件都在进程内；扩容前换共享存储。
 8. **音频后台边界**：定时器已持久化并在 onShow/onEnded 重新校时，但 iOS 完全冻结 JS 时无法保证毫秒级准点；3 分钟音频的锁屏循环仍需真机验证，不能仅凭开发者工具下结论。
 9. **部署端口**：compose 已把 API 绑到 `127.0.0.1:3000`；1Panel 反向代理必须保留 `TRUST_PROXY=1`，且不要额外放行 3000 到公网。
+10. **展示位与流量主**：4 个页面展示位默认关闭；广告位需先在公众平台创建并审核通过，后台填 ID + 勾选启用后才渲染。未开通时 `<ad>` 报错会被组件静默吞掉。
+11. **云备份与“零登录”口径**：同步依赖静默 `wx.login → openid`，不弹授权、不取资料；对外文案只说“零登录、零授权、数据默认本地”，不承诺“无广告/不弹窗”。
 10. **分享归因与海报码**（2026-10-19 新增）：来源分布从新版小程序发布后才开始积累；海报小程序码依赖 `.env` 的 AppSecret 且小程序已发布，两者未就绪时海报自动回退"微信搜索「睡点」"落款，真机扫码链路待发布后验收。
 
 ## 8. 快速命令

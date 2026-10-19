@@ -7,6 +7,9 @@
     "ambient": "/components/ambient/ambient",
     "top-bar": "/components/top-bar/top-bar",
     "heatmap": "/components/heatmap/heatmap",
-    "empty-state": "/components/empty-state/empty-state"
+    "empty-state": "/components/empty-state/empty-state",
+    "ad-slot": "/components/ad-slot/ad-slot",
+    "share-btn": "/components/share-btn/share-btn",
+    "now-playing": "/components/now-playing/now-playing"
   }
 }

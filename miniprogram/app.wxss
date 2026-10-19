@@ -118,11 +118,12 @@ picker-view {
 }
 
 /* 主按钮 */
+/* 主行动按钮：主题靛蓝胶囊（与全站主色一致） */
 .btn-lunar-capsule {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12rpx;
+  gap: 14rpx;
   width: 100%;
   height: 92rpx;
   padding: 0 40rpx;
@@ -135,6 +136,18 @@ picker-view {
   letter-spacing: 1rpx;
   box-shadow: 0 8rpx 20rpx rgba(79, 70, 229, 0.18);
   transition: transform 0.25s var(--ease-spring), opacity 0.2s ease;
+}
+
+.capsule-ico {
+  width: 40rpx;
+  height: 40rpx;
+  border-radius: 50%;
+  border: 1rpx solid rgba(248, 250, 252, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22rpx;
+  line-height: 1;
 }
 
 .btn-lunar-capsule:active {

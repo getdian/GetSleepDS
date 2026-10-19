@@ -25,7 +25,7 @@
   </view>
 
   <!-- 按起床算 -->
-  <view class="calc-card sleep-glass-card {{mode === 'wake' ? 'is-open' : ''}}">
+  <view class="calc-card {{mode === 'wake' ? 'is-open' : ''}}">
     <view class="calc-head" data-mode="wake" bindtap="toggleMode">
       <view class="calc-glyph-wrap">
         <text class="calc-glyph">醒</text>
@@ -41,10 +41,13 @@
       <view class="calc-flip {{wakeFlipped ? 'is-flipped' : ''}}">
         <!-- 正面：时间轮 + 计算 -->
         <view class="calc-face calc-front">
-          <time-wheel id="wake-wheel" value="{{wakeTime}}" bind:change="onWakeChange" />
+          <view class="wheel-frame">
+            <time-wheel id="wake-wheel" value="{{wakeTime}}" bind:change="onWakeChange" />
+          </view>
           <view class="calc-action">
             <view class="btn-lunar-capsule" bindtap="calcWake">
               <text>计算就寝时间</text>
+              <text class="capsule-ico">☾</text>
             </view>
           </view>
         </view>
@@ -76,6 +79,7 @@
             </view>
 
             <view class="btn-moon-ghost result-reset" bindtap="resetWake">重新选择</view>
+            <view class="result-share"><share-btn text="转发给朋友" variant="link" /></view>
           </block>
         </view>
       </view>
@@ -83,7 +87,7 @@
   </view>
 
   <!-- 按入睡算 -->
-  <view class="calc-card sleep-glass-card {{mode === 'sleep' ? 'is-open' : ''}}">
+  <view class="calc-card {{mode === 'sleep' ? 'is-open' : ''}}">
     <view class="calc-head" data-mode="sleep" bindtap="toggleMode">
       <view class="calc-glyph-wrap is-sleep">
         <text class="calc-glyph">睡</text>
@@ -99,7 +103,9 @@
     <view wx:if="{{mode === 'sleep'}}" class="calc-body">
       <view class="calc-flip {{sleepFlipped ? 'is-flipped' : ''}}">
         <view class="calc-face calc-front">
-          <time-wheel id="sleep-wheel" value="{{sleepTime}}" bind:change="onSleepChange" />
+          <view class="wheel-frame">
+            <time-wheel id="sleep-wheel" value="{{sleepTime}}" bind:change="onSleepChange" />
+          </view>
           <view class="now-row">
             <text class="now-hint">当前 {{nowText}}</text>
             <text class="now-link" bindtap="onNowTap">用现在的时间</text>
@@ -107,6 +113,7 @@
           <view class="calc-action">
             <view class="btn-lunar-capsule" bindtap="calcSleep">
               <text>计算唤醒时间</text>
+              <text class="capsule-ico">☀</text>
             </view>
           </view>
         </view>
@@ -132,6 +139,7 @@
             </view>
 
             <view class="btn-moon-ghost result-reset" bindtap="resetSleep">重新选择</view>
+            <view class="result-share"><share-btn text="转发给朋友" variant="link" /></view>
           </block>
         </view>
       </view>
@@ -141,4 +149,8 @@
   <view class="calc-note fade-up">
     <text>每个完整周期约 90 分钟。这里只做时间倒推，不做睡眠评价。</text>
   </view>
+
+  <ad-slot slot-name="home" enabled="{{ads.home.enabled}}" unit-id="{{ads.home.unitId}}" type="{{ads.home.type}}" />
 </view>
+
+<now-playing />

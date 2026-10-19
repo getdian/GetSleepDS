@@ -19,17 +19,17 @@
 
   <block wx:else>
     <view class="metrics fade-up">
-      <view class="metric sleep-glass-card">
-        <text class="metric-key">本周平均入睡</text>
+      <view class="metric">
         <text class="metric-value">{{avgBed}}</text>
+        <text class="metric-key">本周平均入睡</text>
       </view>
-      <view class="metric sleep-glass-card">
-        <text class="metric-key">本周平均起床</text>
+      <view class="metric">
         <text class="metric-value">{{avgWake}}</text>
+        <text class="metric-key">本周平均起床</text>
       </view>
-      <view class="metric sleep-glass-card">
-        <text class="metric-key">本周平均时长</text>
+      <view class="metric">
         <text class="metric-value is-small">{{avgDuration}}</text>
+        <text class="metric-key">本周平均时长</text>
       </view>
     </view>
 
@@ -39,37 +39,42 @@
       <text>连续 {{streak}} 天</text>
     </view>
 
-    <view class="panel sleep-glass-card fade-up">
-      <view class="panel-head">
-        <text class="panel-title">打卡热力图</text>
-        <view class="seg">
-          <view
-            wx:for="{{rangeOptions}}"
-            wx:key="value"
-            class="seg-item {{range === item.value ? 'is-on' : ''}}"
-            data-value="{{item.value}}"
-            bindtap="onRangeTap"
-          >{{item.label}}</view>
+    <view class="section fade-up">
+      <view class="section-hero">
+        <view class="section-head">
+          <text class="section-title">打卡热力图</text>
+          <view class="seg">
+            <view
+              wx:for="{{rangeOptions}}"
+              wx:key="value"
+              class="seg-item {{range === item.value ? 'is-on' : ''}}"
+              data-value="{{item.value}}"
+              bindtap="onRangeTap"
+            >{{item.label}}</view>
+          </view>
         </view>
-      </view>
 
-      <heatmap
-        cells="{{cells}}"
-        colCount="{{colCount}}"
-        months="{{months}}"
-        bind:celltap="onHeatTap"
-      />
+        <heatmap
+          cells="{{cells}}"
+          colCount="{{colCount}}"
+          months="{{months}}"
+          bind:celltap="onHeatTap"
+        />
 
-      <text class="heat-note">共 {{marked}} 天有完整记录</text>
-      <view class="poster-row">
-        <text class="poster-btn" bindtap="onMakePoster">生成月度海报</text>
+        <view class="section-foot">
+          <text class="heat-note">共 {{marked}} 天有完整记录</text>
+          <view class="section-actions">
+            <share-btn text="分享" variant="link" />
+            <text class="poster-btn" bindtap="onMakePoster">生成月度海报</text>
+          </view>
+        </view>
       </view>
     </view>
 
-    <view wx:if="{{factState !== 'off' && factState !== 'idle'}}" class="panel sleep-glass-card fade-up">
-      <view class="panel-head">
-        <text class="panel-title">本周事实回顾</text>
-        <text class="panel-tag">只陈述数据</text>
+    <view wx:if="{{factState !== 'off' && factState !== 'idle'}}" class="section fade-up">
+      <view class="section-head">
+        <text class="section-title">本周事实回顾</text>
+        <text class="section-tag">只陈述数据</text>
       </view>
 
       <block wx:if="{{factState === 'loading'}}">
@@ -100,20 +105,31 @@
     </view>
   </block>
 
-  <view class="sync-card sleep-glass-card fade-up">
+  <ad-slot wx:if="{{hasData}}" slot-name="stats" enabled="{{ads.stats.enabled}}" unit-id="{{ads.stats.unitId}}" type="{{ads.stats.type}}" />
+
+  <view class="sync-line fade-up">
     <view class="sync-info">
-      <text class="sync-title">云同步</text>
+      <text class="sync-title">{{hasData ? '云备份（可选）' : '从云端恢复'}}</text>
       <text class="sync-sub">{{syncText}}</text>
     </view>
-    <view class="sync-btn {{syncBusy ? 'is-busy' : ''}}" bindtap="onSyncTap">{{syncBusy ? '同步中…' : '同步'}}</view>
+    <view class="sync-ops">
+      <view wx:if="{{syncEnabled}}" class="sync-btn {{syncBusy ? 'is-busy' : ''}}" bindtap="onSyncTap">{{syncBusy ? '同步中…' : '同步'}}</view>
+      <switch class="sync-switch" checked="{{syncEnabled}}" color="#818CF8" bindchange="onSyncSwitch" />
+    </view>
   </view>
 
-  <view class="danger-entry fade-up" bindtap="onClearData">
+  <view wx:if="{{hasCloudCopy && !syncEnabled}}" class="cloud-del" bindtap="eraseCloudOnly">删除云端副本（保留本机）</view>
+
+  <view wx:if="{{hasData}}" class="danger-entry fade-up" bindtap="onClearData">
     <text class="danger-entry-title">清除数据（云端+本机）</text>
-    <text class="danger-entry-hint">记录以匿名标识云备份，换机后自动恢复</text>
+    <text class="danger-entry-hint">默认只存本机；开启云备份后以匿名标识保存，换机可恢复</text>
   </view>
+
+  <ad-slot slot-name="statsFooter" enabled="{{ads.statsFooter.enabled}}" unit-id="{{ads.statsFooter.unitId}}" type="{{ads.statsFooter.type}}" />
 
   <canvas canvas-id="poster" class="poster-canvas"></canvas>
 
   <view class="safe-bottom"></view>
 </view>
+
+<now-playing />

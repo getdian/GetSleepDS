@@ -153,8 +153,10 @@
   display: flex;
   flex-direction: column;
   padding: 20rpx 28rpx calc(20rpx + env(safe-area-inset-bottom));
-  background: var(--bg-night-surface);
-  border-top: 1.5rpx solid var(--border-moon-subtle);
+  background: var(--glass-card-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border-top: 1.5rpx solid var(--border-moon-light);
   border-radius: var(--radius-xl) var(--radius-xl) 0 0;
   box-shadow: 0 -28rpx 90rpx rgba(0, 0, 0, 0.5);
   transform: translateY(104%);
@@ -218,7 +220,7 @@
 }
 
 .du-sub {
-  font-size: 20rpx;
+  font-size: 18rpx;
   color: var(--text-muted);
 }
 
@@ -288,20 +290,21 @@
   margin-top: 8rpx;
 }
 
+/* 列表去盒：行间 hairline；播放中的行是唯一带色块的行 */
 .dock-track {
   display: flex;
   align-items: center;
   gap: 18rpx;
-  padding: 18rpx 20rpx;
-  margin-bottom: 10rpx;
-  border-radius: var(--radius-md);
-  border: 1rpx solid transparent;
-  background: var(--glass-tint);
+  padding: 18rpx 8rpx;
+  border-bottom: 1rpx solid rgba(255, 255, 255, 0.05);
 }
 
 .dock-track.is-playing {
-  border-color: var(--border-glow);
-  background: var(--glass-card-active);
+  background: var(--glass-tint);
+  border-radius: var(--radius-md);
+  border-bottom-color: transparent;
+  padding-left: 16rpx;
+  padding-right: 16rpx;
 }
 
 .dock-track:active {
@@ -346,7 +349,7 @@
 }
 
 .dock-tstate {
-  font-size: 19rpx;
+  font-size: 18rpx;
   color: var(--text-muted);
 }
 
@@ -399,8 +402,8 @@
 }
 
 .dock-timer-label {
-  font-size: 21rpx;
-  color: var(--text-muted);
+  font-size: 20rpx;
+  color: var(--text-secondary);
 }
 
 .dock-timer-chips {
@@ -409,10 +412,10 @@
 }
 
 .dock-timer-chip {
-  padding: 8rpx 18rpx;
+  padding: 10rpx 22rpx;
   border-radius: var(--radius-pill);
   border: 1rpx solid var(--border-moon-subtle);
-  font-size: 20rpx;
+  font-size: 18rpx;
   color: var(--text-muted);
 }
 

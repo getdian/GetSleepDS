@@ -211,7 +211,8 @@ function createApp(options) {
       codeToOpenid,
       limitIp: recordsIp,
       limitErase: eraseIp,
-      now
+      now,
+      store
     })
   )
   app.use('/api', createShareRoute({ config, codeToOpenid, limitIp: shareIp }))

@@ -32,7 +32,7 @@ App({
       .catch(() => null)
 
     this.globalData.configReady.then((config) => {
-      // 首次启动静默补一次云端备份；失败不影响使用
+      // 只有用户在统计页显式开启云备份后才会真正上传；未开启时直接跳过
       syncNow().catch(() => {})
 
       if (!config) return

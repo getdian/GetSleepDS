@@ -39,11 +39,11 @@ function trackEvents(code, events) {
   })
 }
 
-function eraseRecords(code) {
+function eraseRecords(code, options) {
   return request({
     path: '/api/records/erase',
     method: 'POST',
-    data: { code },
+    data: { code, cloudOnly: !!(options && options.cloudOnly) },
     timeout: 12000
   })
 }

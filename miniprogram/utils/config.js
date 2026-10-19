@@ -6,12 +6,27 @@ const CACHE_TTL = 10 * 60 * 1000
 
 let memory = null
 
+const AD_SLOTS = ['home', 'sleep', 'stats', 'statsFooter']
+
+/** 展示位逐槽合并：旧配置没有 ads 时全部回落到关闭状态 */
+function mergeAds(raw) {
+  const source = raw && typeof raw === 'object' ? raw : {}
+  const out = {}
+  AD_SLOTS.forEach((slot) => {
+    const base = FALLBACK.ads[slot] || {}
+    const item = source[slot] && typeof source[slot] === 'object' ? source[slot] : {}
+    out[slot] = Object.assign({}, base, item)
+  })
+  return out
+}
+
 function merge(raw) {
   if (!raw) return FALLBACK
   return {
     version: raw.version || FALLBACK.version,
     audio: Array.isArray(raw.audio) && raw.audio.length ? raw.audio : FALLBACK.audio,
     unlock: Object.assign({}, FALLBACK.unlock, raw.unlock || {}),
+    ads: mergeAds(raw.ads),
     features: Object.assign({}, FALLBACK.features, raw.features || {}),
     cache: Object.assign({}, FALLBACK.cache, raw.cache || {}),
     copy: Object.assign({}, FALLBACK.copy, raw.copy || {})

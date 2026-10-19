@@ -6,37 +6,43 @@
   display: flex;
   flex-direction: column;
   gap: 6rpx;
-  margin-bottom: 30rpx;
+  margin-bottom: 34rpx;
 }
 
 .stats-hero .title-xl {
   margin-top: 4rpx;
 }
 
+/* 数据带：无框三列，大数字在上、说明在下，列间一根极淡竖线 */
 .metrics {
   display: flex;
-  gap: 16rpx;
+  align-items: stretch;
 }
 
 .metric {
   flex: 1;
-  padding: 26rpx 16rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8rpx;
-  border-radius: var(--radius-lg);
+  gap: 12rpx;
+  padding: 10rpx 0 6rpx;
 }
 
+.metric + .metric {
+  border-left: 1rpx solid var(--border-moon-subtle);
+}
+
+/* 字阶：18 工具字 / 22 次要信息 / 28 正文 / 30 分区标题 / 48 数据 / 56 页标题 */
 .metric-key {
-  font-size: 20rpx;
+  font-size: 18rpx;
   color: var(--text-muted);
-  letter-spacing: 1rpx;
+  letter-spacing: 2rpx;
 }
 
 .metric-value {
   font-family: var(--font-cn-serif);
-  font-size: 40rpx;
+  font-size: 48rpx;
+  line-height: 1.1;
   color: var(--text-moon-pure);
   font-variant-numeric: tabular-nums;
   letter-spacing: 1rpx;
@@ -44,28 +50,43 @@
 
 .metric-value.is-small {
   font-size: 30rpx;
-  padding-top: 8rpx;
+  padding-top: 12rpx;
 }
 
 .week-line {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 10rpx;
-  margin: 22rpx 4rpx 24rpx;
-  font-size: 22rpx;
-  color: var(--text-secondary);
+  margin: 28rpx 0 0;
+  font-size: 20rpx;
+  letter-spacing: 1rpx;
+  color: var(--color-accent-moon);
+  opacity: 0.82;
 }
 
 .week-dot {
-  color: var(--text-muted);
+  opacity: 0.5;
 }
 
-.panel {
-  margin-bottom: 24rpx;
-  padding: 28rpx;
+/* 分区：无框，层级只靠标题与间距；焦点块例外（玻璃卡） */
+.section {
+  margin-top: 56rpx;
 }
 
-.panel-head {
+/* 焦点块：本页唯一玻璃质感容器（打卡热力图） */
+.section-hero {
+  padding: 26rpx 24rpx;
+  border-radius: var(--radius-xl);
+  background-color: var(--bg-night-surface);
+  background: var(--glass-card-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1rpx solid var(--border-moon-subtle);
+  box-shadow: 0 12rpx 36rpx rgba(0, 0, 0, 0.26);
+}
+
+.section-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -73,14 +94,14 @@
   margin-bottom: 24rpx;
 }
 
-.panel-title {
+.section-title {
   font-family: var(--font-cn-serif);
-  font-size: 28rpx;
+  font-size: 30rpx;
   letter-spacing: 3rpx;
   color: var(--text-primary);
 }
 
-.panel-tag {
+.section-tag {
   padding: 4rpx 14rpx;
   border-radius: var(--radius-pill);
   border: 1rpx solid var(--border-moon-subtle);
@@ -88,7 +109,7 @@
   color: var(--text-muted);
 }
 
-/* 分段 */
+/* 分段选择器：可交互组件，保留自身形状 */
 .seg {
   display: flex;
   padding: 4rpx;
@@ -110,85 +131,62 @@
   color: var(--text-primary);
 }
 
-/* 图例 */
-.legend {
+/* 分区底部行：左侧记录数、右侧海报入口 */
+.section-foot {
   display: flex;
   align-items: center;
-  margin-top: 24rpx;
+  justify-content: space-between;
+  margin-top: 16rpx;
 }
 
-.legend-label {
-  margin: 0 8rpx;
+.heat-note {
   font-size: 18rpx;
   color: var(--text-muted);
 }
 
-.legend-cell {
-  width: 18rpx;
-  height: 18rpx;
-  margin-right: 6rpx;
-  border-radius: 5rpx;
+.section-actions {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
 }
 
-.legend-cell.level-1 { background: var(--heat-1); }
-.legend-cell.level-2 { background: var(--heat-2); }
-.legend-cell.level-3 { background: var(--heat-3); }
-.legend-cell.level-4 { background: var(--heat-4); }
-.legend-cell.level-5 { background: var(--heat-5); }
-
-.legend-marked {
-  margin-left: auto;
+.poster-btn {
+  padding: 8rpx 22rpx;
+  border-radius: var(--radius-pill);
+  border: 1rpx solid var(--border-glow);
   font-size: 18rpx;
-  color: var(--text-muted);
+  color: var(--color-primary);
 }
 
 /* 事实回顾 */
 .fact-text {
   display: block;
   font-size: 28rpx;
-  line-height: 1.95;
+  line-height: 1.9;
   letter-spacing: 0.5rpx;
   color: var(--text-primary);
 }
 
 .fact-muted {
   display: block;
-  font-size: 24rpx;
+  font-size: 22rpx;
+  text-align: center;
   color: var(--text-muted);
+  opacity: 0.75;
 }
 
 .fact-error {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
+  gap: 24rpx;
 }
 
 .fact-retry {
-  padding: 8rpx 20rpx;
+  padding: 8rpx 22rpx;
   border-radius: var(--radius-pill);
   border: 1rpx solid var(--border-glow);
-  font-size: 22rpx;
-  color: var(--color-primary);
-}
-
-.heat-note {
-  display: block;
-  margin-top: 12rpx;
   font-size: 18rpx;
-  color: var(--text-muted);
-}
-
-.poster-row {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 14rpx;
-}
-
-.poster-btn {
-  padding: 8rpx 20rpx;
-  border-radius: var(--radius-pill);
-  border: 1rpx solid var(--border-glow);
-  font-size: 19rpx;
   color: var(--color-primary);
 }
 
@@ -200,28 +198,40 @@
   height: 480px;
 }
 
-/* 云同步 */
-.sync-card {
+/* 云同步：hairline 之下进入操作区，组件只留胶囊按钮 */
+.sync-line {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 8rpx;
-  padding: 24rpx 28rpx;
+  margin-top: 56rpx;
+  padding-top: 32rpx;
+  border-top: 1rpx solid var(--border-moon-subtle);
 }
 
 .sync-info {
   display: flex;
   flex-direction: column;
-  gap: 4rpx;
+  gap: 6rpx;
+}
+
+.sync-ops {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.sync-switch {
+  transform: scale(0.8);
+  transform-origin: right center;
 }
 
 .sync-title {
-  font-size: 25rpx;
+  font-size: 24rpx;
   color: var(--text-primary);
 }
 
 .sync-sub {
-  font-size: 20rpx;
+  font-size: 18rpx;
   color: var(--text-muted);
 }
 
@@ -229,7 +239,7 @@
   padding: 10rpx 28rpx;
   border-radius: var(--radius-pill);
   border: 1rpx solid var(--border-glow);
-  font-size: 22rpx;
+  font-size: 18rpx;
   color: var(--color-primary);
 }
 
@@ -237,14 +247,26 @@
   opacity: 0.5;
 }
 
-/* 清除数据入口：红色链接标题 + 灰色说明行 */
+/* 关闭云备份但仍保留云端副本时的独立删除入口 */
+.cloud-del {
+  margin-top: 12rpx;
+  text-align: right;
+  font-size: 18rpx;
+  color: var(--text-muted);
+  text-decoration: underline;
+}
+
+/* 清除数据入口：居中，红色链接标题 + 灰色说明行 */
 .stats-page .danger-entry {
-  margin-top: 28rpx;
-  padding: 8rpx 4rpx;
+  margin-top: 36rpx;
+  padding: 8rpx 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .stats-page .danger-entry-title {
-  font-size: 25rpx;
+  font-size: 24rpx;
   color: #F87171;
   text-decoration: underline;
 }
@@ -252,7 +274,7 @@
 .stats-page .danger-entry-hint {
   display: block;
   margin-top: 10rpx;
-  font-size: 19rpx;
+  font-size: 18rpx;
   color: var(--text-muted);
+  opacity: 0.8;
 }
-

@@ -52,12 +52,16 @@
         </view>
       </view>
 
-      <view wx:if="{{canOverwrite}}" class="overwrite" bindtap="onOverwriteTonight">再记今晚（覆盖今天旧记录）</view>
+      <view wx:if="{{canOverwrite}}" class="overwrite" bindtap="onOverwriteTonight">{{overwriteText}}</view>
       <view class="undo" bindtap="onUndoTap">记录有误？撤销</view>
     </block>
   </view>
 
-  <view class="week-card sleep-glass-card is-tappable fade-up" bindtap="goStats">
+  <view class="sleep-ad">
+    <ad-slot slot-name="sleep" enabled="{{ads.sleep.enabled}}" unit-id="{{ads.sleep.unitId}}" type="{{ads.sleep.type}}" />
+  </view>
+
+  <view class="week-card fade-up" bindtap="goStats">
     <view class="week-head">
       <text class="week-title">最近 7 天</text>
       <text class="week-link">统计 ›</text>
@@ -69,6 +73,10 @@
       </view>
     </view>
     <text class="week-summary">本周 {{weekCount}} 天 · 连续 {{streak}} 天</text>
+  </view>
+
+  <view class="sleep-share">
+    <share-btn text="分享今晚的睡眠" variant="link" />
   </view>
 
   <text class="sleep-quote font-poetic fade-up">{{footerText}}</text>

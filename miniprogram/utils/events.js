@@ -1,6 +1,7 @@
 const api = require('./api')
 const { withLogin } = require('./login')
 const storage = require('./storage')
+const { getConfig } = require('./config')
 
 const KEY = storage.KEYS.events
 const MAX_QUEUE = 80
@@ -39,6 +40,10 @@ function write(list) {
  * 轻量事件：只上报类型与目标（音频 id），不涉及睡眠明细。
  */
 function track(type, target) {
+  // 运营可在后台关闭匿名事件统计；关闭后连本地队列都不写
+  const config = getConfig()
+  if (config.features && config.features.events === false) return
+
   const list = read()
   list.push({ id: makeId(), type, target: target || '', ts: Date.now() })
   if (list.length > MAX_QUEUE) list.splice(0, list.length - MAX_QUEUE)
