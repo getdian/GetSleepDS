@@ -28,8 +28,8 @@ services:
     env_file:
       - .env
     ports:
-      # 只给本机 1Panel/Nginx 反代；不要把 3000 暴露到公网
-      - "127.0.0.1:3000:3000"
+      # 只给本机 1Panel/Nginx 反代；支持 HOST_PORT 避免多站点端口冲突，不要暴露到公网
+      - "127.0.0.1:${HOST_PORT:-3000}:3000"
     healthcheck:
       test:
         [

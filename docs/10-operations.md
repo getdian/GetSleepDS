@@ -123,6 +123,8 @@ WX_SECRET=<小程序 AppSecret>
 ADMIN_PASSWORD=<后台强密码>
 CONFIG_SECRET=<固定随机串，设置后不要换>
 TRUST_PROXY=1
+# 可选：如果服务器 3000 已被占用或多站点统一编排（如 3001~3003 已用），可指定 3004
+# HOST_PORT=3004
 ```
 
 不需要 `DOMAIN`（1Panel 管证书）。不要把 `.env` 提交、截图或发给别人。
@@ -137,22 +139,16 @@ bash deploy/1panel-up.sh
 脚本会：
 
 - 校验 `.env` 必填项；
+- 读取 `HOST_PORT`（默认 3000）；
 - `docker compose up -d --build`；
-- 轮询 `http://127.0.0.1:3000/api/ready`；
+- 轮询 `http://127.0.0.1:${HOST_PORT}/api/ready`；
 - 打印容器状态和下一步 1Panel 配置。
-
-也可以手动：
-
-```bash
-docker compose up -d --build
-curl http://127.0.0.1:3000/api/ready
-```
 
 ### 3.4 1Panel 反向代理 + HTTPS
 
 1. 1Panel → 网站 → 创建网站 → **反向代理**。
 2. 域名：`sleep.qfmaster.com`
-3. 代理地址：`http://127.0.0.1:3000`
+3. 代理地址：`http://127.0.0.1:3000`（若在 `.env` 中设置了 `HOST_PORT=3004`，这里就填 `http://127.0.0.1:3004`）。
 4. 申请 Let's Encrypt 证书，开启“强制 HTTPS”。
 5. 网站“配置文件”里加：
 
@@ -162,9 +158,9 @@ client_max_body_size 30m;
 
 6. 保存并重载 OpenResty。
 
-> compose 已把 API 绑在 `127.0.0.1:3000`，只允许本机反代。不要额外对公网放行 3000。
+> compose 已把 API 绑在 `127.0.0.1:${HOST_PORT}`，只允许本机反代。不要额外对公网放行该端口。
 >
-> 如果 1Panel 的 OpenResty 跑在 Docker 里而 `127.0.0.1:3000` 不通，应让 1Panel 与 compose 共用 Docker 网络，或仅在内网放行 3000；不要把 3000 直接暴露公网。
+> 常见误区：1Panel 创建网站填写的“代号”主目录（如 `/opt/1panel/www/sites/sleepDS`）是 OpenResty 站点的配置目录；项目源码及 Docker 运行目录请放在独立的 `/opt/getsleep`，不要解压覆盖到站点主目录。
 
 ### 3.5 微信公众平台
 

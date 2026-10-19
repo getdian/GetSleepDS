@@ -16,7 +16,7 @@
           wx:for="{{hourItems}}"
           wx:key="key"
           class="tw-item {{item.v === selH ? 'is-on' : ''}}"
-          style="height:{{rowH}}px;line-height:{{rowH}}px;"
+          style="height:{{rowH}}px;line-height:{{rowH}}px;{{hourStyles[index]}}"
         >{{item.label}}</view>
         <view style="height:{{padH}}px;"></view>
       </scroll-view>
@@ -38,7 +38,7 @@
           wx:for="{{minuteItems}}"
           wx:key="key"
           class="tw-item {{item.v === selM ? 'is-on' : ''}}"
-          style="height:{{rowH}}px;line-height:{{rowH}}px;"
+          style="height:{{rowH}}px;line-height:{{rowH}}px;{{minuteStyles[index]}}"
         >{{item.label}}</view>
         <view style="height:{{padH}}px;"></view>
       </scroll-view>
