@@ -237,7 +237,22 @@
   opacity: 0.5;
 }
 
-.stats-page .danger-link {
+/* 清除数据入口：红色链接标题 + 灰色说明行 */
+.stats-page .danger-entry {
   margin-top: 28rpx;
+  padding: 8rpx 4rpx;
+}
+
+.stats-page .danger-entry-title {
+  font-size: 25rpx;
+  color: #F87171;
+  text-decoration: underline;
+}
+
+.stats-page .danger-entry-hint {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 19rpx;
+  color: var(--text-muted);
 }
 

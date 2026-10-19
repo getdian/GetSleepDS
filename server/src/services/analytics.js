@@ -40,6 +40,7 @@ function createAnalytics(options) {
     let weekPlays = 0
     let weekUnlocks = 0
     const top = new Map()
+    const sources = new Map()
 
     events.forEach((event) => {
       const bucket = days.get(dayKey(event.ts))
@@ -47,7 +48,12 @@ function createAnalytics(options) {
 
       if (event.type === 'checkin') checkinUsers.add(event.openid)
 
-      if (event.type === 'app_open') bucket.opens.add(event.openid)
+      if (event.type === 'app_open') {
+        bucket.opens.add(event.openid)
+        // 启动来源：target = "scene|path|from"（历史空值归 unknown）
+        const sourceKey = event.target || 'unknown'
+        sources.set(sourceKey, (sources.get(sourceKey) || 0) + 1)
+      }
       if (event.type === 'checkin') bucket.checkins += 1
       if (event.type === 'audio_play') {
         bucket.plays += 1
@@ -75,6 +81,11 @@ function createAnalytics(options) {
         return { id: entry[0], title: match ? match.title : entry[0], plays: entry[1] }
       })
 
+    const topSources = Array.from(sources.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map((entry) => ({ source: entry[0], opens: entry[1] }))
+
     return {
       totals: Object.assign({}, totals, {
         users: Math.max(totals.users || 0, checkinUsers.size)
@@ -97,7 +108,8 @@ function createAnalytics(options) {
         checkins: bucket.checkins,
         plays: bucket.plays
       })),
-      topTracks
+      topTracks,
+      topSources
     }
   }
 

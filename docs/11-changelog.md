@@ -1,5 +1,26 @@
 # 睡点 · 关键更新记录
 
+## 2026-10-19 · 分享入口、来源归因与海报小程序码（P6 批次 A/B）
+
+### 分享与增长
+
+- 三页补齐转发入口（原仅统计页可转发）；计算器页开放"分享到朋友圈"（单页模式兜底，入睡/统计页依赖本地存储刻意不开）；分享路径预埋 `from=share` / `from=timeline`。
+- 新增 `utils/launch-source.js`：启动来源归一化为 `scene|path|from` 写入 `app_open.target`；后台看板新增"打开来源 Top 5"（scene 码映射可读标签）。
+- 新增 `GET /api/share/qrcode`：stable_token（不顶掉线上 token，进程内缓存）+ `getwxacodeunlimit`，code 鉴权 + 3 次/分/IP 限流；月度海报底部画小程序码（4s 拉码窗口，失败自动回退"微信搜索「睡点」"落款）。
+- `deploy/dev.ps1` 从根目录 `.env` 增量读取 `WX_APPID/WX_SECRET`（本地不覆盖 dev 参数）；`.env` 已就位真实微信密钥，本地可跑通小程序码链路。
+- 决策固化：ADR-017 不做小程序内付费内容；ADR-018 分享只做拉新、不做"分享解锁"。
+
+### 交互
+
+- 时间轮升级为"电表滚筒"立体效果：逐行 `rotateX + perspective` 弧面变形、上下透明度衰减、实时中心高亮 + 状态条，分钟列改 0–59 完整循环（59→00 连续），整体高度 440rpx → 380rpx。
+
+### 验证
+
+- `npm test`：77 passed / 0 failed（新增 launch-source 5 条、analytics 聚合 3 条、wx 小程序码服务 4 条）。
+- `npm run check`：3 页面 / 15 JSON / 10 WXML / 11 WXSS，主包约 197.5 KB。
+- 内存模式冒烟：`app_open` 归因上报 → 看板 `topSources` 聚合闭环；`/api/share/qrcode` 缺 code 400、密钥不可用 503，均优雅报错。
+- 待真机/发布后验收：朋友圈单页打开、激励视频、海报扫码进入小程序。
+
 ## 2026-10-19 · 同步/删除/解锁/交互加固
 
 ### 功能闭环

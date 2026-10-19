@@ -62,6 +62,11 @@ function saveRecord(record) {
   return ok
 }
 
+/** 开发工具用：整体替换记录表（调用方负责墓碑等一致性） */
+function replaceRecords(map) {
+  return safeSet(KEYS.records, map && typeof map === 'object' ? map : {})
+}
+
 function removeRecord(day) {
   const all = getRecords()
   delete all[day]

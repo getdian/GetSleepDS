@@ -267,6 +267,10 @@ h1 {
   border-top: 1px solid var(--line);
 }
 
+.top-tracks + .top-tracks {
+  margin-top: 18px;
+}
+
 .top-tracks h3 {
   margin: 0 0 10px;
   font-size: 13px;

@@ -20,6 +20,31 @@ function Step($text) {
   Write-Host "[dev] $text" -ForegroundColor Cyan
 }
 
+# 从根目录 .env 增量读取微信密钥（不覆盖已注入的本地参数）。
+# 未配置 WX_SECRET 时本地仍可开发：小程序码接口明确报错，海报自动降级。
+function Import-WxSecrets {
+  $envFile = Join-Path $root '.env'
+  if (-not (Test-Path -LiteralPath $envFile)) {
+    Write-Host '[dev] 未找到 .env：微信密钥未配置（小程序码不可用，海报自动降级）' -ForegroundColor Yellow
+    return
+  }
+  foreach ($line in Get-Content -LiteralPath $envFile) {
+    $trimmed = $line.Trim()
+    if ($trimmed -match '^(WX_APPID|WX_SECRET)=(.*)$') {
+      $key = $Matches[1]
+      $value = $Matches[2].Trim()
+      if ($value -and -not [Environment]::GetEnvironmentVariable($key)) {
+        Set-Item -Path "Env:$key" -Value $value
+      }
+    }
+  }
+  if ([Environment]::GetEnvironmentVariable('WX_SECRET')) {
+    Write-Host '[dev] 微信密钥：已从 .env 读取（小程序码可用）' -ForegroundColor Green
+  } else {
+    Write-Host '[dev] 微信密钥：.env 未配置 WX_SECRET（小程序码不可用，海报自动降级）' -ForegroundColor Yellow
+  }
+}
+
 if (-not (Test-Path -LiteralPath (Join-Path $serverDir 'src\index.js'))) {
   throw "找不到 server/src/index.js，请在项目根目录运行本脚本"
 }
@@ -91,8 +116,12 @@ $env:PORT = "$Port"
 $env:ALLOW_DEV_LOGIN = '1'
 $env:ADMIN_PASSWORD = $AdminPassword
 $env:CONFIG_SECRET = 'getsleep-local-config-2026'
-$env:WX_APPID = 'wx378b0a7437d60998'
 $env:TRUST_PROXY = '0'
+
+Import-WxSecrets
+if (-not [Environment]::GetEnvironmentVariable('WX_APPID')) {
+  $env:WX_APPID = 'wx378b0a7437d60998'
+}
 
 if ($Memory) {
   $env:DB_MODE = 'memory'

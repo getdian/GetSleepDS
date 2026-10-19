@@ -82,3 +82,38 @@ test('总结请求只带最近 14 天', () => {
   assert.equal(payload.length, 3)
   assert.deepEqual(Object.keys(payload[0]).sort(), ['bedAt', 'day', 'updatedAt', 'wakeAt'])
 })
+
+test('月对齐图板：2026-10-19 覆盖 8/9/10/11 月，含往后 3 周板位', () => {
+  const now = local(2026, 10, 19, 12, 0) // 周一
+  const span = S.monthsSpan(now)
+  // 8月1日 ~ 11月15日（今天+21 天所在周的周日），未来板位 27 天
+  assert.equal(span.days, 107)
+  assert.equal(span.endOffsetDays, 27)
+  const heat = S.heatmapCells({}, now, span.days, '', span.endOffsetDays)
+  assert.deepEqual(
+    heat.months.map((m) => m.label),
+    ['8月', '9月', '10月', '11月']
+  )
+  // 2 个 lead 补位（8月1日是周三）+ 107 天 = 109 → 16 列
+  assert.equal(heat.colCount, 16)
+  // 最后一格是 11-15（未来板位，无记录为灰）
+  const last = heat.cells[heat.cells.length - 1]
+  assert.equal(last.day, '2026-11-15')
+  assert.equal(last.level, 0)
+  // 今天（10-19）在板内且有高亮标记
+  const todayCell = heat.cells.find((c) => c.day === '2026-10-19')
+  assert.ok(todayCell && todayCell.isToday)
+})
+
+test('月对齐图板：今天在月中时同样覆盖前 2 个整月', () => {
+  const now = local(2026, 10, 7, 12, 0) // 周三
+  const span = S.monthsSpan(now)
+  const heat = S.heatmapCells({}, now, span.days, '', span.endOffsetDays)
+  // 末列从 10-31 开始，11-1 不独占一列，故无 11 月标签
+  assert.deepEqual(
+    heat.months.map((m) => m.label),
+    ['8月', '9月', '10月']
+  )
+  const todayCell = heat.cells.find((c) => c.day === '2026-10-07')
+  assert.ok(todayCell && todayCell.isToday)
+})

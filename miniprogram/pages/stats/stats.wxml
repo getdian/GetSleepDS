@@ -108,7 +108,10 @@
     <view class="sync-btn {{syncBusy ? 'is-busy' : ''}}" bindtap="onSyncTap">{{syncBusy ? '同步中…' : '同步'}}</view>
   </view>
 
-  <view class="danger-link fade-up" bindtap="onClearData">清除数据（云端+本机）</view>
+  <view class="danger-entry fade-up" bindtap="onClearData">
+    <text class="danger-entry-title">清除数据（云端+本机）</text>
+    <text class="danger-entry-hint">记录以匿名标识云备份，换机后自动恢复</text>
+  </view>
 
   <canvas canvas-id="poster" class="poster-canvas"></canvas>
 

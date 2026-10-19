@@ -2,6 +2,7 @@ const { loadConfig } = require('./utils/config')
 const { syncNow } = require('./utils/sync')
 const storage = require('./utils/storage')
 const events = require('./utils/events')
+const { launchSourceOf } = require('./utils/launch-source')
 const audioCache = require('./utils/audio-cache')
 const audioTimer = require('./utils/audio-timer')
 
@@ -12,7 +13,17 @@ App({
     configReady: null
   },
 
-  onLaunch() {
+  onLaunch(options) {
+    // 开发版专用：真实感模拟数据入口（体验/正式版不挂载）
+    // 开发者工具 console 里执行：getApp().seedDemo() 或 getApp().seedDemo(60)
+    try {
+      const envInfo = wx.getAccountInfoSync && wx.getAccountInfoSync()
+      if (envInfo && envInfo.miniProgram && envInfo.miniProgram.envVersion === 'develop') {
+        const devSeed = require('./utils/dev-seed')
+        this.seedDemo = (days) => devSeed.seedRealistic(days)
+      }
+    } catch (e) {}
+
     this.globalData.configReady = loadConfig(true)
       .then((config) => {
         this.globalData.config = config
@@ -26,7 +37,8 @@ App({
 
       if (!config) return
 
-      events.track('app_open')
+      // 带上启动来源（转发/朋友圈/扫码等 scene），后台看板据此做来源分布
+      events.track('app_open', launchSourceOf(options))
       events.flush()
       audioCache.maybePrune(config.cache)
 

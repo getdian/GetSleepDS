@@ -17,7 +17,7 @@
 | Dockerfile / docker-compose | ✅ 已实现，`docker compose config` 校验通过 |
 | 后台管理 `/admin` | ✅ 左侧主菜单 + 右侧分类面板，浏览器实测保存 |
 | 落地页 `/` + H5 交互演示 `/demo/` | ✅ 浏览器实测（H5 仍为旧版结构，色板已同步） |
-| 65 个单元测试 | ✅ 全部通过 |
+| 77 个单元测试 | ✅ 全部通过 |
 | AppID / 首条 COS 音频 | ✅ `wx378b0a7437d60998`；`https://img.qfmaster.com/sleep/sleep-10001.mp3` 可访问 |
 | 微信开发者工具渲染 | ✅ 三页已编译、截图、无 console error |
 | 真机音频 / 广告 / 锁屏 | ⚠️ 未验证，需要外部账号与真机 |
@@ -133,7 +133,7 @@ npm run dev:geek
 # 只检查环境
 powershell -File deploy/dev.ps1 -Check
 
-# 打包：先跑 65 测试 + 静态检查，再生成 zip/SHA256
+# 打包：先跑 77 测试 + 静态检查，再生成 zip/SHA256
 npm run pack -- -Label 20261019-l4
 ```
 
@@ -159,14 +159,14 @@ npm run pack -- -Label 20261019-l4
 ## 验证
 
 ```bash
-npm test        # 65 个单测：时间、统计、双向倒推、热力图/墓碑、API、后台鉴权/事件/COS 配置/用户记录删除
+npm test        # 77 个单测：时间、统计、双向倒推、热力图/墓碑、API、后台鉴权/事件/COS 配置/用户记录删除、启动来源归一化、看板聚合、小程序码服务
 npm run check   # JSON / WXML 标签 / WXSS 括号 / 页面四件套 / 组件引用 / CSP inline 检查
 ```
 
 本次实际执行结果：
 
-- `npm test`：65 passed / 0 failed
-- `npm run check`：通过，主包约 187.2 KB
+- `npm test`：77 passed / 0 failed
+- `npm run check`：通过，主包约 197.5 KB
 - 后端内存模式冒烟：`/api/health`、`/api/config`、`/api/summary`、`/api/audio/unlock`、`/api/records/erase` 均符合预期
 - **PostgreSQL 16 容器端到端**：自动建表、解锁写入 24 小时、`sync` 幂等、空记录同步能取回 3 条（换机回填）、`summary` 正常返回、后台配置重启后仍在
 - **后台浏览器实测**：登录、保存（写库并立即改变 `/api/config` 与解锁 TTL）、环境音增删、COS 音频试听、存储面板、14 天趋势渲染、无未捕获 JS 错误
@@ -197,7 +197,7 @@ npm run check   # JSON / WXML 标签 / WXSS 括号 / 页面四件套 / 组件引
 ## 文档
 
 0. [当前上下文 context.md](context.md) —— 代码事实、配置边界、部署幂等与待决策
-0.5 [设计决策 DECISIONS.md](DECISIONS.md) —— 16 条 ADR（睡眠日、圆均值、LWW、模板总结、午休范围、同步容错、删除水位、1Panel 等）
+0.5 [设计决策 DECISIONS.md](DECISIONS.md) —— 18 条 ADR（睡眠日、圆均值、LWW、模板总结、午休范围、同步容错、删除水位、1Panel、不做付费内容、不做分享解锁等）
 1. [修订版 PRD](docs/00-prd-revised.md) —— 范围、页面规格、算法口径、与原始 PRD 的 10 处差异、验收清单
 2. [架构与接口](docs/01-architecture.md) —— 目录、数据模型、API 契约、降级矩阵、安全
 3. [实施计划](docs/02-implementation-plan.md) —— 阶段、验证命令、待外部输入

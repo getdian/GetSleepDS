@@ -10,15 +10,15 @@ const audioTimer = require('../../utils/audio-timer')
 const events = require('../../utils/events')
 const { getConfig } = require('../../utils/config')
 
+const RANGE_MONTHS = 'm3'
 const RANGE_SMALL = 30
-const RANGE_FULL = 120
 
 Page({
   data: {
-    range: RANGE_SMALL,
+    range: RANGE_MONTHS,
     rangeOptions: [
-      { value: RANGE_SMALL, label: '近 30 天' },
-      { value: RANGE_FULL, label: '近 4 个月' }
+      { value: RANGE_MONTHS, label: '近 3 个月' },
+      { value: RANGE_SMALL, label: '近 30 天' }
     ],
     hasData: false,
     avgBed: '--:--',
@@ -39,8 +39,6 @@ Page({
 
   onLoad() {
     this._alive = true
-    this._rangeTouched = false
-    this._defaultRangeApplied = false
     this._factLoading = false
     this._records = {}
   },
@@ -68,13 +66,11 @@ Page({
     const pending = storage.getPending()
     const partialDay = pending ? T.sleepDayOf(pending.bedAt) : ''
 
-    if (!this._rangeTouched && !this._defaultRangeApplied) {
-      this._defaultRangeApplied = true
-      this.setData({ range: list.length >= 14 ? RANGE_FULL : RANGE_SMALL })
-    }
-
+    // 月对齐图板：前面 2 个整月 + 当前月 + 往后约 3 周板位
+    const span = this.data.range === RANGE_MONTHS ? S.monthsSpan(now) : null
+    const days = span ? span.days : this.data.range
     this._records = records
-    const heat = S.heatmapCells(records, now, this.data.range, partialDay)
+    const heat = S.heatmapCells(records, now, days, partialDay, span ? span.endOffsetDays : 0)
     const current = weekly.current
     const meta = storage.getMeta()
 
@@ -134,12 +130,20 @@ Page({
   },
 
   onRangeTap(e) {
-    const value = Number(e.currentTarget.dataset.value)
+    const raw = e.currentTarget.dataset.value
+    const value = raw === RANGE_MONTHS ? RANGE_MONTHS : Number(raw)
     if (!value || value === this.data.range) return
-    this._rangeTouched = true
     const pending = storage.getPending()
     const partialDay = pending ? T.sleepDayOf(pending.bedAt) : ''
-    const heat = S.heatmapCells(this._records || storage.getRecords(), Date.now(), value, partialDay)
+    const span = value === RANGE_MONTHS ? S.monthsSpan(Date.now()) : null
+    const days = span ? span.days : value
+    const heat = S.heatmapCells(
+      this._records || storage.getRecords(),
+      Date.now(),
+      days,
+      partialDay,
+      span ? span.endOffsetDays : 0
+    )
     this.setData({
       range: value,
       cells: heat.cells,
@@ -263,18 +267,39 @@ Page({
       wx.showToast({ title: '海报生成超时，请重试', icon: 'none' })
     }, 8000)
     wx.showLoading({ title: '生成中', mask: true })
-    try {
-      this.drawPoster((path) => {
-        finish(path)
-      })
-    } catch (e) {
-      finish('')
-      wx.showToast({ title: '海报生成失败', icon: 'none' })
-    }
+    // 先在 4s 窗口内拉小程序码（失败/超时就放弃），海报落款自动降级为纯文案
+    Promise.race([
+      this._fetchPosterQrPath().catch(() => ''),
+      new Promise((resolve) => setTimeout(() => resolve(''), 4000))
+    ]).then((qrPath) => {
+      try {
+        this.drawPoster(qrPath, (path) => {
+          finish(path)
+        })
+      } catch (e) {
+        finish('')
+        wx.showToast({ title: '海报生成失败', icon: 'none' })
+      }
+    })
   },
 
-  /** 300×480 月度回顾海报；经典 canvas API，离屏绘制 */
-  drawPoster(done) {
+  /** 拉"扫一扫直达"小程序码并写入临时文件；任何失败都返回空串（海报降级） */
+  _fetchPosterQrPath() {
+    return withLogin((code) => api.fetchPosterQr(code)).then((buffer) => {
+      return new Promise((resolve, reject) => {
+        const filePath = wx.env.USER_DATA_PATH + '/poster-qr.png'
+        wx.getFileSystemManager().writeFile({
+          filePath,
+          data: buffer,
+          success: () => resolve(filePath),
+          fail: () => reject(new Error('write failed'))
+        })
+      })
+    })
+  },
+
+  /** 300×480 月度回顾海报；经典 canvas API，离屏绘制。qrPath 为空时不画码 */
+  drawPoster(qrPath, done) {
     const ctx = wx.createCanvasContext('poster', this)
     const records = storage.getRecords()
     const list = S.completedList(records)
@@ -341,13 +366,27 @@ Page({
     ctx.setTextAlign('left')
     ctx.fillText('其中 ' + digest.afterMidnightDays + ' 天在凌晨入睡', 24, y0 + 5 * (cell + gap) + 18)
 
-    ctx.setTextAlign('center')
-    ctx.setFillStyle('#F8FAFC')
-    ctx.setFontSize(12)
-    ctx.fillText('微信搜索「睡点」，记录你的入睡节奏', W / 2, H - 42)
-    ctx.setFillStyle('#94A3B8')
-    ctx.setFontSize(9)
-    ctx.fillText('数据来自个人打卡 · ' + T.dateKey(now), W / 2, H - 24)
+    if (qrPath) {
+      // 底部左侧：白底衬托小程序码 + 扫码引导
+      ctx.setFillStyle('#FFFFFF')
+      ctx.fillRect(20, H - 98, 82, 82)
+      ctx.drawImage(qrPath, 24, H - 94, 74, 74)
+      ctx.setTextAlign('left')
+      ctx.setFillStyle('#F8FAFC')
+      ctx.setFontSize(12)
+      ctx.fillText('扫码打开「睡点」', 112, H - 56)
+      ctx.setFillStyle('#94A3B8')
+      ctx.setFontSize(9)
+      ctx.fillText('数据来自个人打卡 · ' + T.dateKey(now), 112, H - 36)
+    } else {
+      ctx.setTextAlign('center')
+      ctx.setFillStyle('#F8FAFC')
+      ctx.setFontSize(12)
+      ctx.fillText('微信搜索「睡点」，记录你的入睡节奏', W / 2, H - 42)
+      ctx.setFillStyle('#94A3B8')
+      ctx.setFontSize(9)
+      ctx.fillText('数据来自个人打卡 · ' + T.dateKey(now), W / 2, H - 24)
+    }
 
     ctx.draw(false, () => {
       wx.canvasToTempFilePath(

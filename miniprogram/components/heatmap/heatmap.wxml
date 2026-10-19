@@ -1,37 +1,42 @@
 <view class="hm">
-  <scroll-view
-    class="hm-scroll"
-    scroll-x
-    enhanced
-    show-scrollbar="{{false}}"
-    scroll-into-view="{{scrollTarget}}"
-    scroll-with-animation="{{false}}"
-  >
-    <view class="hm-inner">
-      <view class="hm-months" style="grid-template-columns: repeat({{colCount}}, 56rpx);">
-        <text
-          wx:for="{{months}}"
-          wx:key="col"
-          class="hm-month"
-          style="grid-column: {{item.col + 1}};"
-        >{{item.label}}</text>
-      </view>
-
-      <view
-        class="hm-grid"
-        style="grid-template-columns: repeat({{colCount}}, 56rpx);"
-      >
-        <view
-          wx:for="{{cells}}"
-          wx:key="key"
-          id="{{index === cells.length - 1 ? 'hm-last' : ''}}"
-          class="hm-cell {{item.pad ? 'hm-pad' : 'hm-l' + item.level}} {{item.partial ? 'hm-partial' : ''}} {{item.isToday ? 'hm-today' : ''}}"
-          data-index="{{index}}"
-          bindtap="onCellTap"
-        ></view>
-      </view>
+  <view class="hm-body">
+    <view class="hm-weeks">
+      <text class="hm-week" wx:for="{{weekLabels}}" wx:key="*this">{{item}}</text>
     </view>
-  </scroll-view>
+    <scroll-view
+      class="hm-scroll"
+      scroll-x
+      enhanced
+      show-scrollbar="{{false}}"
+      scroll-into-view="{{scrollTarget}}"
+      scroll-with-animation="{{false}}"
+    >
+      <view class="hm-inner">
+        <view class="hm-months" style="grid-template-columns: repeat({{colCount}}, {{cellSize}}rpx);">
+          <text
+            wx:for="{{months}}"
+            wx:key="col"
+            class="hm-month"
+            style="grid-column: {{item.col + 1}};"
+          >{{item.label}}</text>
+        </view>
+
+        <view
+          class="hm-grid"
+          style="grid-template-columns: repeat({{colCount}}, {{cellSize}}rpx);"
+        >
+          <view
+            wx:for="{{cells}}"
+            wx:key="key"
+            id="{{index === cells.length - 1 ? 'hm-last' : ''}}"
+            class="hm-cell {{item.pad ? 'hm-pad' : 'hm-l' + item.level}} {{item.partial ? 'hm-partial' : ''}} {{item.isToday ? 'hm-today' : ''}}"
+            data-index="{{index}}"
+            bindtap="onCellTap"
+          ></view>
+        </view>
+      </view>
+    </scroll-view>
+  </view>
 
   <view class="hm-legend">
     <text class="hm-legend-text">少</text>

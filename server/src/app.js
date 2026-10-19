@@ -14,6 +14,7 @@ const { createAudioRoute } = require('./routes/audio')
 const { createEventsRoute } = require('./routes/events')
 const { createSummaryRoute } = require('./routes/summary')
 const { createRecordsRoute } = require('./routes/records')
+const { createShareRoute } = require('./routes/share')
 
 const ADMIN_DIR = path.join(__dirname, '..', 'public', 'admin')
 const SITE_DIR = path.join(__dirname, '..', 'public', 'site')
@@ -170,6 +171,7 @@ function createApp(options) {
   const eventsIp = createRateLimiter(limits.windowMs, 120)
   const recordsIp = createRateLimiter(60 * 1000, 120)
   const eraseIp = createRateLimiter(60 * 1000, 3)
+  const shareIp = createRateLimiter(60 * 1000, 3)
 
   app.use('/admin', express.static(ADMIN_DIR, { index: 'index.html', setHeaders: setAdminHeaders }))
 
@@ -212,6 +214,7 @@ function createApp(options) {
       now
     })
   )
+  app.use('/api', createShareRoute({ config, codeToOpenid, limitIp: shareIp }))
 
   // 落地页与 H5 交互演示
   app.get(['/demo', '/demo/'], (req, res) => {

@@ -165,5 +165,20 @@ Page({
 
   resetSleep() {
     this.setData({ sleepView: null, sleepFlipped: false })
+  },
+
+  onShareAppMessage() {
+    return {
+      title: '今晚，几点睡？算算你的睡眠周期',
+      path: '/pages/index/index?from=share'
+    }
+  },
+
+  // 朋友圈打开是"单页模式"（无 tabBar、本地存储不可用），只开放纯计算的计算器页
+  onShareTimeline() {
+    return {
+      title: '今晚，几点睡？算算你的睡眠周期',
+      query: 'from=timeline'
+    }
   }
 })

@@ -44,6 +44,7 @@
       </scroll-view>
     </view>
 
+    <view class="tw-band" style="height:{{rowH}}px;"></view>
     <text class="tw-colon">:</text>
   </view>
 

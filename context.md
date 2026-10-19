@@ -41,6 +41,7 @@ miniprogram/
     audio-cache.js 下载/保存/巡检/监听
     audio-timer.js 跨页面定时关闭单例
     config.js / api.js / request.js / login.js / ad.js / events.js
+    launch-source.js  启动来源归一化（scene|path|from → app_open.target，看板来源分布）
   config/
     env.js        API 域名（唯一前端环境配置）
     fallback.js   服务端不可达兜底
@@ -85,8 +86,9 @@ tests/            Node 纯逻辑测试
 
 ## 5. 当前验证基线
 
-- `npm test`：**65 passed / 0 failed**（客户端纯逻辑/定时器/登录队列 + 服务端同步/删除/解封/配置）。
-- `npm run check`：3 页面 / 15 JSON / 10 WXML / 11 WXSS，主包约 187.2 KB（以最新输出为准）。
+- `npm test`：**77 passed / 0 failed**（客户端纯逻辑/定时器/登录队列/启动来源归一化 + 服务端同步/删除/解封/配置/看板聚合/小程序码服务）。
+- `npm run check`：3 页面 / 15 JSON / 10 WXML / 11 WXSS，主包约 197.5 KB（以最新输出为准）。
+- 分享归因冒烟（2026-10-19，内存模式）：`app_open` 带 `1007|pages/index/index|share` 上报 → `/api/admin/analytics` 的 `topSources` 聚合出现；`/api/share/qrcode` 无 code 返 400、密钥不可用返 503，均为优雅报错。
 - 微信开发者工具（AppID `wx378b0a7437d60998`）：三页真实编译；热力图滚到最新周；C 态“覆盖今晚”渲染；控制台无 error；实际触发 `/api/records/sync` 返回 20 条并带 `deletedDays/erasedAt`。
 - 本地 PostgreSQL + API（3100）：`/api/ready` 200；PG `syncRecords` 的 day 归一化/墓碑/erasure 事务、`saveUnlock` 单行覆盖均实测通过。
 - 后台浏览器实测：左菜单切换、音频标题保存、配置接口写库、窄屏横向 tabs、无 console error。
@@ -111,6 +113,7 @@ tests/            Node 纯逻辑测试
 7. **单实例**：限流、配置缓存、事件都在进程内；扩容前换共享存储。
 8. **音频后台边界**：定时器已持久化并在 onShow/onEnded 重新校时，但 iOS 完全冻结 JS 时无法保证毫秒级准点；3 分钟音频的锁屏循环仍需真机验证，不能仅凭开发者工具下结论。
 9. **部署端口**：compose 已把 API 绑到 `127.0.0.1:3000`；1Panel 反向代理必须保留 `TRUST_PROXY=1`，且不要额外放行 3000 到公网。
+10. **分享归因与海报码**（2026-10-19 新增）：来源分布从新版小程序发布后才开始积累；海报小程序码依赖 `.env` 的 AppSecret 且小程序已发布，两者未就绪时海报自动回退"微信搜索「睡点」"落款，真机扫码链路待发布后验收。
 
 ## 8. 快速命令
 
@@ -124,7 +127,7 @@ npm run check
 后台：`/admin`，密码来自 `.env` 的 `ADMIN_PASSWORD`；本地极客混跑默认 `getsleep-local-admin-2026`。
 小程序：微信开发者工具导入仓库根目录；开发版自动指向 `127.0.0.1:3100`，体验/正式版自动指向 `https://sleep.qfmaster.com`。
 标准操作与 1Panel 上传/反代步骤见 [docs/10-operations.md](docs/10-operations.md)；本次关键更新见 [docs/11-changelog.md](docs/11-changelog.md)。
-关键取舍见 [DECISIONS.md](DECISIONS.md)（16 条 ADR：睡眠日边界、圆均值、LWW、模板总结、午休范围、同步容错、删除水位、1Panel 部署等）。
+关键取舍见 [DECISIONS.md](DECISIONS.md)（18 条 ADR：睡眠日边界、圆均值、LWW、模板总结、午休范围、同步容错、删除水位、1Panel 部署、不做付费内容、不做分享解锁等）。
 
 
 

@@ -32,7 +32,7 @@ Component({
     },
     minuteStep: {
       type: Number,
-      value: 5
+      value: 1
     }
   },
 
@@ -83,7 +83,7 @@ Component({
       }
 
       const minuteItems = []
-      const minuteStep = this.data.minuteStep || 5
+      const minuteStep = this.data.minuteStep || 1
       const minuteCount = Math.round(60 / minuteStep)
       this._minuteCount = minuteCount
       for (let c = 0; c < CYCLES; c += 1) {
@@ -103,11 +103,19 @@ Component({
 
       const hourStyles = []
       for (let i = 0; i < hourItems.length; i += 1) {
-        hourStyles.push(this.drumStyleAt('hour', i, hourTop))
+        hourStyles.push(
+          Math.abs(this.drumDeltaOf(i, hourTop)) > DRUM_EDGE_ROWS + 1
+            ? ''
+            : this.drumStyleAt('hour', i, hourTop)
+        )
       }
       const minuteStyles = []
       for (let i = 0; i < minuteItems.length; i += 1) {
-        minuteStyles.push(this.drumStyleAt('minute', i, minuteTop))
+        minuteStyles.push(
+          Math.abs(this.drumDeltaOf(i, minuteTop)) > DRUM_EDGE_ROWS + 1
+            ? ''
+            : this.drumStyleAt('minute', i, minuteTop)
+        )
       }
 
       this.setData(
@@ -148,7 +156,7 @@ Component({
       const parts = String(value || '07:30').split(':')
       let hour = Number(parts[0])
       let minute = Number(parts[1])
-      const step = this.data.minuteStep || 5
+      const step = this.data.minuteStep || 1
       if (!isFinite(hour)) hour = 7
       if (!isFinite(minute)) minute = 30
       minute = Math.round(minute / step) * step
@@ -214,7 +222,7 @@ Component({
       if (!this._ready) return
       const p = this.parse(value)
       const rowH = this._rowH
-      const minuteStep = this.data.minuteStep || 5
+      const minuteStep = this.data.minuteStep || 1
       const minuteCount = this._minuteCount || Math.round(60 / minuteStep)
       const hourTop = (12 + (p.h12 - 1)) * rowH
       const minuteTop = (minuteCount + p.minute / minuteStep) * rowH
@@ -280,7 +288,7 @@ Component({
     commitDrum(which, top) {
       const patch = this.buildDrumPatch(which, top)
       const rowH = this._rowH
-      const minuteStep = this.data.minuteStep || 5
+      const minuteStep = this.data.minuteStep || 1
       const cycleCount = which === 'hour'
         ? CYCLE_HOURS
         : (this._minuteCount || Math.round(60 / minuteStep))
@@ -300,7 +308,7 @@ Component({
       if (!this._ready) return
       const rowH = this._rowH
       const isHour = which === 'hour'
-      const minuteStep = this.data.minuteStep || 5
+      const minuteStep = this.data.minuteStep || 1
       const cycleCount = isHour
         ? CYCLE_HOURS
         : (this._minuteCount || Math.round(60 / minuteStep))

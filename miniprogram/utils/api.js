@@ -1,4 +1,5 @@
 const { request } = require('./request')
+const { apiBase } = require('../config/env')
 
 function fetchConfig() {
   return request({ path: '/api/config' })
@@ -47,11 +48,42 @@ function eraseRecords(code) {
   })
 }
 
+/**
+ * 拉取海报用小程序码（PNG arraybuffer）。
+ * 服务端失败时返回非 2xx，调用方按"没有码"降级，海报仍会生成。
+ */
+function fetchPosterQr(code) {
+  return new Promise((resolve, reject) => {
+    wx.request({
+      url: apiBase + '/api/share/qrcode?code=' + encodeURIComponent(code),
+      method: 'GET',
+      responseType: 'arraybuffer',
+      timeout: 6000,
+      success(res) {
+        if (res.statusCode >= 200 && res.statusCode < 300 && res.data && res.data.byteLength) {
+          resolve(res.data)
+          return
+        }
+        const error = new Error('小程序码生成失败')
+        error.status = res.statusCode
+        reject(error)
+      },
+      fail(err) {
+        const error = new Error('网络不可用')
+        error.code = 'NETWORK'
+        error.detail = err && err.errMsg
+        reject(error)
+      }
+    })
+  })
+}
+
 module.exports = {
   fetchConfig,
   unlockAudio,
   fetchSummary,
   syncRecords,
   eraseRecords,
-  trackEvents
+  trackEvents,
+  fetchPosterQr
 }

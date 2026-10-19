@@ -312,5 +312,12 @@ Page({
 
   goStats() {
     wx.switchTab({ url: '/pages/stats/stats' })
+  },
+
+  onShareAppMessage() {
+    return {
+      title: '我在「睡点」打卡睡觉，一起早睡',
+      path: '/pages/sleep/sleep?from=share'
+    }
   }
 })

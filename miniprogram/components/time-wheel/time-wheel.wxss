@@ -45,9 +45,24 @@
 .tw-item.is-on {
   color: #F8FAFC;
   color: var(--text-moon-pure, #F8FAFC);
-  font-size: 46rpx;
+  font-size: 56rpx;
   font-weight: 600;
   letter-spacing: 1rpx;
+}
+
+/* 居中状态条：当前激活行的选择指示带 */
+.tw-band {
+  position: absolute;
+  left: 8rpx;
+  right: 8rpx;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  border-radius: 14rpx;
+  background: rgba(148, 163, 184, 0.10);
+  border-top: 1rpx solid rgba(148, 163, 184, 0.18);
+  border-bottom: 1rpx solid rgba(148, 163, 184, 0.18);
+  pointer-events: none;
 }
 
 .tw-colon {

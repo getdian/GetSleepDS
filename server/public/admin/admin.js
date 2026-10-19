@@ -247,6 +247,55 @@
     })
   }
 
+  // 常见启动 scene 的可读标签；未识别的显示原始码
+  const SCENE_LABELS = {
+    1001: '发现栏',
+    1005: '顶部搜索框',
+    1006: '搜一搜结果',
+    1007: '会话卡片',
+    1008: '群聊卡片',
+    1011: '扫一扫',
+    1035: '公众号菜单',
+    1036: '公众号文章',
+    1037: '来自其他小程序',
+    1044: '群聊卡片',
+    1047: '小程序码',
+    1154: '朋友圈（单页）'
+  }
+
+  function sceneLabel(code) {
+    return SCENE_LABELS[code] || 'scene ' + code
+  }
+
+  function renderTopSources(list) {
+    const box = $('#top-sources')
+    box.textContent = ''
+
+    if (!list || !list.length) {
+      const empty = document.createElement('li')
+      empty.className = 'empty-line'
+      empty.textContent = '还没有来源数据'
+      box.appendChild(empty)
+      return
+    }
+
+    list.forEach(function (item) {
+      const li = document.createElement('li')
+      const parts = String(item.source || 'unknown').split('|')
+      const label = document.createElement('b')
+      label.textContent = sceneLabel(parts[0])
+      li.appendChild(label)
+      if (parts[1]) {
+        li.appendChild(document.createTextNode(' · ' + parts[1]))
+      }
+      if (parts[2]) {
+        li.appendChild(document.createTextNode('（' + parts[2] + '）'))
+      }
+      li.appendChild(document.createTextNode(' — ' + item.opens + ' 次'))
+      box.appendChild(li)
+    })
+  }
+
   async function loadAnalytics() {
     const data = await api('/api/admin/analytics')
     const today = data.today || {}
@@ -264,6 +313,7 @@
 
     renderTrend(data.trend)
     renderTopTracks(data.topTracks)
+    renderTopSources(data.topSources)
   }
 
   /* ---------- 环境音 ---------- */

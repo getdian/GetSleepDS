@@ -1,6 +1,6 @@
 # 睡点 · 实施计划
 
-- 版本：1.0 / 2026-10-18
+- 版本：1.1 / 2026-10-19（新增第 6 节：P6 增长与变现实施计划）
 - 目标：两周内可提审的 L1 可运行版本（单机部署、单数据库、无第三方 UI 库）
 
 ---
@@ -17,7 +17,7 @@
 | P4.5 | 音频运营 + 看板 + H5 | COS 上传、分类/搜索、本地缓存、事件看板、`/demo/` 与 `/` | 浏览器可完整走通，POST 事件能在看板看到 | ✅ 本次完成 |
 | P7 | 视觉与信息架构改版 | 计算器/入睡/统计三 tab、时间轮、氛围背景、玻璃卡片、跨页定时器 | 单测 + 静态检查通过；真机视觉待验收 | ✅ 本次完成 |
 | P5 | 上线准备 | 账号/类目/域名/COS/广告位/隐私指引 | 真机全流程走通 | ⏳ 待外部输入 |
-| P6 | 增长与变现（下一期） | 分享海报、双人打卡、月度账单、事件埋点 | — | ⏳ 未开始 |
+| P6 | 增长与变现（下一期） | 分享归因埋点、海报小程序码、商业模式决策（批次 A/B/C，见第 6 节） | 批次 A：看板出现"来源分布"；批次 B：真机扫码在看板出现 1047 来源 | ✅ 批次 A/B 已交付（2026-10-19，码链路待发布后真机验收）；批次 C 决策已固化（ADR-017/018），观察项待上线积累数据 |
 
 ---
 
@@ -105,4 +105,54 @@ ADMIN_PASSWORD=local-admin node src/index.js
 - 小程序：微信后台"版本回退"到上一线上版本，配置接口可即时关掉 `features.summary` / `sync`。
 - 服务端：镜像保留上一 tag；compose `docker compose up -d` 回退。
 - 数据：本期无破坏性迁移，`CREATE TABLE IF NOT EXISTS` 幂等。
+
+---
+
+## 6. P6 增长与变现实施计划（2026-10-19 制定）
+
+> 前提事实：分享入口已三页可用（2026-10-19 补齐，计算器页含朋友圈）；`events` 通道的 `app_open` 类型与 `target`（64 字符）字段现成可用，**全程零 schema 变更、零新接口**（批次 B 除外）；`analytics.js` 已有按 target 聚合的先例（Top5 音频）。
+
+### 批次 A：分享归因（无外部依赖，可立即开发，约半天）
+
+| # | 改动 | 文件 | 要点 |
+|---|---|---|---|
+| A1 | 启动来源归一化纯函数 | `miniprogram/utils/launch-source.js`（新增） | `launchSourceOf(options)` → `'1007|pages/index/index|share'`（scene + 打开页 + from 参数，≤64 字符）；零 `wx` 依赖，Node 可直接单测 |
+| A2 | onLaunch 接住 options 并上报 | `miniprogram/app.js` | `onLaunch(options)` 存 launchSource；`:29` 的 `track('app_open')` 改为 `track('app_open', launchSourceOf(options))` |
+| A3 | 来源聚合 | `server/src/services/analytics.js` | 仿 topTracks 增加 `topSources`（14 天窗口内 app_open 按 target 计数 Top5；历史空 target 归 `unknown`）；overview 返回值自动透出到 `/api/admin/analytics`，路由零改动 |
+| A4 | 看板"来源分布"卡片 | `server/public/admin/`（index.html/admin.js/admin.css） | 与"播放 Top5"同款列表；scene 码映射可读标签（1001 发现栏 / 1007 会话卡片 / 1008 群卡片 / 1011 扫码 / 1047 小程序码 / 1154 朋友圈单页，未识别显示原值） |
+| A5 | 单测 | `tests/launch-source.test.js`、`server/test/analytics.test.js`（新增） | 前者锁 scene/path/from 组合与截断；后者用注入 fake db/store 断言 topSources 聚合；`npm test` 脚本按 glob 自动纳入 |
+
+验证门：`npm test`、`npm run check`、内存模式冒烟（登录后台看"来源分布"出现、转发路径打开后 target 形如 `1007|pages/index/index|share`）。
+上线动作：随下一个小程序版本发布（scene 上报从新版本启动才开始积累）。
+
+### 批次 B：海报小程序码（约 1 天开发，外部依赖 AppSecret + 小程序已发布）
+
+| # | 改动 | 文件 | 要点 |
+|---|---|---|---|
+| B0 | **外部前置** | `.env` 填 `WX_APPID`/`WX_SECRET` | 未就绪时批次 B 整体不开发，海报维持"微信搜索「睡点」"落款 |
+| B1 | access_token + 小程序码 | `server/src/services/wx.js` | 优先 `POST /cgi-bin/stable_token`（不互相顶掉旧 token），进程内缓存至过期前 5 分钟（单实例口径与限流一致）；`getUnlimitedQrCode(scene, page)` 调 `/wxa/getwxacodeunlimit`，任何失败抛业务错误不 500 |
+| B2 | 码接口 | `server/src/routes/share.js`（新增，挂 `/api/share/qrcode`） | code→openid 鉴权 + 3 次/分/IP 限流；scene 固定 `'p'`（poster），page 固定 `pages/index/index`；返回 `image/png` buffer + `Cache-Control: private, max-age=3600` |
+| B3 | 路由挂载 | `server/src/app.js` | 与 audio/records 同款注册 + 限流参数 |
+| B4 | 海报画码 | `miniprogram/utils/api.js`、`pages/stats/stats.js` | 拉 arraybuffer → `FileSystemManager.writeFile` 临时文件 → 旧版 canvas `ctx.drawImage` 画在海报底部；**3s 超时/任何失败→跳过画码**，海报必出 |
+| B5 | 归因闭环 | 无新代码 | 扫码打开 scene=1047，批次 A 看板自然出现 `1047|pages/index/index` |
+
+验证门：`npm test`、`npm run check`、内存冒烟（code 换码接口在无 AppSecret 时明确报错而非挂起）、真机扫码 → 看板出现 1047 来源。
+风险：小程序未发布时 `getwxacodeunlimit` 报错（体验版可传 `check_path:false` 规避）——降级路径 B4 必须先行可用。
+
+### 批次 C：商业模式决策（上线后 2–4 周，数据评审，不是开发任务）
+
+| 决策点 | 规则（预设阈值，评审时按实际数据拍板） | 动作 |
+|---|---|---|
+| 分享是否值得投入 | 看板中分享类来源（1007/1008/1154）占 app_open ≥15% | 做：分享卡片统一配图 + 文案 A/B；不做：分享维持现状，投入转内容 |
+| 流量主开通 | 累计独立访客 ≥1000（微信门槛） | 填 `adUnitId`，观察 `audio_unlock` 转化率；`onAdError` 保持 grant 兜底 |
+| 付费音频包 | — | **不立项**：iOS 虚拟支付限制 + Sleep 类目审核风险；写 ADR-017 固化 |
+| 分享解锁 | — | **不做**：诱导分享是审核红线，且 iOS 无朋友圈入口、激励双标；写 ADR-018 固化 |
+
+### 排期与门禁汇总
+
+- 批次 A：立即可做（半天）→ 随下个版本发布。
+- 批次 B：等 B0 外部输入 → 开发 1 天 → 发布后真机扫码验收。
+- 批次 C：批次 A 上线积累 2 周数据后评审 → 结论写 `DECISIONS.md`（ADR-017/018）。
+- 全程无 schema 变更（复用 `events.target`），每批次门禁 = `npm test` + `npm run check` + 内存冒烟；批次 B 增加 PG 端到端与真机项。
+
 

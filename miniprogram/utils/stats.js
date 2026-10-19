@@ -145,9 +145,11 @@ function weekly(records, now) {
  * 热力图格子：周一为一周起点，返回按周补齐的数组。
  * level: -1 占位, 0 未打卡, 1-5 时长分级
  */
-function heatmapCells(records, now, days, partialDay) {
+function heatmapCells(records, now, days, partialDay, endOffsetDays) {
   const span = days || 120
-  const end = T.startOfDay(now)
+  const todayKey = T.dateKey(T.startOfDay(now))
+  // endOffsetDays > 0 时渲染未来板位（月对齐图板的"往后 3 周"）
+  const end = T.addDays(T.startOfDay(now), endOffsetDays || 0)
   const endKey = T.dateKey(end)
   const start = T.addDays(end, -(span - 1))
   const lead = (new Date(start).getDay() + 6) % 7
@@ -171,7 +173,7 @@ function heatmapCells(records, now, days, partialDay) {
       day,
       durationMin: minutes,
       partial: !minutes && day === partialDay,
-      isToday: day === endKey
+      isToday: day === todayKey
     })
   }
 
@@ -227,6 +229,23 @@ function summaryPayload(records, now, days) {
     }))
 }
 
+/**
+ * 「近 3 个月」月对齐图板：
+ * 从"2 个月前的 1 号"开始（起点不做周一对齐，让 heatmapCells 的 lead 补位去对齐
+ * 星期行，保证第一个真实日就是该月 1 号、月份标签不出现上个月的碎列），
+ * 到"今天 + 21 天"所在周的周日结束（含约 3 周空板位）。
+ * 返回 { days, endOffsetDays }：days = 跨度天数；endOffsetDays = 图板末尾相对今天的偏移，
+ * 供 heatmapCells 的第五参渲染未来板位。
+ */
+function monthsSpan(now) {
+  const d = new Date(now)
+  const anchorMonthFirst = new Date(d.getFullYear(), d.getMonth() - 2, 1).getTime()
+  const start = T.startOfDay(anchorMonthFirst)
+  const end = T.startOfWeek(T.startOfDay(now + 21 * T.DAY_MS)) + 6 * T.DAY_MS
+  const days = Math.round((end - start) / T.DAY_MS) + 1
+  return { days, endOffsetDays: Math.round((end - T.startOfDay(now)) / T.DAY_MS) }
+}
+
 module.exports = {
   CYCLE_MIN,
   completedList,
@@ -238,5 +257,6 @@ module.exports = {
   streakDays,
   weekly,
   heatmapCells,
+  monthsSpan,
   summaryPayload
 }
