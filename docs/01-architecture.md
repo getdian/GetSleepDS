@@ -142,6 +142,18 @@ CREATE TABLE IF NOT EXISTS app_config (
     updated_at   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 单日删除墓碑 + 全量清除水位：防止旧设备把已删记录同步回来
+CREATE TABLE IF NOT EXISTS sleep_record_deletions (
+    openid       VARCHAR(64) NOT NULL,
+    day          DATE NOT NULL,
+    deleted_at   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (openid, day)
+);
+CREATE TABLE IF NOT EXISTS user_erasures (
+    openid       VARCHAR(64) PRIMARY KEY,
+    erased_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS events (
     id          BIGSERIAL PRIMARY KEY,
     openid      VARCHAR(64) NOT NULL,
@@ -174,8 +186,8 @@ CREATE INDEX IF NOT EXISTS idx_events_created_at ON events (created_at);
 | GET | `/api/config` | 无 | 下发音频列表、广告位、开关、文案 |
 | POST | `/api/audio/unlock` | code | 校验 code → openid，写入 24h 解锁 |
 | POST | `/api/summary` | 无 | 由记录生成本周事实描述 |
-| POST | `/api/records/sync` | code | 上传近 60 天记录（幂等 upsert，返回云端记录用于回填） |
-| POST | `/api/records/erase` | code | 合规删除：物理删除该 openid 的记录、解锁与事件（3 次/分钟/IP） |
+| POST | `/api/records/sync` | code | 上传记录/删除墓碑；服务端重算 day、丢弃单条脏数据，返回云端剩余记录 |
+| POST | `/api/records/erase` | code | 合规删除：删除记录/解锁/事件，写 erasure 水位（3 次/分钟/IP） |
 | POST | `/api/events` | code | 上报轻量事件（app_open / checkin / audio_play / audio_unlock） |
 | POST | `/api/admin/login` | 密码 | 后台登录，写 HttpOnly + SameSite=Strict Cookie |
 | POST | `/api/admin/logout` | Cookie | 清除后台会话 |
@@ -255,22 +267,39 @@ CREATE INDEX IF NOT EXISTS idx_events_created_at ON events (created_at);
 
 ### 5.4 POST /api/records/sync
 
-请求：`{ "code": "...", "records": [ ... ] }`
+请求：`{ "code": "...", "records": [ ... ], "deletedDays": [ { "day": "2026-10-18", "deletedAt": 1760000000000 } ] }`
 
-成功 200：`{ "synced": 40, "records": [ { "day": "2026-10-12", "bedAt": 1760277600000, "wakeAt": 1760305800000, "durationMin": 470, "updatedAt": 1760305800000 } ], "serverTime": 1760000000000 }`
+成功 200：
 
-- `records` 是云端当前的全部记录，客户端据此回填（换机 / 清缓存恢复）。
+```json
+{
+  "synced": 40,
+  "dropped": 2,
+  "records": [
+    { "day": "2026-10-12", "bedAt": 1760277600000, "wakeAt": 1760305800000, "durationMin": 470, "updatedAt": 1760305800000 }
+  ],
+  "deletedDays": [{ "day": "2026-10-18", "deletedAt": 1760000000000 }],
+  "erasedAt": 0,
+  "serverTime": 1760000000000
+}
+```
+
+- `day` **由 `bedAt` 在服务端重算**，客户端设备时区不再影响云同步；`records` 是云端当前剩余的全部记录，客户端据此回填（换机 / 清缓存恢复）。
+- 单条脏数据（倒挂、超过 20 小时、时间戳超出 `[now-400d, now+1d]`）丢弃并计入 `dropped`，不再整批 400。
 - 冲突策略：`updated_at` 新者胜（客户端上传 `updatedAt`，服务端取 `GREATEST`）。
-- 已撤销的日期在本地写墓碑，墓碑时间不早于云端更新时间时跳过回填。
+- 单日删除：`deletedDays` 写入 `sleep_record_deletions`，删除早于墓碑的记录；响应回传墓碑，客户端清理本机旧记录。
+- 全量清除：`erasedAt` 是 `user_erasures` 水位；`updatedAt <= erasedAt` 的记录一律拒绝，清除后新记录仍可写入。
+- 客户端在“清除数据”后写入新的 `syncEpoch`，清除前发出的在途响应会被丢弃。
 
 ### 5.5 POST /api/records/erase
 
 请求：`{ "code": "..." }`
 
-成功 200：`{ "deleted": 40, "serverTime": 1760000000000 }`
+成功 200：`{ "deleted": 40, "deletedUnlocks": 1, "deletedEvents": 31, "erasedAt": 1760000000000, "serverTime": 1760000000000 }`
 
-- 合规删除通道：按 `code → openid` 物理删除 `sleep_records` 全部行。
+- 合规删除通道：按 `code → openid` 删除 `sleep_records`、`audio_unlocks`、`events`，并写 `user_erasures` 水位。
 - 限制 3 次/分钟/IP；客户端收到成功后才清本地，失败时不清，避免下次同步把记录拉回。
+- 后台“用户数据”删除复用同一 erasure 语义。
 
 ### 5.6 统一错误码
 

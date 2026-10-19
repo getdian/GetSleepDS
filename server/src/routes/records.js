@@ -1,6 +1,6 @@
 const express = require('express')
 const { wrap } = require('../lib/http')
-const { validateRecords } = require('../lib/validate')
+const { validateRecords, validateDeletions } = require('../lib/validate')
 const { rateLimited, dbUnavailable, invalidBody } = require('../lib/errors')
 
 function createRecordsRoute(options) {
@@ -17,18 +17,36 @@ function createRecordsRoute(options) {
       if (!code) throw invalidBody('缺少 code')
 
       const openid = await codeToOpenid(code, config.wx)
-      const records = validateRecords(req.body && req.body.records)
+      const current = now()
+      const parsed = validateRecords(req.body && req.body.records, { now: current })
+      const deletedDays = validateDeletions(req.body && req.body.deletedDays, { now: current })
 
-      let stored = []
+      let result = null
       try {
-        await db.upsertRecords(openid, records)
-        // 把云端记录一起返回，客户端据此回填（换机/清缓存恢复）
-        stored = await db.getRecords(openid)
+        result = db.syncRecords
+          ? await db.syncRecords(openid, parsed.records, deletedDays, current)
+          : await (async () => {
+              await db.upsertRecords(openid, parsed.records)
+              return {
+                accepted: parsed.records.length,
+                dropped: 0,
+                records: await db.getRecords(openid),
+                deletedDays: [],
+                erasedAt: 0
+              }
+            })()
       } catch (e) {
         throw dbUnavailable()
       }
 
-      res.json({ synced: records.length, records: stored, serverTime: now() })
+      res.json({
+        synced: result.accepted,
+        dropped: parsed.dropped + result.dropped,
+        records: result.records,
+        deletedDays: result.deletedDays,
+        erasedAt: result.erasedAt,
+        serverTime: current
+      })
     })
   )
 
@@ -42,11 +60,12 @@ function createRecordsRoute(options) {
       if (!code) throw invalidBody('缺少 code')
 
       const openid = await codeToOpenid(code, config.wx)
+      const current = now()
       let result = null
       try {
-        result = db.deleteUserData
-          ? await db.deleteUserData(openid)
-          : { records: await db.deleteRecords(openid), unlocks: 0, events: 0 }
+        result = db.eraseUserData
+          ? await db.eraseUserData(openid, current)
+          : { records: await db.deleteRecords(openid), unlocks: 0, events: 0, erasedAt: current }
       } catch (e) {
         throw dbUnavailable()
       }
@@ -55,7 +74,8 @@ function createRecordsRoute(options) {
         deleted: result.records,
         deletedUnlocks: result.unlocks,
         deletedEvents: result.events,
-        serverTime: now()
+        erasedAt: result.erasedAt,
+        serverTime: current
       })
     })
   )

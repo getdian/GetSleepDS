@@ -2,7 +2,7 @@ const { getConfig, loadConfig } = require('../../utils/config')
 const storage = require('../../utils/storage')
 const cache = require('../../utils/audio-cache')
 const api = require('../../utils/api')
-const { wxLogin } = require('../../utils/login')
+const { withLogin } = require('../../utils/login')
 const ad = require('../../utils/ad')
 const events = require('../../utils/events')
 const audioTimer = require('../../utils/audio-timer')
@@ -67,6 +67,7 @@ Component({
       ad.init(this._cfg.unlock && this._cfg.unlock.adUnitId)
       this.refreshUnlock()
       this.syncFromAudio()
+      audioTimer.restore()
 
       this._unsubTimer = audioTimer.subscribe((left) => {
         if (!this._alive) return
@@ -112,6 +113,15 @@ Component({
         this._unlockTimer = null
       }
       this.offAudio()
+    }
+  },
+
+  pageLifetimes: {
+    show() {
+      // 统计页“清除数据”会 stop 音频并清空 meta；回到入睡页时同步清掉残留迷你条
+      if (storage.getMeta().lastTrackActive === false && this.data.currentId) {
+        this.setData({ currentId: '', currentTitle: '', playing: false, playerSub: '', timerRemainText: '' })
+      }
     }
   },
 
@@ -238,8 +248,7 @@ Component({
     },
 
     finishUnlock(ttlMs) {
-      return wxLogin()
-        .then((code) => api.unlockAudio(code))
+      return withLogin((code) => api.unlockAudio(code))
         .then((res) => {
           const expire = res && res.expireAt ? res.expireAt : Date.now() + ttlMs
           storage.setUnlockExpire(expire)
@@ -283,7 +292,14 @@ Component({
           this.syncPlayerText()
         },
         ended: () => {
-          if (this._alive) this.replay()
+          if (!this._alive) return
+          // 锁屏期间 JS 可能被挂起；重新播放前先按墙钟检查定时是否已到点
+          audioTimer.restore()
+          if (audioTimer.shouldStop()) {
+            this.stopPlayback()
+            return
+          }
+          this.replay()
         },
         error: () => {
           if (!this._alive) return
@@ -392,13 +408,16 @@ Component({
       })
       events.track('audio_play', track.id)
 
-      if (this.data.timerEnabled && this.data.timerMinutes && !audioTimer.remaining()) {
-        audioTimer.start(this.data.timerMinutes)
+      if (this.data.timerEnabled && this.data.timerMinutes) {
+        if (audioTimer.isPaused()) audioTimer.resume()
+        else if (!audioTimer.remaining()) audioTimer.start(this.data.timerMinutes)
       }
     },
 
     replay() {
-      if (!this.data.playing) return
+      // 自然播放结束不应因 onPause/playing 状态先被置 false 而停止循环；
+      // 只有用户主动 stop（_stopRequested）才允许中断。
+      if (this._stopRequested || !this.data.currentId) return
       const track = this.findTrack(this.data.currentId)
       if (!track || !this._audio) return
       const cached = cache.peek(track.url, this._ttlDays)
@@ -409,8 +428,13 @@ Component({
 
     togglePlay() {
       if (!this._audio || !this.data.currentId) return
-      if (this.data.playing) this._audio.pause()
-      else this._audio.play()
+      if (this.data.playing) {
+        this._audio.pause()
+        audioTimer.pause()
+      } else {
+        if (audioTimer.isPaused()) audioTimer.resume()
+        this._audio.play()
+      }
     },
 
     stopPlayback() {
@@ -504,32 +528,39 @@ Component({
         this.setData({ sheetShow: false })
         return
       }
+      const seq = (this._unlockSeq || 0) + 1
+      this._unlockSeq = seq
 
       const unlock = this._cfg.unlock || {}
       const ttlMs = (unlock.ttlHours || 24) * 60 * 60 * 1000
       this.setData({ unlocking: true, prepareText: '正在准备音频…' })
 
       // 广告与下载并行，广告结束时通常已经能从本地缓存秒播
-      const downloading = cache
+      // 下载只做后台预热，不再阻塞“看完广告立即播放”；弱网下用远程 URL 兜底
+      cache
         .ensure(
           track.url,
           (percent) => {
-            if (this._alive) this.setData({ prepareText: '缓存中 ' + percent + '%' })
+            if (this._alive && this.data.unlocking) {
+              this.setData({ prepareText: '缓存中 ' + percent + '%' })
+            }
           },
           this._ttlDays
         )
         .catch(() => '')
 
-      Promise.all([this.showAd(), downloading])
-        .then((results) => {
-          if (!results[0]) {
+      this.showAd()
+        .then((ok) => {
+          if (seq !== this._unlockSeq) return null
+          if (!ok) {
             if (this._alive) this.setData({ unlocking: false, prepareText: '' })
             return null
           }
-          return this.finishUnlock(ttlMs).then(() => results[1])
+          return this.finishUnlock(ttlMs)
         })
-        .then((localPath) => {
-          if (localPath === null || !this._alive) return
+        .then((finished) => {
+          if (finished === null || seq !== this._unlockSeq || !this._alive) return
+          const localPath = cache.peek(track.url, this._ttlDays)
           this.setData({
             sheetShow: false,
             unlocking: false,
@@ -541,16 +572,17 @@ Component({
           this.play(track, localPath || '')
         })
         .catch(() => {
-          if (!this._alive) return
+          if (!this._alive || seq !== this._unlockSeq) return
           this.setData({ unlocking: false, prepareText: '' })
           wx.showToast({ title: '解锁失败，请重试', icon: 'none' })
         })
     },
 
     onSheetCancel() {
-      if (this.data.unlocking) return
+      // 广告卡住时也必须能退出；递增 seq 让在途回调失效
+      this._unlockSeq = (this._unlockSeq || 0) + 1
       this._sheetTrackId = ''
-      this.setData({ sheetShow: false, prepareText: '' })
+      this.setData({ sheetShow: false, unlocking: false, prepareText: '' })
     },
 
     /* ---------------- 定时 ---------------- */

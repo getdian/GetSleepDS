@@ -46,20 +46,19 @@ function loadConfig(env) {
 
   const ttlHours = Number(source.UNLOCK_TTL_HOURS || file.unlock.ttlHours || 24)
 
-  // 后台密码：优先环境变量；开发环境未设置时默认使用 password123；生产环境必须显式设置
-  const configuredPassword = source.ADMIN_PASSWORD
-    ? String(source.ADMIN_PASSWORD)
-    : (isProd ? '' : 'password123')
+  // 后台密码：只认显式环境变量。开发环境未设置时生成随机临时密码并打印，
+  // 不再使用公开的 password123（否则可离线伪造后台 Cookie）。
+  const configuredPassword = source.ADMIN_PASSWORD ? String(source.ADMIN_PASSWORD) : ''
+  const generatedPassword = configuredPassword || generatePassword()
   const admin = {
-    password: configuredPassword || generatePassword(),
-    secret: source.ADMIN_SECRET || configuredPassword,
-    generated: !source.ADMIN_PASSWORD && !configuredPassword,
+    password: generatedPassword,
+    secret: source.ADMIN_SECRET || configuredPassword || generatedPassword,
+    generated: !configuredPassword,
     secureCookie: isProd
   }
-  if (!admin.secret) admin.secret = admin.password
 
-  // COS 凭证加密密钥：优先 CONFIG_SECRET；否则退化为后台密码相关密钥。
-  // 后台密码若是每次启动随机生成，则不具备稳定密钥，禁止保存 COS 凭证。
+  // COS 凭证加密密钥：只认显式 CONFIG_SECRET/ADMIN_SECRET/ADMIN_PASSWORD。
+  // 临时随机密码每次启动都变，不能作为稳定加密密钥。
   const securityKey = source.CONFIG_SECRET || admin.secret
   const securityReady = !!(source.CONFIG_SECRET || source.ADMIN_SECRET || configuredPassword)
 

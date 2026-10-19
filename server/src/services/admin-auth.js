@@ -69,7 +69,11 @@ function createAdminAuth(options) {
       const index = parts[i].indexOf('=')
       if (index < 0) continue
       if (parts[i].slice(0, index).trim() === COOKIE_NAME) {
-        return decodeURIComponent(parts[i].slice(index + 1).trim())
+        try {
+          return decodeURIComponent(parts[i].slice(index + 1).trim())
+        } catch (e) {
+          return ''
+        }
       }
     }
     return ''

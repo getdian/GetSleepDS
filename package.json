@@ -7,6 +7,9 @@
     "test": "node --test \"tests/*.test.js\" \"server/test/*.test.js\"",
     "check": "node tools/check.mjs",
     "assets": "python tools/gen_assets.py",
-    "serve": "node server/src/index.js"
+    "serve": "node server/src/index.js",
+    "dev:geek": "powershell -NoProfile -ExecutionPolicy Bypass -File deploy/dev.ps1",
+    "pack": "powershell -NoProfile -ExecutionPolicy Bypass -File deploy/pack.ps1",
+    "deploy:check": "docker compose --env-file .env.example config --quiet"
   }
 }

@@ -20,15 +20,15 @@
   <block wx:else>
     <view class="metrics fade-up">
       <view class="metric sleep-glass-card">
-        <text class="metric-key">平均入睡</text>
+        <text class="metric-key">本周平均入睡</text>
         <text class="metric-value">{{avgBed}}</text>
       </view>
       <view class="metric sleep-glass-card">
-        <text class="metric-key">平均起床</text>
+        <text class="metric-key">本周平均起床</text>
         <text class="metric-value">{{avgWake}}</text>
       </view>
       <view class="metric sleep-glass-card">
-        <text class="metric-key">平均时长</text>
+        <text class="metric-key">本周平均时长</text>
         <text class="metric-value is-small">{{avgDuration}}</text>
       </view>
     </view>
@@ -82,6 +82,13 @@
 
       <block wx:elif="{{factState === 'insufficient'}}">
         <text class="fact-muted">本周记录满 3 天后可查看回顾</text>
+      </block>
+
+      <block wx:elif="{{factState === 'unavailable'}}">
+        <view class="fact-error">
+          <text class="fact-muted">回顾暂时不可用</text>
+          <text class="fact-retry" bindtap="onFactRetry">重试</text>
+        </view>
       </block>
 
       <block wx:elif="{{factState === 'error'}}">

@@ -11,12 +11,13 @@
 | 3 个 tab（计算器 / 入睡 / 统计）+ audio-dock 声音抽屉 | ✅ 已实现，深色玻璃视觉 |
 | 通栏透明顶栏 + 悬浮“灵动岛” | ✅ 已实现，去掉固定原生导航条 |
 | 90 分钟双向倒推、时间轮、真 3D 翻转、A/B/C 打卡 | ✅ 已实现，有单测 |
+| 云同步容错 / 单日墓碑 / 全量清除水位 / 解锁覆盖写 | ✅ 2026-10-19 加固，有回归测试 |
 | 横向 120 天热力图、周均值、海报、云同步/清除 | ✅ 已实现 |
 | 后端公共接口 + 后台上传/配置/看板/用户数据 + PG 连接池 + 内存模式 | ✅ 已实现，有单测 |
 | Dockerfile / docker-compose | ✅ 已实现，`docker compose config` 校验通过 |
 | 后台管理 `/admin` | ✅ 左侧主菜单 + 右侧分类面板，浏览器实测保存 |
 | 落地页 `/` + H5 交互演示 `/demo/` | ✅ 浏览器实测（H5 仍为旧版结构，色板已同步） |
-| 53 个单元测试 | ✅ 全部通过 |
+| 65 个单元测试 | ✅ 全部通过 |
 | AppID / 首条 COS 音频 | ✅ `wx378b0a7437d60998`；`https://img.qfmaster.com/sleep/sleep-10001.mp3` 可访问 |
 | 微信开发者工具渲染 | ✅ 三页已编译、截图、无 console error |
 | 真机音频 / 广告 / 锁屏 | ⚠️ 未验证，需要外部账号与真机 |
@@ -42,7 +43,7 @@ server/                 Express API（config / unlock / summary / sync / events 
   public/site/           ← 落地页 + H5 交互演示
   sql/001_init.sql
   test/
-docs/                   10 份文档 + 根目录 DECISIONS.md
+docs/                   12 份文档 + 根目录 DECISIONS.md
 tests/                  小程序纯逻辑单测
 tools/                  资源生成、静态检查
 ```
@@ -123,6 +124,25 @@ curl http://127.0.0.1:3000/api/ready
 
 `NODE_ENV=production` 下有三道启动保护：缺微信密钥、开 `ALLOW_DEV_LOGIN`、用内存库，都会直接启动失败，避免带病上线。
 
+## 常用操作（标准口令）
+
+```bash
+# 本地极客混跑：PostgreSQL 在 Docker，API 在宿主机 3100
+npm run dev:geek
+
+# 只检查环境
+powershell -File deploy/dev.ps1 -Check
+
+# 打包：先跑 65 测试 + 静态检查，再生成 zip/SHA256
+npm run pack -- -Label 20261019-l4
+```
+
+- **说“启动极客混跑模式”** → 执行 `npm run dev:geek`。
+- **说“打包部署”** → 执行 `npm run pack`，然后按 [常用操作](docs/10-operations.md) 上传最新 zip 到 1Panel。
+- **说“检查部署配置”** → `npm run deploy:check`。
+
+极客混跑的后台：`http://127.0.0.1:3100/admin`，本地临时密码 `getsleep-local-admin-2026`。完整参数、停止/重置、1Panel 上传/反代/证书步骤见 [docs/10-operations.md](docs/10-operations.md)。
+
 ## 配置在哪
 
 | 要改什么 | 改哪里 |
@@ -139,14 +159,14 @@ curl http://127.0.0.1:3000/api/ready
 ## 验证
 
 ```bash
-npm test        # 53 个单测：时间、统计、双向倒推、热力图/墓碑、API、后台鉴权/事件/COS 配置/用户记录删除
+npm test        # 65 个单测：时间、统计、双向倒推、热力图/墓碑、API、后台鉴权/事件/COS 配置/用户记录删除
 npm run check   # JSON / WXML 标签 / WXSS 括号 / 页面四件套 / 组件引用 / CSP inline 检查
 ```
 
 本次实际执行结果：
 
-- `npm test`：53 passed / 0 failed
-- `npm run check`：通过，主包约 178 KB
+- `npm test`：65 passed / 0 failed
+- `npm run check`：通过，主包约 187.2 KB
 - 后端内存模式冒烟：`/api/health`、`/api/config`、`/api/summary`、`/api/audio/unlock`、`/api/records/erase` 均符合预期
 - **PostgreSQL 16 容器端到端**：自动建表、解锁写入 24 小时、`sync` 幂等、空记录同步能取回 3 条（换机回填）、`summary` 正常返回、后台配置重启后仍在
 - **后台浏览器实测**：登录、保存（写库并立即改变 `/api/config` 与解锁 TTL）、环境音增删、COS 音频试听、存储面板、14 天趋势渲染、无未捕获 JS 错误
@@ -168,8 +188,8 @@ npm run check   # JSON / WXML 标签 / WXSS 括号 / 页面四件套 / 组件引
 - 单实例：限流、配置缓存、事件队列都在进程内，扩容前需要改造。
 - 后台上传走服务器中转，3M 带宽下 5MB 文件约十几秒；后续可改 COS 预签名直传。
 - H5 是演示：广告是倒计时模拟、数据只存 localStorage、回顾句本地生成；**H5 仍是改版前的结构，只同步了色板**，小程序以 `pages/` 为准。
-- 后台音频不支持混音；`定时关闭` 在锁屏后可能延后到回到小程序才触发（JS 被挂起）。
-- 撤销打卡只删本地并写墓碑；要彻底删除请用统计页“清除数据（云端+本机）”，它会先调 `POST /api/records/erase`。
+- 后台音频不支持混音；`定时关闭` 已持久化并在回到前台/音频结束时校时，但 iOS 完全冻结 JS 时仍可能延后。
+- 撤销打卡会写本地墓碑并在下一次 sync 上传 `deletedDays`；彻底删除请用统计页“清除数据（云端+本机）”，它会调 `POST /api/records/erase` 并写 erasure 水位。
 - 收藏只在本机（`meta.favoriteAudioIds`），不参与云同步，换机不迁移。
 - 小程序内不做订阅/会员支付（iOS 虚拟支付受限），也没有预留支付链路。
 - 限流是进程内实现，多实例部署会失效。
@@ -177,7 +197,7 @@ npm run check   # JSON / WXML 标签 / WXSS 括号 / 页面四件套 / 组件引
 ## 文档
 
 0. [当前上下文 context.md](context.md) —— 代码事实、配置边界、部署幂等与待决策
-0.5 [设计决策 DECISIONS.md](DECISIONS.md) —— 14 条 ADR（睡眠日、圆均值、LWW、模板总结、午休范围、1Panel 等）
+0.5 [设计决策 DECISIONS.md](DECISIONS.md) —— 16 条 ADR（睡眠日、圆均值、LWW、模板总结、午休范围、同步容错、删除水位、1Panel 等）
 1. [修订版 PRD](docs/00-prd-revised.md) —— 范围、页面规格、算法口径、与原始 PRD 的 10 处差异、验收清单
 2. [架构与接口](docs/01-architecture.md) —— 目录、数据模型、API 契约、降级矩阵、安全
 3. [实施计划](docs/02-implementation-plan.md) —— 阶段、验证命令、待外部输入
@@ -188,6 +208,8 @@ npm run check   # JSON / WXML 标签 / WXSS 括号 / 页面四件套 / 组件引
 8. [代码审查报告](docs/07-code-review.md) —— 发现的问题、修复状态、剩余风险
 9. [部署 Runbook](docs/08-deploy-runbook.md) —— 首次部署、HTTPS、备份、回滚
 10. [改版说明](docs/09-redesign.md) —— 三 tab、通栏灵动岛、时间轮、audio-dock、跨页定时器
+11. [常用操作](docs/10-operations.md) —— 极客混跑、打包、1Panel 部署的标准口令
+12. [关键更新](docs/11-changelog.md) —— 2026-10-19 同步/删除/解锁/交互加固记录
 
 ## 下一步
 

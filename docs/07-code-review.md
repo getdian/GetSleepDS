@@ -2,7 +2,7 @@
 
 - 日期：2026-10-18
 - 范围：`miniprogram/`、`server/`、`server/public/admin`、`server/public/site`、部署与文档
-- 方法：逐文件阅读关键路径 + 53 个自动化测试 + 内存/PostgreSQL 实跑 + 浏览器端到端 + 对 COS 真实 URL 做 HTTP 探测
+- 方法：逐文件阅读关键路径 + 65 个自动化测试 + 内存/PostgreSQL 实跑 + 浏览器端到端 + 对 COS 真实 URL 做 HTTP 探测
 - 结论：**主流程闭环，没有发现会让数据丢失或后台失守的代码级 P0**；有 1 个外部配置级 P0（COS 防盗链），以及若干已修复的 P1/P2。
 
 > 2026-10-19 融合说明：本报告记录的是改版前审查。`pages/audio` 已并入 `components/audio-dock`；计算器改为真 3D 翻转；入睡页补 B 态撤销；统计页补横向热力图、海报、云同步/清除数据。对应文件路径以当前仓库为准。
@@ -85,7 +85,7 @@
 
 ## 5. 验证证据
 
-- `npm test`：53 passed / 0 failed
+- `npm test`：65 passed / 0 failed
 - `npm run check`：3 页面 / 9 JSON / 6 WXML / 7 WXSS / 主包约 110KB
 - PostgreSQL 16：事件写入与 14 天聚合、配置持久化、COS 配置加密（密文 69 字符、不含明文）
 - 浏览器：落地页、H5 三 Tab、后台登录/保存/删除/试听/存储面板/趋势图；无未捕获 JS 错误

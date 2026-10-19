@@ -35,8 +35,8 @@ Component({
     },
 
     onCancel() {
-      if (this.data.loading) return
-      this.triggerEvent('cancel')
+      // 取消永远可用：广告/下载卡住时必须给用户退出路径，force 由父组件递增 seq 作废在途回调
+      this.triggerEvent('cancel', { force: true })
     }
   }
 })

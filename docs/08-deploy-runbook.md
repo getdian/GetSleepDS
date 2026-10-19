@@ -83,7 +83,7 @@ curl http://127.0.0.1:3000/api/ready
 4. 在网站“配置文件”里给对应 `server {}` 加 `client_max_body_size 30m;`，否则后台上传 25MB 音频会被 413；保存并重载 OpenResty。
 5. 打开 `https://sleep.qfmaster.com/api/ready` 验证；再打开 `/admin` 登录。
 
-> 如果 1Panel 的 OpenResty 跑在 Docker 里而 `127.0.0.1:3000` 不通，把代理地址改为 `http://172.17.0.1:3000`（宿主机 Docker 网关），并确认 compose 的端口映射存在。
+> 如果 1Panel 的 OpenResty 跑在 Docker 里而 `127.0.0.1:3000` 不通，不要把 3000 直接对公网开放；应让 1Panel 与 compose 使用同一 Docker 网络，或只在内网/安全组放行 3000 后临时改端口绑定。最省事的方案仍是 1Panel OpenResty 跑在宿主机，反代 `127.0.0.1:3000`。
 >
 > 不要在对公网放行 3000；只放行 80/443，3000 仅供本机反代。
 >
@@ -160,7 +160,7 @@ docker compose down
 docker compose up -d
 ```
 
-数据库变更目前是 `CREATE TABLE IF NOT EXISTS`，不破坏已有表；若后续加字段，先备份再执行迁移。
+数据库变更目前是 `CREATE TABLE IF NOT EXISTS`（新增 `sleep_record_deletions`、`user_erasures`），不破坏已有表；启动时 `db.init()` 会自动补建，升级前仍建议先跑 `deploy/backup.sh`。若后续加字段，先备份再执行 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`。
 
 ## 7. 上线前必须确认
 

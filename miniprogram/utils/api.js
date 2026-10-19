@@ -20,11 +20,11 @@ function fetchSummary(records) {
   })
 }
 
-function syncRecords(code, records) {
+function syncRecords(code, records, deletedDays) {
   return request({
     path: '/api/records/sync',
     method: 'POST',
-    data: { code, records },
+    data: { code, records, deletedDays: deletedDays || [] },
     timeout: 12000
   })
 }

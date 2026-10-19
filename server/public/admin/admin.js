@@ -13,7 +13,8 @@
     meta: { source: 'file', updatedAt: 0, storage: 'memory' },
     storage: null,
     dirty: false,
-    preview: null
+    preview: null,
+    queriedOpenid: ''
   }
 
   let toastTimer = null
@@ -93,6 +94,11 @@
   function showLogin(message) {
     stopPreview()
     state.config = null
+    state.queriedOpenid = ''
+    const userResult = $('#user-result')
+    if (userResult) userResult.hidden = true
+    const userInput = $('#user-openid')
+    if (userInput) userInput.value = ''
     $('#boot-view').hidden = true
     loginView.hidden = false
     appView.hidden = true
@@ -476,6 +482,7 @@
   }
 
   function renderUser(data) {
+    state.queriedOpenid = data.openid || ''
     $('#user-result').hidden = false
     $('#user-count').textContent = data.count || 0
     $('#user-openid-label').textContent = data.openid || ''
@@ -545,6 +552,10 @@
     const openid = $('#user-openid').value.trim()
     if (!/^[A-Za-z0-9_-]{6,64}$/.test(openid)) {
       toast('请先查询要删除的 openid', true)
+      return
+    }
+    if (!state.queriedOpenid || openid !== state.queriedOpenid) {
+      toast('输入已变化，请先重新查询确认', true)
       return
     }
 
@@ -923,6 +934,11 @@
   $('#storage-test').addEventListener('click', testStorage)
   $('#user-query').addEventListener('click', queryUser)
   $('#user-delete').addEventListener('click', deleteUser)
+  $('#user-openid').addEventListener('input', function () {
+    // 改过 openid 后，删除按钮必须重新查询才能再启用，避免误删另一用户
+    state.queriedOpenid = ''
+    $('#user-delete').disabled = true
+  })
   $('#user-openid').addEventListener('keydown', function (event) {
     if (event.key === 'Enter') {
       event.preventDefault()

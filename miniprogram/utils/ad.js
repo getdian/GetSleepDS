@@ -5,10 +5,23 @@
 
 let ad = null
 let pending = null
+let pendingTimer = null
 let lastError = null
+let currentUnitId = ''
+
+function clearPending(result) {
+  if (pendingTimer) {
+    clearTimeout(pendingTimer)
+    pendingTimer = null
+  }
+  const fn = pending
+  pending = null
+  if (fn) fn(result)
+}
 
 function init(unitId) {
-  if (!unitId || ad) return false
+  if (!unitId) return false
+  if (ad) return currentUnitId === unitId
   if (!wx.createRewardedVideoAd) return false
 
   try {
@@ -17,6 +30,7 @@ function init(unitId) {
     ad = null
     return false
   }
+  currentUnitId = unitId
 
   ad.onLoad(() => {
     lastError = null
@@ -24,13 +38,13 @@ function init(unitId) {
 
   ad.onError((err) => {
     lastError = err
+    // 广告播放中出错时微信可能只回调 onError，不回调 onClose；
+    // 不结算会让 unlock-sheet 永远停在 loading。
+    clearPending('error')
   })
 
   ad.onClose((res) => {
-    const resolve = pending
-    pending = null
-    if (!resolve) return
-    resolve(res && res.isEnded === true ? 'ended' : 'skipped')
+    clearPending(res && res.isEnded === true ? 'ended' : 'skipped')
   })
 
   return true
@@ -42,15 +56,17 @@ function init(unitId) {
  */
 function show() {
   if (!ad) return Promise.resolve('unavailable')
+  if (pending) return Promise.resolve('error')
 
   return new Promise((resolve) => {
     pending = resolve
 
     const settle = (result) => {
-      const fn = pending
-      pending = null
-      if (fn) fn(result)
+      clearPending(result)
     }
+
+    // 部分基础库在弱网/素材异常时既不 onClose 也不 onError，必须有总超时
+    pendingTimer = setTimeout(() => settle('error'), 45000)
 
     let task = null
     try {

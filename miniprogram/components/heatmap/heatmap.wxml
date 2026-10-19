@@ -1,5 +1,12 @@
 <view class="hm">
-  <scroll-view class="hm-scroll" scroll-x enhanced show-scrollbar="{{false}}">
+  <scroll-view
+    class="hm-scroll"
+    scroll-x
+    enhanced
+    show-scrollbar="{{false}}"
+    scroll-into-view="{{scrollTarget}}"
+    scroll-with-animation="{{false}}"
+  >
     <view class="hm-inner">
       <view class="hm-months" style="grid-template-columns: repeat({{colCount}}, 56rpx);">
         <text
@@ -17,6 +24,7 @@
         <view
           wx:for="{{cells}}"
           wx:key="key"
+          id="{{index === cells.length - 1 ? 'hm-last' : ''}}"
           class="hm-cell {{item.pad ? 'hm-pad' : 'hm-l' + item.level}} {{item.partial ? 'hm-partial' : ''}} {{item.isToday ? 'hm-today' : ''}}"
           data-index="{{index}}"
           bindtap="onCellTap"

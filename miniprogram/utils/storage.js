@@ -9,7 +9,8 @@ const KEYS = {
   config: 'sleep:config:v1',
   meta: 'sleep:meta:v1',
   unlock: 'audio_unlock_expire',
-  deleted: 'sleep:deleted:v1'
+  deleted: 'sleep:deleted:v1',
+  events: 'sleep:events:v1'
 }
 
 function safeGet(key, fallback) {
@@ -25,8 +26,10 @@ function safeGet(key, fallback) {
 function safeSet(key, value) {
   try {
     wx.setStorageSync(key, value)
+    return true
   } catch (e) {
-    // 存储满或系统限制时静默失败，页面仍可继续
+    // 存储满或系统限制时由调用方决定是否提示；关键写入不能再假装成功
+    return false
   }
 }
 
@@ -54,9 +57,9 @@ function getRecords() {
 function saveRecord(record) {
   const all = getRecords()
   all[record.day] = record
-  safeSet(KEYS.records, all)
-  clearDeleted(record.day)
-  return all
+  const ok = safeSet(KEYS.records, all)
+  if (ok) clearDeleted(record.day)
+  return ok
 }
 
 function removeRecord(day) {
@@ -88,6 +91,15 @@ function clearDeleted(day) {
   safeSet(KEYS.deleted, all)
 }
 
+function getDeletedList() {
+  const all = getDeleted()
+  return Object.keys(all)
+    .map((day) => ({ day, deletedAt: all[day] }))
+    .filter((item) => item.day && typeof item.deletedAt === 'number')
+    .sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0))
+    .slice(-400)
+}
+
 function getPending() {
   const raw = safeGet(KEYS.pending, null)
   if (!raw || typeof raw.bedAt !== 'number') return null
@@ -95,7 +107,7 @@ function getPending() {
 }
 
 function setPending(bedAt) {
-  safeSet(KEYS.pending, { bedAt })
+  return safeSet(KEYS.pending, { bedAt })
 }
 
 function clearPending() {
@@ -159,7 +171,9 @@ function toggleFavorite(id) {
 
 /** 清除全部个人数据（保留远程配置缓存，避免下次冷启动无配置） */
 function clearAll() {
-  ;[KEYS.records, KEYS.pending, KEYS.deleted, KEYS.meta, KEYS.unlock].forEach(safeRemove)
+  ;[KEYS.records, KEYS.pending, KEYS.deleted, KEYS.unlock, KEYS.events].forEach(safeRemove)
+  // 保留一个单调递增的代际号，让清除前发出的 sync 响应在回来时被识别为过期
+  safeSet(KEYS.meta, { syncEpoch: Date.now() })
 }
 
 module.exports = {
@@ -168,6 +182,7 @@ module.exports = {
   saveRecord,
   removeRecord,
   getDeleted,
+  getDeletedList,
   markDeleted,
   clearDeleted,
   getPending,

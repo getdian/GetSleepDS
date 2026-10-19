@@ -13,14 +13,15 @@ function createSummaryRoute(options) {
     wrap(async (req, res) => {
       if (!limitIp(req.ip || 'unknown')) throw rateLimited()
 
-      const records = validateRecords(req.body && req.body.records)
       const current = now()
-      const result = summarize(records, current)
+      const parsed = validateRecords(req.body && req.body.records, { now: current })
+      const result = summarize(parsed.records, current)
 
       res.json({
         available: result.available,
         text: result.text,
         stats: result.stats,
+        dropped: parsed.dropped,
         generatedAt: current
       })
     })

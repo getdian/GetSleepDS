@@ -52,7 +52,7 @@ server/
   public/admin/   后台 SPA
   public/site/    落地页 + H5 演示
   sql/001_init.sql
-docs/             00–09 文档
+docs/             00–11 文档（含常用操作与关键更新）
 tests/            Node 纯逻辑测试
 ```
 
@@ -76,20 +76,21 @@ tests/            Node 纯逻辑测试
 ## 4. 数据与同步
 
 - 本地记录按睡眠日存 `sleep:records:v1`，一条夜间睡眠一条记录；`pending` 是进行中会话。
-- 服务端 `sleep_records` 主键 `(openid, day)`；`/api/records/sync` 幂等 upsert，返回云端全量用于换机回填。
-- 删除：本地墓碑 `sleep:deleted:v1` 阻止回填；`POST /api/records/erase` 物理删除该 openid 的睡眠记录、解锁与事件，客户端成功后才清本地。
+- 服务端 `sleep_records` 主键 `(openid, day)`；`/api/records/sync` 幂等 upsert，`day` 由 `bedAt` 重算，单条脏记录丢弃并返回 `dropped`，不再整批 400。
+- 删除：`sleep_record_deletions` 存单日墓碑，`user_erasures` 存全量清除水位；客户端上传 `deletedDays`，并接收服务端墓碑/水位清理本机旧记录。
+- `POST /api/records/erase` 删除该 openid 的睡眠记录、解锁与事件并写 erasure 水位，客户端成功后才清本地；清除前发出的在途 sync 由 `syncEpoch` 丢弃。
 - 客服/合规：`GET /api/admin/users/:openid` 查询、`DELETE /api/admin/users/:openid/records` 删除；后台“用户数据”面板，删除记审计日志（openid 哈希前缀，不落明文）。
-- 取消/撤销：B 态撤销只清 pending；C 态撤销写墓碑。
-- 当前**不支持**一天多次睡眠（午休）作为独立记录；一条记录会覆盖同一天。详见“待决策”。
+- 取消/撤销：B 态撤销只清 pending；C 态撤销写本地墓碑并在下次 sync 上传 `deletedDays`，云端按日删除。
+- 当前**不支持**一天多次睡眠（午休）作为独立记录；C 态在 18:00 后提供“再记今晚（覆盖旧记录）”入口，先行解锁主流程；独立 `nap` 实体仍是下一迭代。
 
 ## 5. 当前验证基线
 
-- `npm test`：**53 passed / 0 failed**（18 客户端 + 35 服务端）。
-- `npm run check`：3 页面 / 15 JSON / 10 WXML / 11 WXSS，主包约 178 KB（以最新输出为准）。
-- 微信开发者工具（AppID `wx378b0a7437d60998`）：三页真实编译/截图；计算器时间轮循环、上午/下午、3D 翻转结果；控制台无 error。
-- 本地 PostgreSQL + API（3100）：`/api/ready` 200，配置写库后公共接口立即生效，后台登录/看板正常。
+- `npm test`：**65 passed / 0 failed**（客户端纯逻辑/定时器/登录队列 + 服务端同步/删除/解封/配置）。
+- `npm run check`：3 页面 / 15 JSON / 10 WXML / 11 WXSS，主包约 187.2 KB（以最新输出为准）。
+- 微信开发者工具（AppID `wx378b0a7437d60998`）：三页真实编译；热力图滚到最新周；C 态“覆盖今晚”渲染；控制台无 error；实际触发 `/api/records/sync` 返回 20 条并带 `deletedDays/erasedAt`。
+- 本地 PostgreSQL + API（3100）：`/api/ready` 200；PG `syncRecords` 的 day 归一化/墓碑/erasure 事务、`saveUnlock` 单行覆盖均实测通过。
 - 后台浏览器实测：左菜单切换、音频标题保存、配置接口写库、窄屏横向 tabs、无 console error。
-- 未验证：真机锁屏续播、激励视频、真实 COS 上传、audio-dock 完整交互、H5 新结构。
+- 未验证：真机锁屏续播、激励视频、真实 COS 上传、海报导出、H5 新结构。
 
 ## 6. 部署幂等性
 
@@ -105,22 +106,25 @@ tests/            Node 纯逻辑测试
 2. **真机未验收**：DevTools 已跑通，但锁屏续播、耳机/来电中断、激励视频、真实 COS 上传仍需真机；`sleep.qfmaster.com` 尚未部署，当前 SSL 不可用。
 3. **后台改密码未实现**：当前改 `.env` 的 `ADMIN_PASSWORD` 并重启；不建议开放明文改文件。要做需“DB 存 scrypt 哈希 + 当前密码校验 + 会话失效/审计”，属于安全改造，不能半套（ADR-013）。
 4. **大模型未接入**：当前 `/api/summary` 是模板，稳定、零调用成本、合规；LLM 仅适合可选润色，默认关闭，需超时/禁词/降级。
-5. **午休/多次睡眠未支持**：建议新增独立 `nap` 记录（start/end/kind），不混入夜间睡眠均值/连续天数；需要同步协议与统计口径一起改。
+5. **午休/多次睡眠未支持**：当前只提供 C 态“覆盖今晚”解锁主流程；独立 `nap` 记录（start/end/kind）不混入夜间均值/连续天数，仍是下一迭代。
 6. **H5 仍是旧结构**：`/demo/` 只同步了色板；三 tab + audio-dock 待重做。
-7. **单实例**：限流、配置缓存、事件、定时器都在进程内；扩容前换共享存储。
+7. **单实例**：限流、配置缓存、事件都在进程内；扩容前换共享存储。
+8. **音频后台边界**：定时器已持久化并在 onShow/onEnded 重新校时，但 iOS 完全冻结 JS 时无法保证毫秒级准点；3 分钟音频的锁屏循环仍需真机验证，不能仅凭开发者工具下结论。
+9. **部署端口**：compose 已把 API 绑到 `127.0.0.1:3000`；1Panel 反向代理必须保留 `TRUST_PROXY=1`，且不要额外放行 3000 到公网。
 
 ## 8. 快速命令
 
 ```bash
+npm run dev:geek          # 本地极客混跑：PG 在 Docker，API 在宿主机 3100
+npm run pack              # 打包（默认先跑测试 + 静态检查）
 npm test
 npm run check
-docker compose up -d --build
-curl http://127.0.0.1:3000/api/ready
 ```
 
-后台：`/admin`，密码来自 `.env` 的 `ADMIN_PASSWORD`。
+后台：`/admin`，密码来自 `.env` 的 `ADMIN_PASSWORD`；本地极客混跑默认 `getsleep-local-admin-2026`。
 小程序：微信开发者工具导入仓库根目录；开发版自动指向 `127.0.0.1:3100`，体验/正式版自动指向 `https://sleep.qfmaster.com`。
-关键取舍见 [DECISIONS.md](DECISIONS.md)（14 条 ADR：睡眠日边界、圆均值、LWW、模板总结、午休范围、1Panel 部署等）。
+标准操作与 1Panel 上传/反代步骤见 [docs/10-operations.md](docs/10-operations.md)；本次关键更新见 [docs/11-changelog.md](docs/11-changelog.md)。
+关键取舍见 [DECISIONS.md](DECISIONS.md)（16 条 ADR：睡眠日边界、圆均值、LWW、模板总结、午休范围、同步容错、删除水位、1Panel 部署等）。
 
 
 

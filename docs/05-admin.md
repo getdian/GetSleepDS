@@ -79,7 +79,7 @@ CONFIG_SECRET=
 “用户数据”面板支持按 **openid 精确查询**和删除：
 
 - 查询：`GET /api/admin/users/:openid`，返回该 openid 的云端记录（日期、入睡、起床、时长）。
-- 删除：`DELETE /api/admin/users/:openid/records`，物理删除该 openid 的 `sleep_records`、`audio_unlocks` 与 `events`；需要管理员登录，删除后写审计日志（只记 openid 哈希前缀和条数，不落明文）。
+- 删除：`DELETE /api/admin/users/:openid/records`，删除该 openid 的 `sleep_records`、`audio_unlocks` 与 `events`，并写 `user_erasures` 水位（旧设备不能再同步回来）；需要管理员登录，删除后写审计日志（只记 openid 哈希前缀和条数，不落明文）。
 - 该操作**只删云端**；用户本机缓存仍需用户在“统计 → 清除数据（云端+本机）”处理，或在客服指引下清除小程序缓存。
 - openid 属于用户标识，不要截图外发；查询框不会把 openid 写入页面历史。
 

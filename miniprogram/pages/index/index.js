@@ -34,6 +34,8 @@ Page({
 
   onShow() {
     this._alive = true
+    const now = Date.now()
+    this.setData({ nowText: F.fmtClock(Math.round(T.minutesOf(now) / 5) * 5) })
   },
 
   onUnload() {

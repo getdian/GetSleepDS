@@ -5,7 +5,8 @@ const storage = require('../../utils/storage')
 const { syncNow } = require('../../utils/sync')
 const events = require('../../utils/events')
 
-const STALE_PENDING_MS = 20 * 60 * 60 * 1000
+const MAX_SLEEP_MS = 20 * 60 * 60 * 1000
+const STALE_PENDING_MS = MAX_SLEEP_MS
 const CLOCK_INTERVAL = 30 * 1000
 const WEEK_LABEL = ['日', '一', '二', '三', '四', '五', '六']
 
@@ -25,6 +26,7 @@ Page({
     weekDays: [],
     weekCount: 0,
     streak: 0,
+    canOverwrite: false,
     footerText: '愿今夜好眠'
   },
 
@@ -33,6 +35,7 @@ Page({
     this._busy = false
     this._pending = null
     this._dimTimer = null
+    this._noticeTimer = null
     this._clockTimer = null
     this.refresh()
   },
@@ -51,6 +54,7 @@ Page({
     this._alive = false
     this.stopClock()
     clearTimeout(this._dimTimer)
+    clearTimeout(this._noticeTimer)
   },
 
   startClock() {
@@ -88,6 +92,7 @@ Page({
     this._pending = pending
     const button = this.buildButton(state, pending, record)
     const weekly = S.weekly(records, now)
+    const canOverwrite = state === 'done' && new Date(now).getHours() >= 18
 
     this.setData({
       dateText: F.fmtDateCN(now),
@@ -107,9 +112,12 @@ Page({
           ? '点击开始记录入睡时间'
           : state === 'sleeping'
             ? '已入睡 ' + F.fmtClockTs(pending.bedAt) + '，早上记得记录起床'
-            : '今晚的记录已完成',
+            : canOverwrite
+              ? '今天已有一笔记录，可在下方覆盖为今晚'
+              : '今晚的记录已完成',
       buttonTitle: button.title,
       buttonSub: button.sub,
+      canOverwrite,
       weekDays: this.buildWeekDays(records, now, pending),
       weekCount: weekly.current.count,
       streak: weekly.streak,
@@ -152,6 +160,10 @@ Page({
     if (now - pending.bedAt > STALE_PENDING_MS) {
       storage.clearPending()
       this.setData({ notice: '上次打卡没记录起床，已清除' })
+      clearTimeout(this._noticeTimer)
+      this._noticeTimer = setTimeout(() => {
+        if (this._alive) this.setData({ notice: '' })
+      }, 5000)
     }
   },
 
@@ -170,7 +182,11 @@ Page({
   markSleep() {
     this._busy = true
     const now = Date.now()
-    storage.setPending(now)
+    if (!storage.setPending(now)) {
+      this._busy = false
+      wx.showToast({ title: '本地存储失败，请清理空间后重试', icon: 'none' })
+      return
+    }
     this._pending = { bedAt: now }
     this.refresh()
     this.setData({ dim: true })
@@ -193,8 +209,16 @@ Page({
     }
 
     const now = Date.now()
-    if (now - pending.bedAt < 60 * 1000) {
+    const elapsed = now - pending.bedAt
+    if (elapsed < 60 * 1000) {
       wx.showToast({ title: '刚睡下，再等等', icon: 'none' })
+      return
+    }
+    if (elapsed > MAX_SLEEP_MS) {
+      storage.clearPending()
+      this._pending = null
+      this.refresh()
+      wx.showToast({ title: '间隔超过 20 小时，本次不记录', icon: 'none' })
       return
     }
 
@@ -202,18 +226,49 @@ Page({
       day: T.sleepDayOf(pending.bedAt),
       bedAt: pending.bedAt,
       wakeAt: now,
-      durationMin: Math.round((now - pending.bedAt) / 60000),
+      durationMin: Math.round(elapsed / 60000),
       updatedAt: now
     }
 
-    storage.saveRecord(record)
+    if (!storage.saveRecord(record)) {
+      wx.showToast({ title: '本地存储失败，尚未记录', icon: 'none' })
+      return
+    }
     storage.clearPending()
     this._pending = null
 
     this.refresh()
     wx.showToast({ title: '早安，已记录', icon: 'none' })
     events.track('checkin', record.day)
-    syncNow(true).catch(() => {})
+    syncNow(true)
+      .then((res) => {
+        if (res && res.skipped === 'stale') return
+        if (res && res.synced === 0 && res.dropped > 0) {
+          wx.showToast({ title: '记录已存本机，云端校验未通过', icon: 'none' })
+        }
+      })
+      .catch(() => {
+        wx.showToast({ title: '已记录，云端备份稍后重试', icon: 'none' })
+      })
+  },
+
+  /** C 态覆盖：白天小睡占用了当天名额时，晚间允许重新开始今晚的记录 */
+  onOverwriteTonight() {
+    const record = this.data.record
+    if (!record) return
+    wx.showModal({
+      title: '记录今晚的睡眠',
+      content: '今天已有一笔 ' + F.fmtDuration(record.durationMin) + ' 的记录，继续后会覆盖它。',
+      confirmText: '继续记录',
+      cancelText: '取消',
+      success: (res) => {
+        if (!res.confirm) return
+        storage.clearPending()
+        this._pending = null
+        this.markSleep()
+        wx.showToast({ title: '已开始记录今晚', icon: 'none' })
+      }
+    })
   },
 
   onUndoTap() {
@@ -228,6 +283,8 @@ Page({
         if (!res.confirm) return
         storage.removeRecord(record.day)
         this.refresh()
+        // 把本地墓碑同步到云端，换机后也不会被旧记录回填
+        syncNow(true).catch(() => {})
       }
     })
   },

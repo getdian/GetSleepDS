@@ -41,12 +41,17 @@ function createEventsRoute(options) {
       const openid = await codeToOpenid(code, config.wx)
 
       try {
-        await db.insertEvents(openid, events)
+        // 全量清除后，清除前发出的在途事件不能再落库
+        const erasedAt = db.getErasure ? await db.getErasure(openid) : 0
+        const accepted = erasedAt
+          ? events.filter((event) => event.ts > erasedAt)
+          : events
+        if (accepted.length) await db.insertEvents(openid, accepted)
+        res.json({ accepted: accepted.length })
       } catch (e) {
+        if (e && e.status) throw e
         throw dbUnavailable()
       }
-
-      res.json({ accepted: events.length })
     })
   )
 

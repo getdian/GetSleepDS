@@ -50,6 +50,13 @@ test('旧配置缺少 category / cache 时按默认值补齐', () => {
   assert.equal(normalized.features.preload, true)
 })
 
+test('开发环境未设密码时生成随机临时密码，且不把 COS 密钥标为可用', () => {
+  const config = loadConfig({ NODE_ENV: 'test', DB_MODE: 'memory' })
+  assert.notEqual(config.admin.password, 'password123')
+  assert.equal(config.admin.generated, true)
+  assert.equal(config.security.ready, false)
+})
+
 test('生产环境配置齐全时可以启动', () => {
   const config = loadConfig({
     NODE_ENV: 'production',

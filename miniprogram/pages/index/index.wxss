@@ -181,6 +181,11 @@
 
 .calc-front {
   justify-content: space-between;
+  pointer-events: auto;
+}
+
+.calc-flip.is-flipped .calc-front {
+  pointer-events: none;
 }
 
 .calc-face .btn-lunar-capsule {
@@ -192,6 +197,11 @@
   padding-top: 4rpx;
   align-items: center;
   justify-content: flex-start;
+  pointer-events: none;
+}
+
+.calc-flip.is-flipped .calc-back {
+  pointer-events: auto;
 }
 
 .calc-action {

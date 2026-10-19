@@ -110,17 +110,17 @@ test('summary 三条记录返回事实描述', async () => {
   assert.equal(res.body.generatedAt, FIXED_NOW)
 })
 
-test('summary 拒绝日期与入睡时间不匹配的记录', async () => {
-  const bad = [{ day: '2026-10-11', bedAt: RECORDS[0].bedAt, wakeAt: RECORDS[0].wakeAt }]
-  const res = await post('/api/summary', { records: bad })
-  assert.equal(res.status, 400)
-  assert.equal(res.body.error.code, 'INVALID_BODY')
-})
+test('summary 按 bedAt 归一化 day，并丢弃时间倒挂的单条记录', async () => {
+  const wrongDay = [{ day: '2026-10-11', bedAt: RECORDS[0].bedAt, wakeAt: RECORDS[0].wakeAt }]
+  const first = await post('/api/summary', { records: wrongDay })
+  assert.equal(first.status, 200)
+  assert.equal(first.body.available, false)
+  assert.equal(first.body.dropped, 0)
 
-test('summary 拒绝起床早于入睡', async () => {
-  const bad = [{ day: '2026-10-12', bedAt: 2000, wakeAt: 1000 }]
-  const res = await post('/api/summary', { records: bad })
-  assert.equal(res.status, 400)
+  const backwards = [{ day: '2026-10-12', bedAt: 2000, wakeAt: 1000 }]
+  const second = await post('/api/summary', { records: backwards })
+  assert.equal(second.status, 200)
+  assert.equal(second.body.dropped, 1)
 })
 
 test('sync 幂等写入记录', async () => {

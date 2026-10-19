@@ -4,9 +4,10 @@ const S = require('../../utils/stats')
 const storage = require('../../utils/storage')
 const cache = require('../../utils/audio-cache')
 const api = require('../../utils/api')
-const { wxLogin } = require('../../utils/login')
+const { withLogin } = require('../../utils/login')
 const { syncNow } = require('../../utils/sync')
 const audioTimer = require('../../utils/audio-timer')
+const events = require('../../utils/events')
 const { getConfig } = require('../../utils/config')
 
 const RANGE_SMALL = 30
@@ -122,7 +123,8 @@ Page({
           this._factWeek = weekly.weekStart
           this.setData({ fact: res.text, factState: 'ok' })
         } else {
-          this.setData({ fact: '', factState: 'insufficient' })
+          // 已满 3 条但服务端没给出结论，属于“暂时不可用”，不能误导为不足 3 条
+          this.setData({ fact: '', factState: 'unavailable' })
         }
       })
       .catch(() => {
@@ -193,10 +195,12 @@ Page({
 
   eraseThenClear() {
     wx.showLoading({ title: '清除中', mask: true })
-    wxLogin()
-      .then((code) => api.eraseRecords(code))
+    withLogin((code) => api.eraseRecords(code))
       .then(() => {
         storage.clearAll()
+        events.clearQueue()
+        // clearAll 会移除 meta；写入新 epoch，让清除前发出的 sync 响应失效
+        storage.patchMeta({ syncEpoch: Date.now(), lastTrackActive: false })
         cache.cleanAll()
         audioTimer.clear()
         try {
@@ -219,12 +223,19 @@ Page({
   },
 
   onMakePoster() {
+    if (this._posterBusy) return
     if (!S.completedList(storage.getRecords()).length) {
       wx.showToast({ title: '还没有完整打卡', icon: 'none' })
       return
     }
-    wx.showLoading({ title: '生成中', mask: true })
-    this.drawPoster((path) => {
+    this._posterBusy = true
+    let finished = false
+    let timeout = null
+    const finish = (path) => {
+      if (finished) return
+      finished = true
+      clearTimeout(timeout)
+      this._posterBusy = false
       wx.hideLoading()
       if (!path) return
       this.setData({ posterPath: path })
@@ -246,7 +257,20 @@ Page({
           }
         }
       })
-    })
+    }
+    timeout = setTimeout(() => {
+      finish('')
+      wx.showToast({ title: '海报生成超时，请重试', icon: 'none' })
+    }, 8000)
+    wx.showLoading({ title: '生成中', mask: true })
+    try {
+      this.drawPoster((path) => {
+        finish(path)
+      })
+    } catch (e) {
+      finish('')
+      wx.showToast({ title: '海报生成失败', icon: 'none' })
+    }
   },
 
   /** 300×480 月度回顾海报；经典 canvas API，离屏绘制 */

@@ -97,7 +97,11 @@ function createApp(options) {
     const logPath = req.originalUrl
       .split('?')[0]
       .replace(/^\/api\/admin\/users\/[^/]+/, '/api/admin/users/:openid')
-    req.id = req.headers['x-request-id'] || crypto.randomBytes(8).toString('hex')
+    const incomingId = req.headers['x-request-id']
+    req.id =
+      typeof incomingId === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(incomingId)
+        ? incomingId
+        : crypto.randomBytes(8).toString('hex')
     res.setHeader('X-Request-Id', req.id)
     res.setHeader('X-Content-Type-Options', 'nosniff')
     res.setHeader('Referrer-Policy', 'no-referrer')
@@ -164,6 +168,7 @@ function createApp(options) {
   const summaryIp = createRateLimiter(limits.windowMs, limits.maxSummaryPerIp)
   const loginIp = createRateLimiter(60 * 1000, 5)
   const eventsIp = createRateLimiter(limits.windowMs, 120)
+  const recordsIp = createRateLimiter(60 * 1000, 120)
   const eraseIp = createRateLimiter(60 * 1000, 3)
 
   app.use('/admin', express.static(ADMIN_DIR, { index: 'index.html', setHeaders: setAdminHeaders }))
@@ -202,7 +207,7 @@ function createApp(options) {
       config,
       db,
       codeToOpenid,
-      limitIp: unlockIp,
+      limitIp: recordsIp,
       limitErase: eraseIp,
       now
     })

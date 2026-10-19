@@ -3,6 +3,7 @@ const { syncNow } = require('./utils/sync')
 const storage = require('./utils/storage')
 const events = require('./utils/events')
 const audioCache = require('./utils/audio-cache')
+const audioTimer = require('./utils/audio-timer')
 
 App({
   globalData: {
@@ -12,7 +13,7 @@ App({
   },
 
   onLaunch() {
-    this.globalData.configReady = loadConfig()
+    this.globalData.configReady = loadConfig(true)
       .then((config) => {
         this.globalData.config = config
         return config
@@ -40,6 +41,10 @@ App({
 
   onShow() {
     events.flush()
+    const current = this.globalData.config
+    if (!current || !current.features || current.features.timer !== false) {
+      audioTimer.restore()
+    }
 
     if (!this.globalData.config) {
       loadConfig(true)

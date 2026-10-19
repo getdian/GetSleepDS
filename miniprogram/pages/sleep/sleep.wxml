@@ -52,6 +52,7 @@
         </view>
       </view>
 
+      <view wx:if="{{canOverwrite}}" class="overwrite" bindtap="onOverwriteTonight">再记今晚（覆盖今天旧记录）</view>
       <view class="undo" bindtap="onUndoTap">记录有误？撤销</view>
     </block>
   </view>

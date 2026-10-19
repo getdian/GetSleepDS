@@ -166,11 +166,12 @@ function createAdminRoute(options) {
     auth.requireAuth,
     wrap(async (req, res) => {
       const openid = readOpenid(req.params.openid)
+      const current = now()
       let result = null
       try {
-        result = db.deleteUserData
-          ? await db.deleteUserData(openid)
-          : { records: await db.deleteRecords(openid), unlocks: 0, events: 0 }
+        result = db.eraseUserData
+          ? await db.eraseUserData(openid, current)
+          : { records: await db.deleteRecords(openid), unlocks: 0, events: 0, erasedAt: current }
       } catch (e) {
         throw dbUnavailable()
       }
@@ -182,14 +183,16 @@ function createAdminRoute(options) {
           openidTag: openidTag(openid),
           deleted: result.records,
           unlocks: result.unlocks,
-          events: result.events
+          events: result.events,
+          erasedAt: result.erasedAt
         })
       )
       res.json({
         openid,
         deleted: result.records,
         deletedUnlocks: result.unlocks,
-        deletedEvents: result.events
+        deletedEvents: result.events,
+        erasedAt: result.erasedAt
       })
     })
   )

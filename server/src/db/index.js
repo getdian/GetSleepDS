@@ -26,6 +26,22 @@ CREATE TABLE IF NOT EXISTS app_config (
     updated_at   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 单日删除墓碑：撤销打卡后阻止其他设备把旧记录传回
+CREATE TABLE IF NOT EXISTS sleep_record_deletions (
+    openid       VARCHAR(64) NOT NULL,
+    day          DATE NOT NULL,
+    deleted_at   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (openid, day)
+);
+CREATE INDEX IF NOT EXISTS idx_sleep_record_deletions_openid
+    ON sleep_record_deletions (openid, deleted_at DESC);
+
+-- 全量清除水位：清除/后台删除后，早于 erased_at 的记录不能再写回
+CREATE TABLE IF NOT EXISTS user_erasures (
+    openid       VARCHAR(64) PRIMARY KEY,
+    erased_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS events (
     id          BIGSERIAL PRIMARY KEY,
     openid      VARCHAR(64) NOT NULL,
@@ -35,11 +51,14 @@ CREATE TABLE IF NOT EXISTS events (
 );
 CREATE INDEX IF NOT EXISTS idx_events_created_at ON events (created_at);
 CREATE INDEX IF NOT EXISTS idx_events_type_created ON events (type, created_at);
+CREATE INDEX IF NOT EXISTS idx_events_openid ON events (openid);
 `
 
 function createMemoryDb() {
   const unlocks = new Map()
   const records = new Map()
+  const deletions = new Map()
+  const erasures = new Map()
   const settings = new Map()
   const events = []
   let appConfig = null
@@ -102,10 +121,77 @@ function createMemoryDb() {
       return count
     },
 
-    async deleteUserData(openid) {
+    async getErasure(openid) {
+      return erasures.get(openid) || 0
+    },
+
+    async getRecordDeletions(openid) {
+      const list = deletions.get(openid)
+      if (!list) return []
+      return Array.from(list, ([day, deletedAt]) => ({ day, deletedAt }))
+    },
+
+    /**
+     * 同步的核心：应用删除墓碑、erasure 水位，再按 LWW upsert。
+     * 返回 accepted/dropped 以及当前云端全量，供客户端回填。
+     */
+    async syncRecords(openid, list, deleteList, nowTs) {
+      const erasedAt = erasures.get(openid) || 0
+      let bucket = records.get(openid)
+      if (!bucket) {
+        bucket = new Map()
+        records.set(openid, bucket)
+      }
+
+      let delMap = deletions.get(openid)
+      if (!delMap) {
+        delMap = new Map()
+        deletions.set(openid, delMap)
+      }
+      ;(deleteList || []).forEach((item) => {
+        const previous = delMap.get(item.day) || 0
+        if (item.deletedAt > previous) delMap.set(item.day, item.deletedAt)
+      })
+
+      let accepted = 0
+      let dropped = 0
+
+      list.forEach((record) => {
+        if (record.updatedAt <= erasedAt) {
+          dropped += 1
+          return
+        }
+        const deletedAt = delMap.get(record.day) || 0
+        if (record.updatedAt <= deletedAt) {
+          dropped += 1
+          return
+        }
+        const previous = bucket.get(record.day)
+        if (!previous || record.updatedAt >= previous.updatedAt) {
+          bucket.set(record.day, record)
+          accepted += 1
+        } else {
+          dropped += 1
+        }
+      })
+
+      // 删除墓碑比分发记录新时，物理删除旧记录
+      delMap.forEach((deletedAt, day) => {
+        const current = bucket.get(day)
+        if (current && current.updatedAt <= deletedAt) bucket.delete(day)
+      })
+
+      const all = Array.from(bucket.values()).sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0))
+      const allDeletions = Array.from(delMap, ([day, deletedAt]) => ({ day, deletedAt }))
+      return { accepted, dropped, records: all, deletedDays: allDeletions, erasedAt }
+    },
+
+    async eraseUserData(openid, nowTs) {
+      const erasedAt = nowTs || Date.now()
       const bucket = records.get(openid)
       const recordCount = bucket ? bucket.size : 0
       records.delete(openid)
+      deletions.delete(openid)
       const unlockCount = unlocks.delete(openid) ? 1 : 0
       let eventCount = 0
       for (let i = events.length - 1; i >= 0; i -= 1) {
@@ -114,7 +200,13 @@ function createMemoryDb() {
           eventCount += 1
         }
       }
-      return { records: recordCount, unlocks: unlockCount, events: eventCount }
+      erasures.set(openid, erasedAt)
+      return { records: recordCount, unlocks: unlockCount, events: eventCount, erasedAt }
+    },
+
+    // 兼容旧调用：全量删除等同于 erasure
+    async deleteUserData(openid) {
+      return this.eraseUserData(openid)
     },
 
     async getAppConfig() {
@@ -218,10 +310,22 @@ function createPostgresDb(connectionString) {
     },
 
     async saveUnlock(openid, expireAt) {
-      await pool.query(
-        'INSERT INTO audio_unlocks (openid, expire_time) VALUES ($1, to_timestamp($2::bigint / 1000.0))',
-        [openid, expireAt]
-      )
+      // 同一 openid 只保留最新一次解锁：TTL 调小后，旧的长有效期行不能继续赢
+      const client = await pool.connect()
+      try {
+        await client.query('BEGIN')
+        await client.query('DELETE FROM audio_unlocks WHERE openid = $1', [openid])
+        await client.query(
+          'INSERT INTO audio_unlocks (openid, expire_time) VALUES ($1, to_timestamp($2::bigint / 1000.0))',
+          [openid, expireAt]
+        )
+        await client.query('COMMIT')
+      } catch (error) {
+        await client.query('ROLLBACK')
+        throw error
+      } finally {
+        client.release()
+      }
     },
 
     async getUnlock(openid) {
@@ -288,18 +392,127 @@ function createPostgresDb(connectionString) {
       return result.rowCount
     },
 
-    async deleteUserData(openid) {
+    async getErasure(openid) {
+      const result = await pool.query('SELECT erased_at FROM user_erasures WHERE openid = $1', [openid])
+      if (!result.rows.length) return 0
+      return new Date(result.rows[0].erased_at).getTime()
+    },
+
+    async getRecordDeletions(openid) {
+      const result = await pool.query(
+        `SELECT to_char(day, 'YYYY-MM-DD') AS day,
+                (EXTRACT(EPOCH FROM deleted_at) * 1000)::bigint AS deleted_at
+         FROM sleep_record_deletions WHERE openid = $1 ORDER BY day`,
+        [openid]
+      )
+      return result.rows.map((row) => ({ day: row.day, deletedAt: Number(row.deleted_at) }))
+    },
+
+    /**
+     * 同一事务里应用 erasure / 单日墓碑 / LWW upsert，避免清除与在途同步互相覆盖。
+     * advisory lock 以 openid 为粒度，单实例之外也能串行化同一用户。
+     */
+    async syncRecords(openid, list, deleteList, nowTs) {
       const client = await pool.connect()
       try {
         await client.query('BEGIN')
-        const records = await client.query('DELETE FROM sleep_records WHERE openid = $1', [openid])
-        const unlocks = await client.query('DELETE FROM audio_unlocks WHERE openid = $1', [openid])
-        const events = await client.query('DELETE FROM events WHERE openid = $1', [openid])
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1)::bigint)', [openid])
+
+        const erasureResult = await client.query(
+          'SELECT erased_at FROM user_erasures WHERE openid = $1',
+          [openid]
+        )
+        const erasedAt = erasureResult.rows.length
+          ? new Date(erasureResult.rows[0].erased_at).getTime()
+          : 0
+
+        for (let i = 0; i < (deleteList || []).length; i += 1) {
+          const item = deleteList[i]
+          await client.query(
+            `INSERT INTO sleep_record_deletions (openid, day, deleted_at)
+             VALUES ($1, $2, to_timestamp($3::bigint / 1000.0))
+             ON CONFLICT (openid, day) DO UPDATE SET
+               deleted_at = GREATEST(sleep_record_deletions.deleted_at, EXCLUDED.deleted_at)`,
+            [openid, item.day, item.deletedAt]
+          )
+        }
+
+        let accepted = 0
+        let dropped = 0
+
+        for (let i = 0; i < list.length; i += 1) {
+          const record = list[i]
+          if (erasedAt && record.updatedAt <= erasedAt) {
+            dropped += 1
+            continue
+          }
+
+          const deletion = await client.query(
+            `SELECT (EXTRACT(EPOCH FROM deleted_at) * 1000)::bigint AS deleted_at
+             FROM sleep_record_deletions WHERE openid = $1 AND day = $2`,
+            [openid, record.day]
+          )
+          const deletedAt = deletion.rows.length ? Number(deletion.rows[0].deleted_at) : 0
+          if (deletedAt && record.updatedAt <= deletedAt) {
+            dropped += 1
+            continue
+          }
+
+          const saved = await client.query(
+            `INSERT INTO sleep_records (openid, day, bed_at, wake_at, duration_min, updated_at)
+             VALUES ($1, $2, $3, $4, $5, to_timestamp($6::bigint / 1000.0))
+             ON CONFLICT (openid, day) DO UPDATE SET
+               bed_at = EXCLUDED.bed_at,
+               wake_at = EXCLUDED.wake_at,
+               duration_min = EXCLUDED.duration_min,
+               updated_at = GREATEST(sleep_records.updated_at, EXCLUDED.updated_at)
+             WHERE EXCLUDED.updated_at >= sleep_records.updated_at
+             RETURNING day`,
+            [openid, record.day, record.bedAt, record.wakeAt, record.durationMin, record.updatedAt]
+          )
+          if (saved.rowCount) accepted += 1
+          else dropped += 1
+        }
+
+        // 删除墓碑比记录新时，物理删除；记录更新（用户重新记录）时保留
+        for (let i = 0; i < (deleteList || []).length; i += 1) {
+          const item = deleteList[i]
+          await client.query(
+            `DELETE FROM sleep_records
+             WHERE openid = $1 AND day = $2
+               AND updated_at <= to_timestamp($3::bigint / 1000.0)`,
+            [openid, item.day, item.deletedAt]
+          )
+        }
+
+        const stored = await client.query(
+          `SELECT to_char(day, 'YYYY-MM-DD') AS day, bed_at, wake_at, duration_min, updated_at
+           FROM sleep_records WHERE openid = $1 ORDER BY day`,
+          [openid]
+        )
+        const deletionRows = await client.query(
+          `SELECT to_char(day, 'YYYY-MM-DD') AS day,
+                  (EXTRACT(EPOCH FROM deleted_at) * 1000)::bigint AS deleted_at
+           FROM sleep_record_deletions WHERE openid = $1 ORDER BY day`,
+          [openid]
+        )
+
         await client.query('COMMIT')
         return {
-          records: records.rowCount,
-          unlocks: unlocks.rowCount,
-          events: events.rowCount
+          accepted,
+          dropped,
+          erasedAt,
+          records: stored.rows.map((row) => ({
+            day: row.day,
+            bedAt: Number(row.bed_at),
+            wakeAt: Number(row.wake_at),
+            durationMin: row.duration_min,
+            updatedAt: new Date(row.updated_at).getTime()
+          })),
+          deletedDays: deletionRows.rows.map((row) => ({
+            day: row.day,
+            deletedAt: Number(row.deleted_at)
+          }))
         }
       } catch (error) {
         await client.query('ROLLBACK')
@@ -307,6 +520,41 @@ function createPostgresDb(connectionString) {
       } finally {
         client.release()
       }
+    },
+
+    async eraseUserData(openid, nowTs) {
+      const erasedAt = nowTs || Date.now()
+      const client = await pool.connect()
+      try {
+        await client.query('BEGIN')
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1)::bigint)', [openid])
+        await client.query(
+          `INSERT INTO user_erasures (openid, erased_at)
+           VALUES ($1, to_timestamp($2::bigint / 1000.0))
+           ON CONFLICT (openid) DO UPDATE SET erased_at = EXCLUDED.erased_at`,
+          [openid, erasedAt]
+        )
+        const records = await client.query('DELETE FROM sleep_records WHERE openid = $1', [openid])
+        const unlocks = await client.query('DELETE FROM audio_unlocks WHERE openid = $1', [openid])
+        const events = await client.query('DELETE FROM events WHERE openid = $1', [openid])
+        await client.query('DELETE FROM sleep_record_deletions WHERE openid = $1', [openid])
+        await client.query('COMMIT')
+        return {
+          records: records.rowCount,
+          unlocks: unlocks.rowCount,
+          events: events.rowCount,
+          erasedAt
+        }
+      } catch (error) {
+        await client.query('ROLLBACK')
+        throw error
+      } finally {
+        client.release()
+      }
+    },
+
+    async deleteUserData(openid) {
+      return this.eraseUserData(openid)
     },
 
     async getAppConfig() {
@@ -394,7 +642,7 @@ function createPostgresDb(connectionString) {
         `SELECT
           (SELECT count(*) FROM sleep_records) AS records,
           (SELECT count(DISTINCT openid) FROM sleep_records) AS users,
-          (SELECT count(*) FROM audio_unlocks WHERE expire_time > to_timestamp($1::bigint / 1000.0)) AS active_unlocks`,
+          (SELECT count(DISTINCT openid) FROM audio_unlocks WHERE expire_time > to_timestamp($1::bigint / 1000.0)) AS active_unlocks`,
         [current]
       )
       const row = result.rows[0]

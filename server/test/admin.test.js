@@ -65,6 +65,19 @@ before(async () => {
 
 after(() => new Promise((resolve) => server.close(resolve)))
 
+test('畸形后台 Cookie 不会 500，按未登录处理', async () => {
+  const res = await fetch(base + '/api/admin/session', {
+    headers: { cookie: 'sleep_admin=%' }
+  })
+  assert.equal(res.status, 200)
+  assert.equal((await res.json()).authenticated, false)
+
+  const protectedRes = await fetch(base + '/api/admin/config', {
+    headers: { cookie: 'sleep_admin=%' }
+  })
+  assert.equal(protectedRes.status, 401)
+})
+
 test('后台页面可访问并带安全头', async () => {
   const res = await fetch(base + '/admin/')
   assert.equal(res.status, 200)

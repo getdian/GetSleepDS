@@ -139,6 +139,6 @@
   </view>
 
   <view class="calc-note fade-up">
-    <text>每个完整周期约 90 分钟。这里只做时间倒推，不做睡眠质量判断。</text>
+    <text>每个完整周期约 90 分钟。这里只做时间倒推，不做睡眠评价。</text>
   </view>
 </view>

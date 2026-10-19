@@ -5,3 +5,5 @@ project.private.config.json
 .DS_Store
 tools/_preview-*.png
 server/coverage/
+release-artifacts/
+dist/
