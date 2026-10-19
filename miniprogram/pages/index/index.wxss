@@ -181,7 +181,7 @@
   perspective: 1600rpx;
   -webkit-perspective: 1600rpx;
   width: 100%;
-  height: 720rpx;
+  height: 760rpx;
 }
 
 .calc-flip {
@@ -332,10 +332,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 2rpx;
+  gap: 4rpx;
   height: 72rpx;
   border-radius: 999rpx;
-  font-size: 25rpx;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  font-size: 26rpx;
   font-weight: 500;
   color: rgba(160, 180, 220, 0.7);
   background: rgba(22, 32, 64, 0.5);
@@ -352,7 +353,8 @@
 }
 
 .fall-unit {
-  font-size: 20rpx;
+  font-size: 22rpx;
+  margin-left: 2rpx;
 }
 
 /* 主按钮：参考效果图的平滑长药丸 + 深靛蓝文字 */

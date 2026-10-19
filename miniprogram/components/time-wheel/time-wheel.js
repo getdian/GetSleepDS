@@ -5,7 +5,7 @@
  * 越靠上下边缘越倾斜、越透明；中心行实时放大高亮。
  * 对外仍使用 24 小时 "HH:MM"，页面无需改算法。
  */
-const COMPONENT_WIDTH_RPX = 76
+const COMPONENT_WIDTH_RPX = 84
 const VISIBLE_ROWS = 5
 const CYCLES = 3
 const CYCLE_HOURS = 12
@@ -348,10 +348,20 @@ Component({
       })
     },
 
+    togglePeriod() {
+      const next = this.data.period === '上午' ? '下午' : '上午'
+      this.setData({ period: next }, () => {
+        this.triggerEvent('change', { value: this.to24() })
+      })
+    },
+
     onPeriodTap(event) {
-      const period = event.currentTarget.dataset.period
-      if (!period || period === this.data.period) return
-      this.setData({ period }, () => {
+      const targetPeriod = event.currentTarget.dataset.period
+      if (!targetPeriod) return
+      if (targetPeriod === this.data.period) {
+        return this.togglePeriod()
+      }
+      this.setData({ period: targetPeriod }, () => {
         this.triggerEvent('change', { value: this.to24() })
       })
     },

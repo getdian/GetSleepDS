@@ -44,20 +44,22 @@
       </scroll-view>
     </view>
 
+    <!-- 居中选中带：精致圆角微光玻璃胶囊，告别生硬贯穿横线 -->
     <view class="tw-band" style="height:{{rowH}}px;"></view>
     <text class="tw-colon">:</text>
   </view>
 
-  <view class="tw-period">
+  <!-- 上午 / 下午：一体化微光胶囊，大点击区 + catchtap 防吞 -->
+  <view class="tw-period" catchtap="togglePeriod">
     <view
       class="tw-period-btn {{period === '上午' ? 'is-on' : ''}}"
       data-period="上午"
-      bindtap="onPeriodTap"
+      catchtap="onPeriodTap"
     >上午</view>
     <view
       class="tw-period-btn {{period === '下午' ? 'is-on' : ''}}"
       data-period="下午"
-      bindtap="onPeriodTap"
+      catchtap="onPeriodTap"
     >下午</view>
   </view>
 </view>
