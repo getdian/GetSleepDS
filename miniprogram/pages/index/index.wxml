@@ -54,12 +54,12 @@
               />
             </view>
 
-            <view wx:if="{{mode === 'sleep'}}" class="now-row">
+            <view class="now-row">
               <text class="now-hint">当前 {{nowText}}</text>
-              <text class="now-link" bindtap="onNowTap">用现在的时间</text>
+              <text class="now-link {{mode === 'sleep' ? '' : 'is-hidden'}}" bindtap="onNowTap">用现在的时间</text>
             </view>
 
-            <view class="fall-block">
+            <view class="fall-row">
               <view class="fall-head">
                 <view class="fall-ico"></view>
                 <text class="fall-label">预计入睡耗时</text>
@@ -71,6 +71,8 @@
                   class="fall-chip {{fallAsleep === item ? 'is-on' : ''}}"
                   data-min="{{item}}"
                   bindtap="onFallAsleepTap"
+                  hover-class="fall-chip--tap"
+                  hover-stay-time="100"
                 >
                   <text>{{item}}</text>
                   <text class="fall-unit">分</text>

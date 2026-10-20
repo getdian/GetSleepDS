@@ -286,17 +286,27 @@
   opacity: 0.68;
 }
 
-/* 入睡耗时保留 */
-.fall-block {
-  margin-top: 24rpx;
+/* 选择起床时间时只隐藏动作，保留行高，避免切模式时把下面的耗时档位顶下去 */
+.now-link.is-hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* 入睡耗时：标签与档位同一行，档位靠右 */
+.fall-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-top: 26rpx;
   padding: 0 12rpx;
 }
 
 .fall-head {
+  flex: none;
   display: flex;
   align-items: center;
   gap: 10rpx;
-  margin-bottom: 16rpx;
 }
 
 /* 极简 CSS 时钟图标 */
@@ -334,47 +344,63 @@
 
 .fall-label {
   font-size: 24rpx;
+  line-height: 1.2;
   font-weight: 500;
-  color: rgba(190, 210, 245, 0.8);
+  color: rgba(190, 210, 245, 0.78);
 }
 
 .fall-chips {
+  flex: none;
   display: flex;
-  gap: 16rpx;
+  gap: 8rpx;
 }
 
+/* 无边框：默认只留一层极弱底，选中态换成更亮的淡紫底 */
 .fall-chip {
-  flex: 1;
+  position: relative;
+  flex: none;
+  min-width: 86rpx;
+  height: 56rpx;
+  padding: 0 12rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4rpx;
-  height: 88rpx;
+  gap: 2rpx;
   border-radius: 999rpx;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
-  font-size: 28rpx;
+  font-size: 24rpx;
   font-weight: 500;
-  color: rgba(160, 180, 220, 0.7);
-  background: rgba(22, 32, 64, 0.5);
-  border: 1rpx solid rgba(255, 255, 255, 0.08);
-  transition: all 0.2s ease;
+  line-height: 1;
+  color: rgba(178, 194, 230, 0.66);
+  background: rgba(255, 255, 255, 0.05);
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.fall-chip:active {
+/* 垂直扩 8rpx：视觉仍是 56rpx 药丸，实际可点 72rpx */
+.fall-chip::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -8rpx;
+  bottom: -8rpx;
+}
+
+.fall-chip--tap {
   opacity: 0.72;
 }
 
 .fall-chip.is-on {
-  color: #FFFFFF;
+  color: #f4f2ff;
   font-weight: 600;
-  background: rgba(65, 82, 155, 0.85);
-  border-color: rgba(145, 175, 255, 0.4);
-  box-shadow: 0 4rpx 16rpx rgba(30, 45, 100, 0.45);
+  background: linear-gradient(135deg, rgba(158, 154, 255, 0.34) 0%, rgba(112, 108, 240, 0.24) 100%);
+  box-shadow: 0 4rpx 14rpx rgba(72, 66, 190, 0.22);
 }
 
 .fall-unit {
-  font-size: 22rpx;
-  margin-left: 2rpx;
+  font-size: 19rpx;
+  margin-left: 1rpx;
+  opacity: 0.72;
 }
 
 /* 主按钮：参考效果图的平滑长药丸 + 深靛蓝文字 */

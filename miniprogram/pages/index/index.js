@@ -7,7 +7,7 @@ const backgrounds = require('../../utils/backgrounds')
 const ad = require('../../utils/ad')
 const { getConfig, loadConfig } = require('../../utils/config')
 
-const CLOCK_INTERVAL = 30 * 1000
+const CLOCK_INTERVAL = 60 * 1000
 
 Page({
   data: {
@@ -44,7 +44,7 @@ Page({
       wakeTime: prefs.wakeTime || '07:30',
       sleepTime: prefs.sleepTime || F.fmtClock(sleepMinutes),
       fallAsleep: typeof prefs.fallAsleep === 'number' ? prefs.fallAsleep : 15,
-      nowText: F.fmtClock(Math.round(T.minutesOf(now) / 5) * 5)
+      nowText: F.fmtClock(T.minutesOf(now))
     })
 
     this.loadBackgrounds()
@@ -81,17 +81,29 @@ Page({
   },
 
   refreshNow() {
-    this.setData({ nowText: F.fmtClock(Math.round(T.minutesOf(Date.now()) / 5) * 5) })
+    // 展示真实时分；5 分钟粒度只用于时间轮和“用现在的时间”落点
+    this.setData({ nowText: F.fmtClock(T.minutesOf(Date.now())) })
   },
 
   startClock() {
     this.stopClock()
-    this._clockTimer = setInterval(() => {
-      if (this._alive) this.refreshNow()
-    }, CLOCK_INTERVAL)
+    // 对齐到下一个整分再起 60s 定时器，避免分钟数最多迟到半分钟
+    const delay = CLOCK_INTERVAL - (Date.now() % CLOCK_INTERVAL)
+    this._clockAlign = setTimeout(() => {
+      this._clockAlign = null
+      if (!this._alive) return
+      this.refreshNow()
+      this._clockTimer = setInterval(() => {
+        if (this._alive) this.refreshNow()
+      }, CLOCK_INTERVAL)
+    }, delay)
   },
 
   stopClock() {
+    if (this._clockAlign) {
+      clearTimeout(this._clockAlign)
+      this._clockAlign = null
+    }
     if (this._clockTimer) {
       clearInterval(this._clockTimer)
       this._clockTimer = null
@@ -129,7 +141,7 @@ Page({
     const value = F.fmtClock(Math.round(T.minutesOf(now) / 5) * 5)
     this.setData({
       sleepTime: value,
-      nowText: value,
+      nowText: F.fmtClock(T.minutesOf(now)),
       mode: 'sleep',
       flipped: false,
       view: null
