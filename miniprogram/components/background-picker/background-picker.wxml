@@ -1,9 +1,9 @@
 <view class="bp-mask {{show ? 'is-show' : ''}}" bindtap="onClose" catchtouchmove="noop"></view>
 
 <view class="bp-sheet {{show ? 'is-show' : ''}}">
-  <view class="bp-grip"></view>
+  <view class="bp-grip" catchtouchmove="noop"></view>
 
-  <view class="bp-head">
+  <view class="bp-head" catchtouchmove="noop">
     <text class="bp-title">选择背景</text>
     <text class="bp-close" bindtap="onClose">×</text>
   </view>
@@ -28,19 +28,27 @@
       data-id="{{item.id}}"
       bindtap="onSelect"
     >
-      <image class="bp-img" src="{{item.url}}" mode="aspectFill" lazy-load />
+      <image
+        class="bp-img"
+        src="{{item.localPath || (item.thumbFailed ? item.url : item.thumbUrl || item.url)}}"
+        mode="aspectFill"
+        lazy-load
+        data-id="{{item.id}}"
+        binderror="onThumbError"
+      />
       <view class="bp-info">
         <text class="bp-name">{{item.title}}</text>
-        <text class="bp-state">{{item.isDefault ? '默认背景 · 免费' : item.unlocked ? '已解锁 · 可直接使用' : '看广告解锁 ' + unlockHours + ' 小时'}}</text>
+        <text class="bp-state">{{item.isDefault ? '默认背景 · 免费' : item.unlocked ? '已解锁 · 可直接使用' : freeMode ? '免费使用 ' + unlockHours + ' 小时' : '看广告解锁 ' + unlockHours + ' 小时'}}</text>
       </view>
       <text wx:if="{{activeId === item.id}}" class="bp-check">使用中</text>
       <text wx:elif="{{item.isDefault}}" class="bp-badge">默认</text>
       <text wx:elif="{{item.unlocked}}" class="bp-badge is-on">已解锁</text>
+      <text wx:elif="{{freeMode}}" class="bp-badge is-on">免费</text>
       <text wx:else class="bp-badge">看广告</text>
     </view>
 
     <view wx:if="{{!items.length}}" class="bp-empty">还没有可用的背景图</view>
   </scroll-view>
 
-  <view class="bp-foot">默认背景免费；选择其他背景需观看一次视频，解锁后 {{unlockHours}} 小时内可用。</view>
+  <view class="bp-foot" catchtouchmove="noop">默认背景免费；{{freeMode ? '其他背景可直接使用' : '选择其他背景需观看一次视频'}}，使用 {{unlockHours}} 小时。</view>
 </view>

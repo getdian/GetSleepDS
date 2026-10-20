@@ -220,14 +220,19 @@ function cachedCount(tracks, ttlDays) {
   return (tracks || []).filter((track) => !!peek(track.url, ttlDays)).length
 }
 
-function cleanAll() {
+function cleanAll(exceptUrl) {
   const meta = readMeta()
+  const kept = {}
   Object.keys(meta).forEach((url) => {
+    if (exceptUrl && url === exceptUrl) {
+      kept[url] = meta[url]
+      return
+    }
     try {
       wx.getFileSystemManager().unlinkSync(meta[url].path)
     } catch (e) {}
   })
-  writeMeta({})
+  writeMeta(kept)
   notify()
 }
 

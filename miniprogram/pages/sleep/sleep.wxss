@@ -111,7 +111,7 @@
   align-items: center;
   justify-content: center;
   gap: 8rpx;
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+  background: linear-gradient(135deg, #5B5BD6, #4338CA);
   border: 1rpx solid var(--border-moon-light);
   box-shadow: 0 24rpx 64rpx rgba(99, 102, 241, 0.4), inset 0 2rpx 12rpx rgba(255, 255, 255, 0.25);
   transition: transform 0.3s var(--ease-spring), background 0.4s ease, box-shadow 0.4s ease;
@@ -142,15 +142,19 @@
 .record-hint {
   display: block;
   text-align: center;
-  font-size: 22rpx;
-  color: var(--text-muted);
+  font-size: 24rpx;
+  color: var(--text-secondary);
 }
 
 .undo-bed {
-  margin-top: 16rpx;
+  margin-top: 12rpx;
+  min-height: 88rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   text-align: center;
-  font-size: 18rpx;
-  color: var(--text-muted);
+  font-size: 22rpx;
+  color: var(--text-secondary);
   text-decoration: underline;
 }
 
@@ -198,10 +202,14 @@
 }
 
 .undo {
-  margin-top: 18rpx;
+  margin-top: 4rpx;
+  min-height: 88rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   text-align: center;
-  font-size: 18rpx;
-  color: var(--text-muted);
+  font-size: 22rpx;
+  color: var(--text-secondary);
 }
 
 /* 展示位：与上方撤销入口再拉开一档，降低误触 */
@@ -220,6 +228,12 @@
   margin-top: 36rpx;
 }
 
+.week-card:active,
+.overwrite:active,
+.notice:active {
+  opacity: 0.76;
+}
+
 .week-head {
   display: flex;
   align-items: center;
@@ -234,7 +248,11 @@
 }
 
 .week-link {
-  font-size: 18rpx;
+  min-height: 88rpx;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8rpx 0 24rpx;
+  font-size: 22rpx;
   color: var(--color-primary);
 }
 
@@ -276,7 +294,7 @@
 }
 
 .day-label {
-  font-size: 18rpx;
+  font-size: 20rpx;
   color: var(--text-muted);
 }
 
@@ -286,9 +304,9 @@
 
 .week-summary {
   display: block;
-  margin-top: 22rpx;
+  margin-top: 18rpx;
   text-align: center;
-  font-size: 18rpx;
+  font-size: 20rpx;
   color: var(--text-muted);
 }
 
@@ -321,6 +339,8 @@
 
 .dim-mask.is-on {
   opacity: 0.97;
+  /* 熄灯期间必须拦截底层点击，否则黑屏下仍能误触分享/统计/声音 */
+  pointer-events: auto;
 }
 
 .dim-text {

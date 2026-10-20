@@ -91,6 +91,39 @@ test('没有记录时不报错', () => {
   assert.equal(weekly.streak, 0)
 })
 
+test('C 态同睡眠日凌晨可重新开始，白天跨睡眠日不放开', () => {
+  // 周二 13:00-14:00 小睡，睡眠日周二；周三 00:30 仍属于周二睡眠日
+  const bed = local(2026, 10, 20, 13, 0)
+  const wake = local(2026, 10, 20, 14, 0)
+  const record = { day: '2026-10-20', bedAt: bed, wakeAt: wake, durationMin: 60 }
+  assert.equal(S.canStartNewSleep(record, local(2026, 10, 21, 0, 30), '2026-10-20'), true)
+  assert.equal(S.canStartNewSleep(record, local(2026, 10, 21, 13, 0), '2026-10-21'), false)
+
+  // 正常 23:00-07:00，周二 13:00 不允许新增会覆盖晚上的午睡
+  const normal = { day: '2026-10-19', bedAt: local(2026, 10, 19, 23, 0), wakeAt: local(2026, 10, 20, 7, 0) }
+  assert.equal(S.canStartNewSleep(normal, local(2026, 10, 20, 13, 0), '2026-10-20'), false)
+  assert.equal(S.canStartNewSleep(normal, local(2026, 10, 20, 19, 0), '2026-10-20'), true)
+})
+
+test('事实回顾指纹会随同周新增记录变化', () => {
+  const weekly = S.weekly(RECORDS, NOW)
+  const first = S.factSignature(weekly)
+  const more = Object.assign({}, RECORDS, {
+    '2026-10-18': record('2026-10-18', local(2026, 10, 18, 23, 0), local(2026, 10, 19, 7, 0))
+  })
+  const second = S.factSignature(S.weekly(more, NOW))
+  assert.notEqual(first, second)
+})
+
+test('热力图未来板位带 future 标记', () => {
+  const now = local(2026, 10, 19, 12, 0)
+  const span = S.monthsSpan(now)
+  const heat = S.heatmapCells({}, now, span.days, '', span.endOffsetDays)
+  const future = heat.cells.filter((cell) => cell.future)
+  assert.ok(future.length > 0)
+  assert.ok(future.every((cell) => cell.day > '2026-10-19'))
+})
+
 test('总结请求只带最近 14 天', () => {
   const payload = S.summaryPayload(RECORDS, NOW, 14)
   assert.equal(payload.length, 3)

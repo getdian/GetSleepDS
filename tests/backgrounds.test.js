@@ -29,6 +29,22 @@ test('未解锁或过期回退默认，解锁中返回当前图', () => {
   assert.equal(B.activeOf(CONFIG, { id: 'b', expireAt: 1001 }, now).id, 'b')
 })
 
+test('列表缩略图 URL 走 COS 图片处理，已有查询串时正确拼接', () => {
+  assert.equal(
+    B.thumbUrlOf('https://img.qfmaster.com/bg/a.jpg'),
+    'https://img.qfmaster.com/bg/a.jpg?imageMogr2/thumbnail/360x'
+  )
+  assert.equal(
+    B.thumbUrlOf('https://img.qfmaster.com/bg/a.jpg?v=2'),
+    'https://img.qfmaster.com/bg/a.jpg?v=2&imageMogr2/thumbnail/360x'
+  )
+  assert.equal(B.thumbUrlOf('wxfile://a.jpg'), '')
+  assert.equal(
+    B.thumbUrlOf('https://img.qfmaster.com/bg/a.jpg?imageMogr2/thumbnail/200x'),
+    'https://img.qfmaster.com/bg/a.jpg?imageMogr2/thumbnail/200x'
+  )
+})
+
 test('背景图分类去重且带“全部”', () => {
   assert.deepEqual(B.categories(B.normalize(CONFIG.backgrounds)), ['全部', '山川', '夜色'])
 })

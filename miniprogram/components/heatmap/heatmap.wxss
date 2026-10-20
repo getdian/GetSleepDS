@@ -91,6 +91,12 @@
   box-shadow: 0 0 0 2rpx var(--border-moon-light);
 }
 
+.hm-future {
+  background: transparent;
+  border: 1rpx dashed rgba(255, 255, 255, 0.08);
+  opacity: 0.55;
+}
+
 .hm-legend {
   display: flex;
   align-items: center;

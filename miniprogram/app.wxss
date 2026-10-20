@@ -1,6 +1,7 @@
 /* ============================================================
    睡点 · 新中式暗夜诗意 × 沉浸式玻璃拟态
-   全项目只允许通过 Token 引用颜色，不在页面里写裸色值
+   全局色板只在这里维护；首页/时间轮可在各自 WXSS 顶部定义局部 token，
+   新增颜色优先复用 token，历史裸色值逐步收敛。
    ============================================================ */
 
 page {
@@ -13,8 +14,9 @@ page {
   --bg-aurora-3: #080B14;
 
   /* 琉璃毛玻璃 */
-  --glass-card-bg: rgba(20, 27, 45, 0.65);
-  --glass-card-active: rgba(28, 38, 62, 0.85);
+  /* 不支持 backdrop-filter 时，0.8 的半透明底仍能保证可读 */
+  --glass-card-bg: rgba(20, 27, 45, 0.8);
+  --glass-card-active: rgba(28, 38, 62, 0.9);
   --glass-tint: rgba(99, 102, 241, 0.08);
 
   /* 月影描边 */
@@ -33,7 +35,7 @@ page {
   --text-moon-pure: #F8FAFC;
   --text-primary: #E2E8F0;
   --text-secondary: #94A3B8;
-  --text-muted: #64748B;
+  --text-muted: #7C8799;
 
   /* 圆角 */
   --radius-sm: 16rpx;
@@ -61,12 +63,13 @@ page {
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
 
   /* 热力图分级 */
-  --heat-0: rgba(255, 255, 255, 0.045);
-  --heat-1: #1E1B4B;
-  --heat-2: #3730A3;
-  --heat-3: #4F46E5;
-  --heat-4: #6366F1;
-  --heat-5: #A5B4FC;
+  /* 低强度也要能和空白天区分：相邻层级保持可见的亮度差 */
+  --heat-0: rgba(255, 255, 255, 0.055);
+  --heat-1: #5A57C8;
+  --heat-2: #6C68E8;
+  --heat-3: #8A90FF;
+  --heat-4: #B4BEFF;
+  --heat-5: #E0E7FF;
 
   /* 时间轮边缘渐隐 */
   --wheel-fade: rgba(8, 11, 20, 0.88);
@@ -101,7 +104,6 @@ picker-view {
 .sleep-glass-card {
   position: relative;
   overflow: hidden;
-  background-color: var(--bg-night-surface);
   background: var(--glass-card-bg);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
@@ -109,69 +111,6 @@ picker-view {
   border-radius: var(--radius-xl);
   box-shadow: 0 12rpx 36rpx rgba(0, 0, 0, 0.26);
   transition: transform 0.3s var(--ease-spring), border-color 0.3s ease, background 0.3s ease;
-}
-
-.is-tappable:active {
-  transform: scale(0.985);
-  background: var(--glass-card-active);
-  border-color: var(--border-moon-light);
-}
-
-/* 主按钮 */
-/* 主行动按钮：主题靛蓝胶囊（与全站主色一致） */
-.btn-lunar-capsule {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 14rpx;
-  width: 100%;
-  height: 92rpx;
-  padding: 0 40rpx;
-  border: none;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(135deg, #7178E8 0%, #5357DA 100%);
-  color: var(--text-moon-pure);
-  font-size: 28rpx;
-  font-weight: 500;
-  letter-spacing: 1rpx;
-  box-shadow: 0 8rpx 20rpx rgba(79, 70, 229, 0.18);
-  transition: transform 0.25s var(--ease-spring), opacity 0.2s ease;
-}
-
-.capsule-ico {
-  width: 40rpx;
-  height: 40rpx;
-  border-radius: 50%;
-  border: 1rpx solid rgba(248, 250, 252, 0.35);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 22rpx;
-  line-height: 1;
-}
-
-.btn-lunar-capsule:active {
-  transform: scale(0.96);
-  opacity: 0.9;
-}
-
-.btn-moon-ghost {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 80rpx;
-  padding: 0 32rpx;
-  border: 1rpx solid var(--border-moon-subtle);
-  border-radius: var(--radius-pill);
-  background: var(--glass-tint);
-  color: var(--text-secondary);
-  font-size: 26rpx;
-}
-
-.btn-moon-ghost:active {
-  transform: scale(0.97);
-  border-color: var(--border-glow);
-  color: var(--text-primary);
 }
 
 /* 文字 */
@@ -215,32 +154,13 @@ picker-view {
 }
 
 /* 动效 */
-.fade-in {
-  animation: fadeIn 0.6s var(--ease-gentle) both;
-}
-
 .fade-up {
   animation: fadeUp 0.6s var(--ease-gentle) both;
-}
-
-.flip-in {
-  animation: flipIn 0.55s var(--ease-spring) both;
-  transform-origin: center;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
 }
 
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(16rpx); }
   to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes flipIn {
-  from { opacity: 0; transform: perspective(900rpx) rotateY(-72deg); }
-  to { opacity: 1; transform: perspective(900rpx) rotateY(0); }
 }
 
 .safe-bottom {

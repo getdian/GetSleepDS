@@ -117,15 +117,18 @@ function normalizeConfig(input, base) {
 function validateConfig(input, base) {
   if (!isObject(input)) throw invalidBody('配置格式错误')
 
-  if (!Array.isArray(input.audio) || !input.audio.length) {
+  // 部分字段保存时一律沿用当前生效配置，避免旧后台/脚本把未提交字段静默重置。
+  const baseConfig = isObject(base) ? base : {}
+  const audioInput = input.audio === undefined ? baseConfig.audio : input.audio
+  if (!Array.isArray(audioInput) || !audioInput.length) {
     throw invalidBody('至少保留 1 条环境音')
   }
-  if (input.audio.length > MAX_AUDIO) {
+  if (audioInput.length > MAX_AUDIO) {
     throw invalidBody('最多 ' + MAX_AUDIO + ' 条环境音')
   }
 
   const seen = {}
-  const audio = input.audio.map((item, index) => {
+  const audio = audioInput.map((item, index) => {
     const label = '第 ' + (index + 1) + ' 条环境音'
     if (!isObject(item)) throw invalidBody(label + '格式错误')
 
@@ -157,7 +160,11 @@ function validateConfig(input, base) {
     }
   })
 
-  const unlockInput = isObject(input.unlock) ? input.unlock : {}
+  const unlockInput = Object.assign(
+    {},
+    isObject(baseConfig.unlock) ? baseConfig.unlock : {},
+    isObject(input.unlock) ? input.unlock : {}
+  )
 
   let mode = 'rewarded'
   if (unlockInput.mode !== undefined) {
@@ -184,7 +191,11 @@ function validateConfig(input, base) {
     onAdError = unlockInput.onAdError
   }
 
-  const featuresInput = isObject(input.features) ? input.features : {}
+  const featuresInput = Object.assign(
+    {},
+    isObject(baseConfig.features) ? baseConfig.features : {},
+    isObject(input.features) ? input.features : {}
+  )
   const features = {
     summary: featuresInput.summary !== false,
     sync: featuresInput.sync !== false,
@@ -193,7 +204,11 @@ function validateConfig(input, base) {
     events: featuresInput.events !== false
   }
 
-  const cacheInput = isObject(input.cache) ? input.cache : {}
+  const cacheInput = Object.assign(
+    {},
+    isObject(baseConfig.cache) ? baseConfig.cache : {},
+    isObject(input.cache) ? input.cache : {}
+  )
 
   let maxMB = 80
   if (cacheInput.maxMB !== undefined) {
@@ -241,7 +256,6 @@ function validateConfig(input, base) {
     }
   })
 
-  const baseConfig = isObject(base) ? base : {}
   const backgroundsInput = Array.isArray(input.backgrounds)
     ? input.backgrounds
     : Array.isArray(baseConfig.backgrounds)
@@ -309,7 +323,11 @@ function validateConfig(input, base) {
     backgroundUnlockHours = n
   }
 
-  const copyInput = isObject(input.copy) ? input.copy : {}
+  const copyInput = Object.assign(
+    {},
+    isObject(baseConfig.copy) ? baseConfig.copy : {},
+    isObject(input.copy) ? input.copy : {}
+  )
   const copy = {
     unlockTitle: readText(copyInput.unlockTitle, '解锁标题', 20, false) || '解锁环境音',
     unlockDesc:

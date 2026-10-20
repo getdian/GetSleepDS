@@ -1,7 +1,7 @@
 /**
  * 服务端配置不可达时的兜底。
  * 结构必须与 server/config/app.config.json 保持一致。
- * 音频 url 是占位地址，替换成 COS 正式地址后才能播放。
+ * 音频地址必须与生产配置同域，否则会落在 downloadFile 白名单/COS 防盗链之外。
  */
 module.exports = {
   version: 1,
@@ -11,7 +11,7 @@ module.exports = {
       title: '雨声',
       subtitle: '循环雨声 · 支持锁屏',
       category: '自然之声',
-      url: 'https://qfmaster-1322402212.cos.ap-shanghai.myqcloud.com/sleep/sleep-10001.mp3',
+      url: 'https://img.qfmaster.com/sleep/sleep-10001.mp3',
       icon: 'rain'
     }
   ],

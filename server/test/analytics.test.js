@@ -60,6 +60,18 @@ test('窗口外的事件不进入统计', async () => {
   assert.equal(overview.topSources[0].source, '1007|pages/index/index|share')
 })
 
+test('本周按周一 00:00 起，不把上周日算进来', async () => {
+  const now = Date.parse('2026-10-19T10:00:00+08:00') // 周一
+  const events = [
+    { openid: 'o-1', type: 'checkin', target: '', ts: Date.parse('2026-10-18T23:00:00+08:00') },
+    { openid: 'o-1', type: 'checkin', target: '', ts: Date.parse('2026-10-19T09:00:00+08:00') }
+  ]
+  const analytics = createAnalytics(fakeDeps(events))
+  const overview = await analytics.overview(now)
+  assert.equal(overview.week.checkins, 1)
+  assert.equal(overview.today.checkins, 1)
+})
+
 test('dayKey 按东八区归日', () => {
   const noon = Date.parse('2026-10-19T12:00:00+08:00')
   assert.equal(dayKey(noon), '2026-10-19')

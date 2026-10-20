@@ -14,32 +14,13 @@ test('睡眠日以中午 12 点为界', () => {
   assert.equal(T.sleepDayOf(local(2026, 10, 18, 13, 0)), '2026-10-18')
 })
 
-test('07:30 起床 + 15 分钟入睡，推荐 23:45 / 01:15 / 02:45', () => {
-  const now = local(2026, 10, 17, 20, 0)
-  const plan = T.buildPlan(now, 7 * 60 + 30, 15)
-
-  assert.equal(plan.rolled, false)
-  assert.deepEqual(
-    plan.slots.map((slot) => T.minutesOf(slot.at)),
-    [23 * 60 + 45, 1 * 60 + 15, 2 * 60 + 45]
-  )
-  assert.equal(T.dateKey(plan.slots[2].at), '2026-10-18')
-  assert.equal(plan.availableMin, 675)
-  assert.equal(plan.cycles, 7)
-  assert.equal(plan.remainder, 45)
-})
-
-test('凌晨 3:38 时推荐时间已过，自动滚动到明晚', () => {
-  const now = local(2026, 10, 18, 3, 38)
-  const plan = T.buildPlan(now, 7 * 60 + 30, 15)
-
-  assert.equal(plan.rolled, true)
-  assert.equal(T.dateKey(plan.nowWakeAt), '2026-10-18')
-  assert.equal(plan.availableMin, 217)
-  assert.equal(plan.cycles, 2)
-  assert.equal(plan.remainder, 37)
-  assert.equal(plan.slots[0].passed, false)
-  assert.equal(T.dateKey(plan.slots[0].at), '2026-10-18')
+test('时间轮 scroll-top 吸附到最近循环行', () => {
+  // 中间周期的 07:30：60 分钟周期 * 1 周期 + 7 点 + 30 分
+  assert.deepEqual(T.snapWheelTop(42 * 30, 42, 12), { raw: 30, index: 6 })
+  assert.deepEqual(T.snapWheelTop(42 * 72, 42, 60), { raw: 72, index: 12 })
+  // 首尾周期折回单周期索引
+  assert.equal(T.snapWheelTop(-10, 42, 12).index, 0)
+  assert.equal(T.snapWheelTop(42 * 35, 42, 12).index, 11)
 })
 
 test('跨午夜的平均时间用圆均值', () => {

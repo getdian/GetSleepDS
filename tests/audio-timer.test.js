@@ -54,6 +54,17 @@ test('restore 在到点后停止音频并清空计时', () => {
   assert.equal(storage.getMeta().audioTimerEndAt, 0)
 })
 
+test('到点/停止清除运行态但保留用户定时偏好', () => {
+  timer.clear()
+  timer.start(30)
+  timer.clear(undefined, true)
+  assert.equal(storage.getMeta().audioTimerMinutes, 30)
+  assert.equal(storage.getMeta().audioTimerEndAt, 0)
+
+  timer.clear()
+  assert.equal(storage.getMeta().audioTimerMinutes, 0)
+})
+
 test('restore 在未到点时重新挂起', () => {
   timer.clear()
   storage.patchMeta({ audioTimerEndAt: Date.now() + 60000, audioTimerMinutes: 1 })

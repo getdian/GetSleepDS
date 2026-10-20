@@ -62,7 +62,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 92rpx;
+  height: 96rpx;
   border-radius: var(--radius-pill);
   font-size: 28rpx;
   letter-spacing: 1rpx;
@@ -71,7 +71,7 @@
 .sheet-primary {
   margin-top: 36rpx;
   border: 1rpx solid var(--border-glow);
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+  background: linear-gradient(135deg, #5B5BD6, #4338CA);
   color: var(--text-moon-pure);
   font-weight: 500;
   box-shadow: 0 12rpx 32rpx rgba(99, 102, 241, 0.3);

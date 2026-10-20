@@ -19,12 +19,13 @@
 }
 
 .share-btn--link {
-  height: auto;
-  padding: 0;
+  height: 88rpx;
+  min-height: 88rpx;
+  padding: 0 20rpx;
   border: none;
   background: transparent;
   color: var(--color-primary);
-  font-size: 18rpx;
+  font-size: 24rpx;
 }
 
 .share-btn--active {

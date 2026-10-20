@@ -187,10 +187,10 @@ CREATE INDEX IF NOT EXISTS idx_events_created_at ON events (created_at);
 | GET | `/api/health` | 无 | 存活 + 数据库状态（始终 200） |
 | GET | `/api/ready` | 无 | 就绪探针（DB 不可用返回 503） |
 | GET | `/api/config` | 无 | 下发音频列表、广告位、开关、文案 |
-| POST | `/api/audio/unlock` | code | 校验 code → openid，写入 24h 解锁 |
+| POST | `/api/audio/unlock` | code | 校验 code → openid，按后台 `unlock.ttlHours`（1–168）写入解锁 |
 | POST | `/api/summary` | 无 | 由记录生成本周事实描述 |
 | POST | `/api/records/sync` | code | 上传记录/删除墓碑；服务端重算 day、丢弃单条脏数据，返回云端剩余记录 |
-| POST | `/api/records/erase` | code | 合规删除：默认删除记录/解锁/事件并写 erasure 水位；`cloudOnly:true` 只删云端副本、不写水位（3 次/分钟/IP） |
+| POST | `/api/records/erase` | code | 合规删除：默认删除记录/解锁/事件并写 erasure 水位；`cloudOnly:true` 只删云端副本、不写水位（3 次/分钟/IP）；`cloudOnly` 非布尔返回 400 |
 | POST | `/api/events` | code | 上报轻量事件（app_open / checkin / audio_play / audio_unlock / ad_show / ad_error） |
 | POST | `/api/admin/login` | 密码 | 后台登录，写 HttpOnly + SameSite=Strict Cookie |
 | POST | `/api/admin/logout` | Cookie | 清除后台会话 |
@@ -199,8 +199,8 @@ CREATE INDEX IF NOT EXISTS idx_events_created_at ON events (created_at);
 | PUT | `/api/admin/config` | Cookie | 严格校验后保存，版本号自增 |
 | GET | `/api/admin/stats` | Cookie | 基础计数 |
 | GET | `/api/admin/analytics` | Cookie | 看板聚合（今日/本周/14 天/ Top 5） |
-| GET | `/api/admin/users/:openid` | Cookie | 按 openid 查询云端记录（客服/合规） |
-| DELETE | `/api/admin/users/:openid/records` | Cookie | 删除该 openid 的记录、解锁与事件，并写审计日志 |
+| GET | `/api/admin/users/:openid` | Cookie | 按 openid 查询云端记录、解锁到期时间与事件数（客服/合规） |
+| DELETE | `/api/admin/users/:openid/records` | Cookie | 删除该 openid 的记录、解锁与事件，写 erasure 水位与 `admin_audit` 审计 |
 | GET/PUT | `/api/admin/storage` | Cookie | 读取 / 保存 COS 配置（SecretKey 加密） |
 | POST | `/api/admin/storage/test` | Cookie | 测试 COS 连接 |
 | POST | `/api/admin/audio/upload` | Cookie | 上传音频到 COS（multipart，≤25MB） |
@@ -265,7 +265,7 @@ CREATE INDEX IF NOT EXISTS idx_events_created_at ON events (created_at);
 { "records": [ { "day": "2026-10-17", "bedAt": 1760715600000, "wakeAt": 1760740860000 } ] }
 ```
 
-约束：最多 62 条；`wakeAt > bedAt`；时长 ≤ 20 小时；`day` 必须等于 `bedAt` 的睡眠日（东八区）。
+约束：最多 62 条；`wakeAt > bedAt`；时长 ≤ 20 小时；服务端用 `bedAt` 按东八区重算 `day`，客户端传的 `day` 仅兼容旧协议、不参与校验。
 
 客户端未开启云备份时**不调用此接口**，改用 `miniprogram/utils/stats.js` 的 `localFact()` 在本地生成同口径模板文案。
 
@@ -302,7 +302,8 @@ CREATE INDEX IF NOT EXISTS idx_events_created_at ON events (created_at);
 ```
 
 - 客户端默认**不开启**云备份（`meta.syncEnabled !== true` 时 `syncNow` 直接返回 `{ skipped: 'sync_off' }`）；统计页显式开启后才上传，关闭开关不删除云端历史数据。
-- 关闭云备份后可单独删除云端副本：`POST /api/records/erase` 带 `cloudOnly:true`，服务端只删云端记录/墓碑/解锁/事件，不写 `user_erasures`，本机记录不会被下次同步清掉；重新开启备份后仍可再次上传。
+- 关闭云备份后可单独删除云端副本：`POST /api/records/erase` 带 `cloudOnly:true`，服务端只删云端记录/墓碑/解锁/事件，不写 `user_erasures`，本机记录不会被下次同步清掉；重新开启备份后仍可再次上传。客户端删除前会等待在途同步结束并换 `syncEpoch`，避免旧响应写回。
+- 客户端同步按每片 60 条分片（服务端单次上限 62），覆盖最近 400 天；每个分片使用独立 `wx.login` code。云端返回的 `day` 以服务端重算为准；本地时区不同时删除本地另一 key，避免同夜双记录。
 - `day` **由 `bedAt` 在服务端重算**，客户端设备时区不再影响云同步；`records` 是云端当前剩余的全部记录，客户端据此回填（换机 / 清缓存恢复）。
 - 单条脏数据（倒挂、超过 20 小时、时间戳超出 `[now-400d, now+1d]`）丢弃并计入 `dropped`，不再整批 400。
 - 冲突策略：`updated_at` 新者胜（客户端上传 `updatedAt`，服务端取 `GREATEST`）。
@@ -344,7 +345,7 @@ CREATE INDEX IF NOT EXISTS idx_events_created_at ON events (created_at);
 | 数据库读配置失败 | 回退到 `server/config/app.config.json`，页面来源显示“配置文件” |
 | `adUnitId` 为空 | 直接解锁 |
 | 激励视频加载失败 | 按 `unlock.onAdError`，默认解锁并记录日志 |
-| 解锁接口失败 | 本地按 ttl 解锁，标记未同步 |
+| 解锁接口失败 | 本地按 ttl 解锁并提示“本地状态”；服务端仍只写不读，换机/重装需重新解锁 |
 | 云备份未开启 | 客户端 `syncNow` 直接跳过，不发请求（默认状态）；事实回顾用本地模板生成，零上传 |
 | 云备份未开启时的匿名事件 | 只上报类型/音频 id/时间，打卡事件不带睡眠日 |
 | 后台关闭匿名事件统计 | `events.track` 直接返回，不写本地队列也不上报 |
@@ -358,7 +359,7 @@ CREATE INDEX IF NOT EXISTS idx_events_created_at ON events (created_at);
 | 事件上报失败 | 留在本地队列（最多 80 条），下次启动再试 |
 | COS 配置未填 / 密钥无法解密 | 后台上传返回 400，不影响已有音频播放 |
 | COS 上传失败 | 返回 502，后台保留表单，可重试 |
-| 数据库不可用 | `/api/health` 返回 `db: "down"`；解锁/同步/看板 503；`/api/config`、`/api/summary` 不受影响 |
+| 数据库不可用 | `/api/health` 返回 `db: "down"`；解锁/同步/看板 503；`/api/config` 不受影响；`/api/summary` 为纯计算，但会被 `features.summary` 总闸拦截 |
 
 ---
 

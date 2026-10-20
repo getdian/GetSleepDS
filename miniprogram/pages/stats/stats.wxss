@@ -34,7 +34,7 @@
 
 /* 字阶：18 工具字 / 22 次要信息 / 28 正文 / 30 分区标题 / 48 数据 / 56 页标题 */
 .metric-key {
-  font-size: 18rpx;
+  font-size: 20rpx;
   color: var(--text-muted);
   letter-spacing: 2rpx;
 }
@@ -59,7 +59,7 @@
   justify-content: center;
   gap: 10rpx;
   margin: 28rpx 0 0;
-  font-size: 20rpx;
+  font-size: 22rpx;
   letter-spacing: 1rpx;
   color: var(--color-accent-moon);
   opacity: 0.82;
@@ -78,7 +78,6 @@
 .section-hero {
   padding: 26rpx 24rpx;
   border-radius: var(--radius-xl);
-  background-color: var(--bg-night-surface);
   background: var(--glass-card-bg);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
@@ -105,7 +104,7 @@
   padding: 4rpx 14rpx;
   border-radius: var(--radius-pill);
   border: 1rpx solid var(--border-moon-subtle);
-  font-size: 18rpx;
+  font-size: 20rpx;
   color: var(--text-muted);
 }
 
@@ -119,9 +118,12 @@
 }
 
 .seg-item {
-  padding: 6rpx 16rpx;
+  min-height: 80rpx;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 22rpx;
   border-radius: var(--radius-pill);
-  font-size: 18rpx;
+  font-size: 20rpx;
   color: var(--text-muted);
   transition: all 0.2s ease;
 }
@@ -140,8 +142,17 @@
 }
 
 .heat-note {
-  font-size: 18rpx;
+  font-size: 20rpx;
   color: var(--text-muted);
+}
+
+.seg-item:active,
+.poster-btn:active,
+.sync-btn:active,
+.cloud-del:active,
+.danger-entry:active,
+.fact-retry:active {
+  opacity: 0.68;
 }
 
 .section-actions {
@@ -151,17 +162,20 @@
 }
 
 .poster-btn {
-  padding: 8rpx 22rpx;
+  min-height: 80rpx;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 24rpx;
   border-radius: var(--radius-pill);
   border: 1rpx solid var(--border-glow);
-  font-size: 18rpx;
+  font-size: 22rpx;
   color: var(--color-primary);
 }
 
 /* 事实回顾 */
 .fact-text {
   display: block;
-  font-size: 28rpx;
+  font-size: 26rpx;
   line-height: 1.9;
   letter-spacing: 0.5rpx;
   color: var(--text-primary);
@@ -169,10 +183,9 @@
 
 .fact-muted {
   display: block;
-  font-size: 22rpx;
+  font-size: 24rpx;
   text-align: center;
-  color: var(--text-muted);
-  opacity: 0.75;
+  color: var(--text-secondary);
 }
 
 .fact-error {
@@ -183,10 +196,13 @@
 }
 
 .fact-retry {
-  padding: 8rpx 22rpx;
+  min-height: 80rpx;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 24rpx;
   border-radius: var(--radius-pill);
   border: 1rpx solid var(--border-glow);
-  font-size: 18rpx;
+  font-size: 22rpx;
   color: var(--color-primary);
 }
 
@@ -194,7 +210,15 @@
   position: fixed;
   left: -2000px;
   top: 0;
-  width: 300px;
+  width: 600px;
+  height: 960px;
+}
+
+.share-canvas {
+  position: fixed;
+  left: -2200px;
+  top: 0;
+  width: 600px;
   height: 480px;
 }
 
@@ -231,15 +255,18 @@
 }
 
 .sync-sub {
-  font-size: 18rpx;
+  font-size: 20rpx;
   color: var(--text-muted);
 }
 
 .sync-btn {
-  padding: 10rpx 28rpx;
+  min-height: 80rpx;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 26rpx;
   border-radius: var(--radius-pill);
   border: 1rpx solid var(--border-glow);
-  font-size: 18rpx;
+  font-size: 22rpx;
   color: var(--color-primary);
 }
 
@@ -249,10 +276,13 @@
 
 /* 关闭云备份但仍保留云端副本时的独立删除入口 */
 .cloud-del {
-  margin-top: 12rpx;
-  text-align: right;
-  font-size: 18rpx;
-  color: var(--text-muted);
+  margin-top: 6rpx;
+  min-height: 80rpx;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  font-size: 20rpx;
+  color: var(--text-secondary);
   text-decoration: underline;
 }
 
@@ -266,15 +296,14 @@
 }
 
 .stats-page .danger-entry-title {
-  font-size: 24rpx;
+  font-size: 26rpx;
   color: #F87171;
   text-decoration: underline;
 }
 
 .stats-page .danger-entry-hint {
   display: block;
-  margin-top: 10rpx;
-  font-size: 18rpx;
+  margin-top: 8rpx;
+  font-size: 20rpx;
   color: var(--text-muted);
-  opacity: 0.8;
 }

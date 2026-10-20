@@ -219,7 +219,7 @@
           </label>
           <div id="bg-list" class="bg-list"></div>
           <p id="bg-empty" class="empty" hidden>还没有背景图，点右上角添加或上传。</p>
-          <p class="hint">建议宽度 1080px 以上、主体放中间偏上（小程序按 aspectFill 裁切）；单张 ≤5MB，压缩后通常 &lt;500KB。默认背景会静默缓存，非默认背景在用户选择时下载。</p>
+          <p class="hint">建议宽度 1080px 以上，小程序按宽度等比完整显示（widthFix，不裁切）；单张 ≤5MB，压缩后通常 &lt;500KB。默认背景会静默缓存，非默认背景在用户选择时下载。</p>
         </section>
 
         <section class="panel admin-panel" data-panel="unlock" hidden>
@@ -326,7 +326,7 @@
         <div class="panel-head">
           <div>
             <h2>用户记录</h2>
-            <p class="hint">按 openid 精确查询、导出核对或删除该用户的云端记录（睡眠记录 / 解锁 / 事件）；删除只影响云端，用户本机数据需在“统计 → 清除数据”处理。</p>
+            <p class="hint">按 openid 精确查询、导出核对或删除该用户的云端数据（睡眠记录 / 解锁 / 事件）。删除会写入全量清除水位：用户下次同步时，本机旧睡眠记录也会被清除，且不可恢复。</p>
           </div>
           <span class="badge">客服 / 合规</span>
         </div>
@@ -340,10 +340,11 @@
             <strong id="user-count">0</strong>
             <span>条云端记录</span>
             <code id="user-openid-label"></code>
+            <span id="user-extra" class="hint"></span>
           </div>
           <div id="user-records" class="user-records"></div>
           <div class="row-actions">
-            <button type="button" id="user-delete" class="danger">删除该用户云端记录</button>
+            <button type="button" id="user-delete" class="danger">删除该用户云端数据（含本机水位）</button>
           </div>
         </div>
       </section>

@@ -92,64 +92,19 @@ function circularMeanMinutes(values) {
   return Math.round((deg * 1440) / 360) % 1440
 }
 
+/** 把 scroll-top 吸附到最近的循环行；返回 3 周期内的 raw 与单周期 index */
+function snapWheelTop(top, rowH, count) {
+  const rows = Math.max(1, Number(count) || 1)
+  const height = Number(rowH) || 1
+  const raw = Math.max(0, Math.min(rows * 3 - 1, Math.round((Number(top) || 0) / height)))
+  return { raw, index: raw % rows }
+}
+
 /** a 相对 b 的有符号分钟差，范围 (-720, 720]，正值表示更晚 */
 function clockDelta(a, b) {
   let diff = wrapMinutes(a - b)
   if (diff > 720) diff -= 1440
   return diff
-}
-
-/**
- * 计算三个推荐入睡时刻 + 现在睡方案。
- *
- * @param {number} now 当前时间戳
- * @param {number} wakeMinutes 起床时刻（0-1439）
- * @param {number} fallAsleepMin 入睡耗时（分钟）
- * @param {number[]} cyclesList 周期数，默认 5/4/3
- */
-function buildPlan(now, wakeMinutes, fallAsleepMin, cyclesList) {
-  const cycles = cyclesList || [5, 4, 3]
-  const today = startOfDay(now)
-  const buffer = fallAsleepMin * MINUTE_MS
-
-  let nowWake = clockTs(today, wakeMinutes)
-  if (nowWake - buffer <= now) nowWake += DAY_MS
-
-  const toSlots = (wakeTs) => cycles.map((count) => {
-    const sleepMin = count * CYCLE_MIN
-    const at = wakeTs - buffer - sleepMin * MINUTE_MS
-    return {
-      cycles: count,
-      sleepMin,
-      at,
-      passed: at <= now
-    }
-  })
-
-  let slotWake = nowWake
-  let slots = toSlots(slotWake)
-  let rolled = false
-
-  if (slots.every((slot) => slot.passed)) {
-    rolled = true
-    slotWake = nowWake + DAY_MS
-    slots = toSlots(slotWake).map((slot) => Object.assign({}, slot, { passed: false }))
-  }
-
-  const availableMin = Math.max(0, Math.floor((nowWake - now) / MINUTE_MS) - fallAsleepMin)
-  const fullCycles = Math.floor(availableMin / CYCLE_MIN)
-  const remainder = availableMin - fullCycles * CYCLE_MIN
-
-  return {
-    nowWakeAt: nowWake,
-    slotWakeAt: slotWake,
-    rolled,
-    slots,
-    availableMin,
-    cycles: fullCycles,
-    remainder,
-    cycleMin: CYCLE_MIN
-  }
 }
 
 module.exports = {
@@ -169,5 +124,5 @@ module.exports = {
   clockTs,
   circularMeanMinutes,
   clockDelta,
-  buildPlan
+  snapWheelTop
 }

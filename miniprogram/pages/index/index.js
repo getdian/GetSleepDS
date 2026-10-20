@@ -7,6 +7,8 @@ const backgrounds = require('../../utils/backgrounds')
 const ad = require('../../utils/ad')
 const { getConfig, loadConfig } = require('../../utils/config')
 
+const CLOCK_INTERVAL = 30 * 1000
+
 Page({
   data: {
     ads: adSlots.empty(),
@@ -26,6 +28,7 @@ Page({
     bgItems: [],
     bgOpen: false,
     bgUnlockHours: 24,
+    bgFreeMode: false,
     bgBusy: false
   },
 
@@ -54,7 +57,8 @@ Page({
 
   onShow() {
     this._alive = true
-    this.setData({ nowText: F.fmtClock(Math.round(T.minutesOf(Date.now()) / 5) * 5) })
+    this.refreshNow()
+    this.startClock()
     adSlots.apply(this)
     loadConfig(false)
       .then(() => {
@@ -65,8 +69,31 @@ Page({
     if (this.data.flipped) this.calc(true)
   },
 
+  onHide() {
+    this.stopClock()
+  },
+
   onUnload() {
     this._alive = false
+    this.stopClock()
+  },
+
+  refreshNow() {
+    this.setData({ nowText: F.fmtClock(Math.round(T.minutesOf(Date.now()) / 5) * 5) })
+  },
+
+  startClock() {
+    this.stopClock()
+    this._clockTimer = setInterval(() => {
+      if (this._alive) this.refreshNow()
+    }, CLOCK_INTERVAL)
+  },
+
+  stopClock() {
+    if (this._clockTimer) {
+      clearInterval(this._clockTimer)
+      this._clockTimer = null
+    }
   },
 
   savePrefs(patch) {
@@ -81,7 +108,7 @@ Page({
     const key = this.data.mode === 'wake' ? 'wakeTime' : 'sleepTime'
     if (value === this.data[key]) return
 
-    const patch = { flipped: false }
+    const patch = { flipped: false, view: null }
     patch[key] = value
     this.setData(patch)
 
@@ -92,7 +119,7 @@ Page({
 
   toggleMode() {
     const next = this.data.mode === 'wake' ? 'sleep' : 'wake'
-    this.setData({ mode: next, flipped: false })
+    this.setData({ mode: next, flipped: false, view: null })
   },
 
   onNowTap() {
@@ -102,7 +129,8 @@ Page({
       sleepTime: value,
       nowText: value,
       mode: 'sleep',
-      flipped: false
+      flipped: false,
+      view: null
     })
     // “用现在的时间”是瞬时动作，不写入偏好
   },
@@ -115,16 +143,37 @@ Page({
     if (this.data.flipped) this.calc(true)
   },
 
-  onCalc() {
-    this.calc(false)
+  /** 结果面也能调整入睡耗时并立即重算（PRD 3.4） */
+  cycleFall() {
+    const options = this.data.fallOptions
+    const index = options.indexOf(this.data.fallAsleep)
+    const minutes = options[(index + 1) % options.length]
+    this.setData({ fallAsleep: minutes })
+    this.savePrefs({ fallAsleep: minutes })
+    if (wx.vibrateShort) wx.vibrateShort({ type: 'light' })
+    if (this.data.flipped) this.calc(true)
   },
 
-  calc(silent) {
+  onCalc() {
+    const key = this.data.mode === 'wake' ? 'wakeTime' : 'sleepTime'
+    let value = this.data[key]
+    const wheel = this.selectComponent('#calc-wheel')
+    if (wheel && wheel.flush) {
+      const flushed = wheel.flush()
+      if (flushed) value = flushed
+    }
+    if (value !== this.data[key]) this.setData({ [key]: value })
+    this.calc(false, value)
+  },
+
+  calc(silent, explicitValue) {
     const now = Date.now()
+    const value =
+      explicitValue || (this.data.mode === 'wake' ? this.data.wakeTime : this.data.sleepTime)
     let view = null
 
     if (this.data.mode === 'wake') {
-      const wakeMinutes = T.parseClock(this.data.wakeTime)
+      const wakeMinutes = T.parseClock(value)
       const plan = P.bedtimesForWake(now, wakeMinutes, this.data.fallAsleep)
       const main = plan.slots.filter((slot) => !slot.passed)[0] || null
 
@@ -144,7 +193,7 @@ Page({
         mainDay: main ? main.dayLabel : '',
         mainMeta: main
           ? main.cycles + ' 个周期 · ' + F.fmtDuration(main.durationMin)
-          : '距离 ' + this.data.wakeTime + ' 起床',
+          : '距离 ' + value + ' 起床',
         note: main
           ? '已为入睡留出 ' + this.data.fallAsleep + ' 分钟'
           : '三个完整周期都已错过',
@@ -153,7 +202,7 @@ Page({
         rows
       }
     } else {
-      const sleepMinutes = T.parseClock(this.data.sleepTime)
+      const sleepMinutes = T.parseClock(value)
       const plan = P.wakeTimesForSleep(now, sleepMinutes, this.data.fallAsleep)
       const main = plan.slots[0]
 
@@ -170,7 +219,7 @@ Page({
         mainTime: F.fmtClockTs(main.at),
         mainDay: main.dayLabel,
         mainMeta: main.cycles + ' 个周期 · ' + F.fmtDuration(main.durationMin),
-        note: '从 ' + this.data.sleepTime + ' 上床算起，已含 ' + this.data.fallAsleep + ' 分钟入睡',
+        note: '从 ' + value + ' 上床算起，已含 ' + this.data.fallAsleep + ' 分钟入睡',
         allPassed: false,
         compact: false,
         rows
@@ -182,7 +231,11 @@ Page({
   },
 
   reset() {
-    this.setData({ flipped: false })
+    this.setData({ flipped: false, view: null })
+  },
+
+  goSleep() {
+    wx.switchTab({ url: '/pages/sleep/sleep' })
   },
 
   /* ---------------- 背景图 ---------------- */
@@ -201,11 +254,14 @@ Page({
     })
 
     const defaultItem = backgrounds.defaultOf(config)
+    const unlock = config.unlock || {}
+    const freeMode = unlock.mode !== 'rewarded' || !unlock.adUnitId
     const items = list.map((item) => ({
       id: item.id,
       title: item.title,
       category: item.category,
       url: item.url,
+      localPath: backgrounds.localPathOf(item.url),
       isDefault: !!defaultItem && item.id === defaultItem.id,
       unlocked: backgrounds.isUnlocked(unlocked, item.id, now)
     }))
@@ -219,6 +275,7 @@ Page({
       background: active,
       bgError: false,
       bgUnlockHours: Number(config.backgroundUnlockHours) || 24,
+      bgFreeMode: freeMode,
       bgCategories: categories,
       bgCategory: category,
       bgItems: this.filterBgItems(items, category)
@@ -270,9 +327,43 @@ Page({
     const config = getConfig()
     const defaultItem = backgrounds.defaultOf(config)
     const isDefault = !!defaultItem && defaultItem.id === id
+    const unlock = config.unlock || {}
+    const freeMode = unlock.mode !== 'rewarded' || !unlock.adUnitId
+    const activeUnlock = backgrounds.getUnlocked()
+    const now = Date.now()
 
-    if (isDefault || backgrounds.isUnlocked(backgrounds.getUnlocked(), id, Date.now())) {
+    if (isDefault) {
+      if (
+        activeUnlock &&
+        backgrounds.isUnlocked(activeUnlock, activeUnlock.id, now) &&
+        activeUnlock.id !== id
+      ) {
+        const leftHours = Math.max(1, Math.ceil((activeUnlock.expireAt - now) / 3600000))
+        wx.showModal({
+          title: '切换到默认背景？',
+          content:
+            '当前付费背景还剩约 ' + leftHours + ' 小时。切换后会结束本次解锁，再使用需重新' +
+            (freeMode ? '选择' : '观看视频') +
+            '。',
+          confirmText: '切换',
+          cancelText: '保留',
+          success: (res) => {
+            if (res.confirm) this.applyBackground(id)
+          }
+        })
+        return
+      }
       this.applyBackground(id)
+      return
+    }
+
+    if (backgrounds.isUnlocked(activeUnlock, id, now)) {
+      this.applyBackground(id)
+      return
+    }
+
+    if (freeMode) {
+      this.finishBackgroundUnlock(id)
       return
     }
 
@@ -321,7 +412,10 @@ Page({
   },
 
   finishBackgroundUnlock(id) {
-    backgrounds.unlock(id, this.data.bgUnlockHours)
+    if (!backgrounds.unlock(id, this.data.bgUnlockHours)) {
+      wx.showToast({ title: '背景状态保存失败，请清理存储空间', icon: 'none' })
+      return
+    }
     this.loadBackgrounds()
     this.setData({ bgOpen: false })
     wx.showToast({ title: '背景已解锁', icon: 'none' })
@@ -334,8 +428,11 @@ Page({
     const config = getConfig()
     const defaultItem = backgrounds.defaultOf(config)
     if (defaultItem && defaultItem.id === id) {
-      // 选择默认图 = 结束当前付费图的使用，之后再选付费图需要重新看广告
-      storage.setBackgroundUnlock(null)
+      // 选择默认图 = 结束当前付费图的使用；是否提示由 onBgSelect 负责
+      if (!storage.setBackgroundUnlock(null)) {
+        wx.showToast({ title: '背景状态保存失败，请稍后重试', icon: 'none' })
+        return
+      }
     }
 
     const localPath = backgrounds.localPathOf(item.url)
@@ -356,7 +453,8 @@ Page({
   /* ---------------- 分享 ---------------- */
 
   onShareAppMessage() {
-    const view = this.data.view
+    // 只在结果面可见时使用结果文案；回到正面/改时间后不能再转发旧结果。
+    const view = this.data.flipped ? this.data.view : null
     const time = view && view.mainTime && view.mainTime.indexOf(':') >= 0 ? view.mainTime : ''
     return {
       title: time

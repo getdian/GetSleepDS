@@ -32,10 +32,18 @@ function stopAudio() {
   storage.patchMeta({ lastTrackActive: false })
 }
 
-function persist() {
+function persist(keepMinutes) {
+  const meta = storage.getMeta()
+  // 定时到点/手动停止只清运行态，不覆盖用户上次选择的分钟数；
+  // 只有用户主动选“关”时才把偏好写成 0。
+  const minutes = keepMinutes
+    ? typeof meta.audioTimerMinutes === 'number'
+      ? meta.audioTimerMinutes
+      : totalMinutes
+    : totalMinutes
   storage.patchMeta({
     audioTimerEndAt: endAt,
-    audioTimerMinutes: totalMinutes,
+    audioTimerMinutes: minutes,
     audioTimerPausedRemaining: pausedRemaining
   })
 }
@@ -47,12 +55,12 @@ function clearTicker() {
   }
 }
 
-function clear(silent) {
+function clear(silent, keepMinutes) {
   endAt = 0
   totalMinutes = 0
   pausedRemaining = 0
   clearTicker()
-  if (!silent) persist()
+  if (!silent) persist(keepMinutes === true)
   emit()
 }
 
@@ -60,7 +68,7 @@ function tick() {
   if (!endAt) return
   if (Date.now() >= endAt) {
     stopAudio()
-    clear()
+    clear(undefined, true)
     return
   }
   emit()
@@ -129,7 +137,7 @@ function restore() {
   if (!savedEnd) return 0
   if (savedEnd <= Date.now()) {
     stopAudio()
-    clear()
+    clear(undefined, true)
     return 0
   }
   endAt = savedEnd
@@ -137,6 +145,17 @@ function restore() {
   startTicker()
   emit()
   return remaining()
+}
+
+/** 只更新“下次播放用多久”的偏好，不启动倒计时（暂停/未播放时使用） */
+function setPreference(minutes) {
+  const value = Number(minutes) || 0
+  totalMinutes = value
+  pausedRemaining = 0
+  clearTicker()
+  endAt = 0
+  storage.patchMeta({ audioTimerMinutes: value, audioTimerEndAt: 0, audioTimerPausedRemaining: 0 })
+  emit()
 }
 
 function subscribe(listener) {
@@ -150,6 +169,7 @@ function subscribe(listener) {
 module.exports = {
   start,
   clear,
+  setPreference,
   pause,
   resume,
   restore,

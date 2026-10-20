@@ -99,8 +99,9 @@ Page({
     this._pending = pending
     const button = this.buildButton(state, pending, record)
     const weekly = S.weekly(records, now)
-    const canOverwrite = state === 'done' && new Date(now).getHours() >= 18
+    const canOverwrite = state === 'done' && S.canStartNewSleep(record, now, todayKey)
     const crossDay = !!record && record.day !== todayKey
+    const evening = new Date(now).getHours() >= 18
 
     this.setData({
       dateText: F.fmtDateCN(now),
@@ -112,7 +113,7 @@ Page({
         ? {
             bed: F.fmtClockTs(record.bedAt),
             wake: F.fmtClockTs(record.wakeAt),
-            duration: F.fmtDuration(record.durationMin)
+            duration: F.fmtDuration(S.durationOf(record))
           }
         : null,
       recordHint:
@@ -123,16 +124,31 @@ Page({
             : crossDay
               ? '已记入 ' + F.fmtDayCN(record.day) + ' 的睡眠'
               : canOverwrite
-                ? '今天已有一笔记录，可在下方覆盖为今晚'
+                ? evening
+                  ? '今天已有一笔记录，可在下方覆盖为今晚'
+                  : '今天（睡眠日）已有一笔记录，可重新开始并覆盖'
                 : '今晚的记录已完成',
       buttonTitle: button.title,
       buttonSub: button.sub,
       canOverwrite,
-      overwriteText: crossDay ? '再记今晚' : '再记今晚（覆盖今天旧记录）',
+      overwriteText: crossDay
+        ? '再记今晚'
+        : evening
+          ? '再记今晚（覆盖今天旧记录）'
+          : '现在开始新的睡眠（覆盖旧记录）',
       weekDays: this.buildWeekDays(records, now, pending),
       weekCount: weekly.current.count,
       streak: weekly.streak,
-      footerText: state === 'done' ? '晚安，明天见。' : state === 'sleeping' ? '夜色正安' : '愿今夜好眠'
+      footerText:
+        state === 'done'
+          ? new Date(now).getHours() >= 5 && new Date(now).getHours() < 12
+            ? '早安，新的一天。'
+            : new Date(now).getHours() >= 18 || new Date(now).getHours() < 5
+              ? '晚安，明天见。'
+              : '今天也辛苦了。'
+          : state === 'sleeping'
+            ? '夜色正安'
+            : '愿今夜好眠'
     })
   },
 
@@ -153,7 +169,7 @@ Page({
       return { title: '记录起床', sub: '已入睡 ' + F.fmtClockTs(pending.bedAt) }
     }
     if (state === 'done' && record) {
-      return { title: '已完成', sub: '睡了 ' + F.fmtDuration(record.durationMin) }
+      return { title: '已完成', sub: '睡了 ' + F.fmtDuration(S.durationOf(record)) }
     }
     return { title: '入睡', sub: '现在 ' + F.fmtClockTs(Date.now()) }
   },
@@ -169,7 +185,7 @@ Page({
       days.push({
         key,
         weekday: WEEK_LABEL[new Date(ts).getDay()],
-        level: record ? S.levelOf(record.durationMin) : 0,
+        level: record ? S.levelOf(S.durationOf(record)) : 0,
         partial: !record && key === pendingDay,
         today: i === 0
       })
@@ -262,7 +278,11 @@ Page({
     this._pending = null
 
     this.refresh()
-    wx.showToast({ title: '早安，已记录', icon: 'none' })
+    const hour = new Date(now).getHours()
+    wx.showToast({
+      title: hour >= 5 && hour < 12 ? '早安，已记录' : '已记录起床时间',
+      icon: 'none'
+    })
     // 只上报“发生了一次打卡”，不把具体睡眠日与 openid 关联
     events.track('checkin', '')
     syncNow(true)
@@ -281,12 +301,16 @@ Page({
   onOverwriteTonight() {
     const record = this.data.record
     if (!record) return
-    const sameDay = record.day === T.sleepDayOf(Date.now())
+    const now = Date.now()
+    const sameDay = record.day === T.sleepDayOf(now)
+    const evening = new Date(now).getHours() >= 18
     wx.showModal({
-      title: '记录今晚的睡眠',
+      title: evening ? '记录今晚的睡眠' : '开始新的睡眠',
       content: sameDay
-        ? '今天已有一笔 ' + F.fmtDuration(record.durationMin) + ' 的记录，继续后会覆盖它。'
-        : '已有一笔 ' + F.fmtDayCN(record.day) + ' 的记录，继续会开始记录今晚，不会删除旧记录。',
+        ? evening
+          ? '今天已有一笔 ' + F.fmtDuration(S.durationOf(record)) + ' 的记录，继续后会覆盖它。'
+          : '当前睡眠日已有一笔 ' + F.fmtDuration(S.durationOf(record)) + ' 的记录。继续后，新记录会归入同一睡眠日并覆盖旧记录。'
+        : '已有一笔 ' + F.fmtDayCN(record.day) + ' 的记录，继续会开始记录新的睡眠，不会删除旧记录。',
       confirmText: '继续记录',
       cancelText: '取消',
       success: (res) => {
@@ -295,7 +319,7 @@ Page({
         this._pending = null
         // 写入失败时 markSleep 内部已提示，不能在这里再弹一次“已开始记录”
         if (this.markSleep()) {
-          wx.showToast({ title: '已开始记录今晚', icon: 'none' })
+          wx.showToast({ title: evening ? '已开始记录今晚' : '已开始新的记录', icon: 'none' })
         }
       }
     })
@@ -311,7 +335,10 @@ Page({
       confirmColor: '#F87171',
       success: (res) => {
         if (!res.confirm) return
-        storage.removeRecord(record.day)
+        if (!storage.removeRecord(record.day)) {
+          wx.showToast({ title: '撤销失败：本地存储写入异常', icon: 'none' })
+          return
+        }
         this.refresh()
         // 把本地墓碑同步到云端，换机后也不会被旧记录回填
         syncNow(true).catch(() => {})
@@ -328,12 +355,20 @@ Page({
       cancelText: '保留',
       success: (res) => {
         if (!res.confirm) return
-        storage.clearPending()
+        if (!storage.clearPending()) {
+          wx.showToast({ title: '撤销失败：本地存储写入异常', icon: 'none' })
+          return
+        }
         this._pending = null
         this.refresh()
         wx.showToast({ title: '已撤销', icon: 'none' })
       }
     })
+  },
+
+  onDimTap() {
+    clearTimeout(this._dimTimer)
+    if (this._alive) this.setData({ dim: false })
   },
 
   onNoticeClose() {

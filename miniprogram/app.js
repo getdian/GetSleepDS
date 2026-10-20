@@ -14,6 +14,9 @@ App({
   },
 
   onLaunch(options) {
+    const launchSource = launchSourceOf(options)
+    this._lastLaunchKey = launchSource
+
     // 开发版专用：真实感模拟数据入口（体验/正式版不挂载）
     // 开发者工具 console 里执行：getApp().seedDemo() 或 getApp().seedDemo(60)
     try {
@@ -38,7 +41,7 @@ App({
       if (!config) return
 
       // 带上启动来源（转发/朋友圈/扫码等 scene），后台看板据此做来源分布
-      events.track('app_open', launchSourceOf(options))
+      events.track('app_open', launchSource)
       events.flush()
       audioCache.maybePrune(config.cache)
 
@@ -51,7 +54,17 @@ App({
     })
   },
 
-  onShow() {
+  onShow(options) {
+    // 热启动从分享卡片/海报码回到前台也要归因；冷启动由 onLaunch 负责，key 去重避免双报。
+    // 只处理带 from/scene 的明确分享/扫码，避免普通切回前台把当前页误记成新来源。
+    const query = (options && options.query) || {}
+    if (query.from || query.scene) {
+      const source = launchSourceOf(options)
+      if (source && source !== this._lastLaunchKey) {
+        this._lastLaunchKey = source
+        events.track('app_open', source)
+      }
+    }
     events.flush()
     const current = this.globalData.config
     if (!current || !current.features || current.features.timer !== false) {

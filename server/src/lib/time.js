@@ -16,6 +16,11 @@ function sleepDayOf(timestamp) {
   return new Date(timestamp - SLEEP_DAY_SHIFT_MS).toISOString().slice(0, 10)
 }
 
+/** 北京时间日历日（用于“本周”这类自然周边界，不等同于睡眠日） */
+function calendarDayOf(timestamp) {
+  return new Date(timestamp + BEIJING_OFFSET_MS).toISOString().slice(0, 10)
+}
+
 function minutesOf(timestamp) {
   const d = new Date(timestamp + BEIJING_OFFSET_MS)
   return d.getUTCHours() * 60 + d.getUTCMinutes()
@@ -81,6 +86,7 @@ module.exports = {
   DAY_MS,
   pad2,
   sleepDayOf,
+  calendarDayOf,
   minutesOf,
   formatClock,
   wrapMinutes,

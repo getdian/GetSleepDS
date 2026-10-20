@@ -5,6 +5,8 @@
  * 越靠上下边缘越倾斜、越透明；中心行实时放大高亮。
  * 对外仍使用 24 小时 "HH:MM"，页面无需改算法。
  */
+const T = require('../../utils/time')
+
 const COMPONENT_WIDTH_RPX = 84
 const VISIBLE_ROWS = 5
 const CYCLES = 3
@@ -23,6 +25,18 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value))
 }
 
+function measureRowH() {
+  let width = 375
+  try {
+    const info = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync()
+    width = info.windowWidth || 375
+  } catch (e) {}
+  return Math.max(36, Math.round((COMPONENT_WIDTH_RPX * width) / 750))
+}
+
+// 首次渲染前算好行高，避免 38px → 42px 的高度跳动
+const INITIAL_ROW_H = measureRowH()
+
 Component({
   properties: {
     value: {
@@ -37,9 +51,9 @@ Component({
   },
 
   data: {
-    rowH: 38,
-    padH: 76,
-    wheelH: 190,
+    rowH: INITIAL_ROW_H,
+    padH: INITIAL_ROW_H * 2,
+    wheelH: INITIAL_ROW_H * VISIBLE_ROWS,
     selH: 7,
     selM: 30,
     period: '上午',
@@ -170,11 +184,64 @@ Component({
       return { h12, minute, period }
     },
 
+    build24(h12, minute, period) {
+      const hour = period === '上午'
+        ? (h12 === 12 ? 0 : h12)
+        : (h12 === 12 ? 12 : h12 + 12)
+      return pad2(hour) + ':' + pad2(minute)
+    },
+
     to24() {
-      const hour = this.data.period === '上午'
-        ? (this.data.selH === 12 ? 0 : this.data.selH)
-        : (this.data.selH === 12 ? 12 : this.data.selH + 12)
-      return pad2(hour) + ':' + pad2(this.data.selM)
+      return this.build24(this.data.selH, this.data.selM, this.data.period)
+    },
+
+    /** 页面可随时取当前显示值（不等待 130ms settle） */
+    getValue() {
+      return this.to24()
+    },
+
+    /**
+     * 计算前强制落定：清掉 settle 定时器，按最近滚动位置吸附并返回 24h 值。
+     * 避免页面刚用旧值计算，随后 settle 的 change 又把结果卡翻回正面。
+     */
+    flush() {
+      if (!this._ready) return this.to24()
+      const rowH = this._rowH
+      const minuteStep = this.data.minuteStep || 1
+      const minuteCount = this._minuteCount || Math.round(60 / minuteStep)
+      const hourTopRaw = Number.isFinite(Number(this._lastHourTop))
+        ? Number(this._lastHourTop)
+        : this.data.hourTop
+      const minuteTopRaw = Number.isFinite(Number(this._lastMinuteTop))
+        ? Number(this._lastMinuteTop)
+        : this.data.minuteTop
+      const hourSnap = T.snapWheelTop(hourTopRaw, rowH, CYCLE_HOURS)
+      const minuteSnap = T.snapWheelTop(minuteTopRaw, rowH, minuteCount)
+      const h12 = hourSnap.index + 1
+      const minute = minuteSnap.index * minuteStep
+      const hourTop = (12 + h12 - 1) * rowH
+      const minuteTop = (minuteCount + minute / minuteStep) * rowH
+
+      clearTimeout(this._hourTimer)
+      clearTimeout(this._minuteTimer)
+      clearTimeout(this._applyTimerHour)
+      clearTimeout(this._applyTimerMinute)
+      this._hourTimer = null
+      this._minuteTimer = null
+      this._applyTimerHour = null
+      this._applyTimerMinute = null
+      this._hourTarget = hourTop
+      this._minuteTarget = minuteTop
+      this._emittedH = h12
+      this._emittedM = minute
+      this._lastHourTop = hourTop
+      this._lastMinuteTop = minuteTop
+
+      const patch = { selH: h12, selM: minute, hourTop, minuteTop }
+      this.mergeDrum(patch, 'hour', hourTop)
+      this.mergeDrum(patch, 'minute', minuteTop)
+      this.setData(patch)
+      return this.build24(h12, minute, this.data.period)
     },
 
     /** 第 i 行相对滚筒中心的行距（正 = 在中心下方） */
@@ -315,7 +382,9 @@ Component({
       const max = CYCLES * cycleCount - 1
       // 程序化滚动（初始定位 / 回中跳转）的回声：位置未变则忽略
       const target = isHour ? this._hourTarget : this._minuteTarget
-      if (target !== null && Math.abs((Number(top) || 0) - target) < rowH / 2) return
+      // 只忽略“程序化滚动回声”（位置几乎等于目标）；旧代码用 rowH/2
+      // 会把用户小幅拖动也当成回声，导致停在行间不吸附。
+      if (target !== null && Math.abs((Number(top) || 0) - target) < 1.5) return
 
       let raw = clamp(Math.round((Number(top) || 0) / rowH), 0, max)
       const idx = raw % cycleCount
@@ -348,19 +417,11 @@ Component({
       })
     },
 
-    togglePeriod() {
-      const next = this.data.period === '上午' ? '下午' : '上午'
-      this.setData({ period: next }, () => {
-        this.triggerEvent('change', { value: this.to24() })
-      })
-    },
-
     onPeriodTap(event) {
       const targetPeriod = event.currentTarget.dataset.period
       if (!targetPeriod) return
-      if (targetPeriod === this.data.period) {
-        return this.togglePeriod()
-      }
+      // 点已选中的上午/下午是“确认”，不能把时间翻转 12 小时。
+      if (targetPeriod === this.data.period) return
       this.setData({ period: targetPeriod }, () => {
         this.triggerEvent('change', { value: this.to24() })
       })

@@ -90,6 +90,10 @@
               <view class="result-head">
                 <text class="result-moon">🌙</text>
                 <text class="result-label">{{view.label}}</text>
+                <view class="result-fall" bindtap="cycleFall">
+                  <text>{{fallAsleep}} 分钟入睡</text>
+                  <text class="result-fall-swap">⇄</text>
+                </view>
               </view>
 
               <view class="result-main">
@@ -130,6 +134,13 @@
                 </view>
               </view>
 
+              <view class="result-extra">
+                <view class="result-go" bindtap="goSleep">
+                  <text>去入睡打卡</text>
+                  <text class="result-go-arrow">→</text>
+                </view>
+              </view>
+
               <view class="result-actions">
                 <view class="result-reset" bindtap="reset">↻ 重新选择</view>
                 <view class="result-switch" bindtap="toggleMode">{{mode === 'wake' ? '换成我想几点睡' : '换成我想几点醒'}} ⇄</view>
@@ -161,6 +172,7 @@
   active-category="{{bgCategory}}"
   active-id="{{background.id}}"
   unlock-hours="{{bgUnlockHours}}"
+  free-mode="{{bgFreeMode}}"
   busy="{{bgBusy}}"
   bind:close="closeBgPicker"
   bind:category="onBgCategory"

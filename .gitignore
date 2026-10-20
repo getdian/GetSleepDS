@@ -7,3 +7,5 @@ tools/_preview-*.png
 server/coverage/
 release-artifacts/
 dist/
+backups/
+*.sql.gz

@@ -67,9 +67,13 @@ function createRecordsRoute(options) {
       const code = req.body && req.body.code
       if (!code) throw invalidBody('缺少 code')
 
+      const rawCloudOnly = req.body && req.body.cloudOnly
+      if (rawCloudOnly !== undefined && typeof rawCloudOnly !== 'boolean') {
+        throw invalidBody('cloudOnly 必须是布尔值')
+      }
+      const cloudOnly = rawCloudOnly === true
       const openid = await codeToOpenid(code, config.wx)
       const current = now()
-      const cloudOnly = !!(req.body && req.body.cloudOnly === true)
       let result = null
       try {
         if (cloudOnly && db.eraseCloudData) {

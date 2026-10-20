@@ -1,5 +1,12 @@
 const { invalidCode, apiError } = require('../lib/errors')
 
+function timeoutSignal(ms) {
+  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+    return AbortSignal.timeout(ms)
+  }
+  return undefined
+}
+
 // access_token 进程内缓存：单实例口径，与限流/配置缓存一致
 const tokenCache = { key: '', token: '', expiresAt: 0 }
 
@@ -26,7 +33,8 @@ async function getAccessToken(options) {
     const response = await fetchImpl('https://api.weixin.qq.com/cgi-bin/stable_token', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ grant_type: 'client_credential', appid, secret })
+      body: JSON.stringify({ grant_type: 'client_credential', appid, secret }),
+      signal: timeoutSignal(8000)
     })
     data = await response.json()
   } catch (e) {
@@ -61,7 +69,8 @@ async function getUnlimitedQrCode(options, scene, page) {
       {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ scene: String(scene || '').slice(0, 32), page, check_path: false, width: 280 })
+        body: JSON.stringify({ scene: String(scene || '').slice(0, 32), page, check_path: false, width: 280 }),
+        signal: timeoutSignal(8000)
       }
     )
   } catch (e) {
@@ -126,7 +135,7 @@ async function codeToOpenid(code, options) {
   let response = null
 
   try {
-    response = await fetchImpl(url)
+    response = await fetchImpl(url, { signal: timeoutSignal(8000) })
   } catch (e) {
     throw apiError('WX_UNAVAILABLE', '微信服务暂时不可用', 503)
   }

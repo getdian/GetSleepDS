@@ -201,8 +201,8 @@ function createApp(options) {
       store
     })
   )
-  app.use('/api', createSummaryRoute({ limitIp: summaryIp, now }))
-  app.use('/api', createEventsRoute({ config, db, codeToOpenid, limitIp: eventsIp, now }))
+  app.use('/api', createSummaryRoute({ limitIp: summaryIp, now, store }))
+  app.use('/api', createEventsRoute({ config, db, codeToOpenid, limitIp: eventsIp, now, store }))
   app.use(
     '/api',
     createRecordsRoute({

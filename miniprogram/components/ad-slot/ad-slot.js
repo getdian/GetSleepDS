@@ -38,9 +38,11 @@ Component({
   },
 
   observers: {
-    // 后台换了广告位 ID 后，旧的失败状态立即失效
-    unitId() {
-      if (this.data.failed) this.setData({ failed: false, failCount: 0, loaded: false })
+    // 后台换了广告位 ID 后，加载/失败状态全部失效，新广告的 onAdLoad 才能重新上报
+    unitId(value) {
+      if (this._lastUnitId === value) return
+      this._lastUnitId = value
+      this.setData({ failed: false, failCount: 0, loaded: false })
     }
   },
 

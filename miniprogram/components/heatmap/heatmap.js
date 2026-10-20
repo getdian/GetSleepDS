@@ -30,7 +30,8 @@ Component({
         const next = wx.nextTick || ((fn) => setTimeout(fn, 0))
         next(() => {
           if (this.data.cells && this.data.cells.length) {
-            this.setData({ scrollTarget: 'hm-last' })
+            // 对齐到“今天”，而不是未来板位的最后一格
+            this.setData({ scrollTarget: 'hm-today' })
           }
         })
       })

@@ -26,6 +26,7 @@
     pendingTrack: null,
     adTimer: null,
     audioBlocked: false,
+    unlockHours: 24,
     copy: {
       unlockTitle: '解锁环境音',
       unlockDesc: '观看视频，解锁今晚的环境声音（24小时内有效）',
@@ -131,19 +132,14 @@
         passed: wakeTs - buffer - cycles * CYCLE * 60000 <= now
       }))
 
-    let rolled = false
-    let slots = makeSlots(wake)
-    if (slots.every((slot) => slot.passed)) {
-      rolled = true
-      slots = makeSlots(wake + DAY).map((slot) => Object.assign({}, slot, { passed: false }))
-    }
-
+    // 与小程序/PRD 一致：三个时刻全过时不再滚到下一晚，而是展示“现在睡还能睡 X”。
+    const slots = makeSlots(wake)
     const available = Math.max(0, Math.floor((wake - now) / 60000) - state.fall)
 
     return {
       wakeAt: wake,
       slots,
-      rolled,
+      rolled: false,
       available,
       cycles: Math.floor(available / CYCLE),
       remainder: available % CYCLE
@@ -447,7 +443,7 @@
       title: '环境音 01',
       subtitle: '循环播放 · 支持锁屏',
       category: '环境音',
-      url: 'https://qfmaster-1322402212.cos.ap-shanghai.myqcloud.com/sleep/sleep-10001.mp3'
+      url: 'https://img.qfmaster.com/sleep/sleep-10001.mp3'
     }
   ]
 
@@ -458,6 +454,9 @@
       const data = await res.json()
       state.tracks = Array.isArray(data.audio) && data.audio.length ? data.audio : FALLBACK_TRACKS
       if (data.copy) state.copy = Object.assign({}, state.copy, data.copy)
+      if (data.unlock && Number(data.unlock.ttlHours) > 0) {
+        state.unlockHours = Number(data.unlock.ttlHours)
+      }
     } catch (e) {
       state.tracks = FALLBACK_TRACKS
     }
@@ -651,12 +650,15 @@
       if (left <= 0) {
         clearInterval(state.adTimer)
         state.adTimer = null
-        localStorage.setItem(UNLOCK_KEY, String(Date.now() + 24 * 60 * 60 * 1000))
+        localStorage.setItem(
+          UNLOCK_KEY,
+          String(Date.now() + state.unlockHours * 60 * 60 * 1000)
+        )
         const track = state.pendingTrack
         state.pendingTrack = null
         $('#unlock-modal').hidden = true
         renderTracks()
-        toast('已解锁，24 小时内有效')
+        toast('已解锁，' + state.unlockHours + ' 小时内有效')
         play(track)
         return
       }

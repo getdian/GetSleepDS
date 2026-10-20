@@ -9,7 +9,13 @@ function launchSourceOf(options) {
   const scene = options.scene ? String(options.scene) : '0'
   const path = typeof options.path === 'string' ? options.path.replace(/^\/+/, '') : ''
   const query = options.query && typeof options.query === 'object' ? options.query : {}
-  const from = typeof query.from === 'string' ? query.from.slice(0, 16) : ''
+  // 海报小程序码通过 query.scene='p' 下发；归入 from=qr:p，复用看板来源展示。
+  const from =
+    typeof query.from === 'string'
+      ? query.from.slice(0, 16)
+      : typeof query.scene === 'string' && query.scene
+        ? ('qr:' + query.scene).slice(0, 16)
+        : ''
   const parts = [scene]
   if (path) parts.push(path)
   if (from) parts.push(from)

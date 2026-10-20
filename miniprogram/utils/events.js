@@ -66,6 +66,13 @@ function schedule(delay) {
 function flush() {
   if (flushing) return flushing
 
+  // 关闭匿名事件后，之前已入队的旧事件也不能继续上报
+  const config = getConfig()
+  if (config.features && config.features.events === false) {
+    clearQueue()
+    return Promise.resolve({ skipped: 'feature_off' })
+  }
+
   const queued = read()
   if (!queued.length) return Promise.resolve({ skipped: 'empty' })
 
@@ -82,8 +89,10 @@ function flush() {
       return res
     })
     .catch((error) => {
-      // 服务端已明确拒绝的批次不再重试；网络/5xx 保留，指数退避
-      if (error && error.status >= 400 && error.status < 500) {
+      // 429/408/425 是临时错误，保留重试；其余明确 4xx 才丢弃，避免把限流当脏数据
+      const transient =
+        error && (error.status === 429 || error.status === 408 || error.status === 425)
+      if (error && error.status >= 400 && error.status < 500 && !transient) {
         const current = read()
         write(current.filter((item) => !ids[item.id]))
       }

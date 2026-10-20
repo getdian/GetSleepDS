@@ -14,7 +14,13 @@
   right: 0;
   z-index: 30;
   width: 100%;
-  background: transparent;
+  /* 透明通栏不代表内容可以直接穿到状态栏：给状态栏/导航一层向下渐隐的暗底 */
+  background: linear-gradient(
+    180deg,
+    rgba(8, 11, 20, 0.94) 0%,
+    rgba(8, 11, 20, 0.78) 48%,
+    rgba(8, 11, 20, 0) 100%
+  );
   pointer-events: none;
 }
 

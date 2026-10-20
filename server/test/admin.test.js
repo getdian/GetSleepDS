@@ -425,20 +425,31 @@ test('后台可按 openid 查询并删除用户记录', async () => {
     body: { code: 'admin-user-code', records }
   })
   assert.equal(synced.status, 200)
+  await call('/api/audio/unlock', { method: 'POST', body: { code: 'admin-user-code' } })
+  await call('/api/events', {
+    method: 'POST',
+    body: { code: 'admin-user-code', events: [{ type: 'checkin', ts: FIXED_NOW }] }
+  })
 
   const found = await call('/api/admin/users/dev_openid', {}, true)
   assert.equal(found.status, 200)
   assert.equal(found.body.openid, 'dev_openid')
   assert.equal(found.body.count, 1)
   assert.equal(found.body.records[0].day, '2026-10-14')
+  assert.ok(found.body.unlockExpireAt > FIXED_NOW)
+  assert.ok(found.body.eventCount >= 1)
 
   const removed = await call('/api/admin/users/dev_openid/records', { method: 'DELETE' }, true)
   assert.equal(removed.status, 200)
   assert.equal(removed.body.deleted, 1)
+  assert.equal(removed.body.deletedUnlocks, 1)
+  assert.ok(removed.body.deletedEvents >= 1)
 
   const after = await call('/api/admin/users/dev_openid', {}, true)
   assert.equal(after.status, 200)
   assert.equal(after.body.count, 0)
+  assert.equal(after.body.unlockExpireAt, 0)
+  assert.equal(after.body.eventCount, 0)
 })
 
 test('后台用户查询拒绝非法 openid，且未登录不可用', async () => {

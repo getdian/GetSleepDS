@@ -65,3 +65,15 @@ test('跨周的旧记录不会被算进本周', () => {
   const result = summarize(CURRENT.concat(LAST_WEEK), NOW)
   assert.equal(result.stats.count, 3)
 })
+
+test('周一 00:00–12:00 不会把上周当成本周', () => {
+  const mondayEarly = bj(2026, 10, 19, 2, 0)
+  const lastWeek = [
+    record('2026-10-13', bj(2026, 10, 12, 23, 30), bj(2026, 10, 13, 7, 0)),
+    record('2026-10-14', bj(2026, 10, 13, 23, 30), bj(2026, 10, 14, 7, 0)),
+    record('2026-10-15', bj(2026, 10, 14, 23, 30), bj(2026, 10, 15, 7, 0))
+  ]
+  const result = summarize(lastWeek, mondayEarly)
+  assert.equal(result.available, false)
+  assert.equal(result.stats.count, 0)
+})

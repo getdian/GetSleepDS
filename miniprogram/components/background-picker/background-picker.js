@@ -31,11 +31,28 @@ Component({
     busy: {
       type: Boolean,
       value: false
+    },
+    freeMode: {
+      type: Boolean,
+      value: false
     }
   },
 
   methods: {
     noop() {},
+
+    /** COS 图片处理不可用/缩略图 404 时回退原图，避免列表整块空白 */
+    onThumbError(event) {
+      const id = event.currentTarget.dataset.id
+      if (!id) return
+      let changed = false
+      const items = this.data.items.map((item) => {
+        if (item.id !== id || item.thumbFailed) return item
+        changed = true
+        return Object.assign({}, item, { thumbFailed: true, localPath: '' })
+      })
+      if (changed) this.setData({ items })
+    },
 
     onClose() {
       this.triggerEvent('close')

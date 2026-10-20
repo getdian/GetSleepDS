@@ -14,7 +14,8 @@
     storage: null,
     dirty: false,
     preview: null,
-    queriedOpenid: ''
+    queriedOpenid: '',
+    userHasData: false
   }
 
   let toastTimer = null
@@ -704,10 +705,25 @@
 
   function renderUser(data) {
     state.queriedOpenid = data.openid || ''
+    const count = Number(data.count) || 0
+    const unlockExpireAt = Number(data.unlockExpireAt) || 0
+    const eventCount = Number(data.eventCount) || 0
+    const activeUnlock = unlockExpireAt > Date.now()
+    state.userHasData = count > 0 || activeUnlock || eventCount > 0
+
     $('#user-result').hidden = false
-    $('#user-count').textContent = data.count || 0
+    $('#user-count').textContent = count
     $('#user-openid-label').textContent = data.openid || ''
-    $('#user-delete').disabled = !data.count
+    const extra = $('#user-extra')
+    if (extra) {
+      extra.textContent =
+        '解锁 ' +
+        (activeUnlock ? '有效（' + formatRecordTime(unlockExpireAt) + ' 到期）' : '无') +
+        ' · 事件 ' +
+        eventCount +
+        ' 条'
+    }
+    $('#user-delete').disabled = !state.userHasData
 
     const box = $('#user-records')
     box.textContent = ''
@@ -716,7 +732,9 @@
     if (!records.length) {
       const empty = document.createElement('div')
       empty.className = 'user-empty'
-      empty.textContent = '这个 openid 还没有云端睡眠记录。'
+      empty.textContent = state.userHasData
+        ? '没有云端睡眠记录，但仍有解锁或事件数据。'
+        : '这个 openid 没有任何云端数据。'
       box.appendChild(empty)
       return
     }
@@ -762,6 +780,7 @@
       $('#user-msg').textContent = '查询完成，仅显示云端记录。'
     } catch (error) {
       $('#user-result').hidden = true
+      state.userHasData = false
       $('#user-msg').textContent = ''
       toast(error.message || '查询失败', true)
     } finally {
@@ -780,7 +799,14 @@
       return
     }
 
-    if (!window.confirm('确认删除 ' + openid + ' 的全部云端记录（睡眠 / 解锁 / 事件）？此操作不可撤销。')) return
+    if (
+      !window.confirm(
+        '确认删除 ' + openid + ' 的全部云端数据（睡眠 / 解锁 / 事件）？\n' +
+          '这会写入全量清除水位：用户下次同步时，本机旧睡眠记录也会被清除，且不可恢复。'
+      )
+    ) {
+      return
+    }
 
     const button = $('#user-delete')
     button.disabled = true
@@ -793,7 +819,7 @@
     } catch (error) {
       toast(error.message || '删除失败', true)
     } finally {
-      button.disabled = $('#user-result').hidden || $('#user-count').textContent === '0'
+      button.disabled = $('#user-result').hidden || !state.userHasData
     }
   }
 
@@ -1423,6 +1449,7 @@
   $('#user-openid').addEventListener('input', function () {
     // 改过 openid 后，删除按钮必须重新查询才能再启用，避免误删另一用户
     state.queriedOpenid = ''
+    state.userHasData = false
     $('#user-delete').disabled = true
   })
   $('#user-openid').addEventListener('keydown', function (event) {

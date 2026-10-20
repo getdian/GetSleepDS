@@ -83,6 +83,23 @@ function inRange(list, start, end) {
   })
 }
 
+/**
+ * 完成态是否允许开始新一次记录。
+ * 原规则只看 18:00，导致下午小睡占用同一睡眠日后，00:00–12:00 无法记录当晚。
+ * 现在：跨睡眠日直接允许；同睡眠日 18:00 后允许；或距上次起床已满 3 小时。
+ */
+function canStartNewSleep(record, now, todayKey) {
+  if (!record || !record.wakeAt) return false
+  const hour = new Date(now).getHours()
+  const stale = now - record.wakeAt >= 3 * 60 * 60 * 1000
+  // 跨睡眠日：仍只在晚上开放“再记今晚”，避免白天新增一条会被晚上覆盖的午睡。
+  if (record.day !== todayKey) return hour >= 18
+  if (hour >= 18) return true
+  // 同一睡眠日的凌晨窗口：下午小睡后 00:00–12:00 仍能开始新记录；
+  // 12:00 之后不放开，避免把任何白天小睡都当成新的一晚。
+  return hour < 12 && stale
+}
+
 function streakDays(records, now) {
   const done = {}
   completedList(records).forEach((r) => {
@@ -151,6 +168,19 @@ function durationText(minutes) {
  * 本地事实回顾：与服务端模板同口径（ADR-007），未开启云备份时使用，零上传。
  * 只陈述均值、差值、0 点后入睡天数，不做任何评价或建议。
  */
+/** 事实回顾缓存指纹：同周内新增记录也必须触发重新生成 */
+function factSignature(weekly) {
+  if (!weekly || !weekly.current) return ''
+  const c = weekly.current
+  return [
+    weekly.weekStart,
+    c.count,
+    c.avgBedMin,
+    c.avgWakeMin,
+    c.avgDurationMin
+  ].join(':')
+}
+
 function localFact(records, now) {
   const w = weekly(records, now)
   const cur = w.current
@@ -215,7 +245,8 @@ function heatmapCells(records, now, days, partialDay, endOffsetDays) {
       day,
       durationMin: minutes,
       partial: !minutes && day === partialDay,
-      isToday: day === todayKey
+      isToday: day === todayKey,
+      future: day > todayKey
     })
   }
 
@@ -296,8 +327,10 @@ module.exports = {
   digest,
   weekly,
   localFact,
+  factSignature,
   weekBounds,
   inRange,
+  canStartNewSleep,
   streakDays,
   heatmapCells,
   monthsSpan,

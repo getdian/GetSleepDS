@@ -18,6 +18,15 @@ function generatePassword() {
   return out
 }
 
+function intEnv(value, fallback, name, min, max) {
+  if (value === undefined || value === null || value === '') return fallback
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < min || parsed > max) {
+    throw new Error(name + ' 必须是 ' + min + '–' + max + ' 的整数')
+  }
+  return parsed
+}
+
 /**
  * 读取配置并做启动期校验。
  * 生产环境宁可起不来，也不要带着假登录或内存库上线。
@@ -39,12 +48,26 @@ function loadConfig(env) {
     throw new Error('生产环境必须配置 WX_APPID 和 WX_SECRET')
   }
 
-  const dbMode = source.DB_MODE || (source.DATABASE_URL ? 'postgres' : 'memory')
+  const rawDbMode = source.DB_MODE
+    ? String(source.DB_MODE).trim().toLowerCase()
+    : source.DATABASE_URL
+      ? 'postgres'
+      : 'memory'
+  if (rawDbMode !== 'memory' && rawDbMode !== 'postgres') {
+    throw new Error('DB_MODE 只能是 memory 或 postgres，当前为：' + source.DB_MODE)
+  }
+  const dbMode = rawDbMode
   if (isProd && dbMode === 'memory' && source.ALLOW_MEMORY_DB !== '1') {
     throw new Error('生产环境不允许使用内存数据库（如确需请显式设置 ALLOW_MEMORY_DB=1）')
   }
 
-  const ttlHours = Number(source.UNLOCK_TTL_HOURS || file.unlock.ttlHours || 24)
+  const ttlHours = intEnv(
+    source.UNLOCK_TTL_HOURS,
+    Number(file.unlock.ttlHours) || 24,
+    'UNLOCK_TTL_HOURS',
+    1,
+    168
+  )
 
   // 后台密码：只认显式环境变量。开发环境未设置时生成随机临时密码并打印，
   // 不再使用公开的 password123（否则可离线伪造后台 Cookie）。
@@ -68,8 +91,8 @@ function loadConfig(env) {
 
   return {
     nodeEnv,
-    port: Number(source.PORT || 3000),
-    trustProxy: Number(source.TRUST_PROXY || 0),
+    port: intEnv(source.PORT, 3000, 'PORT', 1, 65535),
+    trustProxy: intEnv(source.TRUST_PROXY, 0, 'TRUST_PROXY', 0, 10),
     dbMode,
     databaseUrl: source.DATABASE_URL || '',
     wx: {
@@ -82,9 +105,9 @@ function loadConfig(env) {
     security: { key: securityKey, ready: securityReady },
     rateLimit: {
       windowMs: 60 * 1000,
-      maxUnlockPerIp: Number(source.RATE_UNLOCK_IP || 60),
-      maxUnlockPerOpenid: Number(source.RATE_UNLOCK_OPENID || 5),
-      maxSummaryPerIp: Number(source.RATE_SUMMARY_IP || 30)
+      maxUnlockPerIp: intEnv(source.RATE_UNLOCK_IP, 60, 'RATE_UNLOCK_IP', 1, 100000),
+      maxUnlockPerOpenid: intEnv(source.RATE_UNLOCK_OPENID, 5, 'RATE_UNLOCK_OPENID', 1, 100000),
+      maxSummaryPerIp: intEnv(source.RATE_SUMMARY_IP, 30, 'RATE_SUMMARY_IP', 1, 100000)
     },
     app: {
       version: file.version,

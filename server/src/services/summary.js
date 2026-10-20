@@ -1,5 +1,5 @@
 const {
-  sleepDayOf,
+  calendarDayOf,
   minutesOf,
   formatClock,
   circularMeanMinutes,
@@ -62,7 +62,9 @@ function assertClean(text) {
  * @param {number} now 当前时间戳
  */
 function summarize(records, now) {
-  const today = sleepDayOf(now)
+  // “本周”按北京时间自然周（周一 00:00）统计；不能用睡眠日，
+  // 否则周一 00:00–12:00 会把上周日所在的睡眠周当成“本周”。
+  const today = calendarDayOf(now)
   const weekStart = weekStartKey(today)
   const prevStart = addDaysKey(weekStart, -7)
   const prevEnd = addDaysKey(weekStart, -1)

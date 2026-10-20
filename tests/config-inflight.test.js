@@ -1,0 +1,37 @@
+const test = require('node:test')
+const assert = require('node:assert/strict')
+
+const memory = {}
+global.wx = {
+  getStorageSync(key) {
+    return Object.prototype.hasOwnProperty.call(memory, key) ? memory[key] : ''
+  },
+  setStorageSync(key, value) {
+    memory[key] = JSON.parse(JSON.stringify(value))
+  },
+  removeStorageSync(key) {
+    delete memory[key]
+  }
+}
+
+const storage = require('../miniprogram/utils/storage')
+const api = require('../miniprogram/utils/api')
+const { loadConfig } = require('../miniprogram/utils/config')
+
+test('冷启动并发 loadConfig 只发一次请求', async () => {
+  storage.clearAll()
+  let calls = 0
+  const original = api.fetchConfig
+  api.fetchConfig = () => {
+    calls += 1
+    return new Promise((resolve) => {
+      setTimeout(() => resolve({ audio: [], features: { sync: true } }), 10)
+    })
+  }
+  try {
+    await Promise.all([loadConfig(false), loadConfig(false), loadConfig(false)])
+    assert.equal(calls, 1)
+  } finally {
+    api.fetchConfig = original
+  }
+})

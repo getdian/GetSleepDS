@@ -44,13 +44,13 @@
       </scroll-view>
     </view>
 
-    <!-- 居中选中带：精致圆角微光玻璃胶囊，告别生硬贯穿横线 -->
+    <!-- 居中选中带：全宽轻微光带，左右渐隐，不压暗数字 -->
     <view class="tw-band" style="height:{{rowH}}px;"></view>
     <text class="tw-colon">:</text>
   </view>
 
-  <!-- 上午 / 下午：一体化微光胶囊，大点击区 + catchtap 防吞 -->
-  <view class="tw-period" catchtap="togglePeriod">
+  <!-- 上午 / 下午：分段选择；点当前项不改变时间，点另一项才切换 -->
+  <view class="tw-period">
     <view
       class="tw-period-btn {{period === '上午' ? 'is-on' : ''}}"
       data-period="上午"

@@ -1,19 +1,25 @@
 const express = require('express')
 const { wrap } = require('../lib/http')
-const { invalidBody, payloadTooLarge, rateLimited, dbUnavailable } = require('../lib/errors')
+const { invalidBody, payloadTooLarge, rateLimited, dbUnavailable, featureOff } = require('../lib/errors')
 
 const TYPES = ['app_open', 'checkin', 'audio_play', 'audio_unlock', 'ad_show', 'ad_error']
 const MAX_EVENTS = 20
 const MAX_AGE = 7 * 24 * 60 * 60 * 1000
 
 function createEventsRoute(options) {
-  const { config, db, codeToOpenid, limitIp, now } = options
+  const { config, db, codeToOpenid, limitIp, now, store } = options
   const router = express.Router()
 
   router.post(
     '/events',
     wrap(async (req, res) => {
       if (!limitIp(req.ip || 'unknown')) throw rateLimited()
+
+      if (store) {
+        const currentConfig = await store.get()
+        const features = (currentConfig.config && currentConfig.config.features) || {}
+        if (features.events === false) throw featureOff('匿名事件统计未开放')
+      }
 
       const code = req.body && req.body.code
       if (!code) throw invalidBody('缺少 code')
@@ -41,13 +47,9 @@ function createEventsRoute(options) {
       const openid = await codeToOpenid(code, config.wx)
 
       try {
-        // 全量清除后，清除前发出的在途事件不能再落库
-        const erasedAt = db.getErasure ? await db.getErasure(openid) : 0
-        const accepted = erasedAt
-          ? events.filter((event) => event.ts > erasedAt)
-          : events
-        if (accepted.length) await db.insertEvents(openid, accepted)
-        res.json({ accepted: accepted.length })
+        // 由 DB 在同一事务/锁内重新读取 erasure 水位，避免删除后旧事件被写回。
+        const accepted = await db.insertEvents(openid, events)
+        res.json({ accepted })
       } catch (e) {
         if (e && e.status) throw e
         throw dbUnavailable()

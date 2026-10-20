@@ -3,9 +3,10 @@ const T = require('../../utils/time')
 const S = require('../../utils/stats')
 const storage = require('../../utils/storage')
 const cache = require('../../utils/audio-cache')
+const backgrounds = require('../../utils/backgrounds')
 const api = require('../../utils/api')
 const { withLogin } = require('../../utils/login')
-const { syncNow } = require('../../utils/sync')
+const { syncNow, whenIdle } = require('../../utils/sync')
 const audioTimer = require('../../utils/audio-timer')
 const events = require('../../utils/events')
 const adSlots = require('../../utils/ads')
@@ -19,7 +20,7 @@ Page({
     ads: adSlots.empty(),
     syncEnabled: false,
     hasCloudCopy: false,
-    range: RANGE_MONTHS,
+    range: RANGE_SMALL,
     rangeOptions: [
       { value: RANGE_MONTHS, label: '近 3 个月' },
       { value: RANGE_SMALL, label: '近 30 天' }
@@ -38,12 +39,15 @@ Page({
     factState: 'idle',
     syncText: '尚未同步',
     syncBusy: false,
-    posterPath: ''
+    posterPath: '',
+    posterSharePath: ''
   },
 
   onLoad() {
     this._alive = true
     this._factLoading = false
+    this._factSignature = ''
+    this._rangeTouched = false
     this._records = {}
     // 先在 onLoad 渲染一次，避免首帧先画“还没有记录”再被 onShow 覆盖
     this.refresh(false)
@@ -76,16 +80,29 @@ Page({
     const pending = storage.getPending()
     const partialDay = pending ? T.sleepDayOf(pending.bedAt) : ''
 
+    // 新用户默认近 30 天，记录满 14 条后默认近 3 个月；用户手动切换后尊重选择。
+    let range = this.data.range
+    if (!this._rangeTouched) {
+      range = list.length >= 14 ? RANGE_MONTHS : RANGE_SMALL
+    }
     // 月对齐图板：前面 2 个整月 + 当前月 + 往后约 3 周板位
-    const span = this.data.range === RANGE_MONTHS ? S.monthsSpan(now) : null
-    const days = span ? span.days : this.data.range
+    const span = range === RANGE_MONTHS ? S.monthsSpan(now) : null
+    const days = span ? span.days : range
     this._records = records
     const heat = S.heatmapCells(records, now, days, partialDay, span ? span.endOffsetDays : 0)
     const current = weekly.current
     const meta = storage.getMeta()
-    const syncEnabled = storage.getSyncEnabled()
+    const config = getConfig()
+    const syncFeature = !config.features || config.features.sync !== false
+    let syncEnabled = storage.getSyncEnabled()
+    if (syncEnabled && !syncFeature) {
+      storage.setSyncEnabled(false)
+      syncEnabled = false
+    }
+    const cloudPending = !!meta.cloudPendingErase
 
     this.setData({
+      range,
       hasData: list.length > 0 || !!pending,
       avgBed: current.avgBedMin === null ? '--:--' : F.fmtClock(current.avgBedMin),
       avgWake: current.avgWakeMin === null ? '--:--' : F.fmtClock(current.avgWakeMin),
@@ -98,11 +115,15 @@ Page({
       marked: heat.marked,
       syncEnabled,
       hasCloudCopy: !!meta.lastSyncAt,
-      syncText: syncEnabled
-        ? meta.lastSyncAt
-          ? '上次同步 ' + F.fmtClockTs(meta.lastSyncAt)
-          : '已开启，尚未同步'
-        : '仅存本机 · 未开启云备份'
+      syncText: cloudPending
+        ? '云端副本尚未删除，请先删除'
+        : syncEnabled
+          ? meta.lastSyncAt
+            ? '上次同步 ' + F.fmtClockTs(meta.lastSyncAt)
+            : '已开启，尚未同步'
+          : syncFeature
+            ? '仅存本机 · 未开启云备份'
+            : '仅存本机 · 服务端暂未开放云备份'
     })
 
     this.refreshFact(weekly, records, now, forceSummary)
@@ -115,8 +136,9 @@ Page({
       return
     }
 
-    // 未开启云备份时用本地模板生成，零上传；开启后才走服务端模板
-    if (!storage.getSyncEnabled()) {
+    const syncFeature = !config.features || config.features.sync !== false
+    // 未开启云备份（或服务端关闭同步）时用本地模板生成，零上传；开启后才走服务端模板
+    if (!syncFeature || !storage.getSyncEnabled()) {
       const local = S.localFact(records, now)
       this.setData({
         factState: local.available ? 'ok' : 'insufficient',
@@ -130,7 +152,15 @@ Page({
       return
     }
 
-    if (!force && this.data.factState === 'ok' && this._factWeek === weekly.weekStart) return
+    const signature = S.factSignature(weekly)
+    if (
+      !force &&
+      this.data.factState === 'ok' &&
+      this._factWeek === weekly.weekStart &&
+      this._factSignature === signature
+    ) {
+      return
+    }
     if (this._factLoading) return
 
     this._factLoading = true
@@ -144,6 +174,7 @@ Page({
         if (!this._alive) return
         if (res && res.available && res.text) {
           this._factWeek = weekly.weekStart
+          this._factSignature = signature
           this.setData({ fact: res.text, factState: 'ok' })
         } else {
           // 已满 3 条但服务端没给出结论，属于“暂时不可用”，不能误导为不足 3 条
@@ -159,6 +190,8 @@ Page({
   onRangeTap(e) {
     const raw = e.currentTarget.dataset.value
     const value = raw === RANGE_MONTHS ? RANGE_MONTHS : Number(raw)
+    // 点当前项也算“手动选择”：之后新增记录不能把范围自动切走
+    this._rangeTouched = true
     if (!value || value === this.data.range) return
     const pending = storage.getPending()
     const partialDay = pending ? T.sleepDayOf(pending.bedAt) : ''
@@ -183,16 +216,29 @@ Page({
   onHeatTap(e) {
     const cell = e.detail && e.detail.cell
     if (!cell || !cell.day) return
+    if (cell.future) {
+      wx.showToast({ title: '这一天还没到', icon: 'none' })
+      return
+    }
     let text = F.fmtDayCN(cell.day) + ' · 未打卡'
     if (cell.durationMin) text = F.fmtDayCN(cell.day) + ' · ' + F.fmtDuration(cell.durationMin)
     else if (cell.partial) text = F.fmtDayCN(cell.day) + ' · 仅入睡未完成'
     wx.showToast({ title: text, icon: 'none' })
   },
 
+  rollbackSyncSwitch() {
+    // switch 组件已切到开启态；先同步到 true 再回到 false，确保受控 checked 真正重渲染
+    this.setData({ syncEnabled: true }, () => {
+      this.setData({ syncEnabled: false })
+    })
+  },
+
   onSyncSwitch(event) {
     const enabled = !!(event.detail && event.detail.value)
     if (!enabled) {
-      storage.setSyncEnabled(false)
+      if (!storage.setSyncEnabled(false)) {
+        wx.showToast({ title: '云备份开关保存失败', icon: 'none' })
+      }
       this.setData({ syncEnabled: false, syncText: '仅存本机 · 未开启云备份' })
       if (this.data.hasCloudCopy) {
         wx.showModal({
@@ -210,6 +256,23 @@ Page({
       return
     }
 
+    const config = getConfig()
+    if (config.features && config.features.sync === false) {
+      this.rollbackSyncSwitch()
+      wx.showToast({ title: '服务端暂未开放云备份', icon: 'none' })
+      return
+    }
+    if (storage.getMeta().cloudPendingErase) {
+      this.rollbackSyncSwitch()
+      wx.showModal({
+        title: '先删除云端副本',
+        content: '上次清除数据时云端副本尚未删除。请先在下方“删除云端副本（保留本机）”，否则开启会恢复旧记录。',
+        showCancel: false,
+        confirmText: '知道了'
+      })
+      return
+    }
+
     wx.showModal({
       title: '开启云备份？',
       content: '仅上传睡眠时间，不含手机号、位置等信息；以微信匿名标识归属，不获取头像和昵称。此前已备份的云端记录，开启后可恢复。可随时关闭。',
@@ -217,13 +280,14 @@ Page({
       cancelText: '保持本地',
       success: (res) => {
         if (!res.confirm) {
-          // switch 组件已切到开启态；先同步到 true 再回到 false，确保受控 checked 真正重渲染
-          this.setData({ syncEnabled: true }, () => {
-            this.setData({ syncEnabled: false })
-          })
+          this.rollbackSyncSwitch()
           return
         }
-        storage.setSyncEnabled(true)
+        if (!storage.setSyncEnabled(true)) {
+          this.rollbackSyncSwitch()
+          wx.showToast({ title: '云备份开关保存失败', icon: 'none' })
+          return
+        }
         this.setData({ syncEnabled: true, syncText: '已开启，正在首次同步…' })
         this.runSync()
       }
@@ -245,8 +309,13 @@ Page({
         if (res && res.skipped === 'feature_off') {
           // 服务端总闸关闭时回滚开关，避免界面显示开启但永远同步不了
           storage.setSyncEnabled(false)
-          this.setData({ syncEnabled: false, syncText: '仅存本机 · 未开启云备份' })
+          this.setData({ syncEnabled: false, syncText: '仅存本机 · 服务端暂未开放云备份' })
           wx.showToast({ title: '服务端暂未开放云备份', icon: 'none' })
+          return
+        }
+        if (res && res.skipped === 'cloud_pending') {
+          this.setData({ syncText: '云端副本尚未删除，请先删除' })
+          wx.showToast({ title: '请先删除云端副本', icon: 'none' })
           return
         }
         if (res && res.skipped === 'sync_off') {
@@ -261,9 +330,16 @@ Page({
         this.refresh(false)
         wx.showToast({ title: '已同步', icon: 'none' })
       })
-      .catch(() => {
+      .catch((error) => {
         if (!this._alive) return
-        this.setData({ syncBusy: false, syncText: '同步失败 · 请稍后重试' })
+        this.setData({ syncBusy: false })
+        if (error && error.code === 'FEATURE_OFF') {
+          storage.setSyncEnabled(false)
+          this.setData({ syncEnabled: false, syncText: '仅存本机 · 服务端暂未开放云备份' })
+          wx.showToast({ title: '服务端暂未开放云备份', icon: 'none' })
+          return
+        }
+        this.setData({ syncText: '同步失败 · 请稍后重试' })
         wx.showToast({ title: '同步失败，请稍后重试', icon: 'none' })
       })
   },
@@ -271,10 +347,10 @@ Page({
   onClearData() {
     const synced = storage.getSyncEnabled()
     wx.showModal({
-      title: '清除全部睡眠数据',
-      content: synced
-        ? '将删除云端与本机的打卡记录、进行中的会话和音频缓存，不可恢复。'
-        : '将删除本机的打卡记录、进行中的会话和音频缓存，不可恢复。',
+      title: synced ? '清除全部睡眠数据' : '清除本机睡眠数据',
+      content:
+        (synced ? '将删除云端与本机的' : '将删除本机的') +
+        '打卡记录、进行中的会话、音频缓存、音频/背景解锁、收藏和计算偏好；云备份开关会关闭。不可恢复。',
       confirmText: '全部清除',
       confirmColor: '#F87171',
       cancelText: '取消',
@@ -285,7 +361,7 @@ Page({
     })
   },
 
-  /** 只删除云端副本：本机记录保留，且不会再自动上传 */
+  /** 只删除云端副本：本机记录保留；删除期间阻止云同步复活 */
   eraseCloudOnly() {
     if (this._cloudBusy) return
     wx.showModal({
@@ -298,10 +374,17 @@ Page({
         if (!res.confirm) return
         this._cloudBusy = true
         wx.showLoading({ title: '删除中', mask: true })
-        withLogin((code) => api.eraseRecords(code, { cloudOnly: true }))
+        // 先等在途同步结束，再 bump epoch；否则旧响应可能把记录合并回本地。
+        whenIdle()
           .then(() => {
-            storage.setSyncEnabled(false)
-            storage.patchMeta({ lastSyncAt: 0 })
+            storage.patchMeta({ syncEpoch: Date.now() })
+            return withLogin((code) => api.eraseRecords(code, { cloudOnly: true }))
+          })
+          .then(() => {
+            if (!storage.setSyncEnabled(false)) {
+              wx.showToast({ title: '云备份开关保存失败', icon: 'none' })
+            }
+            storage.patchMeta({ lastSyncAt: 0, cloudPendingErase: false })
             this._cloudBusy = false
             wx.hideLoading()
             this.refresh(false)
@@ -310,51 +393,93 @@ Page({
           .catch(() => {
             this._cloudBusy = false
             wx.hideLoading()
+            this.refresh(false)
             wx.showToast({ title: '云端删除失败，请稍后重试', icon: 'none' })
           })
       }
     })
   },
 
-  clearLocalData() {
-    storage.clearAll()
+  /**
+   * 清空本机睡眠数据。
+   * hadCloud 时保留 lastSyncAt/cloudPendingErase，让用户能重试删除云端；
+   * 同时阻止下一次同步把云端旧记录拉回来。
+   */
+  clearLocalData(options) {
+    const opts = options || {}
+    const meta = storage.getMeta()
+    const hadCloud = !!meta.lastSyncAt
+    const cloudAt = meta.lastSyncAt || 0
+    backgrounds.cleanCache()
+    const cleared = storage.clearAll()
     events.clearQueue()
-    // clearAll 会移除 meta；写入新 epoch，让清除前发出的 sync 响应失效
-    storage.patchMeta({ syncEpoch: Date.now(), lastTrackActive: false })
     cache.cleanAll()
     audioTimer.clear()
     try {
       wx.getBackgroundAudioManager().stop()
     } catch (e) {}
+    const patch = { syncEpoch: Date.now(), lastTrackActive: false }
+    if (hadCloud && !opts.cloudCleared) {
+      patch.lastSyncAt = cloudAt
+      patch.cloudPendingErase = true
+    } else {
+      patch.lastSyncAt = 0
+      patch.cloudPendingErase = false
+    }
+    storage.patchMeta(patch)
     this._factWeek = null
+    this._factSignature = ''
+    this.setData({ posterPath: '', posterSharePath: '' })
     this.refresh(true)
+    return cleared
   },
 
   eraseThenClear() {
     const synced = storage.getSyncEnabled()
+    const hadCloud = !!storage.getMeta().lastSyncAt
     wx.showLoading({ title: '清除中', mask: true })
 
     // 未开启云备份：本地是唯一数据源，必须先删掉；云端历史副本尽力而为，失败不阻断
     if (!synced) {
-      this.clearLocalData()
+      const cleared = this.clearLocalData()
       wx.hideLoading()
-      wx.showToast({ title: '已清除本机数据', icon: 'none' })
-      withLogin((code) => api.eraseRecords(code)).catch(() => {})
+      wx.showToast({
+        title: cleared ? '已清除本机数据' : '本机数据未完全清除，请重试',
+        icon: 'none'
+      })
+      if (hadCloud) {
+        withLogin((code) => api.eraseRecords(code))
+          .then(() => {
+            storage.patchMeta({ lastSyncAt: 0, cloudPendingErase: false })
+            this.refresh(false)
+            wx.showToast({ title: '云端副本已删除', icon: 'none' })
+          })
+          .catch(() => {
+            // lastSyncAt/cloudPendingErase 已保留，统计页会出现“删除云端副本”重试入口
+            this.refresh(false)
+            wx.showToast({ title: '云端副本未删除，可在统计页重试', icon: 'none' })
+          })
+      } else {
+        withLogin((code) => api.eraseRecords(code)).catch(() => {})
+      }
       return
     }
 
     withLogin((code) => api.eraseRecords(code))
       .then(() => {
-        this.clearLocalData()
+        const cleared = this.clearLocalData({ cloudCleared: true })
         wx.hideLoading()
-        wx.showToast({ title: '已全部清除', icon: 'none' })
+        wx.showToast({
+          title: cleared ? '已全部清除' : '本机数据未完全清除，请重试',
+          icon: 'none'
+        })
       })
       .catch(() => {
         wx.hideLoading()
         // 云端删不掉时给用户出口：至少把本机数据清掉，云端副本保留
         wx.showModal({
           title: '云端删除失败',
-          content: '云端记录暂时删不掉。可以只清除本机数据，云端副本会保留。',
+          content: '云端记录暂时删不掉。可以只清除本机数据，云端副本会保留，之后可在统计页重试删除。',
           confirmText: '只清本机',
           cancelText: '稍后重试',
           success: (res) => {
@@ -372,8 +497,12 @@ Page({
 
   onMakePoster() {
     if (this._posterBusy) return
-    if (!S.completedList(storage.getRecords()).length) {
-      wx.showToast({ title: '还没有完整打卡', icon: 'none' })
+    const now = Date.now()
+    const recent = S.completedList(storage.getRecords()).filter(
+      (record) => T.parseDateKey(record.day) >= T.addDays(T.startOfDay(now), -29)
+    )
+    if (!recent.length) {
+      wx.showToast({ title: '近 30 天还没有完整打卡', icon: 'none' })
       return
     }
     this._posterBusy = true
@@ -409,7 +538,7 @@ Page({
     timeout = setTimeout(() => {
       finish('')
       wx.showToast({ title: '海报生成超时，请重试', icon: 'none' })
-    }, 8000)
+    }, 12000)
     wx.showLoading({ title: '生成中', mask: true })
     // 先在 4s 窗口内拉小程序码（失败/超时就放弃），海报落款自动降级为纯文案
     Promise.race([
@@ -418,7 +547,15 @@ Page({
     ]).then((qrPath) => {
       try {
         this.drawPoster(qrPath, (path) => {
-          finish(path)
+          if (!path) {
+            finish('')
+            return
+          }
+          // 另画一张 5:4 分享卡：直接把竖版海报当 imageUrl 会被微信分享卡片裁掉底部二维码。
+          this.drawShareCard(qrPath, (sharePath) => {
+            this.setData({ posterSharePath: sharePath || '' })
+            finish(path)
+          })
         })
       } catch (e) {
         finish('')
@@ -442,9 +579,10 @@ Page({
     })
   },
 
-  /** 300×480 月度回顾海报；经典 canvas API，离屏绘制。qrPath 为空时不画码 */
+  /** 600×960（2x）回顾海报；经典 canvas API，离屏绘制。qrPath 为空时不画码 */
   drawPoster(qrPath, done) {
     const ctx = wx.createCanvasContext('poster', this)
+    ctx.scale(2, 2)
     const records = storage.getRecords()
     const list = S.completedList(records)
     const now = Date.now()
@@ -458,7 +596,7 @@ Page({
 
     const W = 300
     const H = 480
-    const colors = ['rgba(255,255,255,0.05)', '#3730A3', '#4338CA', '#6366F1', '#818CF8', '#A5B4FC']
+    const colors = ['rgba(255,255,255,0.05)', '#5A57C8', '#6C68E8', '#8A90FF', '#B4BEFF', '#E0E7FF']
 
     ctx.setFillStyle('#080B14')
     ctx.fillRect(0, 0, W, H)
@@ -536,11 +674,88 @@ Page({
       wx.canvasToTempFilePath(
         {
           canvasId: 'poster',
+          destWidth: 600,
+          destHeight: 960,
           success: (res) => done(res.tempFilePath),
           fail: () => {
             wx.showToast({ title: '海报生成失败', icon: 'none' })
             done('')
           }
+        },
+        this
+      )
+    })
+  },
+
+  /** 600×480（5:4）分享卡，二维码完整可见；失败时回退纯文案 */
+  drawShareCard(qrPath, done) {
+    const ctx = wx.createCanvasContext('share-card', this)
+    ctx.scale(2, 2)
+    const records = storage.getRecords()
+    const now = Date.now()
+    const start = T.addDays(T.startOfDay(now), -29)
+    const recent = S.completedList(records).filter((r) => T.parseDateKey(r.day) >= start)
+    const digest = S.digest(recent)
+    const W = 300
+    const H = 240
+
+    ctx.setFillStyle('#080B14')
+    ctx.fillRect(0, 0, W, H)
+    const grad = ctx.createLinearGradient(0, 0, W, 0)
+    grad.addColorStop(0, '#4F46E5')
+    grad.addColorStop(1, '#818CF8')
+    ctx.setFillStyle(grad)
+    ctx.fillRect(0, 0, W, 6)
+
+    ctx.setTextAlign('left')
+    ctx.setFillStyle('#F8FAFC')
+    ctx.setFontSize(18)
+    ctx.fillText('睡点 · 睡眠回顾', 20, 42)
+    ctx.setFillStyle('#94A3B8')
+    ctx.setFontSize(10)
+    ctx.fillText('近 30 天 · 打卡 ' + digest.count + ' 天', 20, 62)
+
+    const avgBed = digest.avgBedMin === null ? '—' : F.fmtClock(digest.avgBedMin)
+    const avgWake = digest.avgWakeMin === null ? '—' : F.fmtClock(digest.avgWakeMin)
+    const avgDuration = digest.avgDurationMin === null ? '—' : F.fmtHours(digest.avgDurationMin)
+    ctx.setFillStyle('#A5B4FC')
+    ctx.setFontSize(22)
+    ctx.fillText(avgBed + ' 入睡', 20, 108)
+    ctx.fillText(avgWake + ' 起床', 150, 108)
+    ctx.setFillStyle('#94A3B8')
+    ctx.setFontSize(10)
+    ctx.fillText('平均 ' + avgDuration, 20, 128)
+    ctx.fillText('其中 ' + digest.afterMidnightDays + ' 天在凌晨入睡', 150, 128)
+
+    if (qrPath) {
+      ctx.setFillStyle('#FFFFFF')
+      ctx.fillRect(206, 146, 76, 76)
+      ctx.drawImage(qrPath, 210, 150, 68, 68)
+      ctx.setTextAlign('right')
+      ctx.setFillStyle('#F8FAFC')
+      ctx.setFontSize(10)
+      ctx.fillText('扫码记录你的睡眠节奏', 196, 178)
+      ctx.setFillStyle('#94A3B8')
+      ctx.setFontSize(8)
+      ctx.fillText('数据来自个人打卡', 196, 194)
+    } else {
+      ctx.setTextAlign('right')
+      ctx.setFillStyle('#F8FAFC')
+      ctx.setFontSize(10)
+      ctx.fillText('微信搜索「睡点」', 284, 178)
+      ctx.setFillStyle('#94A3B8')
+      ctx.setFontSize(8)
+      ctx.fillText('数据来自个人打卡 · ' + T.dateKey(now), 284, 194)
+    }
+
+    ctx.draw(false, () => {
+      wx.canvasToTempFilePath(
+        {
+          canvasId: 'share-card',
+          destWidth: 600,
+          destHeight: 480,
+          success: (res) => done(res.tempFilePath),
+          fail: () => done('')
         },
         this
       )
@@ -554,8 +769,8 @@ Page({
         : '睡点 · 只看数据、不做评价的睡眠记录',
       path: '/pages/stats/stats?from=share'
     }
-    // 空字符串会让转发卡片变成空白图，只有生成过海报时才带上
-    if (this.data.posterPath) payload.imageUrl = this.data.posterPath
+    // 只用 5:4 分享卡，避免竖版海报被微信卡片裁掉底部二维码
+    if (this.data.posterSharePath) payload.imageUrl = this.data.posterSharePath
     return payload
   },
 

@@ -605,7 +605,11 @@
   margin-top: 18px;
 }
 
-/* 播放条 */
+/* 播放条：hidden 时必须真正隐藏，否则首屏会出现空播放条 */
+.player[hidden] {
+  display: none;
+}
+
 .player {
   position: fixed;
   left: 50%;

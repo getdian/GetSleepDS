@@ -33,14 +33,23 @@ function uploadBuffer(settings, options) {
   })
 }
 
+/**
+ * 用一次最小 PutObject 验证连通性，而不是 getBucket。
+ * 文档建议后台使用“仅该桶 PutObject”的子账号；List 权限并非上传必需。
+ * 固定 key 会被覆盖，不会持续产生垃圾对象。
+ */
 function testBucket(settings) {
   const client = createClient(settings)
+  const prefix = String(settings.prefix || 'sleep').replace(/^\/+|\/+$/g, '')
+  const key = (prefix ? prefix + '/' : '') + '.connectivity-test'
   return new Promise((resolve, reject) => {
-    client.getBucket(
+    client.putObject(
       {
         Bucket: settings.bucket,
         Region: settings.region,
-        MaxKeys: 1
+        Key: key,
+        Body: Buffer.from('getsleep-connectivity-test'),
+        ContentType: 'text/plain'
       },
       (error, data) => {
         if (error) reject(error)

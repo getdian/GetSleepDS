@@ -24,14 +24,14 @@
 <view class="dock-mask {{open ? 'is-show' : ''}}" bindtap="closeSheet" catchtouchmove="noop"></view>
 
 <view class="dock-sheet {{open ? 'is-show' : ''}}">
-  <view class="dock-grip"></view>
+  <view class="dock-grip" catchtouchmove="noop"></view>
 
-  <view class="dock-head">
+  <view class="dock-head" catchtouchmove="noop">
     <text class="dock-title font-poetic">环境声音</text>
     <view class="dock-close" catchtap="closeSheet">×</view>
   </view>
 
-  <view class="dock-unlock">
+  <view class="dock-unlock" catchtouchmove="noop">
     <block wx:if="{{unlocked}}">
       <text class="du-main">环境声音已解锁</text>
       <text class="du-sub">{{unlockRemainText}}</text>
@@ -46,14 +46,17 @@
     </block>
   </view>
 
-  <view class="dock-search">
+  <view class="dock-search" catchtouchmove="noop">
     <input
       class="dock-input"
       value="{{keyword}}"
       placeholder="搜索：雨声 / 白噪音…"
       placeholder-class="dock-ph"
       confirm-type="search"
+      adjust-position
+      cursor-spacing="24"
       bindinput="onKeywordInput"
+      bindconfirm="onSearchConfirm"
     />
     <view wx:if="{{keyword}}" class="dock-clear" bindtap="onClearKeyword">×</view>
   </view>
@@ -93,10 +96,10 @@
         <text>{{currentId === item.id && playing ? '暂停' : '播放'}}</text>
       </view>
     </view>
-    <view wx:if="{{!filteredTracks.length}}" class="dock-empty">没有匹配的声音</view>
+    <view wx:if="{{!filteredTracks.length}}" class="dock-empty">{{tracks.length ? '没有匹配的声音' : '正在加载声音…'}}</view>
   </scroll-view>
 
-  <view wx:if="{{timerEnabled}}" class="dock-timer">
+  <view wx:if="{{timerEnabled}}" class="dock-timer" catchtouchmove="noop">
     <text class="dock-timer-label">定时关闭</text>
     <view class="dock-timer-chips">
       <view
@@ -109,12 +112,12 @@
     </view>
   </view>
 
-  <view class="dock-cache">
+  <view class="dock-cache" catchtouchmove="noop">
     <text class="dock-cache-text">{{cacheText}}</text>
     <text wx:if="{{cacheCount}}" class="dock-cache-clean" bindtap="onCleanCache">清理</text>
   </view>
 
-  <view class="dock-tail">锁屏后继续播放；定时到点自动停止</view>
+  <view class="dock-tail" catchtouchmove="noop">锁屏后继续播放；定时到点自动停止</view>
 </view>
 
 <unlock-sheet

@@ -183,13 +183,23 @@ function createAdminRoute(options) {
     wrap(async (req, res) => {
       const openid = readOpenid(req.params.openid)
       let records = []
+      let unlockExpireAt = 0
+      let eventCount = 0
       try {
         records = await db.getRecords(openid)
+        unlockExpireAt = db.getUnlock ? await db.getUnlock(openid) : 0
+        eventCount = db.countEvents ? await db.countEvents(openid) : 0
       } catch (e) {
         throw dbUnavailable()
       }
       records.sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : 0))
-      res.json({ openid, count: records.length, records })
+      res.json({
+        openid,
+        count: records.length,
+        records,
+        unlockExpireAt,
+        eventCount
+      })
     })
   )
 
@@ -207,18 +217,34 @@ function createAdminRoute(options) {
       } catch (e) {
         throw dbUnavailable()
       }
+      const tag = openidTag(openid)
+      const audit = {
+        requestId: req.id || '',
+        deletedRecords: result.records,
+        deletedUnlocks: result.unlocks,
+        deletedEvents: result.events,
+        erasedAt: result.erasedAt
+      }
       log.log(
-        JSON.stringify({
-          level: 'warn',
-          action: 'admin_delete_user_data',
-          requestId: req.id || '',
-          openidTag: openidTag(openid),
-          deleted: result.records,
-          unlocks: result.unlocks,
-          events: result.events,
-          erasedAt: result.erasedAt
-        })
+        JSON.stringify(
+          Object.assign(
+            {
+              level: 'warn',
+              action: 'admin_delete_user_data',
+              openidTag: tag
+            },
+            audit
+          )
+        )
       )
+      // 审计落库，容器日志轮转后仍可追溯；失败不阻断删除结果。
+      if (db.logAdminAction) {
+        try {
+          await db.logAdminAction('admin_delete_user_data', tag, audit)
+        } catch (e) {
+          log.error('[audit] admin_delete_user_data failed:', e.message)
+        }
+      }
       res.json({
         openid,
         deleted: result.records,

@@ -44,6 +44,38 @@ before(async () => {
 
 after(() => new Promise((resolve) => server.close(resolve)))
 
+test('cloudOnly 必须是布尔值，字符串不能触发全量 erasure', async () => {
+  const wakeAt = Date.now()
+  const bedAt = wakeAt - 8 * 60 * 60 * 1000
+  const record = { bedAt, wakeAt, updatedAt: wakeAt }
+  const first = await call('/api/records/sync', {
+    method: 'POST',
+    body: { code: 'cloud-only-bool', records: [record] }
+  })
+  assert.equal(first.status, 200)
+
+  const bad = await call('/api/records/erase', {
+    method: 'POST',
+    body: { code: 'cloud-only-bool', cloudOnly: 'true' }
+  })
+  assert.equal(bad.status, 400)
+  assert.equal(bad.body.error.code, 'INVALID_BODY')
+
+  const after = await call('/api/records/sync', {
+    method: 'POST',
+    body: { code: 'cloud-only-bool', records: [] }
+  })
+  assert.equal(after.status, 200)
+  assert.equal(after.body.records.length, 1)
+  assert.equal(after.body.erasedAt, 0)
+
+  // 清理，避免与后续用例共享 dev_openid
+  await call('/api/records/erase', {
+    method: 'POST',
+    body: { code: 'cloud-only-bool', cloudOnly: true }
+  })
+})
+
 test('cloudOnly 删除云端副本不写 erasure 水位，本机记录可再次上传', async () => {
   const wakeAt = Date.now()
   const bedAt = wakeAt - 8 * 60 * 60 * 1000

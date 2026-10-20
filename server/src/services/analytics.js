@@ -1,5 +1,6 @@
 const DAY_MS = 24 * 60 * 60 * 1000
 const BEIJING_OFFSET = 8 * 60 * 60 * 1000
+const { weekStartKey } = require('../lib/time')
 
 function dayKey(timestamp) {
   return new Date(timestamp + BEIJING_OFFSET).toISOString().slice(0, 10)
@@ -20,7 +21,8 @@ function createAnalytics(options) {
     const today = dayKey(now)
     const todayStart = Date.parse(today + 'T00:00:00+08:00')
     const start = todayStart - 13 * DAY_MS
-    const weekStart = dayKey(now - 6 * DAY_MS)
+    // 与产品“本周”一致：北京时间周一 00:00 起，而不是滚动 7 天
+    const weekStart = weekStartKey(today)
 
     const [events, totals, current] = await Promise.all([
       db.listEvents(start),

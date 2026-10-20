@@ -28,8 +28,8 @@
           <view
             wx:for="{{cells}}"
             wx:key="key"
-            id="{{index === cells.length - 1 ? 'hm-last' : ''}}"
-            class="hm-cell {{item.pad ? 'hm-pad' : 'hm-l' + item.level}} {{item.partial ? 'hm-partial' : ''}} {{item.isToday ? 'hm-today' : ''}}"
+            id="{{item.isToday ? 'hm-today' : index === cells.length - 1 ? 'hm-last' : ''}}"
+            class="hm-cell {{item.pad ? 'hm-pad' : 'hm-l' + item.level}} {{item.partial ? 'hm-partial' : ''}} {{item.isToday ? 'hm-today' : ''}} {{item.future ? 'hm-future' : ''}}"
             data-index="{{index}}"
             bindtap="onCellTap"
           ></view>
@@ -46,6 +46,6 @@
     <view class="hm-legend-cell hm-l4"></view>
     <view class="hm-legend-cell hm-l5"></view>
     <text class="hm-legend-text">多</text>
-    <text class="hm-legend-partial">◇ 仅入睡</text>
+    <text class="hm-legend-partial">□ 仅入睡</text>
   </view>
 </view>

@@ -42,9 +42,17 @@ function createAdminAuth(options) {
 
     const expected = sign(exp)
     const actual = parts[2]
-    if (actual.length !== expected.length) return false
+    // 比较字节长度，而不是 JS 字符串长度：多字节字符长度相等时字节长度可能不同，
+    // timingSafeEqual 会抛 RangeError 并让鉴权接口 500。
+    const actualBuffer = Buffer.from(actual, 'utf8')
+    const expectedBuffer = Buffer.from(expected, 'utf8')
+    if (actualBuffer.length !== expectedBuffer.length) return false
 
-    return crypto.timingSafeEqual(Buffer.from(actual), Buffer.from(expected))
+    try {
+      return crypto.timingSafeEqual(actualBuffer, expectedBuffer)
+    } catch (e) {
+      return false
+    }
   }
 
   function checkPassword(input) {

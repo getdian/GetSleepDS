@@ -52,6 +52,16 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE INDEX IF NOT EXISTS idx_events_created_at ON events (created_at);
 CREATE INDEX IF NOT EXISTS idx_events_type_created ON events (type, created_at);
 CREATE INDEX IF NOT EXISTS idx_events_openid ON events (openid);
+
+-- 后台敏感操作审计：只存 openid 哈希前缀，不落明文；容器日志轮转后仍可追溯。
+CREATE TABLE IF NOT EXISTS admin_audit (
+    id           BIGSERIAL PRIMARY KEY,
+    action       VARCHAR(40) NOT NULL,
+    openid_tag   VARCHAR(32) NOT NULL,
+    details      JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_created_at ON admin_audit (created_at DESC);
 `
 
 function createMemoryDb() {
@@ -61,6 +71,7 @@ function createMemoryDb() {
   const erasures = new Map()
   const settings = new Map()
   const events = []
+  const audits = []
   let appConfig = null
 
   return {
@@ -255,7 +266,9 @@ function createMemoryDb() {
 
     async insertEvents(openid, list) {
       const now = Date.now()
-      list.forEach((item) => {
+      const erasedAt = erasures.get(openid) || 0
+      const accepted = list.filter((item) => (item.ts || now) > erasedAt)
+      accepted.forEach((item) => {
         events.push({
           openid,
           type: item.type,
@@ -264,7 +277,22 @@ function createMemoryDb() {
         })
       })
       if (events.length > 50000) events.splice(0, events.length - 50000)
-      return list.length
+      return accepted.length
+    },
+
+    async countEvents(openid) {
+      return events.filter((event) => event.openid === openid).length
+    },
+
+    async logAdminAction(action, openidTag, details) {
+      audits.push({
+        action,
+        openidTag,
+        details: details || {},
+        createdAt: Date.now()
+      })
+      if (audits.length > 5000) audits.splice(0, audits.length - 5000)
+      return true
     },
 
     async listEvents(sinceTs) {
@@ -643,20 +671,49 @@ function createPostgresDb(connectionString) {
 
     async insertEvents(openid, list) {
       if (!list.length) return 0
-      const placeholders = []
-      const values = []
-      list.forEach((item, index) => {
-        const offset = index * 4
-        placeholders.push(
-          `($${offset + 1}, $${offset + 2}, $${offset + 3}, to_timestamp($${offset + 4}::bigint / 1000.0))`
-        )
-        values.push(openid, item.type, item.target || '', item.ts)
-      })
+      const client = await pool.connect()
+      try {
+        await client.query('BEGIN')
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1)::bigint)', [openid])
+        const erasure = await client.query('SELECT erased_at FROM user_erasures WHERE openid = $1', [openid])
+        const erasedAt = erasure.rows.length ? new Date(erasure.rows[0].erased_at).getTime() : 0
+        const accepted = list.filter((item) => (item.ts || Date.now()) > erasedAt)
+        if (accepted.length) {
+          const placeholders = []
+          const values = []
+          accepted.forEach((item, index) => {
+            const offset = index * 4
+            placeholders.push(
+              `($${offset + 1}, $${offset + 2}, $${offset + 3}, to_timestamp($${offset + 4}::bigint / 1000.0))`
+            )
+            values.push(openid, item.type, item.target || '', item.ts)
+          })
+          await client.query(
+            `INSERT INTO events (openid, type, target, created_at) VALUES ${placeholders.join(', ')}`,
+            values
+          )
+        }
+        await client.query('COMMIT')
+        return accepted.length
+      } catch (error) {
+        await client.query('ROLLBACK')
+        throw error
+      } finally {
+        client.release()
+      }
+    },
+
+    async countEvents(openid) {
+      const result = await pool.query('SELECT count(*)::int AS n FROM events WHERE openid = $1', [openid])
+      return Number(result.rows[0].n) || 0
+    },
+
+    async logAdminAction(action, openidTag, details) {
       await pool.query(
-        `INSERT INTO events (openid, type, target, created_at) VALUES ${placeholders.join(', ')}`,
-        values
+        'INSERT INTO admin_audit (action, openid_tag, details) VALUES ($1, $2, $3::jsonb)',
+        [action, openidTag, JSON.stringify(details || {})]
       )
-      return list.length
+      return true
     },
 
     async listEvents(sinceTs) {
@@ -706,7 +763,12 @@ function createPostgresDb(connectionString) {
 }
 
 async function createDb(options) {
-  if (options.mode === 'postgres') {
+  const mode = options && options.mode
+  if (mode === 'memory') return createMemoryDb()
+  if (mode !== 'postgres') {
+    throw new Error('未知 DB_MODE：' + mode + '（只支持 memory / postgres）')
+  }
+  {
     if (!options.url) throw new Error('DB_MODE=postgres 但缺少 DATABASE_URL')
     const db = createPostgresDb(options.url)
 
@@ -727,7 +789,6 @@ async function createDb(options) {
       }
     }
   }
-  return createMemoryDb()
 }
 
 module.exports = { createDb, createMemoryDb, createPostgresDb }

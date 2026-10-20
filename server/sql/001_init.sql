@@ -57,4 +57,14 @@ CREATE INDEX IF NOT EXISTS idx_events_created_at ON events (created_at);
 CREATE INDEX IF NOT EXISTS idx_events_type_created ON events (type, created_at);
 CREATE INDEX IF NOT EXISTS idx_events_openid ON events (openid);
 
+-- 后台敏感操作审计：只存 openid 哈希前缀，不落明文
+CREATE TABLE IF NOT EXISTS admin_audit (
+    id           BIGSERIAL PRIMARY KEY,
+    action       VARCHAR(40) NOT NULL,
+    openid_tag   VARCHAR(32) NOT NULL,
+    details      JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_created_at ON admin_audit (created_at DESC);
+
 -- 过期解锁记录由服务端每 6 小时清理一次（保留 7 天便于排查）

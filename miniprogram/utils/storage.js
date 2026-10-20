@@ -38,7 +38,10 @@ function safeSet(key, value) {
 function safeRemove(key) {
   try {
     wx.removeStorageSync(key)
-  } catch (e) {}
+    return true
+  } catch (e) {
+    return false
+  }
 }
 
 function isRecord(value) {
@@ -69,13 +72,14 @@ function replaceRecords(map) {
   return safeSet(KEYS.records, map && typeof map === 'object' ? map : {})
 }
 
-function removeRecord(day) {
+function removeRecord(day, deletedAt) {
   const all = getRecords()
   delete all[day]
-  safeSet(KEYS.records, all)
-  // 墓碑：阻止云端旧记录在下次同步时被回填
-  markDeleted(day)
-  return all
+  const saved = safeSet(KEYS.records, all)
+  // 墓碑：阻止云端旧记录在下次同步时被回填；写入失败必须让调用方知道。
+  // 同步合并时使用服务端墓碑时间，避免把“现在”写成更新的墓碑而挡住清除后新记录。
+  const tomb = saved ? markDeleted(day, deletedAt) : false
+  return saved && tomb
 }
 
 /** 已删除的睡眠日 -> 删除时间，用于同步时挡住旧数据 */
@@ -85,17 +89,18 @@ function getDeleted() {
 }
 
 function markDeleted(day, timestamp) {
-  if (!day) return
+  if (!day) return false
   const all = getDeleted()
-  all[day] = timestamp || Date.now()
-  safeSet(KEYS.deleted, all)
+  const next = Math.max(Number(all[day]) || 0, Number(timestamp) || Date.now())
+  all[day] = next
+  return safeSet(KEYS.deleted, all)
 }
 
 function clearDeleted(day) {
   const all = getDeleted()
-  if (!all[day]) return
+  if (!all[day]) return true
   delete all[day]
-  safeSet(KEYS.deleted, all)
+  return safeSet(KEYS.deleted, all)
 }
 
 function getDeletedList() {
@@ -118,7 +123,7 @@ function setPending(bedAt) {
 }
 
 function clearPending() {
-  safeRemove(KEYS.pending)
+  return safeRemove(KEYS.pending)
 }
 
 function getUnlockExpire() {
@@ -127,7 +132,7 @@ function getUnlockExpire() {
 }
 
 function setUnlockExpire(timestamp) {
-  safeSet(KEYS.unlock, timestamp)
+  return safeSet(KEYS.unlock, timestamp)
 }
 
 /** 首页背景图解锁：{ id, expireAt }；到期自动回退默认图 */
@@ -140,6 +145,10 @@ function getBackgroundUnlock() {
 
 function setBackgroundUnlock(value) {
   return safeSet(KEYS.background, value)
+}
+
+function clearBackgroundCache() {
+  return safeRemove(KEYS.backgroundCache)
 }
 
 /** 背景图本地缓存索引：{ [url]: { path, savedAt } }，最多保留 6 张 */
@@ -156,6 +165,12 @@ function setBackgroundCache(url, path) {
     return (cache[b].savedAt || 0) - (cache[a].savedAt || 0)
   })
   keys.slice(6).forEach((key) => {
+    const entry = cache[key]
+    if (entry && entry.path) {
+      try {
+        wx.getFileSystemManager().unlinkSync(entry.path)
+      } catch (e) {}
+    }
     delete cache[key]
   })
   return safeSet(KEYS.backgroundCache, cache)
@@ -168,8 +183,8 @@ function getMeta() {
 
 function patchMeta(patch) {
   const next = Object.assign({}, getMeta(), patch)
-  safeSet(KEYS.meta, next)
-  return next
+  const saved = safeSet(KEYS.meta, next)
+  return saved ? next : false
 }
 
 /** 云备份默认关闭：数据本地化是产品默认状态，用户显式开启后才会上传 */
@@ -178,7 +193,7 @@ function getSyncEnabled() {
 }
 
 function setSyncEnabled(enabled) {
-  return patchMeta({ syncEnabled: enabled === true })
+  return !!patchMeta({ syncEnabled: enabled === true })
 }
 
 function getConfigCache() {
@@ -188,7 +203,7 @@ function getConfigCache() {
 }
 
 function setConfigCache(data) {
-  safeSet(KEYS.config, { fetchedAt: Date.now(), data })
+  return safeSet(KEYS.config, { fetchedAt: Date.now(), data })
 }
 
 function getPrefs() {
@@ -218,15 +233,22 @@ function toggleFavorite(id) {
 
 /** 清除全部个人数据（保留远程配置缓存，避免下次冷启动无配置） */
 function clearAll() {
-  ;[KEYS.records, KEYS.pending, KEYS.deleted, KEYS.unlock, KEYS.events, KEYS.background, KEYS.backgroundCache].forEach(safeRemove)
+  let ok = true
+  ;[KEYS.records, KEYS.pending, KEYS.deleted, KEYS.unlock, KEYS.events, KEYS.background, KEYS.backgroundCache].forEach(
+    (key) => {
+      if (!safeRemove(key)) ok = false
+    }
+  )
   // 保留一个单调递增的代际号，让清除前发出的 sync 响应在回来时被识别为过期
-  safeSet(KEYS.meta, { syncEpoch: Date.now() })
+  if (!safeSet(KEYS.meta, { syncEpoch: Date.now() })) ok = false
+  return ok
 }
 
 module.exports = {
   KEYS,
   getRecords,
   saveRecord,
+  replaceRecords,
   removeRecord,
   getDeleted,
   getDeletedList,
@@ -241,6 +263,7 @@ module.exports = {
   setBackgroundUnlock,
   getBackgroundCache,
   setBackgroundCache,
+  clearBackgroundCache,
   getMeta,
   patchMeta,
   getSyncEnabled,

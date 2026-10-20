@@ -1,7 +1,7 @@
 const { invalidBody, payloadTooLarge } = require('./errors')
 const { sleepDayOf } = require('./time')
 
-const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+const DAY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/
 const MAX_RECORDS = 62
 const MAX_DELETIONS = 400
 const MAX_SLEEP_MS = 20 * 60 * 60 * 1000
@@ -10,6 +10,21 @@ const MAX_FUTURE_MS = 24 * 60 * 60 * 1000
 
 function inWindow(value, now) {
   return value >= now - MAX_AGE_MS && value <= now + MAX_FUTURE_MS
+}
+
+/** 校验真实日历日，避免 2026-02-30 之类在 PG 触发 503。 */
+function isRealDay(day) {
+  const match = DAY_PATTERN.exec(String(day || ''))
+  if (!match) return false
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const date = Number(match[3])
+  const parsed = new Date(Date.UTC(year, month - 1, date))
+  return (
+    parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === date
+  )
 }
 
 /**
@@ -93,7 +108,7 @@ function validateDeletions(input, options) {
     const item = input[i]
     if (!item || typeof item !== 'object') continue
     const day = String(item.day || '')
-    if (!DAY_PATTERN.test(day)) continue
+    if (!isRealDay(day)) continue
     const deletedAt = Number(item.deletedAt)
     if (!Number.isFinite(deletedAt) || !inWindow(deletedAt, now)) continue
     const previous = byDay.get(day)

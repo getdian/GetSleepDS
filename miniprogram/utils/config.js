@@ -5,6 +5,7 @@ const storage = require('./storage')
 const CACHE_TTL = 10 * 60 * 1000
 
 let memory = null
+let inflight = null
 
 const AD_SLOTS = ['home', 'sleep', 'stats', 'statsFooter']
 
@@ -56,8 +57,10 @@ function loadConfig(force) {
     memory = merge(cache.data)
     return Promise.resolve(memory)
   }
+  // 冷启动时 app.onLaunch / 页面 onLoad / ads.apply 会同时触发，共享同一个在途请求。
+  if (inflight) return inflight
 
-  return api
+  inflight = api
     .fetchConfig()
     .then((data) => {
       storage.setConfigCache(data)
@@ -68,6 +71,10 @@ function loadConfig(force) {
       memory = merge(cache ? cache.data : null)
       return memory
     })
+    .finally(() => {
+      inflight = null
+    })
+  return inflight
 }
 
 module.exports = {

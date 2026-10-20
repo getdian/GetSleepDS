@@ -5,6 +5,16 @@
  */
 const storage = require('./storage')
 
+/**
+ * 列表缩略图走 COS 图片处理，避免选择器一次拉 20 张原图。
+ * 若 COS 未开图片处理，picker 会在 binderror 时回退原图。
+ */
+function thumbUrlOf(url, width) {
+  if (!url || typeof url !== 'string' || url.indexOf('https://') !== 0) return ''
+  if (url.indexOf('imageMogr2') >= 0) return url
+  return url + (url.indexOf('?') >= 0 ? '&' : '?') + 'imageMogr2/thumbnail/' + (width || 360) + 'x'
+}
+
 function normalize(list) {
   return (Array.isArray(list) ? list : [])
     .filter((item) => item && item.enabled !== false && item.id && item.url)
@@ -13,6 +23,7 @@ function normalize(list) {
       title: item.title || '夜色',
       category: item.category || '夜色',
       url: item.url,
+      thumbUrl: thumbUrlOf(item.url),
       sort: Number.isInteger(item.sort) ? item.sort : index
     }))
     .sort((a, b) => a.sort - b.sort)
@@ -56,7 +67,18 @@ function localPathOf(url) {
   if (!url) return ''
   const cache = storage.getBackgroundCache()
   const entry = cache[url]
-  return entry && entry.path ? entry.path : ''
+  if (!entry || !entry.path) return ''
+  try {
+    // 微信清理用户文件后索引可能仍在；不校验会每次先失败再回退远程
+    wx.getFileSystemManager().accessSync(entry.path)
+    return entry.path
+  } catch (e) {
+    delete cache[url]
+    try {
+      wx.setStorageSync(storage.KEYS.backgroundCache, cache)
+    } catch (err) {}
+    return ''
+  }
 }
 
 function hashUrl(url) {
@@ -117,12 +139,26 @@ function unlock(id, hours) {
   })
 }
 
+/** 清除背景图本地缓存文件（“清除数据”或切换缓存时使用） */
+function cleanCache() {
+  const cache = storage.getBackgroundCache()
+  Object.keys(cache).forEach((url) => {
+    const path = cache[url] && cache[url].path
+    if (!path) return
+    try {
+      wx.getFileSystemManager().unlinkSync(path)
+    } catch (e) {}
+  })
+  return storage.clearBackgroundCache()
+}
+
 function getUnlocked() {
   return storage.getBackgroundUnlock()
 }
 
 module.exports = {
   normalize,
+  thumbUrlOf,
   defaultOf,
   isUnlocked,
   activeOf,
@@ -131,5 +167,6 @@ module.exports = {
   cacheImage,
   prepare,
   unlock,
-  getUnlocked
+  getUnlocked,
+  cleanCache
 }

@@ -62,10 +62,10 @@
         />
 
         <view class="section-foot">
-          <text class="heat-note">共 {{marked}} 天有完整记录</text>
+          <text class="heat-note">{{marked ? '共 ' + marked + ' 天有完整记录' : '该范围还没有完整记录，可切换范围'}}</text>
           <view class="section-actions">
             <share-btn text="分享" variant="link" />
-            <text class="poster-btn" bindtap="onMakePoster">生成月度海报</text>
+            <text class="poster-btn" bindtap="onMakePoster">生成近 30 天海报</text>
           </view>
         </view>
       </view>
@@ -121,13 +121,14 @@
   <view wx:if="{{hasCloudCopy && !syncEnabled}}" class="cloud-del" bindtap="eraseCloudOnly">删除云端副本（保留本机）</view>
 
   <view wx:if="{{hasData}}" class="danger-entry fade-up" bindtap="onClearData">
-    <text class="danger-entry-title">清除数据（云端+本机）</text>
+    <text class="danger-entry-title">{{syncEnabled ? '清除数据（云端+本机）' : '清除本机睡眠数据'}}</text>
     <text class="danger-entry-hint">默认只存本机；开启云备份后以匿名标识保存，换机可恢复</text>
   </view>
 
   <ad-slot slot-name="statsFooter" enabled="{{ads.statsFooter.enabled}}" unit-id="{{ads.statsFooter.unitId}}" type="{{ads.statsFooter.type}}" />
 
   <canvas canvas-id="poster" class="poster-canvas"></canvas>
+  <canvas canvas-id="share-card" class="share-canvas"></canvas>
 
   <view class="safe-bottom"></view>
 </view>
