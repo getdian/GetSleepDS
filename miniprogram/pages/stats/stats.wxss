@@ -108,29 +108,12 @@
   color: var(--text-muted);
 }
 
-/* 分段选择器：可交互组件，保留自身形状 */
-.seg {
-  display: flex;
-  padding: 4rpx;
-  border-radius: var(--radius-pill);
-  border: 1rpx solid var(--border-moon-subtle);
-  background: var(--glass-tint);
-}
-
-.seg-item {
-  min-height: 80rpx;
-  display: inline-flex;
-  align-items: center;
-  padding: 0 22rpx;
-  border-radius: var(--radius-pill);
-  font-size: 20rpx;
+/* 固定范围说明：只做标注，不再提供切换（高度刻意压低，不与标题抢层级） */
+.range-tag {
+  font-size: 18rpx;
+  line-height: 1;
+  letter-spacing: 1rpx;
   color: var(--text-muted);
-  transition: all 0.2s ease;
-}
-
-.seg-item.is-on {
-  background: var(--glass-card-active);
-  color: var(--text-primary);
 }
 
 /* 分区底部行：左侧记录数、右侧海报入口 */
@@ -146,7 +129,6 @@
   color: var(--text-muted);
 }
 
-.seg-item:active,
 .poster-btn:active,
 .sync-btn:active,
 .cloud-del:active,
@@ -161,15 +143,25 @@
   gap: 16rpx;
 }
 
+/* 淡紫玻璃胶囊：图标 + 文案，低对比度 action，不抢热力图的视觉重心 */
 .poster-btn {
-  min-height: 80rpx;
+  height: 64rpx;
   display: inline-flex;
   align-items: center;
-  padding: 0 24rpx;
+  gap: 8rpx;
+  padding: 0 22rpx;
   border-radius: var(--radius-pill);
-  border: 1rpx solid var(--border-glow);
+  border: 1rpx solid rgba(129, 140, 248, 0.16);
+  background: rgba(129, 140, 248, 0.14);
   font-size: 22rpx;
-  color: var(--color-primary);
+  letter-spacing: 1rpx;
+  color: #C7CDFB;
+}
+
+.poster-spark {
+  font-size: 24rpx;
+  line-height: 1;
+  color: #C7CDFB;
 }
 
 /* 事实回顾 */

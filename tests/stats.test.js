@@ -164,3 +164,36 @@ test('月对齐图板：今天在月中时同样覆盖前 2 个整月', () => {
   const todayCell = heat.cells.find((c) => c.day === '2026-10-07')
   assert.ok(todayCell && todayCell.isToday)
 })
+
+test('固定 20 整周图板：恒 140 格 / 20 列，末列是本周', () => {
+  const now = local(2026, 10, 21, 12, 0) // 周三
+  const span = S.weeksSpan(now, 20)
+  assert.equal(span.days, 140)
+  // 周三到本周日还差 4 天，作为未来板位
+  assert.equal(span.endOffsetDays, 4)
+
+  const heat = S.heatmapCells({}, now, span.days, '', span.endOffsetDays)
+  assert.equal(heat.colCount, 20)
+  assert.equal(heat.cells.length, 140)
+  // 起点是 19 周前的周一，不需要 lead 补位
+  assert.equal(heat.cells.filter((cell) => cell.pad).length, 0)
+  assert.equal(heat.startKey, '2026-06-08')
+  assert.equal(heat.endKey, '2026-10-25')
+  assert.equal(heat.cells.filter((cell) => cell.future).length, 4)
+
+  const today = heat.cells.find((cell) => cell.day === '2026-10-21')
+  assert.equal(today.isToday, true)
+  assert.equal(today.future, false)
+})
+
+test('固定 20 整周图板：周日为最后一天时不出现未来板位', () => {
+  const now = local(2026, 10, 18, 8, 0) // 周日
+  const span = S.weeksSpan(now, 20)
+  assert.equal(span.days, 140)
+  assert.equal(span.endOffsetDays, 0)
+
+  const heat = S.heatmapCells({}, now, span.days, '', span.endOffsetDays)
+  assert.equal(heat.colCount, 20)
+  assert.equal(heat.cells.filter((cell) => cell.future).length, 0)
+  assert.equal(heat.cells[heat.cells.length - 1].day, '2026-10-18')
+})

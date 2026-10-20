@@ -319,6 +319,22 @@ function monthsSpan(now) {
   return { days, endOffsetDays: Math.round((end - T.startOfDay(now)) / T.DAY_MS) }
 }
 
+/**
+ * 固定整周图板（默认 20 周 = 140 格）：
+ * 起点是 (weeks-1) 周前的周一，终点是本周周日，恒等于 weeks*7 天、恒 weeks 列。
+ * 起点天然是周一，heatmapCells 不会产生 lead 补位；末列含本周剩余天数（future 板位）。
+ */
+function weeksSpan(now, weeks) {
+  const count = weeks || 20
+  const weekStart = T.startOfWeek(T.startOfDay(now))
+  const start = T.addDays(weekStart, -(count - 1) * 7)
+  const end = T.addDays(weekStart, 6)
+  return {
+    days: Math.round((end - start) / T.DAY_MS) + 1,
+    endOffsetDays: Math.round((end - T.startOfDay(now)) / T.DAY_MS)
+  }
+}
+
 module.exports = {
   CYCLE_MIN,
   completedList,
@@ -334,5 +350,6 @@ module.exports = {
   streakDays,
   heatmapCells,
   monthsSpan,
+  weeksSpan,
   summaryPayload
 }

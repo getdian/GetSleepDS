@@ -12,19 +12,14 @@ const events = require('../../utils/events')
 const adSlots = require('../../utils/ads')
 const { getConfig, loadConfig } = require('../../utils/config')
 
-const RANGE_MONTHS = 'm3'
-const RANGE_SMALL = 30
+// 热力图固定 20 整周（140 格）：恒 20 列、最后一列是本周，不再提供范围切换
+const HEAT_WEEKS = 20
 
 Page({
   data: {
     ads: adSlots.empty(),
     syncEnabled: false,
     hasCloudCopy: false,
-    range: RANGE_SMALL,
-    rangeOptions: [
-      { value: RANGE_MONTHS, label: '近 3 个月' },
-      { value: RANGE_SMALL, label: '近 30 天' }
-    ],
     hasData: false,
     avgBed: '--:--',
     avgWake: '--:--',
@@ -47,7 +42,6 @@ Page({
     this._alive = true
     this._factLoading = false
     this._factSignature = ''
-    this._rangeTouched = false
     this._records = {}
     // 先在 onLoad 渲染一次，避免首帧先画“还没有记录”再被 onShow 覆盖
     this.refresh(false)
@@ -85,16 +79,10 @@ Page({
     const pending = storage.getPending()
     const partialDay = pending ? T.sleepDayOf(pending.bedAt) : ''
 
-    // 新用户默认近 30 天，记录满 14 条后默认近 3 个月；用户手动切换后尊重选择。
-    let range = this.data.range
-    if (!this._rangeTouched) {
-      range = list.length >= 14 ? RANGE_MONTHS : RANGE_SMALL
-    }
-    // 月对齐图板：前面 2 个整月 + 当前月 + 往后约 3 周板位
-    const span = range === RANGE_MONTHS ? S.monthsSpan(now) : null
-    const days = span ? span.days : range
+    // 固定图板：19 周前的周一到本周日，恒 140 格 / 20 列，末尾几格是未来板位
+    const span = S.weeksSpan(now, HEAT_WEEKS)
     this._records = records
-    const heat = S.heatmapCells(records, now, days, partialDay, span ? span.endOffsetDays : 0)
+    const heat = S.heatmapCells(records, now, span.days, partialDay, span.endOffsetDays)
     const current = weekly.current
     const meta = storage.getMeta()
     const config = getConfig()
@@ -107,7 +95,6 @@ Page({
     const cloudPending = !!meta.cloudPendingErase
 
     this.setData({
-      range,
       hasData: list.length > 0 || !!pending,
       avgBed: current.avgBedMin === null ? '--:--' : F.fmtClock(current.avgBedMin),
       avgWake: current.avgWakeMin === null ? '--:--' : F.fmtClock(current.avgWakeMin),
@@ -190,32 +177,6 @@ Page({
         this._factLoading = false
         if (this._alive) this.setData({ factState: 'error' })
       })
-  },
-
-  onRangeTap(e) {
-    const raw = e.currentTarget.dataset.value
-    const value = raw === RANGE_MONTHS ? RANGE_MONTHS : Number(raw)
-    // 点当前项也算“手动选择”：之后新增记录不能把范围自动切走
-    this._rangeTouched = true
-    if (!value || value === this.data.range) return
-    const pending = storage.getPending()
-    const partialDay = pending ? T.sleepDayOf(pending.bedAt) : ''
-    const span = value === RANGE_MONTHS ? S.monthsSpan(Date.now()) : null
-    const days = span ? span.days : value
-    const heat = S.heatmapCells(
-      this._records || storage.getRecords(),
-      Date.now(),
-      days,
-      partialDay,
-      span ? span.endOffsetDays : 0
-    )
-    this.setData({
-      range: value,
-      cells: heat.cells,
-      colCount: heat.colCount,
-      months: heat.months,
-      marked: heat.marked
-    })
   },
 
   onHeatTap(e) {

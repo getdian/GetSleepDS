@@ -1,3 +1,10 @@
 <button class="share-btn share-btn--{{variant}}" open-type="share" hover-class="share-btn--active">
-  {{text}}
+  <view wx:if="{{variant === 'icon'}}" class="share-glyph">
+    <view class="sg-dot sg-a"></view>
+    <view class="sg-dot sg-b"></view>
+    <view class="sg-dot sg-c"></view>
+    <view class="sg-bar sg-ab"></view>
+    <view class="sg-bar sg-cb"></view>
+  </view>
+  <block wx:else>{{text}}</block>
 </button>

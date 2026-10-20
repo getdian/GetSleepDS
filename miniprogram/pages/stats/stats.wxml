@@ -43,15 +43,7 @@
       <view class="section-hero">
         <view class="section-head">
           <text class="section-title">打卡热力图</text>
-          <view class="seg">
-            <view
-              wx:for="{{rangeOptions}}"
-              wx:key="value"
-              class="seg-item {{range === item.value ? 'is-on' : ''}}"
-              data-value="{{item.value}}"
-              bindtap="onRangeTap"
-            >{{item.label}}</view>
-          </view>
+          <text class="range-tag">近 140 天</text>
         </view>
 
         <heatmap
@@ -62,10 +54,13 @@
         />
 
         <view class="section-foot">
-          <text class="heat-note">{{marked ? '共 ' + marked + ' 天有完整记录' : '该范围还没有完整记录，可切换范围'}}</text>
+          <text class="heat-note">{{marked ? '共 ' + marked + ' 天完整记录' : '近 140 天还没有完整记录'}}</text>
           <view class="section-actions">
-            <share-btn text="分享" variant="link" />
-            <text class="poster-btn" bindtap="onMakePoster">生成近 30 天海报</text>
+            <share-btn variant="icon" />
+            <view class="poster-btn" bindtap="onMakePoster">
+              <text class="poster-spark">✦</text>
+              <text>生成月度海报</text>
+            </view>
           </view>
         </view>
       </view>

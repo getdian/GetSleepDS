@@ -28,6 +28,66 @@
   font-size: 24rpx;
 }
 
+/* 圆形图标形态：信息行右侧的纯图标入口（glyph 用 CSS 画三节点，避免额外位图） */
+.share-btn--icon {
+  width: 64rpx;
+  min-width: 64rpx;
+  height: 64rpx;
+  padding: 0;
+  border-radius: 50%;
+  background: rgba(148, 163, 184, 0.14);
+  color: var(--text-primary);
+}
+
+.share-glyph {
+  position: relative;
+  width: 30rpx;
+  height: 30rpx;
+}
+
+.sg-dot {
+  position: absolute;
+  width: 7rpx;
+  height: 7rpx;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.sg-a {
+  left: 2rpx;
+  top: 4rpx;
+}
+
+.sg-b {
+  right: 2rpx;
+  top: 11rpx;
+}
+
+.sg-c {
+  left: 2rpx;
+  bottom: 4rpx;
+}
+
+.sg-bar {
+  position: absolute;
+  width: 20rpx;
+  height: 1.5rpx;
+  background: currentColor;
+  transform-origin: 0 50%;
+}
+
+.sg-ab {
+  left: 5rpx;
+  top: 7rpx;
+  transform: rotate(20deg);
+}
+
+.sg-cb {
+  left: 5rpx;
+  top: 22rpx;
+  transform: rotate(-20deg);
+}
+
 .share-btn--active {
   opacity: 0.65;
 }
