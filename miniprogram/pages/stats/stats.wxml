@@ -43,7 +43,7 @@
       <view class="section-hero">
         <view class="section-head">
           <text class="section-title">打卡热力图</text>
-          <text class="range-tag">近 140 天</text>
+          <text class="range-tag">近 3 个月</text>
         </view>
 
         <heatmap
@@ -54,7 +54,7 @@
         />
 
         <view class="section-foot">
-          <text class="heat-note">{{marked ? '共 ' + marked + ' 天完整记录' : '近 140 天还没有完整记录'}}</text>
+          <text class="heat-note">{{marked ? '共 ' + marked + ' 天完整记录' : '近 3 个月还没有完整记录'}}</text>
           <view class="section-actions">
             <share-btn variant="icon" />
             <view class="poster-btn" bindtap="onMakePoster">

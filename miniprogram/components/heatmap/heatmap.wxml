@@ -1,7 +1,12 @@
 <view class="hm">
   <view class="hm-body">
     <view class="hm-weeks">
-      <text class="hm-week" wx:for="{{weekLabels}}" wx:key="*this">{{item}}</text>
+      <text
+        class="hm-week"
+        wx:for="{{weekLabels}}"
+        wx:key="*this"
+        style="height: {{cellSize}}rpx; line-height: {{cellSize}}rpx;"
+      >{{item}}</text>
     </view>
     <scroll-view
       class="hm-scroll"
@@ -23,7 +28,7 @@
 
         <view
           class="hm-grid"
-          style="grid-template-columns: repeat({{colCount}}, {{cellSize}}rpx);"
+          style="grid-template-columns: repeat({{colCount}}, {{cellSize}}rpx); grid-template-rows: repeat(7, {{cellSize}}rpx);"
         >
           <view
             wx:for="{{cells}}"
@@ -46,6 +51,5 @@
     <view class="hm-legend-cell hm-l4"></view>
     <view class="hm-legend-cell hm-l5"></view>
     <text class="hm-legend-text">多</text>
-    <text class="hm-legend-partial">□ 仅入睡</text>
   </view>
 </view>

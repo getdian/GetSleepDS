@@ -165,35 +165,40 @@ test('月对齐图板：今天在月中时同样覆盖前 2 个整月', () => {
   assert.ok(todayCell && todayCell.isToday)
 })
 
-test('固定 20 整周图板：恒 140 格 / 20 列，末列是本周', () => {
-  const now = local(2026, 10, 21, 12, 0) // 周三
-  const span = S.weeksSpan(now, 20)
-  assert.equal(span.days, 140)
-  // 周三到本周日还差 4 天，作为未来板位
-  assert.equal(span.endOffsetDays, 4)
-
+test('月对齐图板：3 个月前（当前 10 月即 7 月 1 日）起，11 月为未来占位', () => {
+  const now = local(2026, 10, 20, 12, 0) // 周二
+  const span = S.monthsSpan(now, 3)
   const heat = S.heatmapCells({}, now, span.days, '', span.endOffsetDays)
+
+  // 7 月 1 日 ~ 11 月 15 日，恰好 20 列铺满
+  assert.equal(heat.startKey, '2026-07-01')
+  assert.equal(heat.endKey, '2026-11-15')
   assert.equal(heat.colCount, 20)
   assert.equal(heat.cells.length, 140)
-  // 起点是 19 周前的周一，不需要 lead 补位
-  assert.equal(heat.cells.filter((cell) => cell.pad).length, 0)
-  assert.equal(heat.startKey, '2026-06-08')
-  assert.equal(heat.endKey, '2026-10-25')
-  assert.equal(heat.cells.filter((cell) => cell.future).length, 4)
+  // 7/1 是周三，前面补 2 个占位
+  assert.equal(heat.cells.filter((cell) => cell.pad).length, 2)
+  assert.deepEqual(
+    heat.months.map((m) => m.label),
+    ['7月', '8月', '9月', '10月', '11月']
+  )
 
-  const today = heat.cells.find((cell) => cell.day === '2026-10-21')
+  // 11 月整月都是未来板位（今天 10-20 之后）
+  const future = heat.cells.filter((cell) => cell.future)
+  assert.equal(future.length, 26)
+  assert.ok(future.some((cell) => cell.day.indexOf('2026-11') === 0))
+  const today = heat.cells.find((cell) => cell.day === '2026-10-20')
   assert.equal(today.isToday, true)
   assert.equal(today.future, false)
 })
 
-test('固定 20 整周图板：周日为最后一天时不出现未来板位', () => {
-  const now = local(2026, 10, 18, 8, 0) // 周日
-  const span = S.weeksSpan(now, 20)
-  assert.equal(span.days, 140)
-  assert.equal(span.endOffsetDays, 0)
+test('月对齐图板：起点恒为 3 个月前的 1 号（跨年同样成立）', () => {
+  const jan = local(2027, 1, 15, 9, 0)
+  const janSpan = S.monthsSpan(jan, 3)
+  const janHeat = S.heatmapCells({}, jan, janSpan.days, '', janSpan.endOffsetDays)
+  assert.equal(janHeat.startKey, '2026-10-01')
 
-  const heat = S.heatmapCells({}, now, span.days, '', span.endOffsetDays)
-  assert.equal(heat.colCount, 20)
-  assert.equal(heat.cells.filter((cell) => cell.future).length, 0)
-  assert.equal(heat.cells[heat.cells.length - 1].day, '2026-10-18')
+  const mar = local(2027, 3, 1, 9, 0)
+  const marSpan = S.monthsSpan(mar, 3)
+  const marHeat = S.heatmapCells({}, mar, marSpan.days, '', marSpan.endOffsetDays)
+  assert.equal(marHeat.startKey, '2026-12-01')
 })

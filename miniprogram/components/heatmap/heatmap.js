@@ -1,3 +1,9 @@
+// 图板可用宽度（rpx）：750 屏宽 - 页面左右 64 - 卡内左右 48 - 星期列 36
+const DEFAULT_AVAILABLE = 602
+const CELL_GAP = 4
+const MIN_CELL = 22
+const MAX_CELL = 30
+
 Component({
   properties: {
     cells: {
@@ -11,19 +17,31 @@ Component({
     months: {
       type: Array,
       value: []
+    },
+    availableWidth: {
+      type: Number,
+      value: DEFAULT_AVAILABLE
     }
   },
 
   data: {
     scrollTarget: '',
-    // 格子边长（rpx）：26 + 4 间距 = 30/列。固定 20 整周 = 20 列，
-    // 总宽 20*26 + 19*4 = 596rpx，恰好补满卡片内可视宽（750 屏宽 - 页面 64 - 卡内 48 - 星期列 36 = 602rpx）
+    // 由列数反推：保证 N 列恰好铺满可用宽度（月数固定 4 个月时列数会在 17~21 之间浮动）
     cellSize: 26,
     // 每列顶行是周一（stats.heatmapCells 的 lead 补位保证），标签自上而下 一→日
     weekLabels: ['一', '二', '三', '四', '五', '六', '日']
   },
 
   observers: {
+    'colCount, availableWidth': function (colCount, availableWidth) {
+      const count = Number(colCount) || 0
+      if (!count) return
+      const width = Number(availableWidth) || DEFAULT_AVAILABLE
+      // 向下取整：宁可少 1~2rpx，也不要溢出触发横向滚动
+      const size = Math.max(MIN_CELL, Math.min(MAX_CELL, Math.floor((width - (count - 1) * CELL_GAP) / count)))
+      if (size !== this.data.cellSize) this.setData({ cellSize: size })
+    },
+
     'cells, colCount': function () {
       // 先清空再指向最后一格，保证数据刷新后仍自动滚到“今天”一侧
       this.setData({ scrollTarget: '' }, () => {

@@ -12,8 +12,8 @@ const events = require('../../utils/events')
 const adSlots = require('../../utils/ads')
 const { getConfig, loadConfig } = require('../../utils/config')
 
-// 热力图固定 20 整周（140 格）：恒 20 列、最后一列是本周，不再提供范围切换
-const HEAT_WEEKS = 20
+// 热力图板面：3 个月前的 1 号 → 今天 + 21 天所在周的周日（末段是未来占位）
+const HEAT_MONTHS_BACK = 3
 
 Page({
   data: {
@@ -79,8 +79,8 @@ Page({
     const pending = storage.getPending()
     const partialDay = pending ? T.sleepDayOf(pending.bedAt) : ''
 
-    // 固定图板：19 周前的周一到本周日，恒 140 格 / 20 列，末尾几格是未来板位
-    const span = S.weeksSpan(now, HEAT_WEEKS)
+    // 月对齐图板：3 个月前的 1 号起，末尾约 3 周为未来占位（当前 10 月即 7 月 1 日起）
+    const span = S.monthsSpan(now, HEAT_MONTHS_BACK)
     this._records = records
     const heat = S.heatmapCells(records, now, span.days, partialDay, span.endOffsetDays)
     const current = weekly.current

@@ -1,7 +1,5 @@
 .hm {
   width: 100%;
-  /* 与 heatmap.js 的 cellSize 保持一致：20 列 * 26 + 19 * 4 = 596rpx */
-  --hm-cell: 26rpx;
 }
 
 .hm-body {
@@ -22,8 +20,9 @@
 
 .hm-week {
   width: 26rpx;
-  height: var(--hm-cell);
-  line-height: var(--hm-cell);
+  /* 实际高度由 heatmap.wxml 的内联 style 跟随 cellSize；这里只是首帧兜底 */
+  height: 26rpx;
+  line-height: 26rpx;
   font-size: 16rpx;
   color: var(--text-muted);
   text-align: center;
@@ -56,14 +55,14 @@
 
 .hm-grid {
   display: grid;
-  grid-template-rows: repeat(7, var(--hm-cell));
   grid-auto-flow: column;
   gap: 4rpx;
 }
 
+/* 宽高由 grid track 决定（wxml 内联 template），格子自身只负责填满 */
 .hm-cell {
-  width: var(--hm-cell);
-  height: var(--hm-cell);
+  width: 100%;
+  height: 100%;
   border-radius: 8rpx;
   background: var(--heat-0);
   transition: opacity 0.15s ease, transform 0.15s ease;
@@ -93,10 +92,11 @@
   box-shadow: 0 0 0 2rpx var(--border-moon-light);
 }
 
+/* 未来占位：淡填充 + 可见虚线轮廓，与“未打卡”的实心空格明确区分 */
 .hm-future {
-  background: transparent;
-  border: 1rpx dashed rgba(255, 255, 255, 0.08);
-  opacity: 0.55;
+  background: rgba(148, 163, 184, 0.03);
+  border: 1rpx dashed rgba(148, 163, 184, 0.32);
+  opacity: 1;
 }
 
 .hm-legend {
@@ -117,8 +117,4 @@
   border-radius: 5rpx;
 }
 
-.hm-legend-partial {
-  margin-left: auto;
-  font-size: 18rpx;
-  color: var(--text-muted);
-}
+

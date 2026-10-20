@@ -303,36 +303,21 @@ function summaryPayload(records, now, days) {
 }
 
 /**
- * 「近 3 个月」月对齐图板：
- * 从"2 个月前的 1 号"开始（起点不做周一对齐，让 heatmapCells 的 lead 补位去对齐
- * 星期行，保证第一个真实日就是该月 1 号、月份标签不出现上个月的碎列），
- * 到"今天 + 21 天"所在周的周日结束（含约 3 周空板位）。
+ * 月对齐图板：monthsBack 个月前的 1 号 → (今天 + aheadDays) 所在周的周日。
+ * 起点不做周一对齐，交给 heatmapCells 的 lead 补位，保证第一个真实日就是该月 1 号，
+ * 月份标签不会出现上个月的碎列；末尾若干天是未来占位（虚线）。
  * 返回 { days, endOffsetDays }：days = 跨度天数；endOffsetDays = 图板末尾相对今天的偏移，
  * 供 heatmapCells 的第五参渲染未来板位。
  */
-function monthsSpan(now) {
+function monthsSpan(now, monthsBack, aheadDays) {
+  const back = monthsBack || 2
+  const ahead = aheadDays === undefined ? 21 : aheadDays
   const d = new Date(now)
-  const anchorMonthFirst = new Date(d.getFullYear(), d.getMonth() - 2, 1).getTime()
+  const anchorMonthFirst = new Date(d.getFullYear(), d.getMonth() - back, 1).getTime()
   const start = T.startOfDay(anchorMonthFirst)
-  const end = T.startOfWeek(T.startOfDay(now + 21 * T.DAY_MS)) + 6 * T.DAY_MS
+  const end = T.startOfWeek(T.startOfDay(now + ahead * T.DAY_MS)) + 6 * T.DAY_MS
   const days = Math.round((end - start) / T.DAY_MS) + 1
   return { days, endOffsetDays: Math.round((end - T.startOfDay(now)) / T.DAY_MS) }
-}
-
-/**
- * 固定整周图板（默认 20 周 = 140 格）：
- * 起点是 (weeks-1) 周前的周一，终点是本周周日，恒等于 weeks*7 天、恒 weeks 列。
- * 起点天然是周一，heatmapCells 不会产生 lead 补位；末列含本周剩余天数（future 板位）。
- */
-function weeksSpan(now, weeks) {
-  const count = weeks || 20
-  const weekStart = T.startOfWeek(T.startOfDay(now))
-  const start = T.addDays(weekStart, -(count - 1) * 7)
-  const end = T.addDays(weekStart, 6)
-  return {
-    days: Math.round((end - start) / T.DAY_MS) + 1,
-    endOffsetDays: Math.round((end - T.startOfDay(now)) / T.DAY_MS)
-  }
 }
 
 module.exports = {
@@ -350,6 +335,5 @@ module.exports = {
   streakDays,
   heatmapCells,
   monthsSpan,
-  weeksSpan,
   summaryPayload
 }

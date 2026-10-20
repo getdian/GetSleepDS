@@ -121,12 +121,20 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12rpx;
   margin-top: 16rpx;
 }
 
+/* 左侧说明可压缩但绝不换行（空间不足时省略，不把按钮挤成两行） */
 .heat-note {
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: 20rpx;
+  line-height: 1.2;
   color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .poster-btn:active,
@@ -138,13 +146,15 @@
 }
 
 .section-actions {
+  flex: none;
   display: flex;
   align-items: center;
-  gap: 16rpx;
+  gap: 12rpx;
 }
 
 /* 淡紫玻璃胶囊：图标 + 文案，低对比度 action，不抢热力图的视觉重心 */
 .poster-btn {
+  flex: none;
   height: 64rpx;
   display: inline-flex;
   align-items: center;
@@ -155,6 +165,7 @@
   background: rgba(129, 140, 248, 0.14);
   font-size: 22rpx;
   letter-spacing: 1rpx;
+  white-space: nowrap;
   color: #C7CDFB;
 }
 

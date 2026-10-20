@@ -28,64 +28,96 @@
   font-size: 24rpx;
 }
 
-/* 圆形图标形态：信息行右侧的纯图标入口（glyph 用 CSS 画三节点，避免额外位图） */
-.share-btn--icon {
-  width: 64rpx;
-  min-width: 64rpx;
+/* 图标 + 文字形态：无底无边框，只留 glyph 与“分享”，button 作为透明热区铺满。
+   button 自带 width:100% 等默认样式，直接约束 button 宽高在该基础库上不可靠。 */
+.share-icon {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10rpx;
   height: 64rpx;
+  padding: 0 4rpx;
+  color: var(--text-secondary);
+}
+
+.share-icon-label {
+  font-size: 22rpx;
+  line-height: 1;
+  letter-spacing: 1rpx;
+  color: var(--text-secondary);
+}
+
+.share-icon-hit {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
   padding: 0;
-  border-radius: 50%;
-  background: rgba(148, 163, 184, 0.14);
-  color: var(--text-primary);
+  border: none;
+  background: transparent;
+}
+
+.share-icon-hit::after {
+  border: none;
 }
 
 .share-glyph {
   position: relative;
-  width: 30rpx;
-  height: 30rpx;
+  width: 32rpx;
+  height: 32rpx;
+  color: var(--text-secondary);
 }
 
 .sg-dot {
   position: absolute;
-  width: 7rpx;
-  height: 7rpx;
+  width: 8rpx;
+  height: 8rpx;
   border-radius: 50%;
   background: currentColor;
 }
 
+/* 左中一点 + 右上/右下两点，两条连线从左侧点发散（对齐系统分享图标） */
 .sg-a {
   left: 2rpx;
-  top: 4rpx;
+  top: 12rpx;
 }
 
 .sg-b {
   right: 2rpx;
-  top: 11rpx;
+  top: 2rpx;
 }
 
 .sg-c {
-  left: 2rpx;
-  bottom: 4rpx;
+  right: 2rpx;
+  bottom: 2rpx;
 }
 
 .sg-bar {
   position: absolute;
-  width: 20rpx;
-  height: 1.5rpx;
+  width: 22rpx;
+  height: 2rpx;
   background: currentColor;
   transform-origin: 0 50%;
 }
 
+/* 起点为左侧点中心 (6,16)，角度 ±27° 指向右侧两点中心 (26,6)/(26,26) */
 .sg-ab {
   left: 5rpx;
-  top: 7rpx;
-  transform: rotate(20deg);
+  top: 15rpx;
+  transform: rotate(-27deg);
 }
 
 .sg-cb {
   left: 5rpx;
-  top: 22rpx;
-  transform: rotate(-20deg);
+  top: 16rpx;
+  transform: rotate(27deg);
 }
 
 .share-btn--active {
