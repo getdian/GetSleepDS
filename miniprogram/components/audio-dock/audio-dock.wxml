@@ -125,16 +125,25 @@
 
   <view wx:if="{{timerEnabled}}" class="dock-timer" catchtouchmove="noop">
     <view class="dock-timer-head">
-      <text class="dock-timer-label">定时关闭</text>
-      <text wx:if="{{timerRemainText}}" class="dock-timer-live">{{timerRemainText}}</text>
+      <view class="dock-timer-ico" aria-hidden="true">
+        <view class="dock-timer-hand"></view>
+      </view>
+      <view class="dock-timer-copy">
+        <text class="dock-timer-label">定时关闭</text>
+        <text wx:if="{{timerRemainText}}" class="dock-timer-live">{{timerRemainText}}</text>
+      </view>
     </view>
-    <view class="dock-timer-chips">
+    <view class="dock-timer-seg" aria-role="radiogroup">
       <view
         wx:for="{{timerOptions}}"
         wx:key="value"
         class="dock-timer-chip {{timerMinutes === item.value ? 'is-on' : ''}}"
         data-value="{{item.value}}"
         bindtap="onTimerTap"
+        hover-class="dock-timer-chip--tap"
+        hover-stay-time="100"
+        aria-role="radio"
+        aria-checked="{{timerMinutes === item.value}}"
       >{{item.label}}</view>
     </view>
   </view>

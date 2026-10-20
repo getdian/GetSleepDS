@@ -9,9 +9,9 @@ const audioTimer = require('../../utils/audio-timer')
 
 const ICONS = ['rain', 'wave', 'fire', 'noise', 'night']
 const TIMER_OPTIONS = [
-  { value: 30, label: '30 分' },
-  { value: 60, label: '60 分' },
-  { value: 90, label: '90 分' },
+  { value: 30, label: '30分' },
+  { value: 60, label: '60分' },
+  { value: 90, label: '90分' },
   { value: 0, label: '关' }
 ]
 

@@ -590,58 +590,144 @@
   color: var(--text-muted);
 }
 
-/* 定时 */
+/* 定时：左图标+文案，右侧等分胶囊分段（参考设计稿） */
 .dock-timer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12rpx;
+  gap: 16rpx;
   margin-top: 10rpx;
-  padding-top: 18rpx;
-  border-top: 1rpx solid var(--border-moon-subtle);
+  padding-top: 16rpx;
+  border-top: 1rpx solid rgba(255, 255, 255, 0.06);
   flex: none;
 }
 
 .dock-timer-head {
+  flex: none;
   display: flex;
-  flex-direction: column;
-  gap: 2rpx;
+  align-items: center;
+  gap: 11rpx;
   min-width: 0;
 }
 
+/* 纯 CSS 秒表：表盘 + 顶部按钮 + 指针，笔画与图标参考图一致 */
+.dock-timer-ico {
+  position: relative;
+  width: 36rpx;
+  height: 36rpx;
+  flex: none;
+  color: rgba(255, 255, 255, 0.64);
+}
+
+.dock-timer-ico::before {
+  content: "";
+  position: absolute;
+  left: 4rpx;
+  top: 7rpx;
+  width: 28rpx;
+  height: 28rpx;
+  box-sizing: border-box;
+  border: 2rpx solid currentColor;
+  border-radius: 50%;
+}
+
+.dock-timer-ico::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 1rpx;
+  width: 14rpx;
+  height: 3rpx;
+  margin-left: -7rpx;
+  border-radius: 2rpx;
+  background: currentColor;
+}
+
+.dock-timer-hand {
+  position: absolute;
+  left: 50%;
+  top: 11rpx;
+  width: 2rpx;
+  height: 10rpx;
+  margin-left: -1rpx;
+  border-radius: 1rpx;
+  background: currentColor;
+  transform-origin: 50% 100%;
+  transform: rotate(38deg);
+}
+
+.dock-timer-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1rpx;
+  min-width: 0;
+  max-width: 196rpx;
+}
+
 .dock-timer-label {
-  font-size: 22rpx;
-  color: var(--text-secondary);
+  font-size: 26rpx;
+  line-height: 1.2;
+  white-space: nowrap;
+  color: var(--text-primary);
 }
 
 /* 运行中的剩余时间：与偏好档位区分，暂停时显示冻结的剩余 */
 .dock-timer-live {
-  font-size: 19rpx;
+  font-size: 18rpx;
   line-height: 1.2;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--color-primary);
 }
 
-.dock-timer-chips {
+/* 深色轨道 + 等分分段，选中为浅紫药丸 */
+.dock-timer-seg {
+  flex: 1;
+  min-width: 0;
   display: flex;
-  gap: 6rpx;
+  align-items: center;
+  padding: 5rpx;
+  border-radius: var(--radius-pill);
+  border: 1rpx solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.38);
 }
 
 .dock-timer-chip {
-  min-height: 80rpx;
-  display: inline-flex;
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 62rpx;
+  display: flex;
   align-items: center;
-  padding: 0 22rpx;
+  justify-content: center;
+  margin: 0 2rpx;
   border-radius: var(--radius-pill);
-  border: 1rpx solid var(--border-moon-subtle);
-  font-size: 22rpx;
-  color: var(--text-muted);
+  font-size: 24rpx;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.56);
+  transition: background 0.18s var(--ease-gentle), color 0.18s var(--ease-gentle),
+    box-shadow 0.18s var(--ease-gentle);
+}
+
+/* 垂直扩 5rpx：视觉仍是 62rpx 药丸，实际可点 72rpx */
+.dock-timer-chip::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -5rpx;
+  bottom: -5rpx;
+}
+
+.dock-timer-chip--tap {
+  opacity: 0.72;
 }
 
 .dock-timer-chip.is-on {
-  border-color: var(--border-glow);
-  background: var(--glass-card-active);
-  color: var(--text-primary);
+  background: #c9ccfa;
+  color: #3f49bf;
+  font-weight: 600;
+  box-shadow: 0 3rpx 10rpx rgba(0, 0, 0, 0.28);
 }
 
 /* 缓存 */
