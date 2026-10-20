@@ -28,8 +28,17 @@ Component({
     scrollTarget: '',
     // 由列数反推：保证 N 列恰好铺满可用宽度（月数固定 4 个月时列数会在 17~21 之间浮动）
     cellSize: 26,
-    // 每列顶行是周一（stats.heatmapCells 的 lead 补位保证），标签自上而下 一→日
-    weekLabels: ['一', '二', '三', '四', '五', '六', '日']
+    // 每列顶行是周一（stats.heatmapCells 的 lead 补位保证）。
+    // 只标注一/三/五/日，二/四/六 留空占位，保证 7 行仍与格子严格对齐
+    weekLabels: [
+      { key: 'mon', label: '一' },
+      { key: 'tue', label: '' },
+      { key: 'wed', label: '三' },
+      { key: 'thu', label: '' },
+      { key: 'fri', label: '五' },
+      { key: 'sat', label: '' },
+      { key: 'sun', label: '日' }
+    ]
   },
 
   observers: {

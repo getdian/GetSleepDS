@@ -109,7 +109,16 @@
     </view>
     <view class="sync-ops">
       <view wx:if="{{syncEnabled}}" class="sync-btn {{syncBusy ? 'is-busy' : ''}}" bindtap="onSyncTap">{{syncBusy ? '同步中…' : '同步'}}</view>
-      <switch class="sync-switch" checked="{{syncEnabled}}" color="#818CF8" bindchange="onSyncSwitch" />
+      <view
+        class="sync-toggle-hit"
+        bindtap="onSyncToggle"
+        aria-role="switch"
+        aria-checked="{{syncEnabled}}"
+      >
+        <view class="sync-toggle {{syncEnabled ? 'is-on' : ''}}">
+          <view class="sync-toggle-knob"></view>
+        </view>
+      </view>
     </view>
   </view>
 

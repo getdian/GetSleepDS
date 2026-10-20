@@ -192,15 +192,12 @@ Page({
     wx.showToast({ title: text, icon: 'none' })
   },
 
-  rollbackSyncSwitch() {
-    // switch 组件已切到开启态；先同步到 true 再回到 false，确保受控 checked 真正重渲染
-    this.setData({ syncEnabled: true }, () => {
-      this.setData({ syncEnabled: false })
-    })
+  // 自绘开关：状态完全由 data.syncEnabled 驱动，失败/取消时不需要回滚组件状态
+  onSyncToggle() {
+    this.applySyncEnabled(!this.data.syncEnabled)
   },
 
-  onSyncSwitch(event) {
-    const enabled = !!(event.detail && event.detail.value)
+  applySyncEnabled(enabled) {
     if (!enabled) {
       if (!storage.setSyncEnabled(false)) {
         wx.showToast({ title: '云备份开关保存失败', icon: 'none' })
@@ -224,12 +221,10 @@ Page({
 
     const config = getConfig()
     if (config.features && config.features.sync === false) {
-      this.rollbackSyncSwitch()
       wx.showToast({ title: '服务端暂未开放云备份', icon: 'none' })
       return
     }
     if (storage.getMeta().cloudPendingErase) {
-      this.rollbackSyncSwitch()
       wx.showModal({
         title: '先删除云端副本',
         content: '上次清除数据时云端副本尚未删除。请先在下方“删除云端副本（保留本机）”，否则开启会恢复旧记录。',
@@ -245,12 +240,8 @@ Page({
       confirmText: '开启',
       cancelText: '保持本地',
       success: (res) => {
-        if (!res.confirm) {
-          this.rollbackSyncSwitch()
-          return
-        }
+        if (!res.confirm) return
         if (!storage.setSyncEnabled(true)) {
-          this.rollbackSyncSwitch()
           wx.showToast({ title: '云备份开关保存失败', icon: 'none' })
           return
         }

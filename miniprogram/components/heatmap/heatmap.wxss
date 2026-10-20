@@ -99,22 +99,6 @@
   opacity: 1;
 }
 
-.hm-legend {
-  display: flex;
-  align-items: center;
-  gap: 8rpx;
-  margin-top: 14rpx;
-}
 
-.hm-legend-text {
-  font-size: 18rpx;
-  color: var(--text-muted);
-}
-
-.hm-legend-cell {
-  width: 18rpx;
-  height: 18rpx;
-  border-radius: 5rpx;
-}
 
 
