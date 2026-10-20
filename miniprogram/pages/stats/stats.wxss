@@ -1,3 +1,9 @@
+/* 跨页播放器宿主：压在页面内容之上，避免底部内容拦截音符点击 */
+.np-host {
+  position: relative;
+  z-index: 120;
+}
+
 .stats-page {
   padding-top: 8rpx;
 }

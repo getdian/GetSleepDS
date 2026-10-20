@@ -3,6 +3,7 @@
   "backgroundColor": "#080B14",
   "usingComponents": {
     "ambient": "/components/ambient/ambient",
+    "hero-backdrop": "/components/hero-backdrop/hero-backdrop",
     "top-bar": "/components/top-bar/top-bar",
     "audio-dock": "/components/audio-dock/audio-dock",
     "ad-slot": "/components/ad-slot/ad-slot",

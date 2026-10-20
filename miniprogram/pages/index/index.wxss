@@ -573,6 +573,21 @@
   color: #FFFFFF;
 }
 
+/* 时长护栏：偏短用琥珀，不足用柔红，避免与“推荐”紫色混淆 */
+.result-badge.guide-short {
+  background: rgba(245, 194, 107, 0.14);
+  border-color: rgba(245, 194, 107, 0.4);
+  color: #f5c26b;
+  box-shadow: none;
+}
+
+.result-badge.guide-low {
+  background: rgba(248, 113, 113, 0.14);
+  border-color: rgba(248, 113, 113, 0.4);
+  color: #fca5a5;
+  box-shadow: none;
+}
+
 /* 后续推荐行列表 */
 .result-list {
   display: flex;
@@ -625,16 +640,41 @@
   display: flex;
   align-items: baseline;
   gap: 8rpx;
+  min-width: 0;
 }
 
 .result-row-dot {
+  flex: none;
   font-size: 22rpx;
   color: rgba(160, 180, 225, 0.5);
 }
 
 .result-row-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 23rpx;
   color: rgba(185, 205, 240, 0.8);
+}
+
+.result-row-guide {
+  flex: none;
+  font-size: 21rpx;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.result-row-guide.guide-ok {
+  color: rgba(167, 164, 255, 0.9);
+}
+
+.result-row-guide.guide-short {
+  color: #f5c26b;
+}
+
+.result-row-guide.guide-low {
+  color: #fca5a5;
 }
 
 .result-fall {
@@ -745,6 +785,12 @@
   .result-meta-inline {
     white-space: normal;
   }
+}
+
+/* 跨页播放器宿主：压在页面内容之上，否则音符/播放条会被底部主按钮拦截点击 */
+.np-host {
+  position: relative;
+  z-index: 120;
 }
 
 /* 脚注 */

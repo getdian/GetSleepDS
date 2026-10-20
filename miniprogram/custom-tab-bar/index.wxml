@@ -1,0 +1,28 @@
+<view class="tabbar" aria-role="tablist">
+  <view
+    wx:for="{{list}}"
+    wx:key="key"
+    class="tab-item {{item.key === 'sleep' ? 'is-center' : ''}} {{selected === index ? 'is-on' : ''}}"
+    data-index="{{index}}"
+    bindtap="onTap"
+    aria-role="tab"
+    aria-selected="{{selected === index}}"
+    aria-label="{{item.text}}"
+  >
+    <view wx:if="{{item.key === 'sleep'}}" class="tab-center-bg" aria-hidden="true"></view>
+    <view class="tab-content {{item.key === 'sleep' ? 'tab-content-center' : ''}}">
+      <view wx:if="{{item.key === 'calc'}}" class="tab-ico tab-clock" aria-hidden="true">
+        <view class="tab-hand tab-hand-h"></view>
+        <view class="tab-hand tab-hand-m"></view>
+      </view>
+      <view wx:elif="{{item.key === 'sleep'}}" class="tab-moon" aria-hidden="true"></view>
+      <view wx:else class="tab-ico tab-stats" aria-hidden="true">
+        <view class="tab-bar b1"></view>
+        <view class="tab-bar b2"></view>
+        <view class="tab-bar b3"></view>
+        <view class="tab-bar b4"></view>
+      </view>
+      <text class="tab-label">{{item.text}}</text>
+    </view>
+  </view>
+</view>

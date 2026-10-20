@@ -10,7 +10,11 @@ App({
   globalData: {
     config: null,
     // 配置加载的 Promise，页面可 await，但页面不依赖它才能渲染
-    configReady: null
+    configReady: null,
+    // 计算器/统计页点迷你播放条后，切到入睡页并打开环境声抽屉
+    openAudioSheet: false,
+    // 本次启动是否创建过音频会话：冷启动时 meta 可能残留，避免画出幽灵播放条
+    audioSession: false
   },
 
   onLaunch(options) {

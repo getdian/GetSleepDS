@@ -1,0 +1,9 @@
+<view wx:if="{{background && !failed}}" class="hero-bg">
+  <image
+    class="hero-bg-img"
+    src="{{background.localPath || background.url}}"
+    mode="widthFix"
+    binderror="onError"
+  />
+  <view class="hero-bg-scrim"></view>
+</view>

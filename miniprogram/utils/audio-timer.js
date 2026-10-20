@@ -35,7 +35,11 @@ function stopAudio() {
     const audio = wx.getBackgroundAudioManager()
     audio.stop()
   } catch (e) {}
-  storage.patchMeta({ lastTrackActive: false })
+  storage.patchMeta({ lastTrackActive: false, lastTrackPlaying: false })
+  try {
+    const app = getApp()
+    if (app && app.globalData) app.globalData.audioSession = false
+  } catch (e) {}
 }
 
 /** 后台音频是否仍有存活会话（冷启动时没有 src，持久化的倒计时不应继续生效） */

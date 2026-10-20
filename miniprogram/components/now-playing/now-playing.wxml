@@ -1,6 +1,22 @@
+<view
+  wx:if="{{visible && miniExpanded && !collapsed}}"
+  class="np-collapse-mask"
+  bindtap="collapseMini"
+  aria-hidden="true"
+></view>
 <view class="np-shell {{visible ? 'is-in' : 'is-out'}}" aria-hidden="{{!visible}}">
-  <view class="now-playing">
-    <view class="np-main" bindtap="goSleep" hover-class="np-main--tap" hover-stay-time="120">
+  <view
+    wx:if="{{!collapsed && (!playing || miniExpanded)}}"
+    class="now-playing {{collapsing ? 'is-collapsing' : ''}}"
+    bindtap="openAudio"
+  >
+    <view
+      class="np-main"
+      hover-class="np-main--tap"
+      hover-stay-time="120"
+      aria-role="button"
+      aria-label="打开环境声音"
+    >
       <view class="np-info">
         <view class="np-line">
           <text class="np-title">{{title}}</text>
@@ -41,19 +57,16 @@
           <view class="np-ico-play"></view>
         </block>
       </view>
-      <view
-        class="np-icon np-x"
-        catchtap="close"
-        hover-class="np-icon--tap"
-        hover-stay-time="100"
-        aria-role="button"
-        aria-label="关闭播放"
-      >
-        <view class="np-ico-x">
-          <view class="np-xbar np-x-a"></view>
-          <view class="np-xbar np-x-b"></view>
-        </view>
-      </view>
     </view>
+  </view>
+
+  <view
+    wx:else
+    class="np-float {{playing ? '' : 'is-paused'}}"
+    bindtap="expandMini"
+    aria-role="button"
+    aria-label="展开播放条"
+  >
+    <text class="np-float-note" aria-hidden="true">♪</text>
   </view>
 </view>

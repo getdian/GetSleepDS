@@ -1,257 +1,434 @@
 .sleep-page {
+  position: relative;
+  z-index: 1;
   padding-top: 8rpx;
+  padding-bottom: 190rpx;
 }
 
+/* Hero：与计算器页同一套大标题 + 轻说明 */
 .sleep-hero {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 6rpx;
-  margin-bottom: 28rpx;
+  gap: 8rpx;
+  margin-bottom: 22rpx;
+}
+
+.sleep-hero-meta {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+}
+
+.sleep-eyebrow {
+  font-size: 18rpx;
+  font-weight: 600;
+  letter-spacing: 5rpx;
+  color: var(--color-primary-soft);
 }
 
 .sleep-date {
-  font-size: 24rpx;
-  color: var(--text-secondary);
-  letter-spacing: 2rpx;
+  font-size: 22rpx;
+  letter-spacing: 1rpx;
+  color: var(--text-muted);
 }
 
-.sleep-hero .title-xl {
+.sleep-title {
+  display: block;
   margin-top: 4rpx;
+  font-family: var(--font-sans);
+  font-size: 72rpx;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: 2rpx;
+  color: #FFFFFF;
+  text-shadow: 0 4rpx 24rpx rgba(0, 0, 0, 0.55);
 }
 
-/* 提示条 */
+.sleep-sub {
+  display: block;
+  max-width: 620rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: rgba(220, 230, 255, 0.72);
+}
+
+/* 提示条：只留一条轻线，不再做卡片 */
 .notice {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16rpx;
-  margin-bottom: 24rpx;
-  padding: 18rpx 24rpx;
-  border-radius: var(--radius-md);
-  border: 1rpx solid var(--border-glow);
-  background: var(--glass-tint);
+  margin: 4rpx 0 10rpx;
+  padding: 12rpx 2rpx;
+  border-bottom: 1rpx solid rgba(255, 255, 255, 0.07);
   font-size: 22rpx;
   color: var(--text-secondary);
+}
+
+.notice-text {
+  flex: 1;
+  min-width: 0;
 }
 
 .notice-close {
+  flex: none;
   color: var(--color-primary);
 }
 
-/* 打卡卡 */
-.record-card {
-  padding: 30rpx 28rpx 34rpx;
-}
-
-.record-top {
+/* 入睡圆环：边缘透明，靠柔光/呼吸环向外辐射 */
+.orb-section {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
+  padding-top: 8rpx;
 }
 
-.record-kicker {
-  font-family: var(--font-cn-serif);
-  font-size: 26rpx;
-  letter-spacing: 4rpx;
-  color: var(--text-secondary);
-}
-
-.record-state {
-  padding: 4rpx 18rpx;
-  border-radius: var(--radius-pill);
-  border: 1rpx solid var(--border-moon-subtle);
-  font-size: 18rpx;
-  color: var(--text-muted);
-}
-
-.pill-sleeping {
-  color: var(--color-calm-teal);
-  border-color: rgba(45, 212, 191, 0.4);
-}
-
-.pill-done {
-  color: var(--color-accent-moon);
-  border-color: rgba(253, 230, 138, 0.4);
-}
-
-/* 月相大圆钮 + 双环呼吸 */
-.dial-wrap {
+.orb-stage {
   position: relative;
+  width: 440rpx;
+  height: 440rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 420rpx;
-  margin: 8rpx 0 2rpx;
 }
 
-.dial-halo {
+.orb-aura {
   position: absolute;
-  width: 340rpx;
-  height: 340rpx;
   border-radius: 50%;
-  border: 1.5rpx solid var(--border-glow);
-  animation: haloBreathe 4.5s var(--ease-gentle) infinite;
+  pointer-events: none;
+  filter: blur(18rpx);
+  background: radial-gradient(
+    circle,
+    rgba(120, 112, 255, 0.3) 0%,
+    rgba(90, 80, 220, 0.12) 48%,
+    rgba(20, 20, 50, 0) 72%
+  );
+  animation: orbPulse 6s var(--ease-gentle) infinite;
 }
 
-.halo-two {
-  width: 392rpx;
-  height: 392rpx;
-  border-color: rgba(129, 140, 248, 0.18);
-  animation-delay: 1.6s;
+.aura-a {
+  width: 430rpx;
+  height: 430rpx;
 }
 
-.dial {
+.aura-b {
+  width: 360rpx;
+  height: 360rpx;
+  opacity: 0.7;
+  animation-delay: 1.4s;
+}
+
+.aura-c {
+  width: 480rpx;
+  height: 480rpx;
+  opacity: 0.45;
+  animation-delay: 2.8s;
+}
+
+.orb-section.is-sleeping .orb-aura {
+  background: radial-gradient(
+    circle,
+    rgba(58, 210, 190, 0.26) 0%,
+    rgba(55, 90, 190, 0.12) 48%,
+    rgba(20, 20, 50, 0) 72%
+  );
+}
+
+.sleep-orb {
   position: relative;
   z-index: 1;
-  width: 300rpx;
-  height: 300rpx;
+  width: 320rpx;
+  height: 320rpx;
   border-radius: 50%;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8rpx;
-  background: linear-gradient(135deg, #5B5BD6, #4338CA);
-  border: 1rpx solid var(--border-moon-light);
-  box-shadow: 0 24rpx 64rpx rgba(99, 102, 241, 0.4), inset 0 2rpx 12rpx rgba(255, 255, 255, 0.25);
-  transition: transform 0.3s var(--ease-spring), background 0.4s ease, box-shadow 0.4s ease;
+  gap: 4rpx;
+  border: none;
+  background: radial-gradient(
+    circle at 50% 40%,
+    rgba(126, 122, 255, 0.7) 0%,
+    rgba(88, 82, 220, 0.48) 42%,
+    rgba(55, 52, 150, 0.2) 66%,
+    rgba(20, 20, 55, 0) 80%
+  );
+  box-shadow:
+    0 0 80rpx rgba(109, 104, 255, 0.36),
+    0 0 160rpx rgba(80, 75, 210, 0.18);
+  transition: transform 0.3s var(--ease-spring), background 0.5s ease, box-shadow 0.5s ease;
 }
 
-.dial:active {
+.sleep-orb::before {
+  content: "";
+  position: absolute;
+  left: 18rpx;
+  right: 18rpx;
+  top: 18rpx;
+  bottom: 18rpx;
+  border-radius: 50%;
+  border: 1rpx solid rgba(255, 255, 255, 0.1);
+  pointer-events: none;
+}
+
+.sleep-orb::after {
+  content: "";
+  position: absolute;
+  left: 62rpx;
+  top: 46rpx;
+  width: 110rpx;
+  height: 60rpx;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  filter: blur(14rpx);
+  transform: rotate(-24deg);
+  pointer-events: none;
+}
+
+.sleep-orb:active {
   transform: scale(0.96);
 }
 
-.dial--sleeping {
-  background: linear-gradient(135deg, var(--color-calm-teal), var(--color-primary-dark));
-  box-shadow: 0 24rpx 64rpx rgba(45, 212, 191, 0.3), inset 0 2rpx 12rpx rgba(255, 255, 255, 0.22);
+.orb--sleeping {
+  background: radial-gradient(
+    circle at 50% 40%,
+    rgba(58, 220, 198, 0.58) 0%,
+    rgba(55, 95, 200, 0.44) 45%,
+    rgba(38, 58, 145, 0.18) 68%,
+    rgba(20, 20, 55, 0) 80%
+  );
+  box-shadow:
+    0 0 80rpx rgba(45, 212, 191, 0.28),
+    0 0 160rpx rgba(55, 80, 200, 0.16);
 }
 
-.dial-title {
-  font-family: var(--font-cn-serif);
-  font-size: 46rpx;
-  letter-spacing: 6rpx;
-  color: var(--text-moon-pure);
+.orb-kicker {
+  position: relative;
+  z-index: 1;
+  font-size: 18rpx;
+  letter-spacing: 2rpx;
+  color: rgba(224, 233, 255, 0.72);
 }
 
-.dial-sub {
-  font-size: 20rpx;
-  color: rgba(248, 250, 252, 0.75);
+.orb-time {
+  position: relative;
+  z-index: 1;
+  font-family: var(--font-sans);
+  font-size: 64rpx;
+  font-weight: 300;
+  line-height: 1.1;
+  letter-spacing: 2rpx;
+  color: #FFFFFF;
   font-variant-numeric: tabular-nums;
+  text-shadow: 0 2rpx 20rpx rgba(10, 10, 40, 0.3);
 }
 
-.record-hint {
+.orb-meta {
+  position: relative;
+  z-index: 1;
+  max-width: 230rpx;
+  text-align: center;
+  font-size: 19rpx;
+  line-height: 1.35;
+  color: rgba(222, 231, 255, 0.78);
+}
+
+.orb-caption {
   display: block;
+  margin-top: 2rpx;
   text-align: center;
   font-size: 24rpx;
+  letter-spacing: 1rpx;
   color: var(--text-secondary);
+}
+
+.orb-note {
+  display: block;
+  margin-top: 8rpx;
+  text-align: center;
+  font-size: 19rpx;
+  color: var(--text-muted);
 }
 
 .undo-bed {
-  margin-top: 12rpx;
-  min-height: 88rpx;
+  margin-top: 8rpx;
+  min-height: 80rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   text-align: center;
   font-size: 22rpx;
   color: var(--text-secondary);
-  text-decoration: underline;
 }
 
-/* 完成态：三项汇总 */
-.done-grid {
-  display: flex;
-  padding: 36rpx 0 18rpx;
-}
-
-.done-item {
-  flex: 1;
+/* 完成态：同样不套卡片，直接落在背景上 */
+.done-section {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8rpx;
+  padding-top: 12rpx;
 }
 
-.done-v {
+.done-kicker {
+  font-size: 18rpx;
+  letter-spacing: 3rpx;
+  color: var(--text-muted);
+}
+
+.done-duration {
+  margin-top: 10rpx;
   font-family: var(--font-cn-serif);
-  font-size: 30rpx;
+  font-size: 76rpx;
+  line-height: 1.1;
+  letter-spacing: 2rpx;
   color: var(--text-moon-pure);
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
 
-.done-accent {
-  color: var(--color-primary);
-}
-
-.done-k {
-  font-size: 20rpx;
+.done-duration-k {
+  margin-top: 4rpx;
+  font-size: 19rpx;
+  letter-spacing: 3rpx;
   color: var(--text-muted);
+}
+
+.done-timeline {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  margin-top: 30rpx;
+  padding: 0 18rpx;
+  box-sizing: border-box;
+}
+
+.done-time {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.done-time.is-right {
+  align-items: flex-end;
+}
+
+.done-time-k {
+  font-size: 18rpx;
   letter-spacing: 2rpx;
+  color: var(--text-muted);
+}
+
+.done-time-v {
+  font-size: 30rpx;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.done-rail {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  margin: 0 18rpx;
+}
+
+.done-rail-line {
+  flex: 1;
+  height: 1rpx;
+  background: linear-gradient(90deg, rgba(167, 164, 255, 0.15), rgba(167, 164, 255, 0.5));
+}
+
+.done-rail-dot {
+  flex: none;
+  width: 8rpx;
+  height: 8rpx;
+  border-radius: 50%;
+  background: var(--color-primary-soft);
+  box-shadow: 0 0 12rpx rgba(167, 164, 255, 0.6);
+}
+
+.done-rail-dot.is-end {
+  background: var(--color-accent-moon);
+  box-shadow: 0 0 12rpx rgba(253, 230, 138, 0.5);
+}
+
+.done-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 20rpx;
 }
 
 .overwrite {
-  margin: 22rpx 0 0;
-  padding: 18rpx 24rpx;
+  min-height: 80rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 20rpx;
   text-align: center;
-  border-radius: var(--radius-pill);
-  border: 1rpx solid rgba(129, 140, 248, 0.3);
-  background: rgba(99, 102, 241, 0.1);
   font-size: 22rpx;
-  color: #C7D2FE;
+  color: var(--color-primary-soft);
+  text-decoration: underline;
+}
+
+.overwrite:active,
+.notice:active,
+.week-section:active {
+  opacity: 0.72;
 }
 
 .undo {
-  margin-top: 4rpx;
-  min-height: 88rpx;
+  min-height: 76rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   text-align: center;
-  font-size: 22rpx;
-  color: var(--text-secondary);
+  font-size: 21rpx;
+  color: var(--text-muted);
 }
 
-/* 展示位：与上方撤销入口再拉开一档，降低误触 */
+/* 展示位 */
 .sleep-ad {
-  margin-top: 24rpx;
+  margin-top: 20rpx;
 }
 
-.sleep-share {
-  display: flex;
-  justify-content: center;
-  margin-top: 24rpx;
-}
-
-/* 最近 7 天：无框分区，打卡卡是本页唯一玻璃焦点 */
-.week-card {
-  margin-top: 36rpx;
-}
-
-.week-card:active,
-.overwrite:active,
-.notice:active {
-  opacity: 0.76;
+/* 最近 7 天：无卡片，只留标题和柱线 */
+.week-section {
+  margin-top: 44rpx;
+  padding: 0 4rpx;
 }
 
 .week-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12rpx;
+}
+
+.week-head-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2rpx;
 }
 
 .week-title {
-  font-family: var(--font-cn-serif);
-  font-size: 28rpx;
-  letter-spacing: 3rpx;
-  color: var(--text-primary);
+  font-size: 26rpx;
+  letter-spacing: 2rpx;
+  color: var(--text-secondary);
+}
+
+.week-sub {
+  font-size: 18rpx;
+  letter-spacing: 1rpx;
+  color: var(--text-muted);
 }
 
 .week-link {
-  min-height: 88rpx;
+  flex: none;
+  min-height: 72rpx;
   display: inline-flex;
   align-items: center;
-  padding: 0 8rpx 0 24rpx;
+  padding: 0 4rpx 0 20rpx;
   font-size: 22rpx;
   color: var(--color-primary);
 }
@@ -259,38 +436,76 @@
 .week-days {
   display: flex;
   justify-content: space-between;
-  margin-top: 26rpx;
+  align-items: flex-end;
+  margin-top: 22rpx;
 }
 
 .week-day {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12rpx;
+  gap: 10rpx;
 }
 
-.day-dot {
-  width: 52rpx;
+.day-track {
+  position: relative;
+  width: 14rpx;
+  height: 88rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+}
+
+.day-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 0;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.18);
+  transition: height 0.35s var(--ease-gentle), background 0.3s ease;
+}
+
+.day-fill.level-0 {
+  height: 7rpx;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.day-fill.level-1 {
+  height: 18rpx;
+  background: var(--heat-1);
+}
+
+.day-fill.level-2 {
+  height: 34rpx;
+  background: var(--heat-2);
+}
+
+.day-fill.level-3 {
   height: 52rpx;
-  border-radius: 50%;
-  border: 1rpx solid var(--border-moon-subtle);
-  background: var(--heat-0);
-  transition: background 0.3s ease;
+  background: var(--heat-3);
 }
 
-.day-dot.level-1 { background: var(--heat-1); border-color: transparent; }
-.day-dot.level-2 { background: var(--heat-2); border-color: transparent; }
-.day-dot.level-3 { background: var(--heat-3); border-color: transparent; }
-.day-dot.level-4 { background: var(--heat-4); border-color: transparent; }
-.day-dot.level-5 { background: var(--heat-5); border-color: transparent; }
+.day-fill.level-4 {
+  height: 70rpx;
+  background: var(--heat-4);
+}
 
-.day-dot.is-partial {
+.day-fill.level-5 {
+  height: 84rpx;
+  background: var(--heat-5);
+}
+
+.day-fill.is-partial {
+  height: 50rpx;
   background: transparent;
-  border: 1.5rpx solid var(--border-glow);
+  border: 1rpx dashed var(--border-glow);
 }
 
-.day-dot.is-today {
-  box-shadow: 0 0 0 3rpx var(--border-moon-light);
+.day-fill.is-today {
+  box-shadow: 0 0 0 2rpx var(--border-moon-light);
 }
 
 .day-label {
@@ -300,23 +515,41 @@
 
 .day-label.is-today-label {
   color: var(--text-primary);
+  font-weight: 500;
+}
+
+.week-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10rpx;
+  margin-top: 16rpx;
 }
 
 .week-summary {
-  display: block;
-  margin-top: 18rpx;
-  text-align: center;
-  font-size: 20rpx;
+  font-size: 19rpx;
   color: var(--text-muted);
+}
+
+.week-sep {
+  font-size: 19rpx;
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.sleep-share {
+  display: flex;
+  justify-content: center;
+  margin-top: 14rpx;
 }
 
 .sleep-quote {
   display: block;
-  margin-top: 40rpx;
+  margin-top: 28rpx;
   text-align: center;
-  font-size: 28rpx;
+  font-size: 26rpx;
   color: var(--text-muted);
-  letter-spacing: 8rpx;
+  letter-spacing: 7rpx;
   opacity: 0.9;
 }
 
@@ -339,7 +572,6 @@
 
 .dim-mask.is-on {
   opacity: 0.97;
-  /* 熄灯期间必须拦截底层点击，否则黑屏下仍能误触分享/统计/声音 */
   pointer-events: auto;
 }
 
@@ -354,8 +586,38 @@
   opacity: 1;
 }
 
-@keyframes haloBreathe {
-  0% { transform: scale(0.94); opacity: 0.5; }
-  100% { transform: scale(1.08); opacity: 0.15; }
+@keyframes orbPulse {
+  0%, 100% {
+    transform: scale(0.92);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.2;
+  }
 }
 
+@media (max-width: 360px) {
+  .sleep-title {
+    font-size: 64rpx;
+  }
+
+  .orb-stage {
+    width: 400rpx;
+    height: 400rpx;
+  }
+
+  .sleep-orb {
+    width: 292rpx;
+    height: 292rpx;
+  }
+
+  .done-duration {
+    font-size: 64rpx;
+  }
+
+  .aura-c {
+    width: 430rpx;
+    height: 430rpx;
+  }
+}

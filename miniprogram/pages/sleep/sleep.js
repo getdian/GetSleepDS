@@ -18,6 +18,13 @@ Page({
     greeting: '',
     state: 'idle',
     stateText: '未记录',
+    nowText: '--:--',
+    heroTitle: '我准备睡了',
+    heroSub: '记录这一刻，明早回来告诉我几点醒。',
+    orbKicker: '当前时间',
+    orbTime: '--:--',
+    orbMeta: '今晚',
+    orbCaption: '轻触圆环，记录入睡',
     buttonTitle: '入睡',
     buttonSub: '',
     record: null,
@@ -46,9 +53,31 @@ Page({
 
   onShow() {
     this._alive = true
+    const tabBar = this.getTabBar && this.getTabBar()
+    if (tabBar) tabBar.setData({ selected: 1 })
     this.refresh()
     this.startClock()
     adSlots.apply(this)
+    this.openPendingAudio()
+  },
+
+  /** 计算器/统计页的播放条点击后，sleep 页接管并打开声音抽屉 */
+  openPendingAudio() {
+    const app = getApp()
+    if (!app || !app.globalData || !app.globalData.openAudioSheet) return
+    app.globalData.openAudioSheet = false
+    let tries = 4
+    const tryOpen = () => {
+      if (!this._alive) return
+      const dock = this.selectComponent('#dock')
+      if (dock && dock.openSheet) {
+        dock.openSheet()
+        return
+      }
+      tries -= 1
+      if (tries > 0) setTimeout(tryOpen, 120)
+    }
+    setTimeout(tryOpen, 180)
   },
 
   onHide() {
@@ -110,13 +139,37 @@ Page({
     const weekly = S.weekly(records, now)
     const canOverwrite = state === 'done' && S.canStartNewSleep(record, now, todayKey)
     const crossDay = !!record && record.day !== todayKey
-    const evening = new Date(now).getHours() >= 18
+    const hour = new Date(now).getHours()
+    const evening = hour >= 18
+    const nowText = F.fmtClockTs(now)
+    const sleeping = state === 'sleeping'
+    const done = state === 'done'
 
     this.setData({
       dateText: F.fmtDateCN(now),
       greeting: F.greeting(now),
       state,
-      stateText: state === 'idle' ? '未记录' : state === 'sleeping' ? '睡梦中' : '已完成',
+      stateText: state === 'idle' ? '未记录' : sleeping ? '睡梦中' : '已完成',
+      nowText,
+      heroTitle: done
+        ? hour >= 5 && hour < 12
+          ? '早安，睡得好吗'
+          : '今晚的记录完成了'
+        : sleeping
+          ? '夜色正浓'
+          : '我准备睡了',
+      heroSub: done
+        ? '入睡与起床时间已经记下。'
+        : sleeping
+          ? '明早醒来，记得回来记录起床。'
+          : '记录这一刻，明早回来告诉我几点醒。',
+      orbKicker: sleeping ? '入睡时间' : '当前时间',
+      orbTime: sleeping && pending ? F.fmtClockTs(pending.bedAt) : nowText,
+      orbMeta:
+        sleeping && pending
+          ? '已睡 ' + F.fmtDuration(Math.round((now - pending.bedAt) / 60000))
+          : '今晚',
+      orbCaption: sleeping ? '轻触圆环，记录起床' : '轻触圆环，记录入睡',
       record,
       recordView: record
         ? {
@@ -125,18 +178,7 @@ Page({
             duration: F.fmtDuration(S.durationOf(record))
           }
         : null,
-      recordHint:
-        state === 'idle'
-          ? '点击开始记录入睡时间'
-          : state === 'sleeping'
-            ? '已入睡 ' + F.fmtClockTs(pending.bedAt) + '，早上记得记录起床'
-            : crossDay
-              ? '已记入 ' + F.fmtDayCN(record.day) + ' 的睡眠'
-              : canOverwrite
-                ? evening
-                  ? '今天已有一笔记录，可在下方覆盖为今晚'
-                  : '今天（睡眠日）已有一笔记录，可重新开始并覆盖'
-                : '今晚的记录已完成',
+      recordHint: done ? '' : sleeping ? '' : '只记录时间，不做睡眠评价',
       buttonTitle: button.title,
       buttonSub: button.sub,
       canOverwrite,
@@ -175,7 +217,10 @@ Page({
 
   buildButton(state, pending, record) {
     if (state === 'sleeping' && pending) {
-      return { title: '记录起床', sub: '已入睡 ' + F.fmtClockTs(pending.bedAt) }
+      return {
+        title: '记录起床',
+        sub: '已睡 ' + F.fmtDuration(Math.round((Date.now() - pending.bedAt) / 60000))
+      }
     }
     if (state === 'done' && record) {
       return { title: '已完成', sub: '睡了 ' + F.fmtDuration(S.durationOf(record)) }

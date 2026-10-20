@@ -1,5 +1,5 @@
 <ambient />
-<top-bar title="统计" style="display:block;width:100%;" />
+<top-bar brand-only="{{true}}" style="display:block;width:100%;" />
 
 <view class="page stats-page">
   <view class="stats-hero fade-up">
@@ -141,4 +141,4 @@
   <view class="safe-bottom"></view>
 </view>
 
-<now-playing />
+<view class="np-host"><now-playing /></view>

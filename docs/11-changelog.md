@@ -1,5 +1,21 @@
 # 睡点 · 关键更新记录
 
+## 2026-10-21 · 环境声抽屉收口 + 悬浮 tabBar
+
+- **底部导航**：`app.json` 开启 `tabBar.custom`，新增 `custom-tab-bar/` 悬浮胶囊；实色深蓝、极细描边/轻阴影，中间「入睡」用同色圆凸起 + CSS 月牙，左右为细线时钟/四柱统计；当前页图标、文字提亮并加 `500` 字重，三页 `onShow` 同步 `selected`。
+- **布局**：去掉原生 tabBar；播放器、音符统一抬到 `132rpx + safe-area`，给悬浮胶囊让位；`np-host` 与 tabBar 的层级重新排过，抽屉/遮罩/播放器的 z-index 明确分层。
+- **环境声抽屉**：分类 `28rpx` 加粗选中、收藏 `36rpx`、播放圆钮 `76rpx` 且可独立点击；定时关闭复用计算器「预计入睡耗时」的 44rpx 小胶囊；移除标题副文案、免费收听提示和列表底部建议卡；去掉搜索与定时之间的重复分隔线，并拉开各区块间距。
+- **播放器**：`audio-dock` 与 `now-playing` 统一 108/66rpx 音符、右缘 26rpx、480rpx 右贴边播放条、48rpx 左留白；去掉易误解的关闭 X，点击条打开抽屉、点击外部向右收缩回音符（暂停态也生效），结束播放收进抽屉标题栏；修复 `.np-shell.is-in .now-playing` 权重压过折叠动画的问题。
+- **跨页状态**：`lastTrackPlaying` + `audioSession` 兜底 `audio.src` 短暂为空；暂停/恢复/停止/错误/定时到点统一清理会话，冷启动不画残留播放条。
+- **文档/验证**：更新 `docs/09-redesign.md`、`docs/12-sleep-audio-refresh.md`、`README.md`；`npm test` 140（139 pass / 1 PG skip），`node tools/check.mjs` 通过（3 页面 / 21 JSON / 16 WXML / 17 WXSS，约 378.9 KB）；开发者工具编译通过，自定义 tab 切换实测可用。
+
+## 2026-10-20 · 结果页时长护栏与晚睡提示
+
+- 新增 `utils/sleep-guide.js`：5 个周期（7.5h）→「推荐」；4 个周期（6h）→「偏短」（低于成人 7–9h 建议）；3 个周期（4.5h）→「不足」（仅作极限参考）。只做解释层，不改变 90 分钟倒推。
+- 结果页主推荐右侧的「★ 推荐」徽标改为时长护栏徽标（推荐/偏短/不足），后续推荐行在时长后追加同色提示词；主推荐 <7h 时说明低于建议，入睡时间在 01:00–05:59 时提示后半夜 REM 被压缩。
+- 新增 `tests/sleep-guide.test.js`（3/4/5 周期分档、晚睡边界）；结果页文案控制在单行内，避免挤占主卡高度。
+- 验证：`node --test tests/sleep-guide.test.js tests/plan.test.js tests/format.test.js` 8/8；`npm run check` 通过。
+
 ## 2026-10-20 · 深审第二轮修复（音频闭环 / 同步反馈 / 背景与广告 / 服务端限流）
 
 - **音频**：坏缓存回退远程后立即失效（`cache.remove` + 会话黑名单），修复循环重播每轮卡顿；`now-playing` 补 `rebuildSource` 与 `onEnded`，系统清空 `src` 后可恢复、首页/统计页自然播完能收口；系统侧暂停（通知栏/锁屏/耳机）冻结倒计时；新增 `onCanplay`/`loading`，弱网不再误显示“正在播放”。

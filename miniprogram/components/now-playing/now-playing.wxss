@@ -3,9 +3,10 @@
   position: fixed;
   left: 0;
   right: 0;
-  bottom: 24rpx;
-  z-index: 40;
-  padding: 0 24rpx;
+  /* 与入睡页 dock 共用同一套底部安全位：避开 tabBar，又不压住计算器主按钮 */
+  bottom: calc(132rpx + env(safe-area-inset-bottom));
+  z-index: 9999;
+  padding: 0 0 0 24rpx;
   pointer-events: none;
   visibility: hidden;
   /* 折叠动效播完再隐藏，期间仍不接管点击 */
@@ -14,25 +15,49 @@
 
 .np-shell.is-in {
   visibility: visible;
+  /* 外壳只包住播放条本身，不铺满整页；直接接管点击，兼容部分基础库
+     对 pointer-events:none 父级下子元素点击失效的问题 */
   pointer-events: auto;
   transition: visibility 0s linear 0s;
+}
+
+.now-playing,
+.np-float {
+  pointer-events: auto;
+}
+
+/* 展开态点击外部：只折叠回音符，不停止播放 */
+.np-collapse-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 9998;
+  background: transparent;
 }
 
 .now-playing {
   display: flex;
   align-items: center;
   gap: 8rpx;
-  padding: 14rpx 8rpx 14rpx 28rpx;
-  border-radius: var(--radius-pill);
+  /* 展开条比通栏窄，右缘直接吸附屏幕边 */
+  width: 100%;
+  max-width: 480rpx;
+  min-height: 88rpx;
+  margin-left: auto;
+  padding: 14rpx 18rpx 14rpx 48rpx;
+  border-radius: 999rpx 0 0 999rpx;
   border: 1rpx solid var(--border-moon-subtle);
   background: var(--glass-card-active);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
   box-shadow: var(--shadow-moon);
   opacity: 0;
-  transform: translate3d(0, 40rpx, 0) scale(0.96);
-  transform-origin: 50% 100%;
-  transition: transform 0.22s var(--ease-gentle), opacity 0.18s var(--ease-gentle);
+  /* 从右缘音符位置向左展开；收起时反向收回去 */
+  transform: translate3d(60rpx, 0, 0) scale(0.92);
+  transform-origin: 100% 50%;
+  transition: transform 0.26s var(--ease-gentle), opacity 0.2s var(--ease-gentle);
 }
 
 .np-shell.is-in .now-playing {
@@ -41,11 +66,20 @@
   transition: transform 0.34s var(--ease-spring), opacity 0.22s var(--ease-gentle);
 }
 
+/* 点击外部：先向右收缩淡出，再切换成音符。
+   需要压过 `.np-shell.is-in .now-playing` 的入场规则，否则计算器/统计页会直接消失。 */
+.np-shell.is-in .now-playing.is-collapsing {
+  opacity: 0;
+  transform: translate3d(90rpx, 0, 0) scale(0.86);
+  transition: transform 0.2s ease-in, opacity 0.16s ease-in;
+}
+
 .np-main {
   flex: 1;
   min-width: 0;
   display: flex;
   align-items: center;
+  gap: 10rpx;
   border-radius: var(--radius-pill);
   transition: opacity 0.15s ease;
 }
@@ -54,13 +88,63 @@
   opacity: 0.68;
 }
 
-/* 信息区：第一行 标题 · 分类；第二行 跳动音符 + 播放状态 + 定时 */
+/* 信息区：曲名 · 分类，第二行均衡器 + 播放状态 + 定时 */
 .np-info {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 7rpx;
+}
+
+/* 播放中收起：右侧绿色音符，无圆框 */
+.np-float {
+  position: relative;
+  width: 108rpx;
+  height: 108rpx;
+  margin-left: auto;
+  margin-right: 26rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: npFloat 3.4s ease-in-out infinite;
+}
+
+/* 视觉只有音符，命中区向外扩到约 128rpx，方便单手点中 */
+.np-float::after {
+  content: "";
+  position: absolute;
+  left: -16rpx;
+  right: -16rpx;
+  top: -16rpx;
+  bottom: -16rpx;
+}
+
+.np-float-note {
+  font-family: var(--font-cn-serif);
+  font-size: 66rpx;
+  line-height: 1;
+  color: #34D399;
+  text-shadow:
+    0 0 22rpx rgba(52, 211, 153, 0.55),
+    0 4rpx 16rpx rgba(0, 0, 0, 0.4);
+  animation: npNoteIn 0.18s ease-out;
+}
+
+/* 暂停后折叠：音符降亮度，避免误以为还在播 */
+.np-float.is-paused .np-float-note {
+  opacity: 0.58;
+  text-shadow: none;
+}
+
+@keyframes npNoteIn {
+  from { opacity: 0; transform: scale(0.76); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes npFloat {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-8rpx) scale(1.04); }
 }
 
 .np-line {
@@ -227,8 +311,8 @@
 }
 
 .np-pbar {
-  width: 6rpx;
-  height: 30rpx;
+  width: 7rpx;
+  height: 32rpx;
   border-radius: 2rpx;
   background: currentColor;
 }
@@ -256,9 +340,9 @@
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 3rpx;
-  height: 30rpx;
-  margin: -15rpx 0 0 -1.5rpx;
+  width: 4rpx;
+  height: 32rpx;
+  margin: -16rpx 0 0 -2rpx;
   border-radius: 2rpx;
   background: currentColor;
 }

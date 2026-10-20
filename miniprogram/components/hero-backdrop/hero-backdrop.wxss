@@ -1,0 +1,32 @@
+/* 与计算器页同一套 Hero 背景：顶部图片 + 向下渐隐，内容在其上 */
+.hero-bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  min-height: 560rpx;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.hero-bg-img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.hero-bg-scrim {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(8, 11, 20, 0.58) 0%,
+    rgba(8, 13, 29, 0.55) 36%,
+    rgba(8, 13, 29, 0.86) 76%,
+    #080B14 100%
+  );
+}

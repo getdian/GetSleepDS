@@ -21,7 +21,13 @@ Component({
     playing: false,
     title: '',
     category: '',
-    timerText: ''
+    timerText: '',
+    // 播放中默认收成右侧绿色音符；点开才展开播放条
+    miniExpanded: false,
+    // 手动折叠后即使暂停也保持音符形态；播放/展开时复位
+    collapsed: false,
+    // 折叠中：保留播放条播放“向右收缩”动画，动画结束后再切音符
+    collapsing: false
   },
 
   lifetimes: {
@@ -31,6 +37,7 @@ Component({
       this._audio = null
       this._lastToggleAt = 0
       this._enterTimer = null
+      this._collapseTimer = null
       this._unsubTimer = null
       this._onPlay = () => this.handlePlay()
       this._onPause = () => this.handlePause()
@@ -49,6 +56,10 @@ Component({
       if (this._enterTimer) {
         clearTimeout(this._enterTimer)
         this._enterTimer = null
+      }
+      if (this._collapseTimer) {
+        clearTimeout(this._collapseTimer)
+        this._collapseTimer = null
       }
       if (this._unsubTimer) {
         this._unsubTimer()
@@ -104,6 +115,9 @@ Component({
 
     handlePlay() {
       if (!this._alive) return
+      const app = getApp()
+      if (app && app.globalData) app.globalData.audioSession = true
+      storage.patchMeta({ lastTrackPlaying: true })
       this.sync(true)
       // 系统侧暂停已冻结倒计时；恢复播放时续剩余，没有运行中的倒计时才按偏好起表。
       if (this.timerEnabled()) {
@@ -115,6 +129,7 @@ Component({
       if (!this._alive) return
       // 与 audio-dock 同口径：通知栏/锁屏/耳机暂停也必须冻结倒计时。
       audioTimer.pause()
+      storage.patchMeta({ lastTrackPlaying: false })
       this.sync(true)
     },
 
@@ -130,7 +145,7 @@ Component({
       this._audio.epname = '环境音'
       this._audio.singer = '睡点'
       this._audio.src = cached || track.url
-      storage.patchMeta({ lastTrackActive: true })
+      storage.patchMeta({ lastTrackActive: true, lastTrackPlaying: true })
       return true
     },
 
@@ -142,14 +157,16 @@ Component({
       const expiredAt = audioTimer.lastExpiredAt()
       const justExpired = expiredAt && Date.now() - expiredAt < EXPIRY_TOAST_WINDOW_MS
       if (audioTimer.shouldStop() || justExpired || !this.rebuildSource()) {
-        storage.patchMeta({ lastTrackActive: false })
+        storage.patchMeta({ lastTrackActive: false, lastTrackPlaying: false })
+        const app = getApp()
+        if (app && app.globalData) app.globalData.audioSession = false
         this.collapse()
         return
       }
       try {
         this._audio.play()
       } catch (e) {
-        storage.patchMeta({ lastTrackActive: false })
+        storage.patchMeta({ lastTrackActive: false, lastTrackPlaying: false })
         this.collapse()
       }
     },
@@ -162,19 +179,25 @@ Component({
       const hasSrc = !!(audio && audio.src)
       const active = !!meta.lastTrackId && meta.lastTrackActive !== false
 
-      if (!active || !hasSrc) {
+      // 跨页时个别基础库会短暂清空 src；只要本次启动创建过音频会话就保留入口，
+      // 播放状态用最后一次 play/pause 事件兜底，避免“明明在播却什么都不显示”。
+      const app = getApp()
+      const session = !!(app && app.globalData && app.globalData.audioSession)
+      if (!active || (!hasSrc && !session)) {
         this.collapse()
         this.syncTimer(true)
         return
       }
 
-      const playing = !audio.paused
+      const playing = hasSrc ? !audio.paused : meta.lastTrackPlaying !== false
       const title = meta.lastTrackTitle || '环境音'
       const category = meta.lastTrackCategory || ''
+      // 播放中保留用户手动展开的状态，避免 play/pause 事件把条瞬间收回
+      const miniExpanded = playing ? this.data.miniExpanded : true
 
       if (!this.data.visible) {
         // 先落地隐藏态，再在下一帧加 is-in，跨页首次出现也能走同一段入场动效
-        this.setData({ playing, title, category, visible: false }, () => {
+        this.setData({ playing, title, category, miniExpanded, visible: false }, () => {
           if (!this._alive) return
           if (this._enterTimer) clearTimeout(this._enterTimer)
           this._enterTimer = setTimeout(() => {
@@ -182,7 +205,7 @@ Component({
             if (!this._alive) return
             // 入场延迟期间恰好停止播放时不要再弹出来
             const latest = storage.getMeta()
-            if (latest.lastTrackActive === false || !this._audio || !this._audio.src) return
+            if (latest.lastTrackActive === false || !this._audio) return
             this.setData({ visible: true })
           }, 32)
         })
@@ -195,11 +218,48 @@ Component({
         !force &&
         playing === this.data.playing &&
         title === this.data.title &&
-        category === this.data.category
+        category === this.data.category &&
+        miniExpanded === this.data.miniExpanded
       ) {
         return
       }
-      this.setData({ playing, title, category })
+      this.setData({ playing, title, category, miniExpanded })
+    },
+
+    expandMini() {
+      this.clearCollapseTimer()
+      this.setData({ miniExpanded: true, collapsed: false, collapsing: false })
+    },
+
+    clearCollapseTimer() {
+      if (this._collapseTimer) {
+        clearTimeout(this._collapseTimer)
+        this._collapseTimer = null
+      }
+    },
+
+    /** 点击播放条外部：向右收缩回音符，不停止播放 */
+    collapseMini() {
+      if (this.data.collapsed || this.data.collapsing) return
+      this.clearCollapseTimer()
+      this.setData({ collapsing: true })
+      this._collapseTimer = setTimeout(() => {
+        this._collapseTimer = null
+        if (!this._alive) return
+        this.setData({ collapsing: false, miniExpanded: false, collapsed: true })
+      }, 210)
+    },
+
+    /** 点击播放条：切到入睡页并打开环境声音抽屉 */
+    openAudio() {
+      const app = getApp()
+      if (app && app.globalData) app.globalData.openAudioSheet = true
+      wx.switchTab({
+        url: '/pages/sleep/sleep',
+        fail: () => {
+          if (app && app.globalData) app.globalData.openAudioSheet = false
+        }
+      })
     },
 
     syncTimer(force) {
@@ -216,14 +276,15 @@ Component({
     },
 
     collapse() {
-      // 即使还没真正展示，也要取消待执行的入场，避免“已停止后又弹出来”
+      // 即使还没真正展示，也要取消待执行的入场/折叠，避免“已停止后又弹出来”
       if (this._enterTimer) {
         clearTimeout(this._enterTimer)
         this._enterTimer = null
       }
+      this.clearCollapseTimer()
       if (!this.data.visible) return
       // 只摘掉 is-in，由 WXSS 完成折叠；元素常驻但不可点，避免 wx:if 硬切
-      this.setData({ visible: false })
+      this.setData({ visible: false, collapsing: false })
     },
 
     handleStop() {
@@ -253,7 +314,7 @@ Component({
         if (track && track.url) {
           playerState.markFallback(track.url)
           cache.remove(track.url)
-          storage.patchMeta({ lastTrackActive: true })
+          storage.patchMeta({ lastTrackActive: true, lastTrackPlaying: true })
           audio.src = track.url
           return
         }
@@ -270,6 +331,8 @@ Component({
           return
         }
         if (meta.lastTrackActive === false) {
+          const app = getApp()
+          if (app && app.globalData) app.globalData.audioSession = false
           this.setData({ playing: false })
           this.collapse()
           if (this._pageVisible) wx.showToast({ title: '音频加载失败，请重新播放', icon: 'none' })
@@ -283,7 +346,9 @@ Component({
         // audio-dock 不在场（例如冷启动直接落到首页）时由这里兜底收口。
         playerState.clearFallback()
         audioTimer.clear(undefined, true)
-        storage.patchMeta({ lastTrackActive: false })
+        storage.patchMeta({ lastTrackActive: false, lastTrackPlaying: false })
+        const app = getApp()
+        if (app && app.globalData) app.globalData.audioSession = false
         this.setData({ playing: false })
         this.collapse()
         if (this._pageVisible) wx.showToast({ title: '音频加载失败，请重新播放', icon: 'none' })
@@ -293,6 +358,8 @@ Component({
     toggle() {
       const audio = this._audio
       if (!audio) return
+      const app = getApp()
+      if (app && app.globalData) app.globalData.audioSession = true
       const now = Date.now()
       if (now - this._lastToggleAt < TOGGLE_GUARD_MS) return
       this._lastToggleAt = now
@@ -307,8 +374,10 @@ Component({
       }
 
       const next = !!audio.paused
-      // 先反馈再调底层：不等 onPlay/onPause 事件，图标与状态行立即切换
-      this.setData({ playing: next })
+      // 先反馈再调底层：播放中收回音符，暂停时展开播放条
+      this.clearCollapseTimer()
+      this.setData({ playing: next, miniExpanded: !next, collapsed: false, collapsing: false })
+      storage.patchMeta({ lastTrackPlaying: next })
       try {
         if (next) {
           // 与入睡页 dock 一致：暂停中续剩余，没有运行中的倒计时才按偏好重新起表
@@ -322,6 +391,7 @@ Component({
         }
       } catch (e) {
         this.setData({ playing: !next })
+        storage.patchMeta({ lastTrackPlaying: !next })
         if (this._pageVisible) wx.showToast({ title: '操作失败，请重试', icon: 'none' })
       }
       // 定时状态此时才落定（暂停/续时都会改文案），最后统一刷新一次
@@ -331,7 +401,9 @@ Component({
     close() {
       // 关闭播放条是“停止本次会话”，不是“把下次定时偏好归零”。
       audioTimer.clear(undefined, true)
-      storage.patchMeta({ lastTrackActive: false })
+      storage.patchMeta({ lastTrackActive: false, lastTrackPlaying: false })
+      const app = getApp()
+      if (app && app.globalData) app.globalData.audioSession = false
       this.collapse()
       if (this._audio) {
         try {

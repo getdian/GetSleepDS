@@ -113,9 +113,9 @@
                   <text wx:if="{{view.compact}}" class="result-meta">{{view.mainMeta}}</text>
                   <text wx:if="{{view.note}}" class="result-note">{{view.note}}</text>
                 </view>
-                <view wx:if="{{!view.compact}}" class="result-badge">
-                  <text class="result-badge-star">★</text>
-                  <text>推荐</text>
+                <view wx:if="{{!view.compact}}" class="result-badge guide-{{view.mainGuideTone}}">
+                  <text wx:if="{{view.mainGuideTone === 'ok'}}" class="result-badge-star">★</text>
+                  <text>{{view.mainGuideLabel}}</text>
                 </view>
               </view>
 
@@ -133,6 +133,7 @@
                   <view class="result-row-right">
                     <text class="result-row-dot">·</text>
                     <text class="result-row-meta">{{item.cycles}} 个周期 · {{item.duration}}</text>
+                    <text class="result-row-guide guide-{{item.guideTone}}">· {{item.guideLabel}}</text>
                   </view>
                 </view>
               </view>
@@ -166,7 +167,7 @@
   <ad-slot slot-name="home" enabled="{{ads.home.enabled}}" unit-id="{{ads.home.unitId}}" type="{{ads.home.type}}" />
 </view>
 
-<now-playing />
+<view class="np-host"><now-playing /></view>
 
 <background-picker
   show="{{bgOpen}}"

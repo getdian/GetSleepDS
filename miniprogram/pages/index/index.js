@@ -1,6 +1,7 @@
 const T = require('../../utils/time')
 const F = require('../../utils/format')
 const P = require('../../utils/plan')
+const G = require('../../utils/sleep-guide')
 const storage = require('../../utils/storage')
 const adSlots = require('../../utils/ads')
 const backgrounds = require('../../utils/backgrounds')
@@ -68,6 +69,8 @@ Page({
 
   onShow() {
     this._alive = true
+    const tabBar = this.getTabBar && this.getTabBar()
+    if (tabBar) tabBar.setData({ selected: 0 })
     this.refreshNow()
     // 未手动调过入睡时间时，回到前台让默认值重新跟随当前时间
     if (this.data.mode === 'sleep' && !this._sleepTouched && !this.data.flipped) {
@@ -264,17 +267,39 @@ Page({
       const wakeMinutes = T.parseClock(value)
       const plan = P.bedtimesForWake(now, wakeMinutes, this.data.fallAsleep)
       const main = plan.slots.filter((slot) => !slot.passed)[0] || null
+      const mainGuide = main ? G.guidanceOf(main.cycles) : null
+      const mainLate = main ? G.isLateNight(main.at) : false
+
+      let note = '三个完整周期都已错过'
+      if (main) {
+        if (mainGuide.tone !== 'ok' && mainLate) {
+          note =
+            (mainGuide.tone === 'low' ? '不足' : '偏短') +
+            '且入睡较晚：优先提前上床，保证 7 小时以上'
+        } else if (mainGuide.tone !== 'ok') {
+          note = mainGuide.note
+        } else if (mainLate) {
+          note = G.lateNote()
+        } else {
+          note = '已为入睡留出 ' + this.data.fallAsleep + ' 分钟'
+        }
+      }
 
       const rows = plan.slots
         .filter((slot) => !main || slot.cycles !== main.cycles)
-        .map((slot) => ({
-          cycles: slot.cycles,
-          time: F.fmtClockTs(slot.at),
-          // 跨午夜时“今天/明天”不如“凌晨/晚上”直观
-          day: F.periodLabel(slot.at),
-          duration: F.fmtDuration(slot.durationMin),
-          passed: slot.passed
-        }))
+        .map((slot) => {
+          const guide = G.guidanceOf(slot.cycles)
+          return {
+            cycles: slot.cycles,
+            time: F.fmtClockTs(slot.at),
+            // 跨午夜时“今天/明天”不如“凌晨/晚上”直观
+            day: F.periodLabel(slot.at),
+            duration: F.fmtDuration(slot.durationMin),
+            guideLabel: guide.label,
+            guideTone: guide.tone,
+            passed: slot.passed
+          }
+        })
 
       view = {
         label: main ? '推荐入睡时间' : '现在睡',
@@ -283,9 +308,9 @@ Page({
         mainMeta: main
           ? main.cycles + ' 个周期 · ' + F.fmtDuration(main.durationMin)
           : '距离 ' + value + ' 起床',
-        note: main
-          ? '已为入睡留出 ' + this.data.fallAsleep + ' 分钟'
-          : '三个完整周期都已错过',
+        mainGuideLabel: mainGuide ? mainGuide.label : '',
+        mainGuideTone: mainGuide ? mainGuide.tone : '',
+        note,
         allPassed: plan.allPassed,
         compact: !main,
         rows
@@ -294,21 +319,30 @@ Page({
       const sleepMinutes = T.parseClock(value)
       const plan = P.wakeTimesForSleep(now, sleepMinutes, this.data.fallAsleep)
       const main = plan.slots[0]
+      const mainGuide = G.guidanceOf(main.cycles)
+      const late = G.isLateNight(plan.sleepAt)
 
-      const rows = plan.slots.slice(1).map((slot) => ({
-        cycles: slot.cycles,
-        time: F.fmtClockTs(slot.at),
-        day: F.periodLabel(slot.at),
-        duration: F.fmtDuration(slot.durationMin),
-        passed: false
-      }))
+      const rows = plan.slots.slice(1).map((slot) => {
+        const guide = G.guidanceOf(slot.cycles)
+        return {
+          cycles: slot.cycles,
+          time: F.fmtClockTs(slot.at),
+          day: F.periodLabel(slot.at),
+          duration: F.fmtDuration(slot.durationMin),
+          guideLabel: guide.label,
+          guideTone: guide.tone,
+          passed: false
+        }
+      })
 
       view = {
         label: '推荐起床时间',
         mainTime: F.fmtClockTs(main.at),
         mainDay: F.periodLabel(main.at),
         mainMeta: main.cycles + ' 个周期 · ' + F.fmtDuration(main.durationMin),
-        note: '从 ' + value + ' 上床算起，已含 ' + this.data.fallAsleep + ' 分钟入睡',
+        mainGuideLabel: mainGuide.label,
+        mainGuideTone: mainGuide.tone,
+        note: late ? G.lateNote() : '从 ' + value + ' 上床算起，已含 ' + this.data.fallAsleep + ' 分钟入睡',
         allPassed: false,
         compact: false,
         rows

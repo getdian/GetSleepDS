@@ -1,10 +1,29 @@
-<!-- 收起态：悬浮声音钮 / 播放中的迷你播放器 -->
-<view wx:if="{{!currentId}}" class="dock-fab" bindtap="openSheet">
-  <text class="dock-fab-glyph">♪</text>
-  <text class="dock-fab-label">声音</text>
+<!-- 播放中展开态：点击外部只折叠回音符，不停止播放 -->
+<view
+  wx:if="{{currentId && miniExpanded && !collapsed && !open}}"
+  class="dock-collapse-mask"
+  bindtap="collapseMini"
+  aria-hidden="true"
+></view>
+
+<!-- 空闲：右下角悬浮音符；播放中：绿色音符吸附右侧；展开后是迷你播放条 -->
+<view
+  wx:if="{{!currentId}}"
+  class="dock-fab"
+  bindtap="openSheet"
+  aria-role="button"
+  aria-label="打开环境声音"
+>
+  <text class="dock-fab-glyph" aria-hidden="true">♪</text>
 </view>
 
-<view class="dock-mini {{currentId ? 'is-in' : 'is-out'}}" bindtap="openSheet" aria-hidden="{{!currentId}}">
+<view
+  wx:elif="{{!collapsed && (!playing || miniExpanded)}}"
+  class="dock-mini is-in {{collapsing ? 'is-collapsing' : ''}}"
+  bindtap="openSheet"
+  aria-role="button"
+  aria-label="打开环境声音"
+>
   <view class="dock-mini-main" hover-class="dock-mini-main--tap" hover-stay-time="120">
     <view class="dock-mini-line">
       <text class="dock-mini-title">{{currentTitle}}</text>
@@ -14,7 +33,7 @@
       </block>
     </view>
     <view class="dock-mini-status {{playing ? 'is-on' : 'is-off'}}">
-      <view class="dock-seq">
+      <view class="dock-seq" aria-hidden="true">
         <view class="dock-sbar ds-1"></view>
         <view class="dock-sbar ds-2"></view>
         <view class="dock-sbar ds-3"></view>
@@ -24,7 +43,14 @@
     </view>
   </view>
   <view class="dock-mini-ctrls">
-    <view class="dmc-btn dock-toggle" catchtap="togglePlay" hover-class="dmc-btn--tap" hover-stay-time="100">
+    <view
+      class="dmc-btn dock-toggle"
+      catchtap="togglePlay"
+      hover-class="dmc-btn--tap"
+      hover-stay-time="100"
+      aria-role="button"
+      aria-label="{{playing ? '暂停' : '继续播放'}}"
+    >
       <block wx:if="{{playing}}">
         <view class="dock-ico-pause">
           <view class="dock-pbar"></view>
@@ -35,42 +61,58 @@
         <view class="dock-ico-play"></view>
       </block>
     </view>
-    <view class="dmc-btn dmc-x" catchtap="stopPlayback" hover-class="dmc-btn--tap" hover-stay-time="100">
-      <view class="dock-ico-x">
-        <view class="dock-xbar dx-a"></view>
-        <view class="dock-xbar dx-b"></view>
-      </view>
-    </view>
   </view>
+</view>
+
+<view
+  wx:else
+  class="dock-note is-playing {{playing ? '' : 'is-paused'}}"
+  bindtap="expandMini"
+  aria-role="button"
+  aria-label="展开播放条"
+>
+  <text class="dock-note-glyph" aria-hidden="true">♪</text>
 </view>
 
 <!-- 展开态：底部玻璃抽屉 -->
 <view class="dock-mask {{open ? 'is-show' : ''}}" bindtap="closeSheet" catchtouchmove="noop"></view>
 
-<view class="dock-sheet {{open ? 'is-show' : ''}}">
+<view class="dock-sheet {{open ? 'is-show' : ''}} {{tracks.length <= 2 ? 'is-short' : ''}}">
   <view class="dock-grip" catchtouchmove="noop"></view>
 
   <view class="dock-head" catchtouchmove="noop">
-    <text class="dock-title font-poetic">环境声音</text>
-    <view class="dock-close" catchtap="closeSheet">×</view>
+    <view class="dock-head-copy">
+      <view class="dock-head-mark">♫</view>
+      <view class="dock-head-text">
+        <text class="dock-title">环境声音</text>
+      </view>
+    </view>
+    <text wx:if="{{currentId}}" class="dock-head-stop" catchtap="stopPlayback" aria-role="button">结束播放</text>
+    <view class="dock-close" catchtap="closeSheet" aria-role="button" aria-label="关闭环境声音"></view>
   </view>
 
-  <view class="dock-unlock" catchtouchmove="noop">
-    <block wx:if="{{unlocked}}">
-      <text class="du-main">环境声音已解锁</text>
-      <text class="du-sub">{{unlockRemainText}}</text>
-    </block>
-    <block wx:elif="{{freeMode}}">
-      <text class="du-main">当前免费收听</text>
-      <text class="du-sub">未配置广告位，所有声音可直接播放</text>
-    </block>
-    <block wx:else>
-      <text class="du-main">观看一次视频，解锁 {{unlockHours}} 小时</text>
-      <text class="du-sub">完整观看后自动生效 · Wi-Fi 下自动缓存</text>
-    </block>
+  <view wx:if="{{currentId}}" class="dock-now">
+    <view class="dock-now-eq {{playing ? 'is-on' : 'is-off'}}">
+      <view class="dock-sbar ds-1"></view>
+      <view class="dock-sbar ds-2"></view>
+      <view class="dock-sbar ds-3"></view>
+      <view class="dock-sbar ds-4"></view>
+    </view>
+    <view class="dock-now-copy">
+      <text class="dock-now-k">正在播放</text>
+      <text class="dock-now-title">{{currentTitle}}</text>
+    </view>
+    <text class="dock-now-sub">{{loading ? '连接中…' : (playing ? '播放中' : '已暂停')}}</text>
+  </view>
+
+  <view wx:if="{{!freeMode}}" class="dock-status">
+    <view class="dock-status-dot {{unlocked ? 'is-on' : ''}}"></view>
+    <text wx:if="{{unlocked}}" class="dock-status-text">已解锁 · {{unlockRemainText}}</text>
+    <text wx:else class="dock-status-text">轻触曲目，看一次视频解锁 {{unlockHours}} 小时</text>
   </view>
 
   <view class="dock-search" catchtouchmove="noop">
+    <view class="dock-search-ico"></view>
     <input
       class="dock-input"
       value="{{keyword}}"
@@ -97,6 +139,11 @@
     </view>
   </scroll-view>
 
+  <view class="dock-section">
+    <text class="dock-section-title">全部声音</text>
+    <text class="dock-section-count">{{filteredTracks.length}} 首</text>
+  </view>
+
   <scroll-view class="dock-list" scroll-y enhanced show-scrollbar="{{false}}">
     <view
       wx:for="{{filteredTracks}}"
@@ -105,19 +152,30 @@
       data-id="{{item.id}}"
       bindtap="onTrackTap"
     >
-      <image class="dock-icon" src="{{item.icon}}" mode="aspectFit" />
+      <view class="dock-icon-wrap tone-{{item.tone}}">
+        <image class="dock-icon" src="{{item.icon}}" mode="aspectFit" />
+      </view>
       <view class="dock-tinfo">
         <view class="dock-tname-row">
           <text class="dock-tname">{{item.title}}</text>
-          <text class="dock-tcat">{{item.category}}</text>
+          <text class="dock-tcat tone-{{item.tone}}">{{item.category}}</text>
+          <view wx:if="{{currentId === item.id}}" class="dock-track-eq {{playing ? 'is-on' : ''}}">
+            <view class="dock-eq-bar eq-1"></view>
+            <view class="dock-eq-bar eq-2"></view>
+            <view class="dock-eq-bar eq-3"></view>
+          </view>
         </view>
         <text class="dock-tstate">{{currentId === item.id ? (loading ? '正在连接音频…' : (playing ? '播放中 · 点击暂停' : '已暂停 · 点击继续')) : (item.cached ? '已缓存 · 点击播放' : '点击播放')}}</text>
       </view>
       <view class="dock-fav {{item.favorite ? 'is-on' : ''}}" data-id="{{item.id}}" catchtap="onToggleFavorite">
         {{item.favorite ? '♥' : '♡'}}
       </view>
-      <view class="dock-tbtn {{currentId === item.id ? 'tb-on' : ''}}">
-        <text>{{currentId === item.id && playing ? '暂停' : '播放'}}</text>
+      <view class="dock-play {{currentId === item.id && playing ? 'is-pause' : ''}}" data-id="{{item.id}}" catchtap="onTrackTap" aria-role="button" aria-label="{{currentId === item.id && playing ? '暂停' : '播放'}}">
+        <view wx:if="{{currentId === item.id && playing}}" class="dock-play-ico dock-play-pause">
+          <view class="dock-play-bar"></view>
+          <view class="dock-play-bar"></view>
+        </view>
+        <view wx:else class="dock-play-ico dock-play-tri"></view>
       </view>
     </view>
     <view wx:if="{{!filteredTracks.length}}" class="dock-empty">{{tracks.length ? '没有匹配的声音' : '正在加载声音…'}}</view>

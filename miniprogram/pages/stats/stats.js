@@ -51,6 +51,8 @@ Page({
 
   onShow() {
     this._alive = true
+    const tabBar = this.getTabBar && this.getTabBar()
+    if (tabBar) tabBar.setData({ selected: 2 })
     this.refresh(false)
     adSlots.apply(this)
     loadConfig(true)
@@ -403,7 +405,9 @@ Page({
     const cleared = storage.clearAll()
     events.clearQueue()
     cache.cleanAll()
-    const patch = { syncEpoch: Date.now(), lastTrackActive: false }
+    const patch = { syncEpoch: Date.now(), lastTrackActive: false, lastTrackPlaying: false }
+    const app = getApp()
+    if (app && app.globalData) app.globalData.audioSession = false
     if (hadCloud && !opts.cloudCleared) {
       patch.lastSyncAt = cloudAt
       patch.cloudPendingErase = true

@@ -63,7 +63,7 @@ tools/                  资源生成、静态检查
 3. 详情 → 本地设置 → 勾选 **不校验合法域名**。开发版自动请求 `http://127.0.0.1:3100`，体验版/正式版自动请求 `https://sleep.qfmaster.com`（`config/env.js` 按 `envVersion` 切换，不用手改）。
 4. 编译，计算器页直接可用；打卡数据写本地存储。
 
-底部 tab 是 **计算器 / 入睡 / 统计**。声音不在 tabBar：从「入睡」页右下角“声音”进入底部抽屉，播放后变成迷你播放器，收起/切 tab 继续播放。视觉系统见 [改版说明](docs/09-redesign.md)。
+底部是 **计算器 / 入睡 / 统计** 的悬浮胶囊 tabBar（`custom-tab-bar`，中间入睡带圆形凸起）。声音不在 tabBar：从「入睡」页右下角悬浮音符进入底部抽屉，播放后变成迷你播放器，收起/切 tab 继续播放。视觉系统见 [改版说明](docs/09-redesign.md) 与 [入睡页/环境声升级](docs/12-sleep-audio-refresh.md)。
 
 环境音已接入 1 条 COS 音频（约 3 分钟，5.7MB），对外地址 `https://img.qfmaster.com/sleep/sleep-10001.mp3`。真机播放前，必须把 `https://img.qfmaster.com` 加入公众平台 → 开发管理 → 服务器域名 → **downloadFile 合法域名**；开发者工具里勾了“不校验合法域名”可直接试听。
 
@@ -224,6 +224,7 @@ npm run check   # JSON / WXML 标签 / WXSS 括号 / 页面四件套 / 组件引
 10. [改版说明](docs/09-redesign.md) —— 三 tab、通栏灵动岛、时间轮、audio-dock、跨页定时器
 11. [常用操作](docs/10-operations.md) —— 极客混跑、打包、1Panel 部署的标准口令
 12. [关键更新](docs/11-changelog.md) —— 2026-10-19 同步/删除/解锁/交互加固记录
+13. [入睡页与环境声音升级](docs/12-sleep-audio-refresh.md) —— 复用计算器视觉：Hero 背景、月相打卡卡、7 天柱图、抽屉头部/当前播放/单曲提示
 
 ## 下一步
 

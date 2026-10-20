@@ -1,78 +1,99 @@
 <ambient />
-<top-bar title="入睡" style="display:block;width:100%;" />
+<hero-backdrop />
+<top-bar brand-only="{{true}}" style="display:block;width:100%;" />
 
 <view class="page sleep-page">
   <view class="sleep-hero fade-up">
-    <text class="eyebrow">TONIGHT</text>
-    <text class="sleep-date">{{dateText}}</text>
-    <text class="title-xl">我几点睡的</text>
+    <view class="sleep-hero-meta">
+      <text class="sleep-eyebrow">TONIGHT</text>
+      <text class="sleep-date">{{dateText}}</text>
+    </view>
+    <text class="sleep-title">{{heroTitle}}</text>
+    <text class="sleep-sub">{{heroSub}}</text>
   </view>
 
   <view wx:if="{{notice}}" class="notice" bindtap="onNoticeClose">
-    <text>{{notice}}</text>
+    <text class="notice-text">{{notice}}</text>
     <text class="notice-close">知道了</text>
   </view>
 
-  <view class="record-card sleep-glass-card fade-up">
-    <view class="record-top">
-      <text class="record-kicker">{{greeting}}</text>
-      <text class="record-state pill-{{state}}">{{stateText}}</text>
-    </view>
-
-    <block wx:if="{{state !== 'done'}}">
-      <view class="dial-wrap">
-        <view class="dial-halo halo-one"></view>
-        <view class="dial-halo halo-two"></view>
-        <view class="dial dial--{{state}}" bindtap="onPrimaryTap">
-          <text class="dial-title">{{buttonTitle}}</text>
-          <text class="dial-sub">{{buttonSub}}</text>
+  <block wx:if="{{state !== 'done'}}">
+    <view class="orb-section fade-up {{state === 'sleeping' ? 'is-sleeping' : ''}}">
+      <view class="orb-stage">
+        <view class="orb-aura aura-a"></view>
+        <view class="orb-aura aura-b"></view>
+        <view class="orb-aura aura-c"></view>
+        <view
+          class="sleep-orb orb--{{state}}"
+          bindtap="onPrimaryTap"
+          aria-role="button"
+          aria-label="{{state === 'sleeping' ? '记录起床时间' : '记录入睡时间'}}"
+        >
+          <text class="orb-kicker">{{orbKicker}}</text>
+          <text class="orb-time">{{orbTime}}</text>
+          <text class="orb-meta">{{orbMeta}}</text>
         </view>
       </view>
-
-      <text class="record-hint">{{recordHint}}</text>
-
+      <text class="orb-caption">{{orbCaption}}</text>
+      <text wx:if="{{recordHint}}" class="orb-note">{{recordHint}}</text>
       <view wx:if="{{state === 'sleeping'}}" class="undo-bed" bindtap="onUndoBed">
         点错了？撤销本次入睡
       </view>
-    </block>
+    </view>
+  </block>
 
-    <block wx:else>
-      <view class="done-grid">
-        <view class="done-item">
-          <text class="done-v">{{recordView.bed}}</text>
-          <text class="done-k">入睡</text>
+  <block wx:else>
+    <view class="done-section fade-up">
+      <text class="done-kicker">{{greeting}} · SLEEP LOG</text>
+      <text class="done-duration">{{recordView.duration}}</text>
+      <text class="done-duration-k">在床时长</text>
+      <view class="done-timeline">
+        <view class="done-time">
+          <text class="done-time-k">入睡</text>
+          <text class="done-time-v">{{recordView.bed}}</text>
         </view>
-        <view class="done-item">
-          <text class="done-v">{{recordView.wake}}</text>
-          <text class="done-k">起床</text>
+        <view class="done-rail">
+          <view class="done-rail-dot"></view>
+          <view class="done-rail-line"></view>
+          <view class="done-rail-dot is-end"></view>
         </view>
-        <view class="done-item">
-          <text class="done-v done-accent">{{recordView.duration}}</text>
-          <text class="done-k">在床时长</text>
+        <view class="done-time is-right">
+          <text class="done-time-k">起床</text>
+          <text class="done-time-v">{{recordView.wake}}</text>
         </view>
       </view>
-
-      <view wx:if="{{canOverwrite}}" class="overwrite" bindtap="onOverwriteTonight">{{overwriteText}}</view>
-      <view class="undo" bindtap="onUndoTap">记录有误？撤销</view>
-    </block>
-  </view>
+      <view class="done-actions">
+        <view wx:if="{{canOverwrite}}" class="overwrite" bindtap="onOverwriteTonight">{{overwriteText}}</view>
+        <view class="undo" bindtap="onUndoTap">记录有误？撤销</view>
+      </view>
+    </view>
+  </block>
 
   <view class="sleep-ad">
     <ad-slot slot-name="sleep" enabled="{{ads.sleep.enabled}}" unit-id="{{ads.sleep.unitId}}" type="{{ads.sleep.type}}" />
   </view>
 
-  <view class="week-card fade-up" bindtap="goStats">
+  <view class="week-section fade-up" bindtap="goStats">
     <view class="week-head">
-      <text class="week-title">最近 7 天</text>
-      <text class="week-link">统计 ›</text>
+      <view class="week-head-copy">
+        <text class="week-title">最近 7 天</text>
+        <text class="week-sub">每个点是一晚</text>
+      </view>
+      <text class="week-link">查看统计 ›</text>
     </view>
     <view class="week-days">
       <view wx:for="{{weekDays}}" wx:key="key" class="week-day">
-        <view class="day-dot level-{{item.level}} {{item.partial ? 'is-partial' : ''}} {{item.today ? 'is-today' : ''}}"></view>
+        <view class="day-track">
+          <view class="day-fill level-{{item.level}} {{item.partial ? 'is-partial' : ''}} {{item.today ? 'is-today' : ''}}"></view>
+        </view>
         <text class="day-label {{item.today ? 'is-today-label' : ''}}">{{item.weekday}}</text>
       </view>
     </view>
-    <text class="week-summary">本周 {{weekCount}} 天 · 连续 {{streak}} 天</text>
+    <view class="week-summary-row">
+      <text class="week-summary">本周 {{weekCount}} 天</text>
+      <text class="week-sep">·</text>
+      <text class="week-summary">连续 {{streak}} 天</text>
+    </view>
   </view>
 
   <view class="sleep-share">

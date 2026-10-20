@@ -1,0 +1,30 @@
+const test = require('node:test')
+const assert = require('node:assert/strict')
+
+const G = require('../miniprogram/utils/sleep-guide')
+
+test('5/4/3 个周期分别给出推荐、偏短、不足', () => {
+  assert.deepEqual(G.guidanceOf(5), { tone: 'ok', label: '推荐', note: '' })
+
+  const short = G.guidanceOf(4)
+  assert.equal(short.tone, 'short')
+  assert.equal(short.label, '偏短')
+  assert.match(short.note, /6 小时/)
+  assert.match(short.note, /7–9 小时/)
+
+  const low = G.guidanceOf(3)
+  assert.equal(low.tone, 'low')
+  assert.equal(low.label, '不足')
+  assert.match(low.note, /4\.5 小时/)
+  assert.match(low.note, /明显不足/)
+  assert.match(low.note, /仅作极限参考/)
+})
+
+test('晚睡判定覆盖 01:00–05:59', () => {
+  const at = (hour, minute = 0) => new Date(2026, 9, 20, hour, minute, 0, 0).getTime()
+  assert.equal(G.isLateNight(at(0, 59)), false)
+  assert.equal(G.isLateNight(at(1, 0)), true)
+  assert.equal(G.isLateNight(at(5, 59)), true)
+  assert.equal(G.isLateNight(at(6, 0)), false)
+  assert.ok(G.lateNote().indexOf('REM') >= 0)
+})
