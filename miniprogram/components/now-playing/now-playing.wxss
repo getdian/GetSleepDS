@@ -1,19 +1,44 @@
-.now-playing {
+/* 外层只负责定位与“是否可点”：常驻 DOM，靠 class 走入场/折叠，避免 wx:if 硬切 */
+.np-shell {
   position: fixed;
-  left: 24rpx;
-  right: 24rpx;
+  left: 0;
+  right: 0;
   bottom: 24rpx;
   z-index: 40;
+  padding: 0 24rpx;
+  pointer-events: none;
+  visibility: hidden;
+  /* 折叠动效播完再隐藏，期间仍不接管点击 */
+  transition: visibility 0s linear 0.24s;
+}
+
+.np-shell.is-in {
+  visibility: visible;
+  pointer-events: auto;
+  transition: visibility 0s linear 0s;
+}
+
+.now-playing {
   display: flex;
   align-items: center;
-  gap: 16rpx;
-  padding: 16rpx 20rpx 16rpx 24rpx;
+  gap: 8rpx;
+  padding: 14rpx 8rpx 14rpx 28rpx;
   border-radius: var(--radius-pill);
   border: 1rpx solid var(--border-moon-subtle);
   background: var(--glass-card-active);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
   box-shadow: var(--shadow-moon);
+  opacity: 0;
+  transform: translate3d(0, 40rpx, 0) scale(0.96);
+  transform-origin: 50% 100%;
+  transition: transform 0.22s var(--ease-gentle), opacity 0.18s var(--ease-gentle);
+}
+
+.np-shell.is-in .now-playing {
+  opacity: 1;
+  transform: translate3d(0, 0, 0) scale(1);
+  transition: transform 0.34s var(--ease-spring), opacity 0.22s var(--ease-gentle);
 }
 
 .np-main {
@@ -21,92 +46,239 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 14rpx;
+  border-radius: var(--radius-pill);
+  transition: opacity 0.15s ease;
 }
 
-.np-eq {
+.np-main--tap {
+  opacity: 0.68;
+}
+
+/* 信息区：第一行 标题 · 分类；第二行 跳动音符 + 播放状态 + 定时 */
+.np-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7rpx;
+}
+
+.np-line {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.np-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 26rpx;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--text-primary);
+}
+
+.np-sep,
+.np-cat {
+  flex: none;
+  font-size: 21rpx;
+  line-height: 1.2;
+  color: var(--text-muted);
+}
+
+.np-status {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  color: var(--text-muted);
+  transition: color 0.2s ease;
+}
+
+.np-status.is-on {
+  color: var(--color-primary);
+}
+
+.np-status-text {
+  flex: none;
+  font-size: 20rpx;
+  line-height: 1.2;
+  transition: color 0.2s ease;
+}
+
+.np-timer-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 20rpx;
+  line-height: 1.2;
+  color: var(--text-secondary);
+}
+
+/* 跳动音符：本条唯一的均衡器，四根加高加粗、大摆幅 */
+.np-seq {
   display: flex;
   align-items: flex-end;
-  height: 30rpx;
+  height: 28rpx;
   flex: none;
 }
 
-.np-bar {
+.np-sbar {
   width: 5rpx;
-  height: 26rpx;
-  margin-right: 5rpx;
-  border-radius: 3rpx;
-  background: var(--color-primary);
+  margin-right: 3rpx;
+  border-radius: 2.5rpx;
+  background: currentColor;
   transform-origin: bottom;
-  animation: npEq 1s ease-in-out infinite;
+  animation: npSeq 0.9s ease-in-out infinite;
 }
 
-.np-2 {
-  height: 18rpx;
-  animation-delay: 0.18s;
+.np-s1 {
+  height: 28rpx;
 }
 
-.np-3 {
-  height: 24rpx;
-  animation-delay: 0.36s;
+.np-s2 {
+  height: 16rpx;
+  animation-delay: 0.14s;
 }
 
-.np-eq.is-paused .np-bar {
+.np-s3 {
+  height: 22rpx;
+  animation-delay: 0.28s;
+}
+
+.np-s4 {
+  height: 12rpx;
+  animation-delay: 0.42s;
+}
+
+/* 暂停/折叠时停止跳动，避免隐藏页与暂停态继续吃 CPU */
+.np-status.is-off .np-sbar,
+.np-shell.is-out .np-sbar {
   animation-play-state: paused;
-  opacity: 0.5;
 }
 
-@keyframes npEq {
+.np-status.is-off .np-sbar {
+  opacity: 0.42;
+}
+
+@keyframes npSeq {
   0%, 100% {
-    transform: scaleY(0.45);
+    transform: scaleY(0.3);
   }
   50% {
     transform: scaleY(1);
   }
 }
 
-.np-info {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4rpx;
-}
-
-.np-title {
-  max-width: 320rpx;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 24rpx;
-  color: var(--text-primary);
-}
-
-.np-sub {
-  font-size: 20rpx;
-  color: var(--text-muted);
-}
-
-.np-btn {
+/* 右侧控制区：无底框纯图标，76rpx 命中区 + 伪元素扩到 88rpx */
+.np-ctrls {
   flex: none;
-  min-width: 96rpx;
-  min-height: 72rpx;
+  display: flex;
+  align-items: center;
+  gap: 6rpx;
+}
+
+.np-icon {
+  position: relative;
+  width: 76rpx;
+  height: 76rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0 20rpx;
-  border-radius: var(--radius-pill);
-  border: 1rpx solid var(--border-glow);
-  font-size: 22rpx;
-  color: var(--color-primary);
+  color: rgba(255, 255, 255, 0.92);
+  transition: transform 0.12s ease, opacity 0.12s ease;
 }
 
-.np-close {
-  flex: none;
-  width: 72rpx;
-  height: 72rpx;
+/* 伪元素外扩 6rpx：视觉是纯图标，实际可点区域 88rpx */
+.np-icon::after {
+  content: "";
+  position: absolute;
+  left: -6rpx;
+  right: -6rpx;
+  top: -6rpx;
+  bottom: -6rpx;
+}
+
+.np-icon--tap {
+  transform: scale(0.86);
+  opacity: 0.55;
+}
+
+.np-x {
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.np-x.np-icon--tap {
+  opacity: 0.4;
+}
+
+/* 暂停图标：两根细竖条（对齐参考图，不用胶囊圆角） */
+.np-ico-pause {
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: 28rpx;
-  color: var(--text-muted);
+  gap: 9rpx;
+  height: 30rpx;
+  animation: npIconIn 0.16s var(--ease-gentle);
+}
+
+.np-pbar {
+  width: 6rpx;
+  height: 30rpx;
+  border-radius: 2rpx;
+  background: currentColor;
+}
+
+/* 播放图标：三角，margin 补偿视觉居中 */
+.np-ico-play {
+  width: 0;
+  height: 0;
+  margin-left: 6rpx;
+  border-top: 15rpx solid transparent;
+  border-bottom: 15rpx solid transparent;
+  border-left: 24rpx solid currentColor;
+  animation: npIconIn 0.16s var(--ease-gentle);
+}
+
+/* 关闭图标：细 ×，中心对齐、旋转后对角线约 21rpx */
+.np-ico-x {
+  position: relative;
+  width: 30rpx;
+  height: 30rpx;
+  animation: npIconIn 0.16s var(--ease-gentle);
+}
+
+.np-xbar {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3rpx;
+  height: 30rpx;
+  margin: -15rpx 0 0 -1.5rpx;
+  border-radius: 2rpx;
+  background: currentColor;
+}
+
+.np-x-a {
+  transform: rotate(45deg);
+}
+
+.np-x-b {
+  transform: rotate(-45deg);
+}
+
+/* 播放/暂停切换时给图标一个轻微的“落定”反馈 */
+@keyframes npIconIn {
+  from {
+    opacity: 0;
+    transform: scale(0.68);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }

@@ -17,6 +17,18 @@
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
   box-shadow: 0 16rpx 40rpx rgba(0, 0, 0, 0.4);
+  animation: dockFabIn 0.24s var(--ease-gentle);
+}
+
+@keyframes dockFabIn {
+  from {
+    opacity: 0;
+    transform: scale(0.84);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .dock-fab:active {
@@ -37,7 +49,7 @@
   color: var(--text-secondary);
 }
 
-/* 迷你播放器 */
+/* 迷你播放器：常驻 DOM，用 class 切换展示/折叠，和跨页 now-playing 同款动效 */
 .dock-mini {
   position: fixed;
   left: 24rpx;
@@ -46,44 +58,30 @@
   z-index: 40;
   display: flex;
   align-items: center;
-  gap: 18rpx;
-  padding: 18rpx 22rpx 18rpx 26rpx;
+  gap: 8rpx;
+  padding: 14rpx 8rpx 14rpx 28rpx;
   border-radius: var(--radius-pill);
   border: 1rpx solid var(--border-moon-subtle);
   background: var(--glass-card-active);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
   box-shadow: var(--shadow-moon);
+  opacity: 0;
+  transform: translate3d(0, 40rpx, 0) scale(0.96);
+  transform-origin: 50% 100%;
+  pointer-events: none;
+  visibility: hidden;
+  transition: transform 0.22s var(--ease-gentle), opacity 0.18s var(--ease-gentle),
+    visibility 0s linear 0.24s;
 }
 
-.dock-eq {
-  display: flex;
-  align-items: flex-end;
-  height: 34rpx;
-  flex: none;
-}
-
-.eq-bar {
-  width: 5rpx;
-  height: 28rpx;
-  margin-right: 6rpx;
-  border-radius: 3rpx;
-  background: var(--color-primary);
-  transform-origin: bottom;
-  animation: dockEq 1s ease-in-out infinite;
-}
-
-.eq-2 { animation-delay: 0.18s; height: 20rpx; }
-.eq-3 { animation-delay: 0.36s; height: 26rpx; }
-
-.dock-mini.is-paused .eq-bar {
-  animation-play-state: paused;
-  opacity: 0.5;
-}
-
-@keyframes dockEq {
-  0%, 100% { transform: scaleY(0.45); }
-  50% { transform: scaleY(1); }
+.dock-mini.is-in {
+  opacity: 1;
+  transform: translate3d(0, 0, 0) scale(1);
+  pointer-events: auto;
+  visibility: visible;
+  transition: transform 0.34s var(--ease-spring), opacity 0.22s var(--ease-gentle),
+    visibility 0s linear 0s;
 }
 
 .dock-mini-main {
@@ -91,45 +89,220 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2rpx;
+  gap: 6rpx;
+  border-radius: var(--radius-pill);
+  transition: opacity 0.15s ease;
+}
+
+.dock-mini-main--tap {
+  opacity: 0.68;
+}
+
+.dock-mini-line {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
 }
 
 .dock-mini-title {
-  font-size: 28rpx;
-  color: var(--text-primary);
+  flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  font-size: 26rpx;
+  line-height: 1.2;
+  color: var(--text-primary);
 }
 
-.dock-mini-sub {
-  font-size: 20rpx;
+.dock-mini-sep,
+.dock-mini-cat {
+  flex: none;
+  font-size: 21rpx;
+  line-height: 1.2;
   color: var(--text-muted);
 }
 
-.dock-mini-btn {
-  flex: none;
-  min-height: 72rpx;
+.dock-mini-status {
+  min-width: 0;
   display: flex;
   align-items: center;
-  padding: 0 24rpx;
-  border-radius: var(--radius-pill);
-  border: 1rpx solid var(--border-glow);
-  background: var(--glass-tint);
-  font-size: 24rpx;
+  gap: 10rpx;
+  color: var(--text-muted);
+  transition: color 0.2s ease;
+}
+
+.dock-mini-status.is-on {
   color: var(--color-primary);
 }
 
-.dock-mini-close {
+.dock-mini-sub {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 20rpx;
+  line-height: 1.2;
+}
+
+/* 跳动音符：本条唯一的均衡器，四根加高加粗、大摆幅 */
+.dock-seq {
+  display: flex;
+  align-items: flex-end;
+  height: 28rpx;
   flex: none;
-  width: 72rpx;
-  height: 72rpx;
+}
+
+.dock-sbar {
+  width: 5rpx;
+  margin-right: 3rpx;
+  border-radius: 2.5rpx;
+  background: currentColor;
+  transform-origin: bottom;
+  animation: dockSeq 0.9s ease-in-out infinite;
+}
+
+.ds-1 {
+  height: 28rpx;
+}
+
+.ds-2 {
+  height: 16rpx;
+  animation-delay: 0.14s;
+}
+
+.ds-3 {
+  height: 22rpx;
+  animation-delay: 0.28s;
+}
+
+.ds-4 {
+  height: 12rpx;
+  animation-delay: 0.42s;
+}
+
+.dock-mini-status.is-off .dock-sbar,
+.dock-mini.is-out .dock-sbar {
+  animation-play-state: paused;
+}
+
+.dock-mini-status.is-off .dock-sbar {
+  opacity: 0.42;
+}
+
+@keyframes dockSeq {
+  0%, 100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+/* 右侧控制区：无底框纯图标，76rpx 命中区 + 伪元素扩到 88rpx */
+.dock-mini-ctrls {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6rpx;
+}
+
+.dmc-btn {
+  position: relative;
+  width: 76rpx;
+  height: 76rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  text-align: center;
-  font-size: 28rpx;
-  color: var(--text-muted);
+  color: rgba(255, 255, 255, 0.92);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+/* 伪元素外扩 6rpx：视觉是纯图标，实际可点区域 88rpx */
+.dmc-btn::after {
+  content: "";
+  position: absolute;
+  left: -6rpx;
+  right: -6rpx;
+  top: -6rpx;
+  bottom: -6rpx;
+}
+
+.dmc-btn:active,
+.dmc-btn--tap {
+  transform: scale(0.86);
+  opacity: 0.55;
+}
+
+.dmc-x {
+  color: rgba(255, 255, 255, 0.58);
+}
+
+/* 暂停态图标：两根细竖条（与 now-playing 同几何） */
+.dock-ico-pause {
+  display: flex;
+  align-items: center;
+  gap: 9rpx;
+  height: 30rpx;
+  animation: dockIconIn 0.16s var(--ease-gentle);
+}
+
+.dock-pbar {
+  width: 6rpx;
+  height: 30rpx;
+  border-radius: 2rpx;
+  background: currentColor;
+}
+
+/* 播放态图标：三角（margin 补偿视觉居中） */
+.dock-ico-play {
+  width: 0;
+  height: 0;
+  margin-left: 6rpx;
+  border-top: 15rpx solid transparent;
+  border-bottom: 15rpx solid transparent;
+  border-left: 24rpx solid currentColor;
+  animation: dockIconIn 0.16s var(--ease-gentle);
+}
+
+/* 关闭图标：细 ×，中心对齐 */
+.dock-ico-x {
+  position: relative;
+  width: 30rpx;
+  height: 30rpx;
+  animation: dockIconIn 0.16s var(--ease-gentle);
+}
+
+.dock-xbar {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3rpx;
+  height: 30rpx;
+  margin: -15rpx 0 0 -1.5rpx;
+  border-radius: 2rpx;
+  background: currentColor;
+  transform-origin: 50% 50%;
+}
+
+@keyframes dockIconIn {
+  from {
+    opacity: 0;
+    transform: scale(0.68);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.dx-a {
+  transform: rotate(45deg);
+}
+
+.dx-b {
+  transform: rotate(-45deg);
 }
 
 /* 遮罩与抽屉 */
@@ -329,8 +502,7 @@
 .dock-cat:active,
 .dock-timer-chip:active,
 .dock-fav:active,
-.dock-cache-clean:active,
-.dock-mini-btn:active {
+.dock-cache-clean:active {
   opacity: 0.7;
 }
 
@@ -430,9 +602,24 @@
   flex: none;
 }
 
+.dock-timer-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2rpx;
+  min-width: 0;
+}
+
 .dock-timer-label {
   font-size: 22rpx;
   color: var(--text-secondary);
+}
+
+/* 运行中的剩余时间：与偏好档位区分，暂停时显示冻结的剩余 */
+.dock-timer-live {
+  font-size: 19rpx;
+  line-height: 1.2;
+  white-space: nowrap;
+  color: var(--color-primary);
 }
 
 .dock-timer-chips {

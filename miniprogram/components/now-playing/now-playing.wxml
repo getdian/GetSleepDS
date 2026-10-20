@@ -1,15 +1,59 @@
-<view wx:if="{{visible}}" class="now-playing">
-  <view class="np-main" bindtap="goSleep">
-    <view class="np-eq {{playing ? '' : 'is-paused'}}">
-      <view class="np-bar np-1"></view>
-      <view class="np-bar np-2"></view>
-      <view class="np-bar np-3"></view>
+<view class="np-shell {{visible ? 'is-in' : 'is-out'}}" aria-hidden="{{!visible}}">
+  <view class="now-playing">
+    <view class="np-main" bindtap="goSleep" hover-class="np-main--tap" hover-stay-time="120">
+      <view class="np-info">
+        <view class="np-line">
+          <text class="np-title">{{title}}</text>
+          <block wx:if="{{category}}">
+            <text class="np-sep">·</text>
+            <text class="np-cat">{{category}}</text>
+          </block>
+        </view>
+        <view class="np-status {{playing ? 'is-on' : 'is-off'}}">
+          <view class="np-seq" aria-hidden="true">
+            <view class="np-sbar np-s1"></view>
+            <view class="np-sbar np-s2"></view>
+            <view class="np-sbar np-s3"></view>
+            <view class="np-sbar np-s4"></view>
+          </view>
+          <text class="np-status-text">{{playing ? '正在播放' : '已暂停'}}</text>
+          <text wx:if="{{timerText}}" class="np-timer-text">· {{timerText}}</text>
+        </view>
+      </view>
     </view>
-    <view class="np-info">
-      <text class="np-title">{{title}}</text>
-      <text class="np-sub">{{playing ? '正在播放 · 点击回到声音' : '已暂停'}}</text>
+
+    <view class="np-ctrls">
+      <view
+        class="np-icon np-toggle"
+        catchtap="toggle"
+        hover-class="np-icon--tap"
+        hover-stay-time="100"
+        aria-role="button"
+        aria-label="{{playing ? '暂停' : '继续播放'}}"
+      >
+        <block wx:if="{{playing}}">
+          <view class="np-ico-pause">
+            <view class="np-pbar"></view>
+            <view class="np-pbar"></view>
+          </view>
+        </block>
+        <block wx:else>
+          <view class="np-ico-play"></view>
+        </block>
+      </view>
+      <view
+        class="np-icon np-x"
+        catchtap="close"
+        hover-class="np-icon--tap"
+        hover-stay-time="100"
+        aria-role="button"
+        aria-label="关闭播放"
+      >
+        <view class="np-ico-x">
+          <view class="np-xbar np-x-a"></view>
+          <view class="np-xbar np-x-b"></view>
+        </view>
+      </view>
     </view>
   </view>
-  <view class="np-btn" catchtap="toggle">{{playing ? '暂停' : '播放'}}</view>
-  <view class="np-close" catchtap="close">×</view>
 </view>

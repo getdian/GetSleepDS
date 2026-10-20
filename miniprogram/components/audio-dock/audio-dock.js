@@ -33,6 +33,7 @@ Component({
     timerRemainText: '',
     currentId: '',
     currentTitle: '',
+    currentCategory: '',
     playing: false,
     playerSub: '',
     cacheText: '',
@@ -50,6 +51,7 @@ Component({
   lifetimes: {
     attached() {
       this._alive = true
+      this._pageVisible = true
       this._audio = null
       this._cfg = getConfig()
       this._sheetTrackId = ''
@@ -73,9 +75,18 @@ Component({
       this._unsubTimer = audioTimer.subscribe((left) => {
         if (!this._alive) return
         if (left === 0 && this.data.currentId && storage.getMeta().lastTrackActive === false) {
-          this.setData({ currentId: '', currentTitle: '', playing: false })
+          const expiredAt = audioTimer.lastExpiredAt()
+          if (
+            expiredAt &&
+            Date.now() - expiredAt < 2000 &&
+            this._pageVisible
+          ) {
+            wx.showToast({ title: '定时结束，已停止播放', icon: 'none' })
+          }
+          this.setData({ currentId: '', currentTitle: '', currentCategory: '', playing: false })
         }
-        this.syncPlayerText()
+        // 隐藏页不逐秒算文案，回到前台时由 show 补一次
+        if (this._pageVisible) this.syncPlayerText()
       })
       this._unlockTimer = setInterval(() => {
         if (this._alive) this.refreshUnlock()
@@ -119,10 +130,15 @@ Component({
 
   pageLifetimes: {
     show() {
+      this._pageVisible = true
       // 统计页“清除数据”会 stop 音频并清空 meta；回到入睡页时同步清掉残留迷你条
       if (storage.getMeta().lastTrackActive === false && this.data.currentId) {
-        this.setData({ currentId: '', currentTitle: '', playing: false, playerSub: '', timerRemainText: '' })
+        this.setData({ currentId: '', currentTitle: '', currentCategory: '', playing: false, playerSub: '', timerRemainText: '' })
       }
+      this.syncPlayerText()
+    },
+    hide() {
+      this._pageVisible = false
     }
   },
 
@@ -234,7 +250,9 @@ Component({
       // 到期即停止当前曲目，避免“已过期但仍可续播”的权益漏洞。
       if (expired && this.data.currentId) {
         this.stopPlayback()
-        wx.showToast({ title: '解锁已到期，重新解锁后继续', icon: 'none' })
+        if (this._pageVisible) {
+          wx.showToast({ title: '解锁已到期，重新解锁后继续', icon: 'none' })
+        }
       }
     },
 
@@ -309,9 +327,13 @@ Component({
         },
         ended: () => {
           if (!this._alive) return
-          // 锁屏期间 JS 可能被挂起；重新播放前先按墙钟检查定时是否已到点
+          // 锁屏期间 JS 可能被挂起；重新播放前先按墙钟检查定时是否已到点。
+          // restore 到点时会立刻停音频并清 endAt，之后 shouldStop() 恒 false，
+          // 因此还要看“刚刚到点”的时间戳，避免到点后又循环重播。
           audioTimer.restore()
-          if (audioTimer.shouldStop()) {
+          const expiredAt = audioTimer.lastExpiredAt()
+          const justExpired = expiredAt && Date.now() - expiredAt < 2000
+          if (audioTimer.shouldStop() || justExpired) {
             this.stopPlayback()
             return
           }
@@ -324,9 +346,20 @@ Component({
             this._audio.src = this._currentTrack.url
             return
           }
-          this.setData({ playing: false })
+          // 终态失败：结束本次会话，和 now-playing 的错误态保持同一口径，
+          // 避免入睡页还留着一个点不动的“已暂停”迷你条。
+          this.setData({
+            currentId: '',
+            currentTitle: '',
+            currentCategory: '',
+            playing: false,
+            playerSub: '',
+            timerRemainText: ''
+          })
           storage.patchMeta({ lastTrackActive: false })
-          wx.showToast({ title: '音频加载失败', icon: 'none' })
+          audioTimer.clear(undefined, true)
+          // 播放中可能人在首页/统计页：那边由 now-playing 负责提示，避免双 toast
+          if (this._pageVisible) wx.showToast({ title: '音频加载失败', icon: 'none' })
         }
       }
       this._handlers = handlers
@@ -368,6 +401,7 @@ Component({
       this.setData({
         currentId: track.id,
         currentTitle: track.title,
+        currentCategory: track.category || '',
         playing: !this._audio.paused
       })
       this.syncPlayerText()
@@ -375,14 +409,22 @@ Component({
 
     syncPlayerText() {
       const left = audioTimer.remaining()
-      const remain = left > 0 ? Math.ceil(left / 60000) + ' 分钟后关闭' : ''
+      const paused = audioTimer.isPaused()
+      let timerText = ''
+      let liveText = ''
+      if (left > 0) {
+        const mins = Math.max(1, Math.ceil(left / 60000))
+        // 暂停时倒计时是冻结的，不能说“分钟后关闭”，否则会误导用户
+        timerText = paused ? '定时剩 ' + mins + ' 分钟' : mins + ' 分钟后关闭'
+        liveText = paused ? '剩 ' + mins + ' 分钟 · 已暂停' : '剩 ' + mins + ' 分钟'
+      }
       let sub = ''
       if (this.data.currentId) {
-        sub = this.data.playing ? remain || '正在播放 · 循环' : '已暂停'
+        sub = (this.data.playing ? '正在播放' : '已暂停') + (timerText ? ' · ' + timerText : '')
       }
-      // audioTimer 每秒 emit 一次；文案未变化时不要 setData（隐藏页也省开销）
-      if (remain === this.data.timerRemainText && sub === this.data.playerSub) return
-      this.setData({ timerRemainText: remain, playerSub: sub })
+      // audioTimer 每秒 emit 一次；文案未变化时不要 setData
+      if (liveText === this.data.timerRemainText && sub === this.data.playerSub) return
+      this.setData({ timerRemainText: liveText, playerSub: sub })
     },
 
     findTrack(id) {
@@ -411,6 +453,7 @@ Component({
       this.setData({
         currentId: track.id,
         currentTitle: track.title,
+        currentCategory: track.category || '',
         playing: true
       })
       this.syncPlayerText()
@@ -423,14 +466,12 @@ Component({
       storage.patchMeta({
         lastTrackId: track.id,
         lastTrackTitle: track.title,
+        lastTrackCategory: track.category || '',
         lastTrackActive: true
       })
       events.track('audio_play', track.id)
 
-      if (this.data.timerEnabled && this.data.timerMinutes) {
-        if (audioTimer.isPaused()) audioTimer.resume()
-        else if (!audioTimer.remaining()) audioTimer.start(this.data.timerMinutes)
-      }
+      if (this.data.timerEnabled) audioTimer.arm(this.data.timerMinutes)
     },
 
     replay() {
@@ -456,10 +497,7 @@ Component({
         this._audio.pause()
         audioTimer.pause()
       } else {
-        if (audioTimer.isPaused()) audioTimer.resume()
-        else if (!audioTimer.remaining() && this.data.timerEnabled && this.data.timerMinutes) {
-          audioTimer.start(this.data.timerMinutes)
-        }
+        if (this.data.timerEnabled) audioTimer.arm(this.data.timerMinutes)
         this._audio.play()
       }
     },
@@ -469,7 +507,7 @@ Component({
       // 停止本次播放，但保留“下次定时多久”的偏好
       audioTimer.clear(undefined, true)
       storage.patchMeta({ lastTrackActive: false })
-      this.setData({ currentId: '', currentTitle: '', playing: false, playerSub: '', timerRemainText: '' })
+      this.setData({ currentId: '', currentTitle: '', currentCategory: '', playing: false, playerSub: '', timerRemainText: '' })
       if (this._audio) {
         try {
           this._audio.stop()
@@ -635,8 +673,12 @@ Component({
     onTimerTap(event) {
       const minutes = Number(event.currentTarget.dataset.value)
       if (minutes === this.data.timerMinutes) {
-        // 重复点当前项时，若计时已结束/暂停，重新启用；不改变偏好
-        if (minutes && this.data.playing && !audioTimer.remaining()) audioTimer.start(minutes)
+        // 重复点当前项时，若计时已结束，重新启用；不改变偏好
+        if (minutes && this.data.playing && !audioTimer.remaining()) {
+          audioTimer.start(minutes)
+          this.syncPlayerText()
+          wx.showToast({ title: minutes + ' 分钟后自动关闭', icon: 'none' })
+        }
         return
       }
       this.setData({ timerMinutes: minutes })
@@ -644,13 +686,16 @@ Component({
       if (!saved) wx.showToast({ title: '定时设置保存失败', icon: 'none' })
 
       if (!minutes) {
+        const wasOn = audioTimer.remaining() > 0
         audioTimer.clear()
         this.syncPlayerText()
+        if (wasOn) wx.showToast({ title: '已关闭定时', icon: 'none' })
         return
       }
       if (this.data.playing) {
         audioTimer.start(minutes)
         this.syncPlayerText()
+        wx.showToast({ title: minutes + ' 分钟后自动关闭', icon: 'none' })
       } else {
         // 未播放/已暂停时只记录偏好，继续播放后再起表，避免暂停时倒计时偷偷走完
         audioTimer.setPreference(minutes)

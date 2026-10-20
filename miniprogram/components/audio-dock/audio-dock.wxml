@@ -4,20 +4,44 @@
   <text class="dock-fab-label">声音</text>
 </view>
 
-<view wx:if="{{currentId}}" class="dock-mini {{playing ? '' : 'is-paused'}}" bindtap="openSheet">
-  <view class="dock-eq">
-    <view class="eq-bar eq-1"></view>
-    <view class="eq-bar eq-2"></view>
-    <view class="eq-bar eq-3"></view>
+<view class="dock-mini {{currentId ? 'is-in' : 'is-out'}}" bindtap="openSheet" aria-hidden="{{!currentId}}">
+  <view class="dock-mini-main" hover-class="dock-mini-main--tap" hover-stay-time="120">
+    <view class="dock-mini-line">
+      <text class="dock-mini-title">{{currentTitle}}</text>
+      <block wx:if="{{currentCategory}}">
+        <text class="dock-mini-sep">·</text>
+        <text class="dock-mini-cat">{{currentCategory}}</text>
+      </block>
+    </view>
+    <view class="dock-mini-status {{playing ? 'is-on' : 'is-off'}}">
+      <view class="dock-seq">
+        <view class="dock-sbar ds-1"></view>
+        <view class="dock-sbar ds-2"></view>
+        <view class="dock-sbar ds-3"></view>
+        <view class="dock-sbar ds-4"></view>
+      </view>
+      <text class="dock-mini-sub">{{playerSub || (playing ? '正在播放' : '已暂停')}}</text>
+    </view>
   </view>
-  <view class="dock-mini-main">
-    <text class="dock-mini-title">{{currentTitle}}</text>
-    <text class="dock-mini-sub">{{playerSub}}</text>
+  <view class="dock-mini-ctrls">
+    <view class="dmc-btn dock-toggle" catchtap="togglePlay" hover-class="dmc-btn--tap" hover-stay-time="100">
+      <block wx:if="{{playing}}">
+        <view class="dock-ico-pause">
+          <view class="dock-pbar"></view>
+          <view class="dock-pbar"></view>
+        </view>
+      </block>
+      <block wx:else>
+        <view class="dock-ico-play"></view>
+      </block>
+    </view>
+    <view class="dmc-btn dmc-x" catchtap="stopPlayback" hover-class="dmc-btn--tap" hover-stay-time="100">
+      <view class="dock-ico-x">
+        <view class="dock-xbar dx-a"></view>
+        <view class="dock-xbar dx-b"></view>
+      </view>
+    </view>
   </view>
-  <view class="dock-mini-btn" catchtap="togglePlay">
-    <text>{{playing ? '暂停' : '播放'}}</text>
-  </view>
-  <view class="dock-mini-close" catchtap="stopPlayback">×</view>
 </view>
 
 <!-- 展开态：底部玻璃抽屉 -->
@@ -100,7 +124,10 @@
   </scroll-view>
 
   <view wx:if="{{timerEnabled}}" class="dock-timer" catchtouchmove="noop">
-    <text class="dock-timer-label">定时关闭</text>
+    <view class="dock-timer-head">
+      <text class="dock-timer-label">定时关闭</text>
+      <text wx:if="{{timerRemainText}}" class="dock-timer-live">{{timerRemainText}}</text>
+    </view>
     <view class="dock-timer-chips">
       <view
         wx:for="{{timerOptions}}"
