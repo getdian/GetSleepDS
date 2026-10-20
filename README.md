@@ -2,7 +2,7 @@
 
 极简睡眠时间计算 + 一键打卡 + 环境音。零登录、零授权、数据默认只存本机、只有深色主题，前后端分离。
 
-当前是 **L4 商业交付候选（2026-10-20 深审修复已落地）**：三 tab 小程序、audio-dock、Express/PG 后端、后台管理、H5 演示与部署文件已就位。融合了同产品另一实现的 audio-dock、真 3D 翻转、A/B/C 打卡态、横向热力图与海报/清除数据。AppID 已切到 `wx378b0a7437d60998`；还缺真实 ICP 备案号、AppSecret、1Panel 线上部署、广告位/真实 COS 与真机验收，以及改后模拟器截图复验。
+当前是 **L4 商业交付候选（2026-10-20 深审修复已落地）**：三 tab 小程序、audio-dock、Express/PG 后端、后台管理、H5 演示与部署文件已就位。融合了同产品另一实现的 audio-dock、真 3D 翻转、A/B/C 打卡态、横向热力图与海报/清除数据。AppID 已切到 `wx378b0a7437d60998`；还缺真实 ICP 备案号、AppSecret、1Panel 线上部署、广告位/真实 COS 与真机验收。改后模拟器已复验背景显示与时间轮拖动。
 
 ## 当前状态
 
@@ -23,7 +23,7 @@
 | Dockerfile / docker-compose | ✅ 已实现，`docker compose config` 校验通过 |
 | 后台管理 `/admin` | ✅ 左侧主菜单 + 右侧分类面板，浏览器实测保存 |
 | 落地页 `/` + H5 交互演示 `/demo/` | ✅ 浏览器实测（H5 仍为旧版结构，色板已同步） |
-| 119 个单元测试 | ✅ 118 通过 + 1 个 PG 集成用例（需 `PG_TEST_URL`） |
+| 120 个单元测试 | ✅ 119 通过 + 1 个 PG 集成用例（需 `PG_TEST_URL`） |
 | AppID / 首条 COS 音频 | ✅ `wx378b0a7437d60998`；`https://img.qfmaster.com/sleep/sleep-10001.mp3` 可访问 |
 | 微信开发者工具渲染 | ✅ 三页已编译、截图、无 console error |
 | 真机音频 / 广告 / 锁屏 | ⚠️ 未验证，需要外部账号与真机 |
@@ -139,7 +139,7 @@ npm run dev:geek
 # 只检查环境
 powershell -File deploy/dev.ps1 -Check
 
-# 打包：先跑 119 测试 + 静态检查，再生成 zip/SHA256
+# 打包：先跑 120 测试 + 静态检查，再生成 zip/SHA256
 npm run pack -- -Label 20261019-l4
 ```
 
@@ -167,14 +167,14 @@ npm run pack -- -Label 20261019-l4
 ## 验证
 
 ```bash
-npm test        # 119 个测试：时间、统计、双向倒推、热力图/墓碑、分片同步、API、后台鉴权/事件/COS 配置/用户记录删除、启动来源归一化、看板聚合、小程序码服务、展示位配置校验、同步总闸、云端副本删除、本地事实回顾、背景图逻辑与后台配置；PG 集成用例需 PG_TEST_URL
+npm test        # 120 个测试：时间、统计、双向倒推、热力图/墓碑、分片同步、API、后台鉴权/事件/COS 配置/用户记录删除、启动来源归一化、看板聚合、小程序码服务、展示位配置校验、同步总闸、云端副本删除、本地事实回顾、背景图逻辑与后台配置；PG 集成用例需 PG_TEST_URL
 npm run check   # JSON / WXML 标签 / WXSS 括号 / 页面四件套 / 组件引用 / CSP inline 检查
 ```
 
 本次实际执行结果：
 
-- `npm test`：118 passed / 0 failed + 1 个 PG 集成用例（未设置 `PG_TEST_URL` 时跳过）
-- `npm run check`：通过（19 JSON / 14 WXML / 15 WXSS），主包约 284.6 KB
+- `npm test`：119 passed / 0 failed + 1 个 PG 集成用例（未设置 `PG_TEST_URL` 时跳过）
+- `npm run check`：通过（19 JSON / 14 WXML / 15 WXSS），主包约 285.6 KB
 - 后端内存模式冒烟：`/api/health`、`/api/config`、`/api/summary`、`/api/audio/unlock`、`/api/records/erase` 均符合预期
 - **PostgreSQL 16 容器端到端**：自动建表、解锁写入 24 小时、`sync` 幂等、空记录同步能取回 3 条（换机回填）、`summary` 正常返回、后台配置重启后仍在
 - **后台浏览器实测**：登录、保存（写库并立即改变 `/api/config` 与解锁 TTL）、环境音增删、COS 音频试听、存储面板、14 天趋势渲染、无未捕获 JS 错误

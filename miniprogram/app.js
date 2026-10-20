@@ -71,12 +71,12 @@ App({
       audioTimer.restore()
     }
 
-    if (!this.globalData.config) {
-      loadConfig(true)
-        .then((config) => {
-          this.globalData.config = config
-        })
-        .catch(() => {})
-    }
+    // 每次回前台都强制刷新，后台改广告位/背景图/开关后能尽快生效；
+    // config 内部有在途去重，不会和页面 onShow 的请求叠加。
+    loadConfig(true)
+      .then((config) => {
+        this.globalData.config = config
+      })
+      .catch(() => {})
   }
 })

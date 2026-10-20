@@ -10,7 +10,7 @@ const { syncNow, whenIdle } = require('../../utils/sync')
 const audioTimer = require('../../utils/audio-timer')
 const events = require('../../utils/events')
 const adSlots = require('../../utils/ads')
-const { getConfig } = require('../../utils/config')
+const { getConfig, loadConfig } = require('../../utils/config')
 
 const RANGE_MONTHS = 'm3'
 const RANGE_SMALL = 30
@@ -58,6 +58,11 @@ Page({
     this._alive = true
     this.refresh(false)
     adSlots.apply(this)
+    loadConfig(true)
+      .then(() => {
+        if (this._alive) this.refresh(false)
+      })
+      .catch(() => {})
   },
 
   onUnload() {

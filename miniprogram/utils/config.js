@@ -52,13 +52,16 @@ function getConfig() {
  * 拉取远程配置。任何失败都不抛出，返回缓存或内置兜底。
  */
 function loadConfig(force) {
+  // 只要有在途请求，就必须等它，不能先用旧缓存短路；否则 app.onLaunch 的
+  // force 请求还没回来，页面 onLoad 的 force:false 会拿着旧缓存渲染，
+  // 后台刚改的背景图/广告位要等 10 分钟 TTL 才出现。
+  if (inflight) return inflight
+
   const cache = storage.getConfigCache()
   if (!force && cache && Date.now() - cache.fetchedAt < CACHE_TTL) {
     memory = merge(cache.data)
     return Promise.resolve(memory)
   }
-  // 冷启动时 app.onLaunch / 页面 onLoad / ads.apply 会同时触发，共享同一个在途请求。
-  if (inflight) return inflight
 
   inflight = api
     .fetchConfig()

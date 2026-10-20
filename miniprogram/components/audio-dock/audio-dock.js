@@ -90,7 +90,7 @@ Component({
         this.setData({ timerMinutes: 60 })
       }
 
-      loadConfig(false).then((cfg) => {
+      loadConfig(true).then((cfg) => {
         if (!this._alive || !cfg) return
         this._cfg = cfg
         this.applyConfig(cfg)

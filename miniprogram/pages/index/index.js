@@ -48,7 +48,8 @@ Page({
     })
 
     this.loadBackgrounds()
-    loadConfig(false)
+    // onLoad 必须强制拉一次：后台刚改的背景图/广告位不能被 10 分钟缓存挡住
+    loadConfig(true)
       .then(() => {
         if (this._alive) this.loadBackgrounds()
       })
@@ -60,7 +61,8 @@ Page({
     this.refreshNow()
     this.startClock()
     adSlots.apply(this)
-    loadConfig(false)
+    // 从后台保存后切回小程序，onShow 立即刷新，而不是等 10 分钟
+    loadConfig(true)
       .then(() => {
         if (this._alive) this.loadBackgrounds()
       })
@@ -261,6 +263,7 @@ Page({
       title: item.title,
       category: item.category,
       url: item.url,
+      thumbUrl: item.thumbUrl,
       localPath: backgrounds.localPathOf(item.url),
       isDefault: !!defaultItem && item.id === defaultItem.id,
       unlocked: backgrounds.isUnlocked(unlocked, item.id, now)

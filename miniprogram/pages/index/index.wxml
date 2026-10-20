@@ -170,7 +170,7 @@
   items="{{bgItems}}"
   categories="{{bgCategories}}"
   active-category="{{bgCategory}}"
-  active-id="{{background.id}}"
+  active-id="{{background ? background.id : ''}}"
   unlock-hours="{{bgUnlockHours}}"
   free-mode="{{bgFreeMode}}"
   busy="{{bgBusy}}"
