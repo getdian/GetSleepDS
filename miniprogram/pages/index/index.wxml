@@ -33,7 +33,7 @@
         <view class="mode-capsule" bindtap="toggleMode">
           <view class="mode-pill-active">
             <text class="mode-ico">{{mode === 'wake' ? '☼' : '🌙'}}</text>
-            <text class="mode-text">{{mode === 'wake' ? '我想几点醒' : '我想几点睡'}}</text>
+            <text class="mode-text">{{mode === 'wake' ? '选择起床时间' : '选择入睡时间'}}</text>
           </view>
           <view class="mode-swap">
             <text class="mode-swap-ico">⇄</text>
@@ -62,7 +62,7 @@
             <view class="fall-block">
               <view class="fall-head">
                 <view class="fall-ico"></view>
-                <text class="fall-label">入睡耗时</text>
+                <text class="fall-label">预计入睡耗时</text>
               </view>
               <view class="fall-chips">
                 <view
