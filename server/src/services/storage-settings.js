@@ -20,8 +20,21 @@ function createStorageSettings(options) {
   const box = options.secretBox
   const securityReady = !!options.securityReady
 
+  /** 只把数据库层异常映射成 503，业务校验错误保持原状。 */
+  async function dbCall(run) {
+    try {
+      return await run()
+    } catch (error) {
+      if (error && (error.status || error.code === 'DB_UNAVAILABLE')) throw error
+      const wrapped = new Error('数据库暂时不可用')
+      wrapped.code = 'DB_UNAVAILABLE'
+      wrapped.status = 503
+      throw wrapped
+    }
+  }
+
   async function getRow() {
-    return db.getSetting('cos')
+    return dbCall(() => db.getSetting('cos'))
   }
 
   async function getRaw() {
@@ -94,14 +107,16 @@ function createStorageSettings(options) {
     if (!secretId) throw invalidBody('SecretId 不能为空')
     if (!secretKeyEnc) throw invalidBody('SecretKey 不能为空')
 
-    await db.saveSetting('cos', {
-      bucket,
-      region,
-      domain,
-      prefix,
-      secretId,
-      secretKeyEnc
-    })
+    await dbCall(() =>
+      db.saveSetting('cos', {
+        bucket,
+        region,
+        domain,
+        prefix,
+        secretId,
+        secretKeyEnc
+      })
+    )
 
     return getPublic()
   }

@@ -96,6 +96,11 @@ function markDeleted(day, timestamp) {
   return safeSet(KEYS.deleted, all)
 }
 
+/** 批量合并用：整体替换墓碑表（调用方负责墓碑优先规则） */
+function replaceDeleted(map) {
+  return safeSet(KEYS.deleted, map && typeof map === 'object' ? map : {})
+}
+
 function clearDeleted(day) {
   const all = getDeleted()
   if (!all[day]) return true
@@ -252,6 +257,7 @@ module.exports = {
   removeRecord,
   getDeleted,
   getDeletedList,
+  replaceDeleted,
   markDeleted,
   clearDeleted,
   getPending,

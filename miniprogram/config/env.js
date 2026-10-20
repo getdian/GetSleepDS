@@ -8,13 +8,18 @@
 const PROD_API = 'https://sleep.qfmaster.com'
 const DEV_API = 'http://127.0.0.1:3100'
 
-let envVersion = 'develop'
+// 取不到环境信息时按正式版处理：宁可请求线上失败，也不要把 127.0.0.1 带到线上。
+let envVersion = 'release'
 try {
   if (typeof wx !== 'undefined' && wx.getAccountInfoSync) {
     const account = wx.getAccountInfoSync()
-    envVersion = (account && account.miniProgram && account.miniProgram.envVersion) || 'develop'
+    envVersion = (account && account.miniProgram && account.miniProgram.envVersion) || 'release'
   }
-} catch (e) {}
+} catch (e) {
+  if (typeof console !== 'undefined' && console.warn) {
+    console.warn('[env] getAccountInfoSync failed, fallback to release', e)
+  }
+}
 
 module.exports = {
   apiBase: envVersion === 'develop' ? DEV_API : PROD_API,

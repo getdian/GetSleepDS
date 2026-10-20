@@ -6,6 +6,7 @@ const { withLogin } = require('../../utils/login')
 const ad = require('../../utils/ad')
 const events = require('../../utils/events')
 const audioTimer = require('../../utils/audio-timer')
+const playerState = require('../../utils/player-state')
 
 const ICONS = ['rain', 'wave', 'fire', 'noise', 'night']
 const TIMER_OPTIONS = [
@@ -59,11 +60,16 @@ Component({
       this._playingFromCache = false
       this._currentTrack = null
       this._wasUnlocked = false
+      // 广告看完了但本地有效期写入失败时，至少保证本次会话可用；
+      // 否则抽屉显示“已解锁”、点曲目却重新弹解锁。
+      this._sessionUnlocked = false
       this._ttlDays = (this._cfg.cache && this._cfg.cache.ttlDays) || 7
       this._onCacheChange = () => this.refreshCache()
 
       cache.onChange(this._onCacheChange)
-      cache.maybePrune(this._cfg.cache)
+      const lastTrackId = storage.getMeta().lastTrackId
+      const lastTrack = (this._cfg.audio || []).filter((track) => track.id === lastTrackId)[0]
+      cache.maybePrune(this._cfg.cache, lastTrack && lastTrack.url)
 
       this.applyConfig(this._cfg)
       this.setupAudio()
@@ -221,7 +227,7 @@ Component({
 
     /* ---------------- 解锁 ---------------- */
     isUnlocked() {
-      return storage.getUnlockExpire() > Date.now()
+      return this._sessionUnlocked || storage.getUnlockExpire() > Date.now()
     },
 
     isFreeMode() {
@@ -237,10 +243,16 @@ Component({
       this._wasUnlocked = unlocked
       let remainText = ''
       if (unlocked) {
-        const left = storage.getUnlockExpire() - Date.now()
-        const hours = Math.floor(left / 3600000)
-        const minutes = Math.floor((left % 3600000) / 60000)
-        remainText = '剩余约 ' + hours + ' 小时' + (minutes > 0 ? ' ' + minutes + ' 分钟' : '')
+        const expireAt = storage.getUnlockExpire()
+        if (expireAt > Date.now()) {
+          const left = expireAt - Date.now()
+          const hours = Math.floor(left / 3600000)
+          const minutes = Math.floor((left % 3600000) / 60000)
+          remainText = '剩余约 ' + hours + ' 小时' + (minutes > 0 ? ' ' + minutes + ' 分钟' : '')
+        } else {
+          // 广告已看完但有效期写入失败：本次会话可听，重进小程序需重新解锁。
+          remainText = '本次会话有效 · 重进需重新解锁'
+        }
       }
       this.setData({
         unlocked,
@@ -307,6 +319,7 @@ Component({
       const handlers = {
         play: () => {
           if (!this._alive) return
+          playerState.clearFallback()
           this.setData({ playing: true })
           this.syncPlayerText()
         },
@@ -343,11 +356,15 @@ Component({
           if (!this._alive) return
           if (this._playingFromCache && this._currentTrack) {
             this._playingFromCache = false
+            // 标记“正在回退”，让同时监听的 now-playing 不要把这次错误当终态。
+            playerState.markFallback(this._currentTrack.url)
+            storage.patchMeta({ lastTrackActive: true })
             this._audio.src = this._currentTrack.url
             return
           }
           // 终态失败：结束本次会话，和 now-playing 的错误态保持同一口径，
           // 避免入睡页还留着一个点不动的“已暂停”迷你条。
+          playerState.clearFallback()
           this.setData({
             currentId: '',
             currentTitle: '',
@@ -446,6 +463,7 @@ Component({
       }
 
       this._stopRequested = false
+      playerState.clearFallback()
       const cached = localPath || cache.peek(track.url, this._ttlDays)
       this._currentTrack = track
       this._playingFromCache = !!cached
@@ -496,10 +514,33 @@ Component({
       if (this.data.playing) {
         this._audio.pause()
         audioTimer.pause()
-      } else {
-        if (this.data.timerEnabled) audioTimer.arm(this.data.timerMinutes)
-        this._audio.play()
+        return
       }
+
+      // 系统侧 stop（通知栏/锁屏/被其他音频抢占）后部分基础库会清空 src，
+      // 直接 play() 不会重新起播；此时按 replay 的口径重建源。
+      if (!this._audio.src) {
+        const track = this.findTrack(this.data.currentId)
+        if (!track || !track.url) return
+        const cached = cache.peek(track.url, this._ttlDays)
+        this._currentTrack = track
+        this._playingFromCache = !!cached
+        this._audio.title = '睡点 · ' + track.title
+        this._audio.epname = '环境音'
+        this._audio.singer = '睡点'
+        this._audio.src = cached || track.url
+        storage.patchMeta({
+          lastTrackId: track.id,
+          lastTrackTitle: track.title,
+          lastTrackCategory: track.category || '',
+          lastTrackActive: true
+        })
+        if (this.data.timerEnabled) audioTimer.arm(this.data.timerMinutes)
+        return
+      }
+
+      if (this.data.timerEnabled) audioTimer.arm(this.data.timerMinutes)
+      this._audio.play()
     },
 
     stopPlayback() {
@@ -607,6 +648,8 @@ Component({
       const track = this.findTrack(this._sheetTrackId)
       if (!track) {
         this.setData({ sheetShow: false })
+        wx.showToast({ title: '该声音已下架', icon: 'none' })
+        this.refreshCache()
         return
       }
       const seq = (this._unlockSeq || 0) + 1
@@ -641,15 +684,17 @@ Component({
         })
         .then((finished) => {
           if (finished === null || seq !== this._unlockSeq || !this._alive) return
+          // 有效期写入失败时保留“本次会话已解锁”，避免抽屉文案与点击行为互相矛盾。
+          if (finished === false) this._sessionUnlocked = true
           const localPath = cache.peek(track.url, this._ttlDays)
           this.setData({
             sheetShow: false,
             unlocking: false,
             prepareText: '',
-            unlocked: true
+            unlocked: this.isUnlocked()
           })
           wx.showToast({
-            title: finished === false ? '已解锁（本地状态未保存）' : '已解锁',
+            title: finished === false ? '已解锁（本次有效，重进需重新解锁）' : '已解锁',
             icon: 'none'
           })
           events.track('audio_unlock', track.id)
@@ -664,9 +709,12 @@ Component({
 
     onSheetCancel() {
       // 广告卡住时也必须能退出；递增 seq 让在途回调失效
+      const track = this.findTrack(this._sheetTrackId)
       this._unlockSeq = (this._unlockSeq || 0) + 1
       this._sheetTrackId = ''
       this.setData({ sheetShow: false, unlocking: false, prepareText: '' })
+      // 用户没看完广告就取消时，不应继续在后台下载并写入缓存。
+      if (track && track.url && cache.cancel) cache.cancel(track.url)
     },
 
     /* ---------------- 定时 ---------------- */

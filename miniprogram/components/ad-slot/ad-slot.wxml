@@ -1,12 +1,12 @@
-<view wx:if="{{enabled && unitId && !failed}}" class="ad-slot {{loaded ? 'is-settled' : type === 'banner' ? 'is-pending-banner' : 'is-pending'}}">
+<view wx:if="{{enabled && unitId}}" class="ad-slot {{failed ? 'is-failed' : loaded ? 'is-settled' : type === 'banner' ? 'is-pending-banner' : 'is-pending'}}">
   <ad
-    wx:if="{{type === 'banner'}}"
+    wx:if="{{!failed && type === 'banner'}}"
     unit-id="{{unitId}}"
     bindload="onAdLoad"
     binderror="onAdError"
   ></ad>
   <ad
-    wx:else
+    wx:elif="{{!failed}}"
     unit-id="{{unitId}}"
     ad-type="template"
     ad-theme="{{theme}}"

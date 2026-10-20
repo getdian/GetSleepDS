@@ -191,6 +191,20 @@
   color: var(--text-secondary);
 }
 
+.fact-local-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-top: 10rpx;
+}
+
+.fact-local {
+  font-size: 20rpx;
+  letter-spacing: 0.4rpx;
+  color: var(--text-muted);
+}
+
 .fact-error {
   display: flex;
   align-items: center;

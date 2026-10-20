@@ -16,7 +16,7 @@ Page({
     wakeTime: '07:30',
     sleepTime: '23:00',
     fallAsleep: 15,
-    fallOptions: [5, 10, 15, 20],
+    fallOptions: [5, 10, 15, 20, 30],
     view: null,
     flipped: false,
     nowText: '',
@@ -35,38 +35,50 @@ Page({
   onLoad() {
     this._alive = true
     this._bgItems = []
+    this._cfgLoaded = false
+    this._sleepTouched = false
     const now = Date.now()
-    const hour = new Date(now).getHours()
     const prefs = storage.getPrefs()
-    // 白天默认给今晚的 23:00，避免“现在睡到 21:25”这种尴尬结果
-    const sleepMinutes = hour >= 9 && hour < 18 ? 23 * 60 : Math.round(T.minutesOf(now) / 5) * 5
+    // 入睡默认跟随真实当前时间（时间轮支持 1 分钟粒度），不再固定白天 23:00
+    const nowClock = F.fmtClock(T.minutesOf(now))
     this.setData({
       wakeTime: prefs.wakeTime || '07:30',
-      sleepTime: prefs.sleepTime || F.fmtClock(sleepMinutes),
-      fallAsleep: typeof prefs.fallAsleep === 'number' ? prefs.fallAsleep : 15,
-      nowText: F.fmtClock(T.minutesOf(now))
+      sleepTime: nowClock,
+      // 入睡耗时以 15 分为默认起点；旧版本存下的 5 分不再作为初值
+      fallAsleep: 15,
+      nowText: nowClock
     })
 
     this.loadBackgrounds()
     // onLoad 必须强制拉一次：后台刚改的背景图/广告位不能被 10 分钟缓存挡住
     loadConfig(true)
       .then(() => {
+        this._cfgLoaded = true
         if (this._alive) this.loadBackgrounds()
       })
-      .catch(() => {})
+      .catch(() => {
+        this._cfgLoaded = true
+      })
   },
 
   onShow() {
     this._alive = true
     this.refreshNow()
+    // 未手动调过入睡时间时，回到前台让默认值重新跟随当前时间
+    if (this.data.mode === 'sleep' && !this._sleepTouched && !this.data.flipped) {
+      this.setData({ sleepTime: F.fmtClock(T.minutesOf(Date.now())) })
+    }
     this.startClock()
     adSlots.apply(this)
     // 从后台保存后切回小程序，onShow 立即刷新，而不是等 10 分钟
     loadConfig(true)
       .then(() => {
+        this._cfgLoaded = true
         if (this._alive) this.loadBackgrounds()
       })
-      .catch(() => {})
+      .catch(() => {
+        this._cfgLoaded = true
+      })
     // 切走再回来时，已翻到结果面的推荐时间要重新判定“已过”
     if (this.data.flipped) this.calc(true)
   },
@@ -121,27 +133,35 @@ Page({
     if (!value) return
     const key = this.data.mode === 'wake' ? 'wakeTime' : 'sleepTime'
     if (value === this.data[key]) return
+    if (this.data.mode === 'sleep') this._sleepTouched = true
 
     const patch = { flipped: false, view: null }
     patch[key] = value
     this.setData(patch)
 
-    const prefs = {}
-    prefs[key] = value
-    this.savePrefs(prefs)
+    // 只记住起床时间；入睡时间每次跟随当前时间，入睡耗时默认 15 分
+    if (key === 'wakeTime') this.savePrefs({ wakeTime: value })
   },
 
   toggleMode() {
     const next = this.data.mode === 'wake' ? 'sleep' : 'wake'
-    this.setData({ mode: next, flipped: false, view: null })
+    const patch = { mode: next, flipped: false, view: null }
+    // 本轮还没手动选过入睡时间时，切到入睡模式直接用当前时间
+    if (next === 'sleep' && !this._sleepTouched) {
+      const value = F.fmtClock(T.minutesOf(Date.now()))
+      patch.sleepTime = value
+      patch.nowText = value
+    }
+    this.setData(patch)
   },
 
   onNowTap() {
     const now = Date.now()
-    const value = F.fmtClock(Math.round(T.minutesOf(now) / 5) * 5)
+    const value = F.fmtClock(T.minutesOf(now))
+    this._sleepTouched = true
     this.setData({
       sleepTime: value,
-      nowText: F.fmtClock(T.minutesOf(now)),
+      nowText: value,
       mode: 'sleep',
       flipped: false,
       view: null
@@ -153,7 +173,6 @@ Page({
     const minutes = Number(event.currentTarget.dataset.min)
     if (!minutes || minutes === this.data.fallAsleep) return
     this.setData({ fallAsleep: minutes })
-    this.savePrefs({ fallAsleep: minutes })
     if (this.data.flipped) this.calc(true)
   },
 
@@ -163,7 +182,6 @@ Page({
     const index = options.indexOf(this.data.fallAsleep)
     const minutes = options[(index + 1) % options.length]
     this.setData({ fallAsleep: minutes })
-    this.savePrefs({ fallAsleep: minutes })
     if (wx.vibrateShort) wx.vibrateShort({ type: 'light' })
     if (this.data.flipped) this.calc(true)
   },
@@ -313,7 +331,25 @@ Page({
 
   openBgPicker() {
     if (!this.data.backgrounds.length) {
-      wx.showToast({ title: '后台还没有配置背景图', icon: 'none' })
+      // 首帧配置还在路上时不能断言“后台没有配置”，否则弱网下会给出错误结论。
+      if (!this._cfgLoaded) {
+        wx.showLoading({ title: '加载背景图', mask: true })
+        loadConfig(true)
+          .then(() => {
+            this._cfgLoaded = true
+            wx.hideLoading()
+            if (this._alive) this.openBgPicker()
+          })
+          .catch(() => {
+            this._cfgLoaded = true
+            wx.hideLoading()
+            if (this._alive) {
+              wx.showToast({ title: '背景图加载失败，请稍后重试', icon: 'none' })
+            }
+          })
+        return
+      }
+      wx.showToast({ title: '暂时没有可用的背景图', icon: 'none' })
       return
     }
     // 打开前重算一次，刷新到期/解锁状态

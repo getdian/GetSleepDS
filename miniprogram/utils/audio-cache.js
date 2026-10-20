@@ -113,27 +113,52 @@ function remove(url) {
   writeMeta(meta)
 }
 
-function download(url, onProgress, ttlDays) {
+// 同一 URL 的进行中任务。warmup / 解锁预热 / 用户取消后重试都可能撞在一起，
+// 没有这张表时两个 download 会同时 unlink + saveFile 同一路径。
+const inflight = new Map()
+
+function download(url, onProgress, ttlDays, onTask) {
   return ensureDir().then(
     () =>
       new Promise((resolve, reject) => {
+        const dest = pathFor(url)
+        // 先写临时文件，再原子替换；避免 unlink(dest) 删掉正在播放的文件。
+        const tmp = dest + '.part-' + Date.now().toString(36)
+        const cleanupTmp = () => {
+          try {
+            wx.getFileSystemManager().unlinkSync(tmp)
+          } catch (e) {}
+        }
+
         const task = wx.downloadFile({
           url,
           timeout: 60000,
           success(res) {
             if (res.statusCode !== 200) {
+              cleanupTmp()
               reject(new Error('HTTP ' + res.statusCode))
               return
             }
-            const dest = pathFor(url)
             const fs = wx.getFileSystemManager()
-            try {
-              fs.unlinkSync(dest)
-            } catch (e) {}
             fs.saveFile({
               tempFilePath: res.tempFilePath,
-              filePath: dest,
+              filePath: tmp,
               success() {
+                try {
+                  try {
+                    fs.renameSync(tmp, dest)
+                  } catch (e) {
+                    // 个别文件系统不允许 rename 覆盖已有文件。
+                    try {
+                      fs.unlinkSync(dest)
+                    } catch (e2) {}
+                    fs.renameSync(tmp, dest)
+                  }
+                } catch (e) {
+                  cleanupTmp()
+                  reject(new Error('保存缓存失败'))
+                  return
+                }
                 let size = res.dataLength || 0
                 try {
                   size = fs.statSync(dest).size || size
@@ -149,15 +174,18 @@ function download(url, onProgress, ttlDays) {
                 resolve(dest)
               },
               fail() {
+                cleanupTmp()
                 reject(new Error('保存缓存失败'))
               }
             })
           },
           fail(err) {
+            cleanupTmp()
             reject(new Error((err && err.errMsg) || '下载失败'))
           }
         })
 
+        if (onTask) onTask(task)
         if (onProgress && task && task.onProgressUpdate) {
           task.onProgressUpdate((res) => onProgress(res.progress))
         }
@@ -168,11 +196,59 @@ function download(url, onProgress, ttlDays) {
 function ensure(url, onProgress, ttlDays) {
   const cached = peek(url, ttlDays)
   if (cached) return Promise.resolve(cached)
-  return download(url, onProgress, ttlDays)
+
+  const running = inflight.get(url)
+  if (running) {
+    if (typeof onProgress === 'function') running.progress.push(onProgress)
+    return running.promise
+  }
+
+  const progress = typeof onProgress === 'function' ? [onProgress] : []
+  const entry = { progress, task: null, promise: null, cancelled: false }
+  entry.promise = download(
+    url,
+    (percent) => {
+      progress.slice().forEach((fn) => {
+        try {
+          fn(percent)
+        } catch (e) {}
+      })
+    },
+    ttlDays,
+    (task) => {
+      entry.task = task
+      // 取消可能发生在 ensureDir 完成之前，此时 task 还没创建。
+      if (entry.cancelled && task && task.abort) {
+        try {
+          task.abort()
+        } catch (e) {}
+      }
+    }
+  )
+  inflight.set(url, entry)
+  const clear = () => {
+    if (inflight.get(url) === entry) inflight.delete(url)
+  }
+  entry.promise.then(clear, clear)
+  return entry.promise
 }
 
-/** 超过上限或过期时清理，最多一天执行一次 */
-function maybePrune(cacheConfig) {
+/** 用户取消解锁时中止仍在进行的下载；已缓存的文件不受影响。 */
+function cancel(url) {
+  const entry = inflight.get(url)
+  if (!entry) return false
+  entry.cancelled = true
+  if (inflight.get(url) === entry) inflight.delete(url)
+  if (entry.task && entry.task.abort) {
+    try {
+      entry.task.abort()
+    } catch (e) {}
+  }
+  return true
+}
+
+/** 超过上限或过期时清理，最多一天执行一次；keepUrl 用于保护正在播放的文件。 */
+function maybePrune(cacheConfig, keepUrl) {
   const config = cacheConfig || {}
   let last = 0
   try {
@@ -196,6 +272,7 @@ function maybePrune(cacheConfig) {
 
   let removed = 0
   entries.forEach((entry) => {
+    if (keepUrl && entry.url === keepUrl) return
     const expired = Date.now() - (entry.savedAt || 0) > ttlDays * DAY_MS
     if (!expired && total <= maxBytes) return
     remove(entry.url)
@@ -257,6 +334,7 @@ function warmup(tracks, cacheConfig, unlocked) {
 module.exports = {
   peek,
   ensure,
+  cancel,
   remove,
   maybePrune,
   warmup,

@@ -281,8 +281,10 @@ function validateConfig(input, base) {
     if (!/^[a-zA-Z0-9_-]+$/.test(id)) {
       throw invalidBody(label + ' ID 只能包含字母、数字、下划线和短横线')
     }
-    if (seenBg[id]) throw invalidBody('背景图 ID 重复：' + id)
-    seenBg[id] = true
+    if (Object.prototype.hasOwnProperty.call(seenBg, id)) {
+      throw invalidBody('背景图 ID 重复：' + id)
+    }
+    seenBg[id] = item.enabled !== false
 
     let sort = index
     if (item.sort !== undefined) {
@@ -306,8 +308,11 @@ function validateConfig(input, base) {
   const defaultInput =
     input.defaultBackgroundId !== undefined ? input.defaultBackgroundId : baseConfig.defaultBackgroundId
   let defaultBackgroundId = readText(defaultInput, '默认背景图', 32, false)
-  if (defaultBackgroundId && !seenBg[defaultBackgroundId]) {
+  if (defaultBackgroundId && !Object.prototype.hasOwnProperty.call(seenBg, defaultBackgroundId)) {
     throw invalidBody('默认背景图不在列表中')
+  }
+  if (defaultBackgroundId && seenBg[defaultBackgroundId] === false) {
+    throw invalidBody('默认背景图已停用，请先启用或换一张')
   }
 
   const unlockHoursInput =

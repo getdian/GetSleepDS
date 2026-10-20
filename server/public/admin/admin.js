@@ -13,6 +13,7 @@
     meta: { source: 'file', updatedAt: 0, storage: 'memory' },
     storage: null,
     dirty: false,
+    panel: 'overview',
     preview: null,
     queriedOpenid: '',
     userHasData: false
@@ -52,6 +53,7 @@
       node.classList.toggle('warn', value)
     }
     if (side) side.textContent = value ? '有未保存的修改' : '已保存'
+    updateSavebar()
   }
 
   async function api(path, options) {
@@ -137,8 +139,29 @@
     advanced: { title: '配置 JSON', sub: '只读检查当前下发的完整配置', badge: '只读' }
   }
 
+  function isConfigPanel(name) {
+    return (
+      name === 'audio' ||
+      name === 'backgrounds' ||
+      name === 'unlock' ||
+      name === 'features' ||
+      name === 'copy'
+    )
+  }
+
+  /**
+   * 脏状态下保存条必须在所有面板可见。
+   * 窄屏下 .side-foot 会被隐藏，如果这里也隐藏 savebar，
+   * 运营切到“概览/用户数据”后就完全看不到“有未保存的修改”。
+   */
+  function updateSavebar() {
+    const name = state.panel || 'overview'
+    $('#global-savebar').hidden = !isConfigPanel(name) && !state.dirty
+  }
+
   function showPanel(name) {
     const meta = PANEL_META[name] || PANEL_META.overview
+    state.panel = name
     $$('.admin-panel').forEach(function (panel) {
       panel.hidden = panel.dataset.panel !== name
     })
@@ -148,13 +171,7 @@
     $('#workspace-title').textContent = meta.title
     $('#workspace-sub').textContent = meta.sub
     $('#workspace-badge').textContent = meta.badge
-    const configPanel =
-      name === 'audio' ||
-      name === 'backgrounds' ||
-      name === 'unlock' ||
-      name === 'features' ||
-      name === 'copy'
-    $('#global-savebar').hidden = !configPanel
+    updateSavebar()
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -601,8 +618,10 @@
   }
 
   function updateJson() {
-    if (jsonView.hidden) return
-    jsonView.textContent = JSON.stringify(collect(), null, 2)
+    if (jsonView.hidden || !state.config) return
+    // 面板标题是“下发的 JSON”，必须展示服务端已生效的配置，
+    // 而不是 collect() 里尚未保存、也未经 normalize 的表单值。
+    jsonView.textContent = JSON.stringify(state.config, null, 2)
   }
 
   function render() {
@@ -677,13 +696,12 @@
     ) {
       return '背景图解锁时长需为 1–168 小时的整数'
     }
-    if (
-      payload.defaultBackgroundId &&
-      !backgrounds.some(function (item) {
+    if (payload.defaultBackgroundId) {
+      const defaultBg = backgrounds.filter(function (item) {
         return item.id === payload.defaultBackgroundId
-      })
-    ) {
-      return '默认背景图不在列表中'
+      })[0]
+      if (!defaultBg) return '默认背景图不在列表中'
+      if (defaultBg.enabled === false) return '默认背景图已停用，请先启用或换一张'
     }
     return ''
   }
@@ -716,14 +734,22 @@
     $('#user-openid-label').textContent = data.openid || ''
     const extra = $('#user-extra')
     if (extra) {
+      const erasedAt = Number(data.erasedAt) || 0
+      const deletedDayCount = Number(data.deletedDayCount) || 0
       extra.textContent =
         '解锁 ' +
         (activeUnlock ? '有效（' + formatRecordTime(unlockExpireAt) + ' 到期）' : '无') +
         ' · 事件 ' +
         eventCount +
-        ' 条'
+        ' 条 · 清除水位 ' +
+        (erasedAt ? formatRecordTime(erasedAt) : '无') +
+        ' · 墓碑 ' +
+        deletedDayCount +
+        ' 天'
     }
-    $('#user-delete').disabled = !state.userHasData
+    // 即使当前没有云端数据，也要允许写入全量清除水位；
+    // 这是“用户要求以后也不再上传旧记录”的唯一后台入口。
+    $('#user-delete').disabled = false
 
     const box = $('#user-records')
     box.textContent = ''
@@ -819,7 +845,7 @@
     } catch (error) {
       toast(error.message || '删除失败', true)
     } finally {
-      button.disabled = $('#user-result').hidden || !state.userHasData
+      button.disabled = $('#user-result').hidden
     }
   }
 
@@ -1180,7 +1206,10 @@
     showApp()
 
     loadAnalytics().catch(function () {})
-    loadStorage().catch(function () {})
+    loadStorage().catch(function (error) {
+      // 存储面板失败时不能静默留空表单，否则容易被误当成“尚未配置”而重填凭证。
+      toast('存储配置加载失败：' + (error.message || '请稍后重试'), true)
+    })
   }
 
   async function boot() {
@@ -1402,6 +1431,11 @@
 
   form.addEventListener('change', function (event) {
     if (isUploadOnly(event.target)) return
+    // 停用某张背景图时，默认图下拉必须同步移除该选项，
+    // 否则表单仍会提交一个已停用的 id，服务端只能拒绝或客户端静默回退。
+    if (event.target.classList && event.target.classList.contains('bg-enabled')) {
+      refreshBgDefaultOptions(collect().backgrounds, $('#bg-default').value)
+    }
     setDirty(true)
     updateJson()
   })

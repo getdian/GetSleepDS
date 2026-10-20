@@ -355,50 +355,50 @@
   gap: 8rpx;
 }
 
-/* 无边框：默认只留一层极弱底，选中态换成更亮的淡紫底 */
+/* 未选中的档位只显示文字，不画底框；选中项才是一枚小标签 */
 .fall-chip {
   position: relative;
   flex: none;
-  min-width: 86rpx;
-  height: 56rpx;
-  padding: 0 12rpx;
+  width: 72rpx;
+  height: 44rpx;
+  padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 2rpx;
   border-radius: 999rpx;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
-  font-size: 24rpx;
-  font-weight: 500;
+  font-size: 23rpx;
+  font-weight: 400;
   line-height: 1;
-  color: rgba(178, 194, 230, 0.66);
-  background: rgba(255, 255, 255, 0.05);
+  color: rgba(170, 186, 215, 0.55);
+  background: transparent;
   transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
 }
 
-/* 垂直扩 8rpx：视觉仍是 56rpx 药丸，实际可点 72rpx */
+/* 垂直扩 14rpx：视觉只有 44rpx 高的小标签，实际可点 72rpx */
 .fall-chip::after {
   content: "";
   position: absolute;
   left: 0;
   right: 0;
-  top: -8rpx;
-  bottom: -8rpx;
+  top: -14rpx;
+  bottom: -14rpx;
 }
 
 .fall-chip--tap {
-  opacity: 0.72;
+  opacity: 0.7;
 }
 
 .fall-chip.is-on {
-  color: #f4f2ff;
-  font-weight: 600;
-  background: linear-gradient(135deg, rgba(158, 154, 255, 0.34) 0%, rgba(112, 108, 240, 0.24) 100%);
-  box-shadow: 0 4rpx 14rpx rgba(72, 66, 190, 0.22);
+  color: #e9e7ff;
+  font-weight: 500;
+  background: rgba(150, 146, 255, 0.14);
+  box-shadow: inset 0 0 0 1rpx rgba(167, 164, 255, 0.3);
 }
 
 .fall-unit {
-  font-size: 19rpx;
+  font-size: 18rpx;
   margin-left: 1rpx;
   opacity: 0.72;
 }

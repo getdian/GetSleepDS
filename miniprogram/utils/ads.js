@@ -7,11 +7,14 @@
 const { loadConfig } = require('./config')
 
 function empty() {
+  // 必须给出完整槽位字段：ad-slot 的 unitId/type 是 String 属性，
+  // 传 undefined 会被基础库归一成 null 并在 console 里刷 type-uncompatible 警告。
+  const slot = () => ({ enabled: false, unitId: '', type: 'template' })
   return {
-    home: {},
-    sleep: {},
-    stats: {},
-    statsFooter: {}
+    home: slot(),
+    sleep: slot(),
+    stats: slot(),
+    statsFooter: slot()
   }
 }
 

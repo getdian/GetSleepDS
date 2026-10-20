@@ -326,7 +326,7 @@
         <div class="panel-head">
           <div>
             <h2>用户记录</h2>
-            <p class="hint">按 openid 精确查询、导出核对或删除该用户的云端数据（睡眠记录 / 解锁 / 事件）。删除会写入全量清除水位：用户下次同步时，本机旧睡眠记录也会被清除，且不可恢复。</p>
+            <p class="hint">按 openid 精确查询、导出核对或删除该用户的云端数据（睡眠记录 / 解锁 / 事件）。删除会写入全量清除水位：用户下次同步时，本机旧睡眠记录也会被清除，且不可恢复。即使当前没有云端数据，删除也会写入水位，用于拦截该用户以后上传的旧记录。</p>
           </div>
           <span class="badge">客服 / 合规</span>
         </div>
@@ -382,7 +382,7 @@
           <button type="button" id="toggle-json" class="ghost">查看 JSON</button>
         </div>
         <pre id="json-view" class="json" hidden></pre>
-        <p class="hint">保存后，小程序最多 10 分钟内拉到新配置；重新打开小程序会立即拉取。</p>
+        <p class="hint">以下为服务端当前已生效的配置；表单里未保存的修改不会出现在这里。保存后，小程序最多 10 分钟内拉到新配置；重新打开小程序会立即拉取。</p>
       </section>
 
       <div class="savebar" id="global-savebar" hidden>

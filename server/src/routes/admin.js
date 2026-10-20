@@ -185,10 +185,16 @@ function createAdminRoute(options) {
       let records = []
       let unlockExpireAt = 0
       let eventCount = 0
+      let erasedAt = 0
+      let deletedDayCount = 0
       try {
         records = await db.getRecords(openid)
         unlockExpireAt = db.getUnlock ? await db.getUnlock(openid) : 0
         eventCount = db.countEvents ? await db.countEvents(openid) : 0
+        erasedAt = db.getErasure ? await db.getErasure(openid) : 0
+        deletedDayCount = db.getRecordDeletions
+          ? (await db.getRecordDeletions(openid)).length
+          : 0
       } catch (e) {
         throw dbUnavailable()
       }
@@ -198,7 +204,9 @@ function createAdminRoute(options) {
         count: records.length,
         records,
         unlockExpireAt,
-        eventCount
+        eventCount,
+        erasedAt,
+        deletedDayCount
       })
     })
   )

@@ -6,6 +6,7 @@
  */
 const storage = require('../../utils/storage')
 const audioTimer = require('../../utils/audio-timer')
+const playerState = require('../../utils/player-state')
 const { getConfig } = require('../../utils/config')
 
 const TOGGLE_GUARD_MS = 220
@@ -186,11 +187,36 @@ Component({
 
     handleError() {
       if (!this._alive) return
-      audioTimer.clear(undefined, true)
-      storage.patchMeta({ lastTrackActive: false })
-      this.setData({ playing: false })
-      this.collapse()
-      if (this._pageVisible) wx.showToast({ title: '音频加载失败，请重新播放', icon: 'none' })
+      // 两个组件监听同一个全局播放器，事件顺序不保证。
+      // 等一个极短窗口，让 audio-dock（播放会话的 owner）先决定：
+      // - 缓存失败回退：它会把 lastTrackActive 保持 true 并重设 src；
+      // - 终态失败：它会把 lastTrackActive 置 false。
+      setTimeout(() => {
+        if (!this._alive) return
+        const meta = storage.getMeta()
+        if (playerState.isFallbacking()) {
+          this.sync(true)
+          return
+        }
+        if (meta.lastTrackActive === false) {
+          this.setData({ playing: false })
+          this.collapse()
+          if (this._pageVisible) wx.showToast({ title: '音频加载失败，请重新播放', icon: 'none' })
+          return
+        }
+        const audio = this._audio
+        if (audio && audio.src && !audio.paused) {
+          this.sync(true)
+          return
+        }
+        // audio-dock 不在场（例如冷启动直接落到首页）时由这里兜底收口。
+        playerState.clearFallback()
+        audioTimer.clear(undefined, true)
+        storage.patchMeta({ lastTrackActive: false })
+        this.setData({ playing: false })
+        this.collapse()
+        if (this._pageVisible) wx.showToast({ title: '音频加载失败，请重新播放', icon: 'none' })
+      }, 300)
     },
 
     toggle() {

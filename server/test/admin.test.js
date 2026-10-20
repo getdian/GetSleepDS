@@ -359,6 +359,23 @@ test('背景图配置保存、校验与公开下发', async () => {
     true
   )
   assert.equal(missingDefault.status, 400)
+
+  const disabledDefault = await call(
+    '/api/admin/config',
+    {
+      method: 'PUT',
+      body: Object.assign({}, basePayload, {
+        backgrounds: [
+          { id: 'bg-a', title: '湖面', url: 'https://cdn.example.com/bg-a.jpg', enabled: false },
+          { id: 'bg-b', title: '山川', url: 'https://cdn.example.com/bg-b.jpg', enabled: true }
+        ],
+        defaultBackgroundId: 'bg-a'
+      })
+    },
+    true
+  )
+  assert.equal(disabledDefault.status, 400)
+  assert.match(disabledDefault.body.error.message, /停用/)
 })
 
 test('背景图上传先校验登录与文件', async () => {
@@ -450,6 +467,26 @@ test('后台可按 openid 查询并删除用户记录', async () => {
   assert.equal(after.body.count, 0)
   assert.equal(after.body.unlockExpireAt, 0)
   assert.equal(after.body.eventCount, 0)
+  assert.ok(after.body.erasedAt > 0)
+})
+
+test('云端无数据的 openid 也能写入全量清除水位', async () => {
+  const openid = 'empty_user_001'
+  const before = await call('/api/admin/users/' + openid, {}, true)
+  assert.equal(before.status, 200)
+  assert.equal(before.body.count, 0)
+  assert.equal(before.body.erasedAt, 0)
+  assert.equal(before.body.deletedDayCount, 0)
+
+  const removed = await call('/api/admin/users/' + openid + '/records', { method: 'DELETE' }, true)
+  assert.equal(removed.status, 200)
+  assert.equal(removed.body.deleted, 0)
+  assert.ok(removed.body.erasedAt > 0)
+  assert.equal(await db.getErasure(openid), removed.body.erasedAt)
+
+  const after = await call('/api/admin/users/' + openid, {}, true)
+  assert.equal(after.status, 200)
+  assert.equal(after.body.erasedAt, removed.body.erasedAt)
 })
 
 test('后台用户查询拒绝非法 openid，且未登录不可用', async () => {

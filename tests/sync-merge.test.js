@@ -3,6 +3,7 @@ const assert = require('node:assert/strict')
 
 const memory = {}
 let failWrites = false
+let writes = 0
 
 global.wx = {
   getStorageSync(key) {
@@ -10,6 +11,7 @@ global.wx = {
   },
   setStorageSync(key, value) {
     if (failWrites) throw new Error('storage full')
+    writes += 1
     memory[key] = value
   },
   removeStorageSync(key) {
@@ -50,6 +52,29 @@ test('erasure 水位只删除旧记录，不删除清除后新记录', () => {
   storage.saveRecord(record('2026-10-18', 400))
   mergeServerRecords([], { erasedAt: 300 })
   assert.equal(storage.getRecords()['2026-10-18'].updatedAt, 400)
+})
+
+test('本机没有对应记录时，云端墓碑也会落盘', () => {
+  storage.clearAll()
+  mergeServerRecords([], {
+    deletedDays: [{ day: '2026-10-19', deletedAt: 500 }]
+  })
+  assert.equal(storage.getDeleted()['2026-10-19'], 500)
+})
+
+test('多条云端记录回填只写两次 Storage', () => {
+  storage.clearAll()
+  writes = 0
+  const list = []
+  for (let i = 1; i <= 30; i += 1) {
+    const day = '2026-08-' + (i < 10 ? '0' : '') + i
+    list.push(record(day, 100 + i))
+  }
+  const changed = mergeServerRecords(list, {})
+  assert.equal(changed, 30)
+  assert.equal(Object.keys(storage.getRecords()).length, 30)
+  // records 一次 + deleted 一次，而不是每条记录各写一次
+  assert.equal(writes, 2)
 })
 
 test('saveRecord 写入失败时返回 false，不清墓碑', () => {

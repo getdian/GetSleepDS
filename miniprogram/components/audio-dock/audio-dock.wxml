@@ -85,7 +85,7 @@
     <view wx:if="{{keyword}}" class="dock-clear" bindtap="onClearKeyword">×</view>
   </view>
 
-  <scroll-view class="dock-cats" scroll-x enhanced show-scrollbar="{{false}}">
+  <scroll-view class="dock-cats" scroll-x enhanced show-scrollbar="{{false}}" catchtouchmove="noop">
     <view class="dock-cat-chips">
       <view
         wx:for="{{categories}}"

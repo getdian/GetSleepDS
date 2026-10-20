@@ -82,7 +82,16 @@ Page({
     const records = storage.getRecords()
     this.pruneStalePending(now)
 
-    const pending = storage.getPending()
+    let pending = storage.getPending()
+    // 记录已经保存、但 removeStorageSync 失败时，pending 会残留。
+    // 只要同一次入睡已经落成记录，就按“已完成”展示并再尝试清一次，避免二次打卡拉长时长。
+    if (pending) {
+      const saved = records[T.sleepDayOf(pending.bedAt)]
+      if (saved && saved.bedAt === pending.bedAt) {
+        storage.clearPending()
+        pending = null
+      }
+    }
     const todayKey = T.sleepDayOf(now)
     let state = 'idle'
     let record = null
@@ -274,13 +283,17 @@ Page({
       wx.showToast({ title: '本地存储失败，尚未记录', icon: 'none' })
       return
     }
-    storage.clearPending()
+    const cleared = storage.clearPending()
     this._pending = null
 
     this.refresh()
     const hour = new Date(now).getHours()
     wx.showToast({
-      title: hour >= 5 && hour < 12 ? '早安，已记录' : '已记录起床时间',
+      title: cleared
+        ? hour >= 5 && hour < 12
+          ? '早安，已记录'
+          : '已记录起床时间'
+        : '已记录，但会话未清除，请重启小程序',
       icon: 'none'
     })
     // 只上报“发生了一次打卡”，不把具体睡眠日与 openid 关联

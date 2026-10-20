@@ -2,6 +2,7 @@
 .ad-slot {
   display: block;
   margin: 32rpx 0 8rpx;
+  transition: min-height 0.2s ease, margin 0.2s ease, opacity 0.2s ease;
 }
 
 /* 广告异步填充前保留占位，避免下方内容整体位移 */
@@ -11,4 +12,12 @@
 
 .ad-slot.is-pending-banner {
   min-height: 100rpx;
+}
+
+/* 加载失败（未开通流量主/广告位未审核）时平滑收起，而不是节点瞬间消失 */
+.ad-slot.is-failed {
+  min-height: 0;
+  margin: 0;
+  opacity: 0;
+  overflow: hidden;
 }

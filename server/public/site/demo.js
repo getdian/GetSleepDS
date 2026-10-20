@@ -123,7 +123,11 @@
     const buffer = state.fall * 60000
     const dayStart = startOfDay(now)
     let wake = dayStart + parseClock(state.wake) * 60000
-    if (wake - buffer <= now) wake += DAY
+    let rolled = false
+    if (wake - buffer <= now) {
+      wake += DAY
+      rolled = true
+    }
 
     const makeSlots = (wakeTs) =>
       [5, 4, 3].map((cycles) => ({
@@ -132,14 +136,15 @@
         passed: wakeTs - buffer - cycles * CYCLE * 60000 <= now
       }))
 
-    // 与小程序/PRD 一致：三个时刻全过时不再滚到下一晚，而是展示“现在睡还能睡 X”。
+    // 目标起床时刻已过（含入睡缓冲）时，槽位整体滚到下一晚，
+    // 由 #roll-label 明确告诉用户“以下是下一晚”，避免误以为 23:45 就是现在该睡。
     const slots = makeSlots(wake)
     const available = Math.max(0, Math.floor((wake - now) / 60000) - state.fall)
 
     return {
       wakeAt: wake,
       slots,
-      rolled: false,
+      rolled,
       available,
       cycles: Math.floor(available / CYCLE),
       remainder: available % CYCLE

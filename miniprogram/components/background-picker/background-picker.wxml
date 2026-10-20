@@ -8,7 +8,7 @@
     <text class="bp-close" bindtap="onClose">×</text>
   </view>
 
-  <scroll-view class="bp-cats" scroll-x enhanced show-scrollbar="{{false}}">
+  <scroll-view class="bp-cats" scroll-x enhanced show-scrollbar="{{false}}" catchtouchmove="noop">
     <view class="bp-cat-list">
       <view
         wx:for="{{categories}}"

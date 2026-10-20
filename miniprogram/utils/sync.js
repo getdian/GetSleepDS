@@ -59,15 +59,19 @@ function chunk(list, size) {
   return out
 }
 
-function removeLocal(day, stamp) {
-  storage.removeRecord(day, stamp)
-  storage.markDeleted(day, stamp)
-  return stamp
+/** 只改内存：删除记录并留下墓碑，最终一次性落盘。 */
+function dropLocal(local, deleted, day, stamp) {
+  delete local[day]
+  deleted[day] = Math.max(Number(deleted[day]) || 0, Number(stamp) || 0)
 }
 
 /**
  * 把云端记录回填到本地（换机 / 清缓存恢复）。
  * 服务端下发的单日墓碑和全量清除水位优先于旧记录，避免删除被复活。
+ *
+ * 注意：这是同步合并的热路径，不能逐条调用 storage.saveRecord/removeRecord；
+ * 那样每条记录都会“全表读 + 全表写”，400 条回填会产生近千次同步 Storage IO。
+ * 这里统一在内存里合并，最后各写一次 records/deleted。
  */
 function mergeServerRecords(serverRecords, options) {
   const opts = options || {}
@@ -75,15 +79,15 @@ function mergeServerRecords(serverRecords, options) {
   const deleted = storage.getDeleted()
   const erasedAt = Number(opts.erasedAt) || 0
   let changed = 0
+  let dirty = false
 
   if (erasedAt) {
     Object.keys(local).forEach((day) => {
       const stamp = local[day].updatedAt || 0
       if (stamp <= erasedAt) {
-        removeLocal(day, erasedAt)
-        deleted[day] = Math.max(Number(deleted[day]) || 0, erasedAt)
-        delete local[day]
+        dropLocal(local, deleted, day, erasedAt)
         changed += 1
+        dirty = true
       }
     })
   }
@@ -93,16 +97,15 @@ function mergeServerRecords(serverRecords, options) {
     if (!isValidDay(item.day)) return
     const current = local[item.day]
     if (!current || (current.updatedAt || 0) <= item.deletedAt) {
-      removeLocal(item.day, item.deletedAt)
-      deleted[item.day] = Math.max(Number(deleted[item.day]) || 0, item.deletedAt)
-      delete local[item.day]
+      dropLocal(local, deleted, item.day, item.deletedAt)
       if (current) changed += 1
+      // 即使本机没有这条记录，也要把墓碑落盘，否则换机后旧数据会被云端回填。
+      dirty = true
     }
   })
 
-  if (!Array.isArray(serverRecords) || !serverRecords.length) return changed
-
-  serverRecords.forEach((item) => {
+  const records = Array.isArray(serverRecords) ? serverRecords : []
+  records.forEach((item) => {
     if (!item || !item.day) return
     if (!isValidDay(item.day)) return
     if (typeof item.bedAt !== 'number' || typeof item.wakeAt !== 'number') return
@@ -115,26 +118,31 @@ function mergeServerRecords(serverRecords, options) {
     // 删除本地按设备时区算出的另一个 key，避免同一夜出现两条记录。
     const localDay = T.sleepDayOf(item.bedAt)
     if (localDay && localDay !== item.day && local[localDay]) {
-      removeLocal(localDay, stamp)
-      delete local[localDay]
+      dropLocal(local, deleted, localDay, stamp)
       changed += 1
+      dirty = true
     }
 
     const current = local[item.day]
     if (current && (current.updatedAt || 0) >= stamp) return
 
-    const saved = storage.saveRecord({
+    local[item.day] = {
       day: item.day,
       bedAt: item.bedAt,
       wakeAt: item.wakeAt,
       durationMin: item.durationMin || Math.round((item.wakeAt - item.bedAt) / 60000),
       updatedAt: stamp
-    })
-    if (saved) {
-      local[item.day] = { day: item.day, bedAt: item.bedAt, wakeAt: item.wakeAt, updatedAt: stamp }
-      changed += 1
     }
+    // 与 storage.saveRecord 的语义保持一致：新记录会清掉同一天的旧墓碑。
+    delete deleted[item.day]
+    changed += 1
+    dirty = true
   })
+
+  if (dirty) {
+    storage.replaceRecords(local)
+    storage.replaceDeleted(deleted)
+  }
 
   return changed
 }

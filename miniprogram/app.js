@@ -43,7 +43,9 @@ App({
       // 带上启动来源（转发/朋友圈/扫码等 scene），后台看板据此做来源分布
       events.track('app_open', launchSource)
       events.flush()
-      audioCache.maybePrune(config.cache)
+      const lastTrackId = storage.getMeta().lastTrackId
+      const playing = (config.audio || []).filter((track) => track.id === lastTrackId)[0]
+      audioCache.maybePrune(config.cache, playing && playing.url)
 
       // 已解锁时，Wi-Fi 下预热前两条环境音（不阻塞、不打扰）
       audioCache.warmup(

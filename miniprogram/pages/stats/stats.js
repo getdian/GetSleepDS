@@ -32,6 +32,7 @@ Page({
     marked: 0,
     fact: '',
     factState: 'idle',
+    factSource: '',
     syncText: '尚未同步',
     syncBusy: false,
     posterPath: '',
@@ -121,6 +122,17 @@ Page({
     this.refreshFact(weekly, records, now, forceSummary)
   },
 
+  /** 本地模板兜底：服务端不可用、关闭同步或未开启云备份时共用。 */
+  applyLocalFact(records, now) {
+    const local = S.localFact(records, now)
+    if (!local.available) {
+      this.setData({ factState: 'insufficient', fact: '', factSource: '' })
+      return false
+    }
+    this.setData({ factState: 'ok', fact: local.text, factSource: 'local' })
+    return true
+  },
+
   refreshFact(weekly, records, now, force) {
     const config = getConfig()
     if (!config.features || !config.features.summary) {
@@ -131,16 +143,12 @@ Page({
     const syncFeature = !config.features || config.features.sync !== false
     // 未开启云备份（或服务端关闭同步）时用本地模板生成，零上传；开启后才走服务端模板
     if (!syncFeature || !storage.getSyncEnabled()) {
-      const local = S.localFact(records, now)
-      this.setData({
-        factState: local.available ? 'ok' : 'insufficient',
-        fact: local.text
-      })
+      this.applyLocalFact(records, now)
       return
     }
 
     if (weekly.current.count < 3) {
-      this.setData({ factState: 'insufficient', fact: '' })
+      this.setData({ factState: 'insufficient', fact: '', factSource: '' })
       return
     }
 
@@ -167,15 +175,16 @@ Page({
         if (res && res.available && res.text) {
           this._factWeek = weekly.weekStart
           this._factSignature = signature
-          this.setData({ fact: res.text, factState: 'ok' })
+          this.setData({ fact: res.text, factState: 'ok', factSource: 'server' })
         } else {
-          // 已满 3 条但服务端没给出结论，属于“暂时不可用”，不能误导为不足 3 条
-          this.setData({ fact: '', factState: 'unavailable' })
+          // 服务端不可用（关闭功能、口径不一致或瞬时故障）时回退本地模板，
+          // 不能让“重试”成为唯一出口。
+          this.applyLocalFact(records, now)
         }
       })
       .catch(() => {
         this._factLoading = false
-        if (this._alive) this.setData({ factState: 'error' })
+        if (this._alive) this.applyLocalFact(records, now)
       })
   },
 
@@ -463,15 +472,24 @@ Page({
       return
     }
     this._posterBusy = true
-    let finished = false
+    // 关闭 loading 与保存图片必须分离：超时只代表“等太久了”，
+    // 不代表晚到的绘制结果无效；否则低端机上会出现“图已生成但相册没有”。
+    // seq 用于丢弃“上一次已超时、用户又重试”后迟到的旧结果。
+    const seq = (this._posterSeq || 0) + 1
+    this._posterSeq = seq
+    let closed = false
+    let saved = false
     let timeout = null
-    const finish = (path) => {
-      if (finished) return
-      finished = true
+    const closeLoading = () => {
+      if (seq !== this._posterSeq || closed) return
+      closed = true
       clearTimeout(timeout)
       this._posterBusy = false
       wx.hideLoading()
-      if (!path) return
+    }
+    const save = (path) => {
+      if (seq !== this._posterSeq || !path || saved) return
+      saved = true
       this.setData({ posterPath: path })
       wx.saveImageToPhotosAlbum({
         filePath: path,
@@ -492,8 +510,13 @@ Page({
         }
       })
     }
+    const finish = (path) => {
+      closeLoading()
+      save(path)
+    }
     timeout = setTimeout(() => {
-      finish('')
+      if (seq !== this._posterSeq) return
+      closeLoading()
       wx.showToast({ title: '海报生成超时，请重试', icon: 'none' })
     }, 12000)
     wx.showLoading({ title: '生成中', mask: true })
@@ -505,7 +528,7 @@ Page({
       try {
         this.drawPoster(qrPath, (path) => {
           if (!path) {
-            finish('')
+            closeLoading()
             return
           }
           // 另画一张 5:4 分享卡：直接把竖版海报当 imageUrl 会被微信分享卡片裁掉底部二维码。
@@ -515,7 +538,7 @@ Page({
           })
         })
       } catch (e) {
-        finish('')
+        closeLoading()
         wx.showToast({ title: '海报生成失败', icon: 'none' })
       }
     })
