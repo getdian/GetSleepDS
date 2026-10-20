@@ -129,3 +129,26 @@ test('sync 返回删除墓碑与 erasure 水位，供客户端清理本机旧记
   assert.ok(Array.isArray(res.body.deletedDays))
   assert.ok(res.body.erasedAt > 0)
 })
+
+// 放在文件末尾：本文件的用例共享同一个内存库，新增记录不能影响前面的“全量清空”断言。
+test('后续分片 includeAll=false 时不回传全量 records/deletedDays', async () => {
+  const res = await post('/api/records/sync', {
+    code: 'sync-v2',
+    records: [
+      {
+        day: '2026-10-15',
+        bedAt: bj(2026, 10, 15, 20, 0),
+        wakeAt: bj(2026, 10, 16, 4, 0),
+        // 前一个用例写入了 erasure 水位 FIXED_NOW，这里必须晚于水位才会被接受
+        updatedAt: FIXED_NOW + 3000
+      }
+    ],
+    deletedDays: [],
+    includeAll: false
+  })
+  assert.equal(res.status, 200)
+  assert.equal(res.body.synced, 1)
+  assert.equal(res.body.dropped, 0)
+  assert.deepEqual(res.body.records, [])
+  assert.deepEqual(res.body.deletedDays, [])
+})

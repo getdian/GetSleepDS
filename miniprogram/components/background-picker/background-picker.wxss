@@ -123,6 +123,11 @@
   background: rgba(139, 135, 255, 0.1);
 }
 
+/* 广告加载/下发期间：卡片暂不可点，视觉上明确“处理中” */
+.bp-item.is-busy {
+  opacity: 0.45;
+}
+
 .bp-img {
   width: 168rpx;
   height: 108rpx;

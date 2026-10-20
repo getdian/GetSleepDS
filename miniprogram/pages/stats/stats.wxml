@@ -80,7 +80,7 @@
         <text class="fact-text">{{fact}}</text>
         <view wx:if="{{factSource === 'local'}}" class="fact-local-row">
           <text class="fact-local">仅统计本机记录</text>
-          <text class="fact-retry" bindtap="onFactRetry">重新获取</text>
+          <text class="fact-retry" bindtap="onFactRetry">{{syncEnabled ? '重新获取' : '开启云备份'}}</text>
         </view>
       </block>
 

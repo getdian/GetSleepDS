@@ -469,10 +469,16 @@
     empty.textContent = '不使用默认背景'
     select.appendChild(empty)
     ;(list || []).forEach(function (item) {
-      if (item.enabled === false) return
       const option = document.createElement('option')
       option.value = item.id
-      option.textContent = item.title || item.id
+      if (item.enabled === false) {
+        // 停用项也保留一个 disabled option：否则 select.value 会被清空，
+        // 运营只改其它字段并保存时，defaultBackgroundId 就被静默抹掉。
+        option.disabled = true
+        option.textContent = (item.title || item.id) + '（已停用）'
+      } else {
+        option.textContent = item.title || item.id
+      }
       select.appendChild(option)
     })
     select.value = selected || ''
@@ -1205,7 +1211,10 @@
     render()
     showApp()
 
-    loadAnalytics().catch(function () {})
+    loadAnalytics().catch(function (error) {
+      // 不能静默留“–”：DB 异常时运营会把“加载失败”看成“今天 0 用户”。
+      toast('看板加载失败：' + ((error && error.message) || '请稍后重试'), true)
+    })
     loadStorage().catch(function (error) {
       // 存储面板失败时不能静默留空表单，否则容易被误当成“尚未配置”而重填凭证。
       toast('存储配置加载失败：' + (error.message || '请稍后重试'), true)
@@ -1467,7 +1476,9 @@
       }
       render()
       toast('已保存，重新打开小程序即可生效')
-      loadAnalytics().catch(function () {})
+      loadAnalytics().catch(function (error) {
+        toast('看板加载失败：' + ((error && error.message) || '请稍后重试'), true)
+      })
     } catch (e) {
       toast(e.message || '保存失败', true)
     } finally {

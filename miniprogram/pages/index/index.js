@@ -5,7 +5,7 @@ const storage = require('../../utils/storage')
 const adSlots = require('../../utils/ads')
 const backgrounds = require('../../utils/backgrounds')
 const ad = require('../../utils/ad')
-const { getConfig, loadConfig } = require('../../utils/config')
+const { getConfig, loadConfig, getConfigStatus } = require('../../utils/config')
 
 const CLOCK_INTERVAL = 60 * 1000
 
@@ -14,6 +14,7 @@ Page({
     ads: adSlots.empty(),
     mode: 'wake',
     wakeTime: '07:30',
+    wakeContext: '',
     sleepTime: '23:00',
     fallAsleep: 15,
     fallOptions: [5, 10, 15, 20, 30],
@@ -37,12 +38,16 @@ Page({
     this._bgItems = []
     this._cfgLoaded = false
     this._sleepTouched = false
+    this._bgExpiryNotified = false
     const now = Date.now()
     const prefs = storage.getPrefs()
     // 入睡默认跟随真实当前时间（时间轮支持 1 分钟粒度），不再固定白天 23:00
     const nowClock = F.fmtClock(T.minutesOf(now))
+    const wakeTime = prefs.wakeTime || '07:30'
     this.setData({
-      wakeTime: prefs.wakeTime || '07:30',
+      wakeTime,
+      // 起床时间补一个“今天/明天”的上下文，避免 07:30 上午不知道指哪天
+      wakeContext: this.wakeContextText(wakeTime, 15, now),
       sleepTime: nowClock,
       // 入睡耗时以 15 分为默认起点；旧版本存下的 5 分不再作为初值
       fallAsleep: 15,
@@ -95,6 +100,33 @@ Page({
   refreshNow() {
     // 展示真实时分；5 分钟粒度只用于时间轮和“用现在的时间”落点
     this.setData({ nowText: F.fmtClock(T.minutesOf(Date.now())) })
+    // 起床时间可能随当前时刻从“今天”翻到“明天”，随分钟刷新
+    if (this.data.mode === 'wake') this.refreshWakeContext()
+  },
+
+  /** 起床选择的上下文：今天/明天 + 上午/下午 + 12h 时间 */
+  wakeContextText(wakeValue, fallMinutes, now) {
+    const wakeMinutes = typeof wakeValue === 'number' ? wakeValue : T.parseClock(wakeValue)
+    const wakeAt = P.nextWakeAt(now, wakeMinutes, Number(fallMinutes) || 0)
+    const period = wakeMinutes < 12 * 60 ? '上午' : '下午'
+    const h12 = Math.floor(wakeMinutes / 60) % 12 || 12
+    return (
+      P.dayLabel(wakeAt, now) +
+      ' ' +
+      period +
+      ' ' +
+      T.pad2(h12) +
+      ':' +
+      T.pad2(wakeMinutes % 60) +
+      ' 起床'
+    )
+  },
+
+  refreshWakeContext(wakeValue, fallMinutes) {
+    const value = wakeValue === undefined ? this.data.wakeTime : wakeValue
+    const fall = fallMinutes === undefined ? this.data.fallAsleep : fallMinutes
+    const text = this.wakeContextText(value, fall, Date.now())
+    if (text !== this.data.wakeContext) this.setData({ wakeContext: text })
   },
 
   startClock() {
@@ -140,17 +172,39 @@ Page({
     this.setData(patch)
 
     // 只记住起床时间；入睡时间每次跟随当前时间，入睡耗时默认 15 分
-    if (key === 'wakeTime') this.savePrefs({ wakeTime: value })
+    if (key === 'wakeTime') {
+      this.savePrefs({ wakeTime: value })
+      this.refreshWakeContext(T.parseClock(value), this.data.fallAsleep)
+    }
   },
 
   toggleMode() {
     const next = this.data.mode === 'wake' ? 'sleep' : 'wake'
     const patch = { mode: next, flipped: false, view: null }
-    // 本轮还没手动选过入睡时间时，切到入睡模式直接用当前时间
-    if (next === 'sleep' && !this._sleepTouched) {
-      const value = F.fmtClock(T.minutesOf(Date.now()))
-      patch.sleepTime = value
-      patch.nowText = value
+    // 从结果面反向切换时，用刚算出的推荐时间作为种子，保持双向计算连续；
+    // 只有正面的普通切换才退回“跟随当前时间”。种子是一次明确的用户意图，不再被 onShow 覆盖。
+    const view = this.data.view
+    const seed =
+      this.data.flipped && view && typeof view.mainTime === 'string' && view.mainTime.indexOf(':') >= 0
+        ? view.mainTime
+        : ''
+    if (next === 'sleep') {
+      if (seed) {
+        patch.sleepTime = seed
+        this._sleepTouched = true
+      } else if (!this._sleepTouched) {
+        const value = F.fmtClock(T.minutesOf(Date.now()))
+        patch.sleepTime = value
+        patch.nowText = value
+      }
+    }
+    if (next === 'wake') {
+      if (seed) patch.wakeTime = seed
+      patch.wakeContext = this.wakeContextText(
+        patch.wakeTime || this.data.wakeTime,
+        this.data.fallAsleep,
+        Date.now()
+      )
     }
     this.setData(patch)
   },
@@ -173,6 +227,7 @@ Page({
     const minutes = Number(event.currentTarget.dataset.min)
     if (!minutes || minutes === this.data.fallAsleep) return
     this.setData({ fallAsleep: minutes })
+    if (this.data.mode === 'wake') this.refreshWakeContext(this.data.wakeTime, minutes)
     if (this.data.flipped) this.calc(true)
   },
 
@@ -182,6 +237,7 @@ Page({
     const index = options.indexOf(this.data.fallAsleep)
     const minutes = options[(index + 1) % options.length]
     this.setData({ fallAsleep: minutes })
+    if (this.data.mode === 'wake') this.refreshWakeContext(this.data.wakeTime, minutes)
     if (wx.vibrateShort) wx.vibrateShort({ type: 'light' })
     if (this.data.flipped) this.calc(true)
   },
@@ -214,7 +270,8 @@ Page({
         .map((slot) => ({
           cycles: slot.cycles,
           time: F.fmtClockTs(slot.at),
-          day: slot.dayLabel,
+          // 跨午夜时“今天/明天”不如“凌晨/晚上”直观
+          day: F.periodLabel(slot.at),
           duration: F.fmtDuration(slot.durationMin),
           passed: slot.passed
         }))
@@ -222,7 +279,7 @@ Page({
       view = {
         label: main ? '推荐入睡时间' : '现在睡',
         mainTime: main ? F.fmtClockTs(main.at) : F.fmtDuration(plan.availableMin),
-        mainDay: main ? main.dayLabel : '',
+        mainDay: main ? F.periodLabel(main.at) : '',
         mainMeta: main
           ? main.cycles + ' 个周期 · ' + F.fmtDuration(main.durationMin)
           : '距离 ' + value + ' 起床',
@@ -241,7 +298,7 @@ Page({
       const rows = plan.slots.slice(1).map((slot) => ({
         cycles: slot.cycles,
         time: F.fmtClockTs(slot.at),
-        day: slot.dayLabel,
+        day: F.periodLabel(slot.at),
         duration: F.fmtDuration(slot.durationMin),
         passed: false
       }))
@@ -249,7 +306,7 @@ Page({
       view = {
         label: '推荐起床时间',
         mainTime: F.fmtClockTs(main.at),
-        mainDay: main.dayLabel,
+        mainDay: F.periodLabel(main.at),
         mainMeta: main.cycles + ' 个周期 · ' + F.fmtDuration(main.durationMin),
         note: '从 ' + value + ' 上床算起，已含 ' + this.data.fallAsleep + ' 分钟入睡',
         allPassed: false,
@@ -288,16 +345,32 @@ Page({
     const defaultItem = backgrounds.defaultOf(config)
     const unlock = config.unlock || {}
     const freeMode = unlock.mode !== 'rewarded' || !unlock.adUnitId
-    const items = list.map((item) => ({
-      id: item.id,
-      title: item.title,
-      category: item.category,
-      url: item.url,
-      thumbUrl: item.thumbUrl,
-      localPath: backgrounds.localPathOf(item.url),
-      isDefault: !!defaultItem && item.id === defaultItem.id,
-      unlocked: backgrounds.isUnlocked(unlocked, item.id, now)
-    }))
+    // 付费背景到期是静默回退：这里给一次明确提示，否则用户会以为“背景被弄丢了”。
+    const expiredRecently =
+      unlocked &&
+      Number(unlocked.expireAt) > 0 &&
+      Number(unlocked.expireAt) <= now &&
+      now - Number(unlocked.expireAt) < 6 * 60 * 60 * 1000
+    if (expiredRecently && !this._bgExpiryNotified) {
+      this._bgExpiryNotified = true
+      wx.showToast({ title: '背景使用时长已到，已切回默认', icon: 'none' })
+    }
+    const items = list.map((item) => {
+      const itemUnlocked = backgrounds.isUnlocked(unlocked, item.id, now)
+      return {
+        id: item.id,
+        title: item.title,
+        category: item.category,
+        url: item.url,
+        thumbUrl: item.thumbUrl,
+        localPath: backgrounds.localPathOf(item.url),
+        isDefault: !!defaultItem && item.id === defaultItem.id,
+        unlocked: itemUnlocked,
+        remainHours: itemUnlocked
+          ? Math.max(1, Math.ceil((Number(unlocked.expireAt) - now) / 3600000))
+          : 0
+      }
+    })
 
     this._bgItems = items
     const categories = backgrounds.categories(list)
@@ -347,6 +420,22 @@ Page({
               wx.showToast({ title: '背景图加载失败，请稍后重试', icon: 'none' })
             }
           })
+        return
+      }
+      // loadConfig 失败时也会返回兜底（backgrounds=[]），必须区分“确实为空”与“没拉到”。
+      const status = getConfigStatus()
+      if (status.failed) {
+        wx.showModal({
+          title: '背景图加载失败',
+          content: '网络或服务暂时不可用，是否重试？',
+          confirmText: '重试',
+          cancelText: '稍后',
+          success: (res) => {
+            if (!res.confirm || !this._alive) return
+            this._cfgLoaded = false
+            this.openBgPicker()
+          }
+        })
         return
       }
       wx.showToast({ title: '暂时没有可用的背景图', icon: 'none' })
@@ -464,9 +553,22 @@ Page({
 
   finishBackgroundUnlock(id) {
     if (!backgrounds.unlock(id, this.data.bgUnlockHours)) {
-      wx.showToast({ title: '背景状态保存失败，请清理存储空间', icon: 'none' })
+      // 广告已看完：不能因为一次本地写入失败就要求用户重看一遍视频。
+      // 保留待发放标记并提供原地重试（同一天重写是幂等的）。
+      this._pendingBgGrant = id
+      wx.showModal({
+        title: '解锁状态未保存',
+        content: '本次观看已记录。可立即重试保存；若仍失败，请清理背景缓存后再试。',
+        confirmText: '重试',
+        cancelText: '稍后',
+        success: (res) => {
+          if (!res.confirm || !this._alive) return
+          this.finishBackgroundUnlock(id)
+        }
+      })
       return
     }
+    this._pendingBgGrant = ''
     this.loadBackgrounds()
     this.setData({ bgOpen: false })
     wx.showToast({ title: '背景已解锁', icon: 'none' })

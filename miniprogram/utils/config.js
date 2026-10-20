@@ -6,6 +6,9 @@ const CACHE_TTL = 10 * 60 * 1000
 
 let memory = null
 let inflight = null
+// 失败不抛出是为了主流程可用，但调用方需要能区分“配置确实为空”与“拉取失败”。
+let lastErrorAt = 0
+let lastLoadedAt = 0
 
 const AD_SLOTS = ['home', 'sleep', 'stats', 'statsFooter']
 
@@ -68,9 +71,12 @@ function loadConfig(force) {
     .then((data) => {
       storage.setConfigCache(data)
       memory = merge(data)
+      lastLoadedAt = Date.now()
+      lastErrorAt = 0
       return memory
     })
     .catch(() => {
+      lastErrorAt = Date.now()
       memory = merge(cache ? cache.data : null)
       return memory
     })
@@ -80,7 +86,20 @@ function loadConfig(force) {
   return inflight
 }
 
+/**
+ * 最近一次远程拉取是否失败：失败时 loadConfig 返回的是兜底配置（backgrounds=[]），
+ * 页面不能据此断言“后台没有配置”。
+ */
+function getConfigStatus() {
+  return {
+    failed: lastErrorAt > 0 && lastErrorAt >= lastLoadedAt,
+    failedAt: lastErrorAt,
+    loadedAt: lastLoadedAt
+  }
+}
+
 module.exports = {
   getConfig,
-  loadConfig
+  loadConfig,
+  getConfigStatus
 }

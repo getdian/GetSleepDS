@@ -7,6 +7,7 @@
 const storage = require('../../utils/storage')
 const audioTimer = require('../../utils/audio-timer')
 const playerState = require('../../utils/player-state')
+const cache = require('../../utils/audio-cache')
 const { getConfig } = require('../../utils/config')
 
 const TOGGLE_GUARD_MS = 220
@@ -31,9 +32,10 @@ Component({
       this._lastToggleAt = 0
       this._enterTimer = null
       this._unsubTimer = null
-      this._onPlay = () => this.sync(true)
-      this._onPause = () => this.sync(true)
+      this._onPlay = () => this.handlePlay()
+      this._onPause = () => this.handlePause()
       this._onStop = () => this.handleStop()
+      this._onEnded = () => this.handleEnded()
       this._onError = () => this.handleError()
       this.setup()
       this.sync(false)
@@ -79,6 +81,7 @@ Component({
       this._audio.onPlay(this._onPlay)
       this._audio.onPause(this._onPause)
       this._audio.onStop(this._onStop)
+      this._audio.onEnded(this._onEnded)
       this._audio.onError(this._onError)
     },
 
@@ -88,6 +91,7 @@ Component({
         this._audio.offPlay(this._onPlay)
         this._audio.offPause(this._onPause)
         this._audio.offStop(this._onStop)
+        if (this._audio.offEnded) this._audio.offEnded(this._onEnded)
         if (this._audio.offError) this._audio.offError(this._onError)
       } catch (e) {}
       this._audio = null
@@ -96,6 +100,58 @@ Component({
     timerEnabled() {
       const cfg = getConfig()
       return !cfg.features || cfg.features.timer !== false
+    },
+
+    handlePlay() {
+      if (!this._alive) return
+      this.sync(true)
+      // 系统侧暂停已冻结倒计时；恢复播放时续剩余，没有运行中的倒计时才按偏好起表。
+      if (this.timerEnabled()) {
+        audioTimer.arm(Number(storage.getMeta().audioTimerMinutes) || 0)
+      }
+    },
+
+    handlePause() {
+      if (!this._alive) return
+      // 与 audio-dock 同口径：通知栏/锁屏/耳机暂停也必须冻结倒计时。
+      audioTimer.pause()
+      this.sync(true)
+    },
+
+    /** 按 meta.lastTrackId 从配置重建播放源：部分基础库在系统 stop 后会清空 src。 */
+    rebuildSource() {
+      const meta = storage.getMeta()
+      if (!meta.lastTrackId || !this._audio) return false
+      const cfg = getConfig()
+      const track = (cfg.audio || []).filter((item) => item.id === meta.lastTrackId)[0]
+      if (!track || !track.url) return false
+      const cached = cache.peek(track.url, (cfg.cache && cfg.cache.ttlDays) || 7)
+      this._audio.title = '睡点 · ' + track.title
+      this._audio.epname = '环境音'
+      this._audio.singer = '睡点'
+      this._audio.src = cached || track.url
+      storage.patchMeta({ lastTrackActive: true })
+      return true
+    },
+
+    handleEnded() {
+      if (!this._alive) return
+      // audio-dock 只挂在入睡页；在首页/统计页自然播完时由这里接管循环与终止态，
+      // 否则迷你条会停在“正在播放”再遇到 toggle 的静默 return。
+      audioTimer.restore()
+      const expiredAt = audioTimer.lastExpiredAt()
+      const justExpired = expiredAt && Date.now() - expiredAt < EXPIRY_TOAST_WINDOW_MS
+      if (audioTimer.shouldStop() || justExpired || !this.rebuildSource()) {
+        storage.patchMeta({ lastTrackActive: false })
+        this.collapse()
+        return
+      }
+      try {
+        this._audio.play()
+      } catch (e) {
+        storage.patchMeta({ lastTrackActive: false })
+        this.collapse()
+      }
     },
 
     /** 以 meta + 后台音频状态为准同步展示；任何事件都走这里，避免多实例口径漂移 */
@@ -187,6 +243,21 @@ Component({
 
     handleError() {
       if (!this._alive) return
+      const audio = this._audio
+      // 本地缓存源损坏时，dock 不在场（首页/统计页）也要自行回退远程一次；
+      // 否则重建源会反复命中同一个坏文件，用户点一次播放就失败一次。
+      if (audio && audio.src && audio.src.indexOf('https://') !== 0) {
+        const meta = storage.getMeta()
+        const cfg = getConfig()
+        const track = (cfg.audio || []).filter((item) => item.id === meta.lastTrackId)[0]
+        if (track && track.url) {
+          playerState.markFallback(track.url)
+          cache.remove(track.url)
+          storage.patchMeta({ lastTrackActive: true })
+          audio.src = track.url
+          return
+        }
+      }
       // 两个组件监听同一个全局播放器，事件顺序不保证。
       // 等一个极短窗口，让 audio-dock（播放会话的 owner）先决定：
       // - 缓存失败回退：它会把 lastTrackActive 保持 true 并重设 src；
@@ -221,10 +292,19 @@ Component({
 
     toggle() {
       const audio = this._audio
-      if (!audio || !audio.src) return
+      if (!audio) return
       const now = Date.now()
       if (now - this._lastToggleAt < TOGGLE_GUARD_MS) return
       this._lastToggleAt = now
+
+      if (!audio.src) {
+        // 系统侧 stop 会清空 src：此前这里静默 return，用户点播放毫无反应。
+        if (!this.rebuildSource()) {
+          wx.showToast({ title: '音频已结束，请重新播放', icon: 'none' })
+          return
+        }
+        this.sync(true)
+      }
 
       const next = !!audio.paused
       // 先反馈再调底层：不等 onPlay/onPause 事件，图标与状态行立即切换

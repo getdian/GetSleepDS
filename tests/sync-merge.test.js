@@ -86,3 +86,15 @@ test('saveRecord 写入失败时返回 false，不清墓碑', () => {
   failWrites = false
   assert.equal(storage.getDeleted()['2026-10-18'], 200)
 })
+
+test('合并结果写入失败时通过 options.failed 暴露给调用方', () => {
+  storage.clearAll()
+  const options = {}
+  failWrites = true
+  try {
+    mergeServerRecords([record('2026-10-20', 100)], options)
+  } finally {
+    failWrites = false
+  }
+  assert.equal(options.failed, true)
+})

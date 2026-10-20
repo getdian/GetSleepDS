@@ -12,13 +12,19 @@ function dayLabel(timestamp, now) {
   return date.getMonth() + 1 + '月' + date.getDate() + '日'
 }
 
+/** 下一次该起床时刻：留出入睡耗时后仍来不及，就顺延到明天 */
+function nextWakeAt(now, wakeMinutes, fallMinutes) {
+  let wakeAt = T.clockTs(T.startOfDay(now), wakeMinutes)
+  if (wakeAt - fallMinutes * T.MINUTE_MS <= now) wakeAt += T.DAY_MS
+  return wakeAt
+}
+
 /**
  * 给定起床时间，倒推 3 个入睡时刻（5/4/3 个周期）。
  * 目标起床时间取“下一次”该时刻；若连 3 个周期都来不及，slots 会标记 passed。
  */
 function bedtimesForWake(now, wakeMinutes, fallMinutes) {
-  let wakeAt = T.clockTs(T.startOfDay(now), wakeMinutes)
-  if (wakeAt - fallMinutes * T.MINUTE_MS <= now) wakeAt += T.DAY_MS
+  const wakeAt = nextWakeAt(now, wakeMinutes, fallMinutes)
 
   const slots = CYCLES.map((cycles) => {
     const at = wakeAt - (fallMinutes + cycles * CYCLE) * T.MINUTE_MS
@@ -75,6 +81,7 @@ module.exports = {
   CYCLE,
   CYCLES,
   dayLabel,
+  nextWakeAt,
   bedtimesForWake,
   wakeTimesForSleep
 }

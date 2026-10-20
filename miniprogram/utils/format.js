@@ -11,6 +11,18 @@ function fmtClockTs(timestamp) {
   return fmtClock(T.minutesOf(timestamp))
 }
 
+/** 时段名称：比“今天/明天”更适合跨午夜的睡眠时间展示 */
+function periodLabel(timestamp) {
+  const hour = new Date(timestamp).getHours()
+  if (hour < 5) return '凌晨'
+  if (hour < 9) return '早晨'
+  if (hour < 12) return '上午'
+  if (hour < 14) return '中午'
+  if (hour < 18) return '下午'
+  if (hour < 20) return '傍晚'
+  return '晚上'
+}
+
 function fmtDuration(minutes) {
   const total = Math.max(0, Math.round(minutes))
   if (total < 60) return total + ' 分钟'
@@ -49,6 +61,7 @@ function signedMinutes(value) {
 module.exports = {
   fmtClock,
   fmtClockTs,
+  periodLabel,
   fmtDuration,
   fmtHours,
   fmtDateCN,

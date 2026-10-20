@@ -24,7 +24,7 @@
     <view
       wx:for="{{items}}"
       wx:key="id"
-      class="bp-item {{activeId === item.id ? 'is-active' : ''}}"
+      class="bp-item {{activeId === item.id ? 'is-active' : ''}} {{busy ? 'is-busy' : ''}}"
       data-id="{{item.id}}"
       bindtap="onSelect"
     >
@@ -38,7 +38,7 @@
       />
       <view class="bp-info">
         <text class="bp-name">{{item.title}}</text>
-        <text class="bp-state">{{item.isDefault ? '默认背景 · 免费' : item.unlocked ? '已解锁 · 可直接使用' : freeMode ? '免费使用 ' + unlockHours + ' 小时' : '看广告解锁 ' + unlockHours + ' 小时'}}</text>
+        <text class="bp-state">{{item.isDefault ? '默认背景 · 免费' : item.unlocked ? '已解锁 · 剩 ' + item.remainHours + ' 小时' : freeMode ? '免费使用 ' + unlockHours + ' 小时' : '看广告解锁 ' + unlockHours + ' 小时'}}</text>
       </view>
       <text wx:if="{{activeId === item.id}}" class="bp-check">使用中</text>
       <text wx:elif="{{item.isDefault}}" class="bp-badge">默认</text>

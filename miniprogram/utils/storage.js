@@ -63,8 +63,10 @@ function saveRecord(record) {
   const all = getRecords()
   all[record.day] = record
   const ok = safeSet(KEYS.records, all)
-  if (ok) clearDeleted(record.day)
-  return ok
+  if (!ok) return false
+  // 清墓碑失败会让“记录的 updatedAt < 旧墓碑时间”，服务端将永久拒收这一天。
+  // 返回失败让调用方提示重试（同一天重写是幂等的）。
+  return clearDeleted(record.day)
 }
 
 /** 开发工具用：整体替换记录表（调用方负责墓碑等一致性） */

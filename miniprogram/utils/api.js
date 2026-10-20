@@ -21,11 +21,16 @@ function fetchSummary(records) {
   })
 }
 
-function syncRecords(code, records, deletedDays) {
+function syncRecords(code, records, deletedDays, includeAll) {
   return request({
     path: '/api/records/sync',
     method: 'POST',
-    data: { code, records, deletedDays: deletedDays || [] },
+    data: {
+      code,
+      records,
+      deletedDays: deletedDays || [],
+      includeAll: includeAll !== false
+    },
     timeout: 12000
   })
 }

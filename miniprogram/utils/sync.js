@@ -37,7 +37,9 @@ function collect(now, spanDays) {
     const r = records[day]
     if (!r || !r.wakeAt || !r.bedAt) return
     if (r.wakeAt <= r.bedAt || r.wakeAt - r.bedAt > MAX_SLEEP_MS) return
-    if (current - r.wakeAt > span) return
+    // 与服务端 validate.inWindow(bedAt) 同边界：只看 wakeAt 会把“wakeAt 在窗口内、
+    // bedAt 已越界”的记录反复上传并被服务端丢弃，形成永久 dropped。
+    if (current - r.bedAt > span) return
     list.push({
       day: r.day,
       bedAt: r.bedAt,
@@ -140,8 +142,10 @@ function mergeServerRecords(serverRecords, options) {
   })
 
   if (dirty) {
-    storage.replaceRecords(local)
-    storage.replaceDeleted(deleted)
+    // 先落墓碑再落记录：中途失败时墓碑优先，下一轮同步能挡住云端回填。
+    const deletedOk = storage.replaceDeleted(deleted)
+    const recordsOk = storage.replaceRecords(local)
+    if (!deletedOk || !recordsOk) opts.failed = true
   }
 
   return changed
@@ -171,26 +175,36 @@ function doSync(force) {
     let synced = 0
     let dropped = 0
     let restored = 0
+    let writeFailed = false
 
     for (let i = 0; i < batches.length; i += 1) {
       // 每个请求都使用一次新的 wx.login code；不能复用同一个 code 调多次接口。
+      // 只有首片需要云端全量回填，后续分片让服务端省略 records，避免 N 倍全量下载。
       const res = await withLogin((code) =>
-        api.syncRecords(code, batches[i], i === 0 ? deletedDays : [])
+        api.syncRecords(code, batches[i], i === 0 ? deletedDays : [], i === 0)
       )
       if ((storage.getMeta().syncEpoch || 0) !== epoch) {
         return { skipped: 'stale' }
       }
       const body = res || {}
-      restored += mergeServerRecords(body.records, {
+      const mergeOptions = {
         deletedDays: body.deletedDays,
         erasedAt: body.erasedAt
-      })
+      }
+      restored += mergeServerRecords(body.records, mergeOptions)
+      if (mergeOptions.failed) writeFailed = true
       synced += body.synced || 0
       dropped += body.dropped || 0
     }
 
-    storage.patchMeta({ lastSyncAt: Date.now() })
-    return { synced, dropped, restored, chunks: batches.length }
+    storage.patchMeta({
+      lastSyncAt: Date.now(),
+      // 有记录被服务端丢弃，或本机合并结果没写进去：都不能算“完整同步”
+      lastSyncPartial: dropped > 0 || writeFailed,
+      lastSyncDropped: dropped,
+      lastSyncWriteFailed: writeFailed
+    })
+    return { synced, dropped, restored, chunks: batches.length, writeFailed }
   }
 
   return run().catch((error) => {

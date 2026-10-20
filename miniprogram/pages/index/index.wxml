@@ -55,7 +55,8 @@
             </view>
 
             <view class="now-row">
-              <text class="now-hint">当前 {{nowText}}</text>
+              <text wx:if="{{mode === 'wake'}}" class="now-hint">{{wakeContext}}</text>
+              <text wx:else class="now-hint">当前 {{nowText}}</text>
               <text class="now-link {{mode === 'sleep' ? '' : 'is-hidden'}}" bindtap="onNowTap">用现在的时间</text>
             </view>
 
@@ -102,7 +103,7 @@
                 <view class="result-bar"></view>
                 <view class="result-body">
                   <view class="result-line">
-                    <text wx:if="{{view.mainDay && view.mainDay !== '今天'}}" class="result-day">{{view.mainDay}}</text>
+                    <text wx:if="{{view.mainDay}}" class="result-day">{{view.mainDay}}</text>
                     <text class="result-time {{view.compact ? 'is-compact' : ''}}">{{view.mainTime}}</text>
                     <block wx:if="{{!view.compact}}">
                       <text class="result-dot">·</text>
@@ -125,7 +126,7 @@
                   class="result-row {{item.passed ? 'is-passed' : ''}}"
                 >
                   <view class="result-row-left">
-                    <text wx:if="{{item.day && item.day !== '今天'}}" class="result-row-day">{{item.day}}</text>
+                    <text wx:if="{{item.day}}" class="result-row-day">{{item.day}}</text>
                     <text class="result-row-time">{{item.time}}</text>
                     <text wx:if="{{item.passed}}" class="result-row-tag">已过</text>
                   </view>

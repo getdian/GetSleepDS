@@ -66,9 +66,9 @@ Page({
 
   onPullDownRefresh() {
     this.refresh(true)
-    // 运营改完广告位后，下拉刷新可立即拿到新配置（绕过 10 分钟 TTL）
-    adSlots.reload(this)
-    wx.stopPullDownRefresh()
+    // 运营改完广告位后，下拉刷新可立即拿到新配置（绕过 10 分钟 TTL）。
+    // 等配置真正返回再收起转圈，否则新广告位要过几秒才出现。
+    adSlots.reload(this).finally(() => wx.stopPullDownRefresh())
   },
 
   refresh(forceSummary) {
@@ -111,9 +111,11 @@ Page({
       syncText: cloudPending
         ? '云端副本尚未删除，请先删除'
         : syncEnabled
-          ? meta.lastSyncAt
-            ? '上次同步 ' + F.fmtClockTs(meta.lastSyncAt)
-            : '已开启，尚未同步'
+          ? meta.lastSyncPartial
+            ? '上次同步有 ' + (Number(meta.lastSyncDropped) || 0) + ' 条记录云端未写入'
+            : meta.lastSyncAt
+              ? '上次同步 ' + F.fmtClockTs(meta.lastSyncAt)
+              : '已开启，尚未同步'
           : syncFeature
             ? '仅存本机 · 未开启云备份'
             : '仅存本机 · 服务端暂未开放云备份'
@@ -293,6 +295,19 @@ Page({
           wx.showToast({ title: '上一次同步已取消', icon: 'none' })
           return
         }
+        if (res && res.dropped > 0) {
+          // 全部被拒通常是设备时钟越界（换机后数据会全无），必须给出可行动提示；
+          // 部分未写入可能是服务端已有更新版本（LWW），只做中性告知。
+          this.refresh(false)
+          wx.showToast({
+            title:
+              res.synced > 0
+                ? '已同步（部分记录云端未写入）'
+                : '云端未接受记录，请检查手机时间',
+            icon: 'none'
+          })
+          return
+        }
         this.refresh(false)
         wx.showToast({ title: '已同步', icon: 'none' })
       })
@@ -340,16 +355,18 @@ Page({
         if (!res.confirm) return
         this._cloudBusy = true
         wx.showLoading({ title: '删除中', mask: true })
-        // 先等在途同步结束，再 bump epoch；否则旧响应可能把记录合并回本地。
+        // 先关闭云备份并置 pending 闸门，再等在途同步结束、最后删云端。
+        // 反过来（先删后关）时，erase 往返窗口内任何 syncNow 都会把本机记录重新上传。
+        if (!storage.setSyncEnabled(false)) {
+          this._cloudBusy = false
+          wx.hideLoading()
+          wx.showToast({ title: '云备份开关保存失败，请重试', icon: 'none' })
+          return
+        }
+        storage.patchMeta({ syncEpoch: Date.now(), cloudPendingErase: true })
         whenIdle()
+          .then(() => withLogin((code) => api.eraseRecords(code, { cloudOnly: true })))
           .then(() => {
-            storage.patchMeta({ syncEpoch: Date.now() })
-            return withLogin((code) => api.eraseRecords(code, { cloudOnly: true }))
-          })
-          .then(() => {
-            if (!storage.setSyncEnabled(false)) {
-              wx.showToast({ title: '云备份开关保存失败', icon: 'none' })
-            }
             storage.patchMeta({ lastSyncAt: 0, cloudPendingErase: false })
             this._cloudBusy = false
             wx.hideLoading()
@@ -357,6 +374,7 @@ Page({
             wx.showToast({ title: '云端副本已删除', icon: 'none' })
           })
           .catch(() => {
+            // 保留 lastSyncAt/cloudPendingErase：页面出现重试入口；同步已关闭，不会复活。
             this._cloudBusy = false
             wx.hideLoading()
             this.refresh(false)
@@ -377,13 +395,14 @@ Page({
     const hadCloud = !!meta.lastSyncAt
     const cloudAt = meta.lastSyncAt || 0
     backgrounds.cleanCache()
-    const cleared = storage.clearAll()
-    events.clearQueue()
-    cache.cleanAll()
+    // 先停播放再清缓存：反过来会先删掉正在播放的文件，触发一条“音频加载失败”提示。
     audioTimer.clear()
     try {
       wx.getBackgroundAudioManager().stop()
     } catch (e) {}
+    const cleared = storage.clearAll()
+    events.clearQueue()
+    cache.cleanAll()
     const patch = { syncEpoch: Date.now(), lastTrackActive: false }
     if (hadCloud && !opts.cloudCleared) {
       patch.lastSyncAt = cloudAt
@@ -458,6 +477,12 @@ Page({
   },
 
   onFactRetry() {
+    if (this.data.factSource === 'local' && !storage.getSyncEnabled()) {
+      // 本地兜底时“重新获取”只会用同一份本机数据重算，结果永远不变；
+      // 直接引导开启云备份，才有服务端回顾可拿。
+      this.onSyncToggle()
+      return
+    }
     this.refresh(true)
   },
 
@@ -517,7 +542,7 @@ Page({
     timeout = setTimeout(() => {
       if (seq !== this._posterSeq) return
       closeLoading()
-      wx.showToast({ title: '海报生成超时，请重试', icon: 'none' })
+      wx.showToast({ title: '生成较慢，完成后会自动保存', icon: 'none' })
     }, 12000)
     wx.showLoading({ title: '生成中', mask: true })
     // 先在 4s 窗口内拉小程序码（失败/超时就放弃），海报落款自动降级为纯文案

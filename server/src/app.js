@@ -172,6 +172,9 @@ function createApp(options) {
   const recordsIp = createRateLimiter(60 * 1000, 120)
   const eraseIp = createRateLimiter(60 * 1000, 3)
   const shareIp = createRateLimiter(60 * 1000, 3)
+  // 反代下 req.ip 可能全员相同，按 openid 再补一层维度，避免互相挤占。
+  const eraseOpenid = createRateLimiter(60 * 1000, 10)
+  const shareOpenid = createRateLimiter(60 * 1000, 10)
 
   app.use('/admin', express.static(ADMIN_DIR, { index: 'index.html', setHeaders: setAdminHeaders }))
 
@@ -211,11 +214,15 @@ function createApp(options) {
       codeToOpenid,
       limitIp: recordsIp,
       limitErase: eraseIp,
+      limitEraseOpenid: eraseOpenid,
       now,
       store
     })
   )
-  app.use('/api', createShareRoute({ config, codeToOpenid, limitIp: shareIp }))
+  app.use(
+    '/api',
+    createShareRoute({ config, codeToOpenid, limitIp: shareIp, limitOpenid: shareOpenid })
+  )
 
   // 落地页与 H5 交互演示
   app.get(['/demo', '/demo/'], (req, res) => {

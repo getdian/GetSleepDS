@@ -1,5 +1,20 @@
 # 睡点 · 关键更新记录
 
+## 2026-10-20 · 深审第二轮修复（音频闭环 / 同步反馈 / 背景与广告 / 服务端限流）
+
+- **音频**：坏缓存回退远程后立即失效（`cache.remove` + 会话黑名单），修复循环重播每轮卡顿；`now-playing` 补 `rebuildSource` 与 `onEnded`，系统清空 `src` 后可恢复、首页/统计页自然播完能收口；系统侧暂停（通知栏/锁屏/耳机）冻结倒计时；新增 `onCanplay`/`loading`，弱网不再误显示“正在播放”。
+- **同步**：服务端 `dropped>0` 不再提示“已同步”，区分全部被拒（检查手机时间）与部分未写入；合并写入失败、墓碑清理失败不再被吞；400 天窗口边界与服务端统一为 `bedAt`；后续分片只回传精简响应；`eraseCloudOnly` 先关同步并置 pending 闸门再删云端。
+- **背景/广告/配置**：配置拉取失败不再误报“暂时没有可用的背景图”，提供重试；付费背景到期提示 + 选择器显示剩余小时；激励视频看完但写入失败可原地重试；结果面「换成我想几点睡/醒」保留刚算出的推荐时间。
+- **服务端/后台**：`/api/share/qrcode` 增加进程内缓存与 in-flight 去重；erase/qrcode 补 openid 维度限流；erase 能力缺失 fail-closed；生产 `TRUST_PROXY=0` 显式告警；配置保存补审计；默认背景读路径兜底；`unlockDesc` 跟随 `ttlHours`；看板加载失败可见。
+- 验证：`npm test` 137 passed / 0 failed（1 个 PG 集成 skip）；`npm run check` 通过（3 页面 / 19 JSON / 14 WXML / 15 WXSS，约 333.2 KB）；全量修改文件 `node --check` 通过。
+
+## 2026-10-20 · 计算器起床上下文 + 结果时段标签
+
+- 起床模式在时间轮下方显示「今天/明天 上午/下午 HH:MM 起床」：与 `bedtimesForWake` 共用新的 `plan.nextWakeAt`（留出入睡耗时后仍来不及才顺延到明天），随当前分钟、所选时间、入睡耗时刷新；入睡模式该行仍显示「当前 HH:MM」。21:50 选 07:30 上午会明确显示「明天 上午 07:30 起床」。
+- 结果面的时间前缀从「今天/明天」改为时段词：凌晨（0–4）、早晨（5–8）、上午（9–11）、中午（12–13）、下午（14–17）、傍晚（18–19）、晚上（20–23）。23:45 → 晚上 23:45，01:15 → 凌晨 01:15，消除“明天 01:15”指的到底是今晚还是明晚的歧义。
+- 新增 `format.periodLabel` 与 `plan.nextWakeAt`，补时段边界单测（tests/format.test.js）和“今天/明天”判定单测（tests/plan.test.js）。
+- 验证：`node --test tests/plan.test.js tests/format.test.js` 6/6；`npm run check` 通过。
+
 ## 2026-10-20 · 深审修复（音频状态机 / 统计兜底 / 同步批量化 / 后台合规 / UX）
 
 - **P1 音频**：`audio-dock` 与 `now-playing` 同时监听全局播放器 `onError`。缓存坏文件回退远程时，`now-playing` 原会无条件清 `lastTrackActive` 和定时器，导致音频仍在播但三个页面都没有控件、定时关闭失效。新增 `utils/player-state.js` 标记“正在回退”，`now-playing` 延迟 300ms 等 owner 落定后再判定终态；`audio-dock` 回退分支同步保持 `lastTrackActive=true`。

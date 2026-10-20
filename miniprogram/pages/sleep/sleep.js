@@ -232,7 +232,7 @@ Page({
     const now = Date.now()
     if (!storage.setPending(now)) {
       this._busy = false
-      wx.showToast({ title: '本地存储失败，请清理空间后重试', icon: 'none' })
+      wx.showToast({ title: '本地存储写入失败，请稍后重试', icon: 'none' })
       return false
     }
     this._pending = { bedAt: now }
@@ -280,7 +280,8 @@ Page({
     }
 
     if (!storage.saveRecord(record)) {
-      wx.showToast({ title: '本地存储失败，尚未记录', icon: 'none' })
+      // 可能是记录写入失败，也可能是墓碑清理失败；两种情况重试同一天都是幂等的。
+      wx.showToast({ title: '记录未完整写入，请重试一次', icon: 'none' })
       return
     }
     const cleared = storage.clearPending()
@@ -293,7 +294,7 @@ Page({
         ? hour >= 5 && hour < 12
           ? '早安，已记录'
           : '已记录起床时间'
-        : '已记录，但会话未清除，请重启小程序',
+        : '已记录（会话清理稍后自动重试）',
       icon: 'none'
     })
     // 只上报“发生了一次打卡”，不把具体睡眠日与 openid 关联
@@ -349,7 +350,7 @@ Page({
       success: (res) => {
         if (!res.confirm) return
         if (!storage.removeRecord(record.day)) {
-          wx.showToast({ title: '撤销失败：本地存储写入异常', icon: 'none' })
+          wx.showToast({ title: '撤销未完成，请重试一次', icon: 'none' })
           return
         }
         this.refresh()

@@ -51,3 +51,14 @@ test('选的入睡时间已过去很多时，按次日处理', () => {
   assert.equal(plan.slots[0].dayLabel, '明天')
   assert.equal(T.minutesOf(plan.slots[0].at), 15 * 60 + 45)
 })
+
+test('nextWakeAt 只有留出入睡耗时后仍来得及才算今天', () => {
+  const evening = local(2026, 10, 17, 21, 50)
+  assert.equal(P.dayLabel(P.nextWakeAt(evening, 7 * 60 + 30, 15), evening), '明天')
+
+  const morning = local(2026, 10, 18, 6, 0)
+  assert.equal(P.dayLabel(P.nextWakeAt(morning, 7 * 60 + 30, 15), morning), '今天')
+
+  const tooTight = local(2026, 10, 18, 7, 20)
+  assert.equal(P.dayLabel(P.nextWakeAt(tooTight, 7 * 60 + 30, 15), tooTight), '明天')
+})

@@ -89,10 +89,20 @@ function loadConfig(env) {
     throw new Error('生产环境必须配置 ADMIN_PASSWORD，不能依赖启动期临时密码')
   }
 
+  const trustProxy = intEnv(source.TRUST_PROXY, 0, 'TRUST_PROXY', 0, 10)
+  if (isProd && trustProxy === 0) {
+    // 仓库部署方案是 1Panel/nginx 反代；不信任代理时 req.ip 恒为代理地址，
+    // 所有用户会共用同一个限流桶（erase 3/min、qrcode 3/min、登录 5/min）。
+    // 不阻断启动（避免已有部署因漏配置直接不可用），但必须显式告警。
+    console.warn(
+      '[config] TRUST_PROXY=0 且当前为生产环境：若前面有反向代理，所有用户会共用同一限流桶，请在 .env 设置 TRUST_PROXY=1'
+    )
+  }
+
   return {
     nodeEnv,
     port: intEnv(source.PORT, 3000, 'PORT', 1, 65535),
-    trustProxy: intEnv(source.TRUST_PROXY, 0, 'TRUST_PROXY', 0, 10),
+    trustProxy,
     dbMode,
     databaseUrl: source.DATABASE_URL || '',
     wx: {

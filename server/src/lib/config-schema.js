@@ -88,25 +88,44 @@ function normalizeConfig(input, base) {
     }
   })
 
+  const backgrounds = normalizeBackgrounds(source.backgrounds, fallback.backgrounds)
+  const enabledBgIds = {}
+  backgrounds.forEach((item) => {
+    if (item.enabled !== false) enabledBgIds[item.id] = true
+  })
+  let defaultBackgroundId =
+    typeof source.defaultBackgroundId === 'string'
+      ? source.defaultBackgroundId
+      : typeof fallback.defaultBackgroundId === 'string'
+        ? fallback.defaultBackgroundId
+        : ''
+  // 历史库行/直接改库可能留下“默认图已停用或不存在”的组合。
+  // 保存路径会拦截，但读路径也必须兜底，否则 /api/config 会原样下发，
+  // 后台打开时下拉变空、保存其它字段就静默清掉默认背景。
+  if (defaultBackgroundId && !enabledBgIds[defaultBackgroundId]) defaultBackgroundId = ''
+
+  const unlock = Object.assign({}, fallback.unlock || {}, isObject(source.unlock) ? source.unlock : {})
+  const copy = Object.assign({}, fallback.copy || {}, isObject(source.copy) ? source.copy : {})
+  // 旧版本把“24 小时”写死在默认文案里；运营改 ttlHours 后会出现抽屉两套数字。
+  // 只精确迁移这一条历史默认文案，不动用户自定义文案。
+  if (copy.unlockDesc === '观看视频，解锁今晚的环境声音（24小时内有效）') {
+    copy.unlockDesc = '观看视频，解锁今晚的环境声音（' + (Number(unlock.ttlHours) || 24) + ' 小时内有效）'
+  }
+
   return {
     version: Number(source.version) || Number(fallback.version) || 1,
     audio,
-    unlock: Object.assign({}, fallback.unlock || {}, isObject(source.unlock) ? source.unlock : {}),
+    unlock,
     ads: normalizeAds(source.ads, fallback.ads),
-    backgrounds: normalizeBackgrounds(source.backgrounds, fallback.backgrounds),
-    defaultBackgroundId:
-      typeof source.defaultBackgroundId === 'string'
-        ? source.defaultBackgroundId
-        : typeof fallback.defaultBackgroundId === 'string'
-          ? fallback.defaultBackgroundId
-          : '',
+    backgrounds,
+    defaultBackgroundId,
     backgroundUnlockHours:
       Number(source.backgroundUnlockHours) ||
       Number(fallback.backgroundUnlockHours) ||
       DEFAULT_BACKGROUND_UNLOCK_HOURS,
     features: Object.assign({}, DEFAULT_FEATURES, fallback.features || {}, isObject(source.features) ? source.features : {}),
     cache: Object.assign({}, DEFAULT_CACHE, fallback.cache || {}, isObject(source.cache) ? source.cache : {}),
-    copy: Object.assign({}, fallback.copy || {}, isObject(source.copy) ? source.copy : {})
+    copy
   }
 }
 
@@ -337,7 +356,8 @@ function validateConfig(input, base) {
     unlockTitle: readText(copyInput.unlockTitle, '解锁标题', 20, false) || '解锁环境音',
     unlockDesc:
       readText(copyInput.unlockDesc, '解锁说明', 60, false) ||
-      '观看视频，解锁今晚的环境声音（24小时内有效）',
+      // 未自定义时跟随可配置的 ttlHours；写死 24 小时会和抽屉里的“解锁 N 小时”互相矛盾。
+      '观看视频，解锁今晚的环境声音（' + ttlHours + ' 小时内有效）',
     unlockConfirm: readText(copyInput.unlockConfirm, '确认按钮', 10, false) || '观看视频',
     unlockCancel: readText(copyInput.unlockCancel, '取消按钮', 10, false) || '先不用'
   }

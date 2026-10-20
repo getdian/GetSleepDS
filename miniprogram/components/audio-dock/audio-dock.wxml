@@ -20,7 +20,7 @@
         <view class="dock-sbar ds-3"></view>
         <view class="dock-sbar ds-4"></view>
       </view>
-      <text class="dock-mini-sub">{{playerSub || (playing ? '正在播放' : '已暂停')}}</text>
+      <text class="dock-mini-sub">{{loading ? '正在连接音频…' : (playerSub || (playing ? '正在播放' : '已暂停'))}}</text>
     </view>
   </view>
   <view class="dock-mini-ctrls">
@@ -111,7 +111,7 @@
           <text class="dock-tname">{{item.title}}</text>
           <text class="dock-tcat">{{item.category}}</text>
         </view>
-        <text class="dock-tstate">{{currentId === item.id ? (playing ? '播放中 · 点击暂停' : '已暂停 · 点击继续') : (item.cached ? '已缓存 · 点击播放' : '点击播放')}}</text>
+        <text class="dock-tstate">{{currentId === item.id ? (loading ? '正在连接音频…' : (playing ? '播放中 · 点击暂停' : '已暂停 · 点击继续')) : (item.cached ? '已缓存 · 点击播放' : '点击播放')}}</text>
       </view>
       <view class="dock-fav {{item.favorite ? 'is-on' : ''}}" data-id="{{item.id}}" catchtap="onToggleFavorite">
         {{item.favorite ? '♥' : '♡'}}

@@ -143,6 +143,21 @@ function createAdminRoute(options) {
         if (error.code === 'DB_UNAVAILABLE') throw dbUnavailable()
         throw error
       }
+      // 配置保存原先没有审计：误操作（清空环境音、关掉同步）无法追溯。
+      if (db.logAdminAction) {
+        try {
+          const config = saved.config || {}
+          await db.logAdminAction('admin_config_save', '-', {
+            version: config.version,
+            audioCount: (config.audio || []).length,
+            backgroundCount: (config.backgrounds || []).length,
+            defaultBackgroundId: config.defaultBackgroundId || '',
+            features: config.features || {}
+          })
+        } catch (e) {
+          log.error('[audit] admin_config_save failed:', e.message)
+        }
+      }
       res.json({
         config: saved.config,
         updatedAt: saved.updatedAt,
@@ -219,10 +234,14 @@ function createAdminRoute(options) {
       const current = now()
       let result = null
       try {
-        result = db.eraseUserData
-          ? await db.eraseUserData(openid, current)
-          : { records: await db.deleteRecords(openid), unlocks: 0, events: 0, erasedAt: current }
+        // fail-closed：能力缺失时不能假装写入了 erasure 水位，
+        // 否则面板会展示“已清除”，但用户下次同步仍会把记录全部传回来。
+        if (!db.eraseUserData) {
+          throw apiError('NOT_SUPPORTED', '当前存储不支持全量清除', 501)
+        }
+        result = await db.eraseUserData(openid, current)
       } catch (e) {
+        if (e && e.status) throw e
         throw dbUnavailable()
       }
       const tag = openidTag(openid)

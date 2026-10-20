@@ -36,6 +36,8 @@ Component({
     currentTitle: '',
     currentCategory: '',
     playing: false,
+    // 源已赋值但尚未真正起播（弱网/缓存文件损坏）时，文案显示“连接中”而不是“正在播放”
+    loading: false,
     playerSub: '',
     cacheText: '',
     cacheCount: 0,
@@ -59,6 +61,8 @@ Component({
       this._stopRequested = false
       this._playingFromCache = false
       this._currentTrack = null
+      // 本会话已判定损坏的缓存 URL：即使文件删除失败也不再命中，避免每轮循环重演“报错→回退”
+      this._badUrls = {}
       this._wasUnlocked = false
       // 广告看完了但本地有效期写入失败时，至少保证本次会话可用；
       // 否则抽屉显示“已解锁”、点曲目却重新弹解锁。
@@ -139,7 +143,7 @@ Component({
       this._pageVisible = true
       // 统计页“清除数据”会 stop 音频并清空 meta；回到入睡页时同步清掉残留迷你条
       if (storage.getMeta().lastTrackActive === false && this.data.currentId) {
-        this.setData({ currentId: '', currentTitle: '', currentCategory: '', playing: false, playerSub: '', timerRemainText: '' })
+        this.setData({ currentId: '', currentTitle: '', currentCategory: '', playing: false, loading: false, playerSub: '', timerRemainText: '' })
       }
       this.syncPlayerText()
     },
@@ -320,19 +324,31 @@ Component({
         play: () => {
           if (!this._alive) return
           playerState.clearFallback()
-          this.setData({ playing: true })
+          this.setData({ playing: true, loading: false })
+          // 系统侧恢复（通知栏/锁屏/耳机）与首次起播都走这里：
+          // 暂停事件已冻结倒计时，这里续剩余；没有运行中的倒计时才按偏好起表。
+          if (this.data.timerEnabled) {
+            audioTimer.arm(Number(storage.getMeta().audioTimerMinutes) || this.data.timerMinutes || 0)
+          }
           this.syncPlayerText()
         },
         pause: () => {
           if (!this._alive) return
-          this.setData({ playing: false })
+          // 系统侧暂停（通知栏/锁屏/耳机）不走 togglePlay，必须在这里冻结倒计时，
+          // 否则用户睡前从锁屏暂停后，定时仍会偷跑并在到点时把会话清掉。
+          audioTimer.pause()
+          this.setData({ playing: false, loading: false })
           this.syncPlayerText()
+        },
+        canplay: () => {
+          if (!this._alive) return
+          if (this.data.loading) this.setData({ loading: false })
         },
         stop: () => {
           if (!this._alive) return
           const stoppedByUser = this._stopRequested
           this._stopRequested = false
-          this.setData({ playing: false })
+          this.setData({ playing: false, loading: false })
           if (stoppedByUser) {
             this.setData({ currentId: '', currentTitle: '', playerSub: '' })
           }
@@ -356,8 +372,15 @@ Component({
           if (!this._alive) return
           if (this._playingFromCache && this._currentTrack) {
             this._playingFromCache = false
+            const badUrl = this._currentTrack.url
+            // 本地文件损坏后必须失效，否则每次 ended→replay 都会再次命中同一个坏文件，
+            // 形成“每轮循环静默卡顿一次”的循环；删除失败时用会话黑名单兜底。
+            this._badUrls[badUrl] = true
+            cache.remove(badUrl)
+            this.refreshCache()
+            this.setData({ loading: false })
             // 标记“正在回退”，让同时监听的 now-playing 不要把这次错误当终态。
-            playerState.markFallback(this._currentTrack.url)
+            playerState.markFallback(badUrl)
             storage.patchMeta({ lastTrackActive: true })
             this._audio.src = this._currentTrack.url
             return
@@ -370,6 +393,7 @@ Component({
             currentTitle: '',
             currentCategory: '',
             playing: false,
+            loading: false,
             playerSub: '',
             timerRemainText: ''
           })
@@ -385,6 +409,7 @@ Component({
       audio.onStop(handlers.stop)
       audio.onEnded(handlers.ended)
       audio.onError(handlers.error)
+      if (audio.onCanplay) audio.onCanplay(handlers.canplay)
     },
 
     offAudio() {
@@ -396,7 +421,8 @@ Component({
           ['offPause', 'pause'],
           ['offStop', 'stop'],
           ['offEnded', 'ended'],
-          ['offError', 'error']
+          ['offError', 'error'],
+          ['offCanplay', 'canplay']
         ]
         pairs.forEach((pair) => {
           if (typeof audio[pair[0]] !== 'function') return
@@ -452,6 +478,12 @@ Component({
       return null
     },
 
+    /** 命中缓存才返回本地路径；本会话判坏的 URL 一律走远程 */
+    peekCached(url) {
+      if (!url || this._badUrls[url]) return ''
+      return cache.peek(url, this._ttlDays)
+    },
+
     play(track, localPath) {
       if (!track.url || track.url.indexOf('https://') !== 0) {
         wx.showToast({ title: '音频地址未配置', icon: 'none' })
@@ -464,7 +496,7 @@ Component({
 
       this._stopRequested = false
       playerState.clearFallback()
-      const cached = localPath || cache.peek(track.url, this._ttlDays)
+      const cached = localPath || this.peekCached(track.url)
       this._currentTrack = track
       this._playingFromCache = !!cached
 
@@ -472,7 +504,9 @@ Component({
         currentId: track.id,
         currentTitle: track.title,
         currentCategory: track.category || '',
-        playing: true
+        playing: true,
+        // 源还没加载完；canplay/play 事件到达后清除，避免弱网下误显示“正在播放”
+        loading: true
       })
       this.syncPlayerText()
 
@@ -503,8 +537,9 @@ Component({
       }
       const track = this.findTrack(this.data.currentId)
       if (!track || !this._audio) return
-      const cached = cache.peek(track.url, this._ttlDays)
+      const cached = this.peekCached(track.url)
       this._playingFromCache = !!cached
+      this.setData({ loading: true })
       this._audio.title = '睡点 · ' + track.title
       this._audio.src = cached || track.url
     },
@@ -522,9 +557,10 @@ Component({
       if (!this._audio.src) {
         const track = this.findTrack(this.data.currentId)
         if (!track || !track.url) return
-        const cached = cache.peek(track.url, this._ttlDays)
+        const cached = this.peekCached(track.url)
         this._currentTrack = track
         this._playingFromCache = !!cached
+        this.setData({ loading: true })
         this._audio.title = '睡点 · ' + track.title
         this._audio.epname = '环境音'
         this._audio.singer = '睡点'
@@ -548,7 +584,7 @@ Component({
       // 停止本次播放，但保留“下次定时多久”的偏好
       audioTimer.clear(undefined, true)
       storage.patchMeta({ lastTrackActive: false })
-      this.setData({ currentId: '', currentTitle: '', currentCategory: '', playing: false, playerSub: '', timerRemainText: '' })
+      this.setData({ currentId: '', currentTitle: '', currentCategory: '', playing: false, loading: false, playerSub: '', timerRemainText: '' })
       if (this._audio) {
         try {
           this._audio.stop()
@@ -605,7 +641,7 @@ Component({
         .map((track) =>
           Object.assign({}, track, {
             favorite: favorites.indexOf(track.id) >= 0,
-            cached: !!cache.peek(track.url, this._ttlDays)
+            cached: !!this.peekCached(track.url)
           })
         )
       this.setData({ filteredTracks: list })
