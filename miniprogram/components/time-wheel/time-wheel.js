@@ -1,6 +1,7 @@
 /**
  * 自绘 12 小时时间轮：时 / 分 / 上午·下午。
- * 时、分各渲染 3 个周期，滚动停止后落在边界周期时无感跳回中间周期，形成循环。
+ * 时、分各渲染 2 个周期，滚动到首/尾缓冲行时无感跳回另一个周期，形成循环。
+ * 2 份比 3 份少 1/3 的 DOM 行与滚动高度，1 分钟粒度下分钟列从 180 行降到 120 行。
  * 视觉为立体滚筒（电表轮）：每行按其到滚筒中心的行距做 rotateX + 透视变形，
  * 越靠上下边缘越倾斜、越透明；中心行实时放大高亮。
  * 对外仍使用 24 小时 "HH:MM"，页面无需改算法。
@@ -9,8 +10,10 @@ const T = require('../../utils/time')
 
 const COMPONENT_WIDTH_RPX = 84
 const VISIBLE_ROWS = 5
-const CYCLES = 3
+const CYCLES = 2
 const CYCLE_HOURS = 12
+// 距离内容首/尾多少行时回中：至少覆盖上下两侧可视行，避免回中后顶部/底部露出空白
+const RECENTER_BUFFER = VISIBLE_ROWS
 // 滚筒造型参数
 const DRUM_ALPHA_DEG = 24 // 每行对应的圆心角，越大弧度越弯
 const DRUM_PERSPECTIVE_ROWS = 8 // 每行透视距离（rowH 的倍数），越小立体感越强
@@ -108,8 +111,9 @@ Component({
       }
 
       const p = this.parse(this.properties.value)
-      const hourTop = (12 + (p.h12 - 1)) * rowH
-      const minuteTop = (minuteCount + p.minute / minuteStep) * rowH
+      const hourTop = T.pickWheelRow(p.h12 - 1, CYCLE_HOURS, CYCLES, RECENTER_BUFFER) * rowH
+      const minuteTop =
+        T.pickWheelRow(p.minute / minuteStep, minuteCount, CYCLES, RECENTER_BUFFER) * rowH
       this._emittedH = p.h12
       this._emittedM = p.minute
       this._hourTarget = hourTop
@@ -210,12 +214,14 @@ Component({
       const minuteTopRaw = Number.isFinite(Number(this._lastMinuteTop))
         ? Number(this._lastMinuteTop)
         : this.data.minuteTop
-      const hourSnap = T.snapWheelTop(hourTopRaw, rowH, CYCLE_HOURS)
-      const minuteSnap = T.snapWheelTop(minuteTopRaw, rowH, minuteCount)
+      const hourSnap = T.snapWheelTop(hourTopRaw, rowH, CYCLE_HOURS, CYCLES)
+      const minuteSnap = T.snapWheelTop(minuteTopRaw, rowH, minuteCount, CYCLES)
       const h12 = hourSnap.index + 1
       const minute = minuteSnap.index * minuteStep
-      const hourTop = (12 + h12 - 1) * rowH
-      const minuteTop = (minuteCount + minute / minuteStep) * rowH
+      const hourTop =
+        T.pickWheelRow(hourSnap.index, CYCLE_HOURS, CYCLES, RECENTER_BUFFER) * rowH
+      const minuteTop =
+        T.pickWheelRow(minuteSnap.index, minuteCount, CYCLES, RECENTER_BUFFER) * rowH
 
       clearTimeout(this._hourTimer)
       clearTimeout(this._minuteTimer)
@@ -286,8 +292,9 @@ Component({
       const rowH = this._rowH
       const minuteStep = this.data.minuteStep || 1
       const minuteCount = this._minuteCount || Math.round(60 / minuteStep)
-      const hourTop = (12 + (p.h12 - 1)) * rowH
-      const minuteTop = (minuteCount + p.minute / minuteStep) * rowH
+      const hourTop = T.pickWheelRow(p.h12 - 1, CYCLE_HOURS, CYCLES, RECENTER_BUFFER) * rowH
+      const minuteTop =
+        T.pickWheelRow(p.minute / minuteStep, minuteCount, CYCLES, RECENTER_BUFFER) * rowH
       clearTimeout(this._hourTimer)
       clearTimeout(this._minuteTimer)
       this._hourTarget = hourTop
@@ -387,10 +394,8 @@ Component({
       const nextM = isHour ? this.data.selM : idx * minuteStep
       const changed = isHour ? (nextH !== this._emittedH) : (nextM !== this._emittedM)
 
-      // 越过首尾周期时无感回到中间周期，保持同一数值
-      if (raw < cycleCount || raw >= cycleCount * 2) {
-        raw = cycleCount + idx
-      }
+      // 接近首/尾缓冲行时切到另一个周期副本；目标行的数字与当前完全相同，视觉无跳变
+      raw = T.recenterWheelRow(raw, cycleCount, CYCLES, RECENTER_BUFFER)
       if (isHour) this._hourTarget = raw * rowH
       else this._minuteTarget = raw * rowH
 

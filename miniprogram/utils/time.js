@@ -92,12 +92,39 @@ function circularMeanMinutes(values) {
   return Math.round((deg * 1440) / 360) % 1440
 }
 
-/** 把 scroll-top 吸附到最近的循环行；返回 3 周期内的 raw 与单周期 index */
-function snapWheelTop(top, rowH, count) {
+/** 把 scroll-top 吸附到最近的循环行；默认 3 份循环，兼容旧调用 */
+function snapWheelTop(top, rowH, count, copies) {
   const rows = Math.max(1, Number(count) || 1)
   const height = Number(rowH) || 1
-  const raw = Math.max(0, Math.min(rows * 3 - 1, Math.round((Number(top) || 0) / height)))
+  const total = rows * Math.max(2, Number(copies) || 3)
+  const raw = Math.max(0, Math.min(total - 1, Math.round((Number(top) || 0) / height)))
   return { raw, index: raw % rows }
+}
+
+/**
+ * 2 份循环的“无缝回中”：滚到首/尾 buffer 行内时，±一个周期。
+ * 新位置上的数字与旧位置完全相同，所以视觉上看不出跳变，却能继续朝同一方向滚。
+ */
+function recenterWheelRow(raw, cycleCount, copies, buffer) {
+  const rows = Math.max(1, Number(cycleCount) || 1)
+  const total = rows * Math.max(2, Number(copies) || 2)
+  const guard = Math.max(0, Math.min(Number(buffer) || 0, Math.floor(rows / 2)))
+  let row = Math.max(0, Math.min(total - 1, Math.round(Number(raw) || 0)))
+  if (row < guard) row += rows
+  else if (row >= total - guard) row -= rows
+  return Math.max(0, Math.min(total - 1, row))
+}
+
+/** 选中某个 index 时，优先选一个上下都留有滚动空间的周期副本 */
+function pickWheelRow(index, cycleCount, copies, buffer) {
+  const rows = Math.max(1, Number(cycleCount) || 1)
+  const total = rows * Math.max(2, Number(copies) || 2)
+  const guard = Math.max(0, Math.min(Number(buffer) || 0, Math.floor(rows / 2)))
+  const idx = ((Math.round(Number(index) || 0) % rows) + rows) % rows
+  if (total <= rows) return idx
+  if (idx < guard) return Math.min(total - 1, rows + idx)
+  if (idx >= rows - guard) return idx
+  return Math.min(total - 1, rows + idx)
 }
 
 /** a 相对 b 的有符号分钟差，范围 (-720, 720]，正值表示更晚 */
@@ -122,7 +149,9 @@ module.exports = {
   minutesOf,
   parseClock,
   clockTs,
+  snapWheelTop,
+  recenterWheelRow,
+  pickWheelRow,
   circularMeanMinutes,
-  clockDelta,
-  snapWheelTop
+  clockDelta
 }

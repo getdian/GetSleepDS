@@ -24,7 +24,15 @@ function guidanceOf(cycles) {
       tone: 'long',
       label: '偏长',
       hours,
-      note: count + ' 个周期约 ' + hoursText(hours) + '，高于成人 ' + ADULT_MIN_HOURS + '–' + ADULT_MAX_HOURS + ' 小时建议'
+      note:
+        count +
+        ' 个周期约 ' +
+        hoursText(hours) +
+        '；高于成人常见区间 ' +
+        ADULT_MIN_HOURS +
+        '–' +
+        ADULT_MAX_HOURS +
+        ' 小时'
     }
   }
   if (hours >= 6) {
@@ -33,14 +41,30 @@ function guidanceOf(cycles) {
       label: '偏短',
       hours,
       // 文案按真实时长生成：后台若调整周期档位，不能继续写死“约 6 小时”
-      note: count + ' 个周期约 ' + hoursText(hours) + '，低于成人 ' + ADULT_MIN_HOURS + '–' + ADULT_MAX_HOURS + ' 小时建议'
+      note:
+        count +
+        ' 个周期约 ' +
+        hoursText(hours) +
+        '；成人常见睡眠时长为 ' +
+        ADULT_MIN_HOURS +
+        '–' +
+        ADULT_MAX_HOURS +
+        ' 小时'
     }
   }
   return {
     tone: 'low',
     label: '不足',
     hours,
-    note: count + ' 个周期约 ' + hoursText(hours) + '，明显不足，仅作极限参考'
+    note:
+      count +
+      ' 个周期约 ' +
+      hoursText(hours) +
+      '；成人常见睡眠时长为 ' +
+      ADULT_MIN_HOURS +
+      '–' +
+      ADULT_MAX_HOURS +
+      ' 小时，仅作极限参考'
   }
 }
 
@@ -51,7 +75,7 @@ function isLateNight(timestamp) {
 }
 
 function lateNote() {
-  return '晚睡会压缩后半夜 REM；建议保证 7 小时以上'
+  return '后半夜 REM 更集中，晚睡会压缩恢复性睡眠'
 }
 
 module.exports = {

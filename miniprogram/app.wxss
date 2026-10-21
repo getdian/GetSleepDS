@@ -7,11 +7,7 @@
 page {
   /* 睡眠暗夜色盘 */
   --bg-cosmic: #080B14;
-  --bg-night-primary: #0C101D;
   --bg-night-surface: #141B2D;
-  --bg-aurora-1: #18223C;
-  --bg-aurora-2: #0C101D;
-  --bg-aurora-3: #080B14;
 
   /* 琉璃毛玻璃 */
   /* 不支持 backdrop-filter 时，0.8 的半透明底仍能保证可读 */
@@ -27,10 +23,8 @@ page {
   /* 主色与点缀 */
   --color-primary: #818CF8;
   --color-primary-soft: #A7A4FF;
-  --color-primary-dark: #4F46E5;
   --color-accent-moon: #FDE68A;
   --color-calm-teal: #2DD4BF;
-  --color-danger-soft: #F87171;
 
   /* 文字阶度 */
   --text-moon-pure: #F8FAFC;
@@ -67,25 +61,16 @@ page {
   --z-overlay: 160;
 
   /* 圆角 */
-  --radius-sm: 16rpx;
   --radius-md: 24rpx;
-  --radius-lg: 32rpx;
   --radius-xl: 48rpx;
   --radius-pill: 999rpx;
-
-  /* 间距 */
-  --space-1: 8rpx;
-  --space-2: 16rpx;
-  --space-3: 24rpx;
-  --space-4: 32rpx;
-  --space-6: 48rpx;
-  --space-8: 64rpx;
 
   /* 动效 */
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --ease-gentle: cubic-bezier(0.4, 0, 0.2, 1);
   --glass-blur: blur(24rpx) saturate(160%);
   --shadow-moon: 0 16rpx 48rpx rgba(0, 0, 0, 0.45);
+  /* 时间轮边缘渐隐已由行内 opacity 完成，不再保留死 token */
 
   /* 字体 */
   --font-cn-serif: "Songti SC", "SimSun", "Source Han Serif CN", "STSong", serif;
@@ -100,8 +85,6 @@ page {
   --heat-4: #B4BEFF;
   --heat-5: #E0E7FF;
 
-  /* 时间轮边缘渐隐 */
-  --wheel-fade: rgba(8, 11, 20, 0.88);
   --scrim: rgba(8, 11, 20, 0.86);
 
   background-color: var(--bg-cosmic);

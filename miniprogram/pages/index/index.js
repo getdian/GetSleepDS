@@ -293,8 +293,8 @@ Page({
           note = mainGuide.note
         } else if (mainGuide.tone !== 'ok' && mainLate) {
           note =
-            (mainGuide.tone === 'low' ? '不足' : '偏短') +
-            '且入睡较晚：优先提前上床，保证 7 小时以上'
+            (mainGuide.tone === 'low' ? '时长不足' : '时长偏短') +
+            '且入睡较晚；成人常见睡眠时长为 7–9 小时'
         } else if (mainGuide.tone !== 'ok') {
           note = mainGuide.note
         } else if (mainLate) {

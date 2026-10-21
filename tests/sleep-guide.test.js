@@ -22,7 +22,7 @@ test('5/4/3 个周期分别给出推荐、偏短、不足', () => {
   assert.equal(low.label, '不足')
   assert.equal(low.hours, 4.5)
   assert.match(low.note, /4\.5 小时/)
-  assert.match(low.note, /明显不足/)
+  assert.match(low.note, /7–9 小时/)
   assert.match(low.note, /仅作极限参考/)
 })
 
@@ -31,7 +31,7 @@ test('文案按真实时长生成，周期档位变化不会写死旧数字', ()
   assert.equal(tenHalf.tone, 'long')
   assert.equal(tenHalf.label, '偏长')
   assert.match(tenHalf.note, /10\.5 小时/)
-  assert.match(tenHalf.note, /高于成人 7–9 小时建议/)
+  assert.match(tenHalf.note, /高于成人常见区间 7–9 小时/)
   assert.doesNotMatch(tenHalf.note, /低于/)
 
   const two = G.guidanceOf(2)

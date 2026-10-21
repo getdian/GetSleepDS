@@ -1,13 +1,9 @@
 /* 首页局部设计 token：只作用于计算器页，不改其他页面的全局色板 */
 .calc-page {
-  --c-primary: #8B87FF;
   /* 与全局 --color-primary-soft 同值：本页历史上自建过一套局部 token，
      保留变量名兼容既有引用，值必须与 app.wxss 保持一致 */
   --c-primary-soft: var(--color-primary-soft, #A7A4FF);
-  --c-text: rgba(255, 255, 255, 0.96);
-  --c-text-2: rgba(255, 255, 255, 0.72);
   --c-text-3: rgba(255, 255, 255, 0.52);
-  --c-border: rgba(255, 255, 255, 0.07);
   position: relative;
   z-index: var(--z-page, 1);
   padding-top: 8rpx;

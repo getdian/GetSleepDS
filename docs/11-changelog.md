@@ -1,5 +1,12 @@
 # 睡点 · 关键更新记录
 
+## 2026-10-21 · 时间轮 2 份循环 + 睡眠提示陈述化 + token 清理
+
+- **时间轮减负**：时/分从 3 份循环降到 2 份，分钟列 180→120 行、滚动高度少 1/3，保留 1 分钟粒度；接近首尾 5 行时切到另一份，数字不变、视觉无跳。回中/初始选点抽成 `recenterWheelRow/pickWheelRow` 纯函数并补单测。
+- **提示陈述化**：结果页“低于成人 7–9 小时建议”改为“成人常见睡眠时长为 7–9 小时”；晚睡提示去掉“建议保证”，改为“后半夜 REM 更集中，晚睡会压缩恢复性睡眠”；“偏短且入睡较晚”改为陈述句。徽标“推荐/偏短/不足/偏长”保留，仅表达相对区间。
+- **token 清理**：删除无引用的 `--bg-aurora-*`、`--bg-night-primary`、`--wheel-fade`、`--color-danger-soft`、`--color-primary-dark`、`--radius-sm/lg`、`--space-*`，以及首页局部 `--c-primary/--c-text/--c-text-2/--c-border`；统一保留在用的 `--radius-md/xl/pill`、`--bg-cosmic`、`--bg-night-surface`、`--scrim`。
+- 验证：`node --test tests/time.test.js tests/sleep-guide.test.js` 10/10；`npm test` 155 项 / 154 通过 / 1 PG skip；`npm run check` 通过；未真机验证时间轮 2 份循环的实际滚动手感。
+
 ## 2026-10-21 · 落地页备案与主体信息收敛
 
 - **备案**：页脚替换占位号为正式备案信息——工信部备案号 `粤ICP备2026037774号-3`（链接 `https://beian.miit.gov.cn/`）、公安备案号 `粤公网安备44030002013825号`（链接 `https://beian.mps.gov.cn/#/query/webSearch?code=44030002013825`）；均 `target="_blank" rel="noopener noreferrer"`。

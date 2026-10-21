@@ -23,6 +23,34 @@ test('时间轮 scroll-top 吸附到最近循环行', () => {
   assert.equal(T.snapWheelTop(42 * 35, 42, 12).index, 11)
 })
 
+test('2 份循环在首尾缓冲行无缝回中，1 分钟粒度仍连续', () => {
+  // 分钟：0 行回到第二份的 60 行（同为 00 分），119 行回到第一份的 59 行
+  assert.equal(T.recenterWheelRow(0, 60, 2, 5), 60)
+  assert.equal(T.recenterWheelRow(119, 60, 2, 5), 59)
+  assert.equal(T.recenterWheelRow(60, 60, 2, 5), 60)
+  // 小时：首尾同理
+  assert.equal(T.recenterWheelRow(0, 12, 2, 5), 12)
+  assert.equal(T.recenterWheelRow(23, 12, 2, 5), 11)
+  // 初始选中优先放在上下都有余量的那一份
+  assert.equal(T.pickWheelRow(0, 60, 2, 5), 60)
+  assert.equal(T.pickWheelRow(59, 60, 2, 5), 59)
+  assert.equal(T.pickWheelRow(28, 60, 2, 5), 88)
+  assert.equal(T.snapWheelTop(42 * 119, 42, 60, 2).raw, 119)
+})
+
+test('任意分钟/小时初始位置都留有上下滚动余量', () => {
+  for (let m = 0; m < 60; m += 1) {
+    const raw = T.pickWheelRow(m, 60, 2, 5)
+    assert.equal(raw % 60, m)
+    assert.ok(raw >= 5 && raw < 115, 'minute ' + m + ' -> ' + raw)
+  }
+  for (let h = 0; h < 12; h += 1) {
+    const raw = T.pickWheelRow(h, 12, 2, 5)
+    assert.equal(raw % 12, h)
+    assert.ok(raw >= 5 && raw < 19, 'hour ' + h + ' -> ' + raw)
+  }
+})
+
 test('跨午夜的平均时间用圆均值', () => {
   assert.equal(T.circularMeanMinutes([23 * 60 + 50, 10]), 0)
   assert.equal(T.circularMeanMinutes([23 * 60 + 50, 23 * 60 + 55, 20]), 2)
