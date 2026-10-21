@@ -3,6 +3,7 @@ const F = require('../../utils/format')
 const P = require('../../utils/plan')
 const S = require('../../utils/stats')
 const reminder = require('../../utils/reminder')
+const tabbar = require('../../utils/tabbar')
 const storage = require('../../utils/storage')
 const { syncNow } = require('../../utils/sync')
 const events = require('../../utils/events')
@@ -420,6 +421,9 @@ Page({
     }
     this._pending = pending
     this._endBaseDay = T.startOfDay(now)
+    // 自定义 tabBar 可能由微信渲染在页面之上，仅靠 z-index 压不住；
+    // 打开结束面板时主动隐藏，关闭后恢复（与抽屉/背景选择器同一套机制）。
+    this.hideTabbarForSheet()
     this.setData(
       {
         endShow: true,
@@ -429,6 +433,14 @@ Page({
       },
       () => this.computeEndSheet()
     )
+  },
+
+  /** 首帧 tabBar 可能尚未挂载：立即隐藏一次，下一拍再补一次 */
+  hideTabbarForSheet() {
+    tabbar.hide()
+    setTimeout(() => {
+      if (this._alive && this.data.endShow) tabbar.hide()
+    }, 60)
   },
 
   computeEndSheet() {
@@ -464,6 +476,7 @@ Page({
   onEndCancel() {
     this._editingDay = ''
     this._editingSessionId = ''
+    tabbar.show()
     this.setData({ endShow: false, endError: '' })
   },
 
@@ -478,6 +491,7 @@ Page({
     this._editingDay = day
     this._editingSessionId = id
     this._endBaseDay = T.startOfDay(session.endAt)
+    this.hideTabbarForSheet()
     this.setData(
       {
         endShow: true,
@@ -510,6 +524,7 @@ Page({
       }
       this._editingDay = ''
       this._editingSessionId = ''
+      tabbar.show()
       this.setData({ endShow: false, endError: '' })
       this.refresh()
       wx.showToast({ title: '时间已更新', icon: 'none' })
@@ -519,6 +534,7 @@ Page({
 
     const pending = this._pending || storage.getPending()
     if (!pending) {
+      tabbar.show()
       this.setData({ endShow: false })
       this.refresh()
       return
@@ -538,6 +554,7 @@ Page({
     reminder.cancel(pending.id).catch(() => {})
     const cleared = storage.clearPending()
     this._pending = null
+    tabbar.show()
     this.setData({ endShow: false, endError: '' })
     this.refresh()
     wx.showToast({ title: cleared ? '已记录，可随时校准' : '已记录（会话清理稍后重试）', icon: 'none' })
