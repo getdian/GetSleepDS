@@ -87,20 +87,20 @@ tests/            Node 纯逻辑测试
 
 ## 4. 数据与同步
 
-- 本地记录按睡眠日存 `sleep:records:v1`，一条夜间睡眠一条记录；`pending` 是进行中会话。
+- 本地记录存 `sleep:records:v1`，按**醒来日**归档（v2：`records[day].sessions[]`，一天可多段）；`pending` 是进行中会话。
 - **云备份默认关闭**（`meta.syncEnabled !== true` 时 `syncNow` 直接跳过，不发任何请求）；用户在统计页显式开启后，才用静默 `wx.login → openid` 归属上传，不获取头像/昵称/手机号。
-- 服务端 `sleep_records` 主键 `(openid, day)`；`/api/records/sync` 幂等 upsert，`day` 由 `bedAt` 重算，单条脏记录丢弃并返回 `dropped`，不再整批 400。
+- 服务端 `sleep_records` 主键 `(openid, day)`；`/api/records/sync` 幂等 upsert：v2 记录 `day` 由主睡眠 `wakeAt` 重算、v1 记录仍按 `sleepDayOf(bedAt)`，单条脏记录丢弃并返回 `dropped`，不再整批 400；`includeAll` 类型校验在写库前完成。
 - 云备份客户端按每片 60 条分片、覆盖最近 400 天；服务端单次上限 62 条。
 - 删除：`sleep_record_deletions` 存单日墓碑，`user_erasures` 存全量清除水位；客户端上传 `deletedDays`，并接收服务端墓碑/水位清理本机旧记录。
 - `POST /api/records/erase` 删除该 openid 的睡眠记录、解锁与事件并写 erasure 水位，客户端成功后才清本地；清除前发出的在途 sync 由 `syncEpoch` 丢弃。
 - 客服/合规：`GET /api/admin/users/:openid` 查询、`DELETE /api/admin/users/:openid/records` 删除；后台“用户数据”面板，删除记审计日志（openid 哈希前缀，不落明文）。
 - 取消/撤销：B 态撤销只清 pending；C 态撤销写本地墓碑并在下次 sync 上传 `deletedDays`，云端按日删除。
-- 当前**不支持**一天多次睡眠（午休）作为独立记录；C 态在 18:00 后提供“再记今晚（覆盖旧记录）”入口，先行解锁主流程；独立 `nap` 实体仍是下一迭代。
+- 一天多次睡眠：完成态可「再记一段（现在开始计时）」或「补记一段已发生」，新段追加不覆盖；每段可单独改时间，保存前按时间区间（跨全表）挡重叠。尚未引入独立的 `nap` 类型字段。
 
 ## 5. 当前验证基线
 
-- `npm test`：**148 项 / 147 通过 / 0 失败**（1 个 PG 集成用例在未设置 `PG_TEST_URL` 时跳过）。
-- `npm run check`：3 页面 / 21 JSON / 16 WXML / 17 WXSS，主包约 396.1 KB（以最新输出为准）。
+- `npm test`：**182 项 / 181 通过 / 0 失败 / 1 skip**（PG 集成用例在未设置 `PG_TEST_URL` 时跳过）。
+- `npm run check`：3 页面 / 21 JSON / 16 WXML / 17 WXSS，主包约 432.7 KB（以最新输出为准）。
 - 交付包：`release-artifacts/getsleep-L4-20261021.zip`（223 文件 / 2.51 MB，含 `RELEASE-MANIFEST.json` 与逐文件 sha256）。
 - 分享归因冒烟（2026-10-19，内存模式）：`app_open` 带 `1007|pages/index/index|share` 上报 → `/api/admin/analytics` 的 `topSources` 聚合出现；`/api/share/qrcode` 无 code 返 400、密钥不可用返 503，均为优雅报错。
 - 微信开发者工具（AppID `wx378b0a7437d60998`）：三页真实编译；热力图滚到最新周；C 态“覆盖今晚”渲染；控制台无 error；实际触发 `/api/records/sync` 返回 20 条并带 `deletedDays/erasedAt`。
@@ -122,7 +122,7 @@ tests/            Node 纯逻辑测试
 2. **真机未验收**：DevTools 已跑通，但锁屏续播、耳机/来电中断、激励视频、真实 COS 上传仍需真机；`sleep.qfmaster.com` 尚未部署，当前 SSL 不可用。
 3. **后台改密码未实现**：当前改 `.env` 的 `ADMIN_PASSWORD` 并重启；不建议开放明文改文件。要做需“DB 存 scrypt 哈希 + 当前密码校验 + 会话失效/审计”，属于安全改造，不能半套（ADR-013）。
 4. **大模型未接入**：当前 `/api/summary` 是模板，稳定、零调用成本、合规；LLM 仅适合可选润色，默认关闭，需超时/禁词/降级。
-5. **午休/多次睡眠未支持**：当前只提供 C 态“覆盖今晚”解锁主流程；独立 `nap` 记录（start/end/kind）不混入夜间均值/连续天数，仍是下一迭代。
+5. **午休/多次睡眠**：已支持一天多段（v2 `records[day].sessions[]`，主睡眠取最长一段进热力图/连续天数，`totalDurationMin` 为当天总睡眠）；未做独立的 `nap` 类型字段，跨天段由客户端按“醒来日”拆到各自记录（一段只归一个醒来日）。
 6. **H5 仍是旧结构**：`/demo/` 已修空播放条、全过期展示和解锁 TTL 读取，但仍是旧三屏结构；三 tab + audio-dock 待重做。
 7. **单实例**：限流、配置缓存、事件都在进程内；扩容前换共享存储。
 8. **音频后台边界**：定时器已持久化并在 onShow/onEnded 重新校时，但 iOS 完全冻结 JS 时无法保证毫秒级准点；3 分钟音频的锁屏循环仍需真机验证，不能仅凭开发者工具下结论。
@@ -135,6 +135,7 @@ tests/            Node 纯逻辑测试
 15. **2026-10-20 深审修复轮**：音频双 onError 状态机、统计事实回顾本地兜底、同步合并批量化、后台无数据用户清除水位、海报超时/睡眠会话清理/缓存并发/广告塌陷/后台存储 503/默认背景停用等 19 项已修复，详见 changelog。新增 `player-state`、`audio-cache`、`sync-merge`、`storage-settings` 回归测试。仍待真机：锁屏/通知栏停止后恢复、同一 `src` 重赋值循环、来电中断倒计时。
 16. **2026-10-21 L4 收口**：音频幽灵播放态 / ended 双写、后台配置并发覆盖、存储过滤回写丢历史、计算器重算推后一天、统计页重复全量刷新与热力图强制 seek、时间轮小幅拖动不回中、墓碑无回收、memory/PG 双实现不等价、无进程级异常兜底、音频 loading 无超时、折叠遮罩层级、`--color-primary-soft` 缺失与 Hero 压暗两套数值等 14 项已修复，详见 changelog 与 `docs/09-redesign.md` 的 token/层级表。门禁：`npm test` 147 通过 / 1 skip、`npm run check` 通过、开发者工具 390×844 三页 + 抽屉 + 熄灯遮罩截图复核、打包 `getsleep-L4-20261021.zip`。仍待真机：杀进程重进不出现幽灵播放态、短音源循环只重播一次、时间轮拖动回中、展开迷你条后第一次点 tab 直切页。
 17. **层级实现事实（2026-10-21 实拍校正）**：自定义 tabBar 渲染在**独立 root**，页面级 `z-index` 无法覆盖它；需要隐藏悬浮胶囊时只能调用 `utils/tabbar.hide()`（audio-dock / background-picker 已这么做）。`pages/sleep` 的「晚安」熄灯遮罩是 1.6s 瞬时层，页面 z-index 提到 150 只保证盖住页面内浮层，tabBar 仍可见，属预期。
+18. **睡眠段复审修复（2026-10-21）**：结束/补记/编辑三条保存路径曾因把 `sessions.rangeForDay` 误写成 `stats.rangeForDay` 全部失效（P0），已修并新增 `tests/sleep-page.test.js` 页面级冒烟；同时补跨天重叠检测（`sessions.findOverlap`，页面预检 + `saveSession`/`updateSession` 三处）、把“忘记结束超 24h”的入睡日固定为打卡日并允许改醒来日（`sessions.rangeBetween`）、30 秒时钟拆成轻量 `refreshClock()`、日期上限随自然日刷新、超时提示按 pending 去重、保存/同步反馈统一。服务端 `/records/sync` 的 `includeAll` 校验前置到写库前。服务端仍只校验单条记录内部的段重叠，跨天重叠以客户端为准。详见 changelog。
 
 ## 8. 快速命令
 

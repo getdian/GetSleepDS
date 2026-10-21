@@ -1,5 +1,16 @@
 # 睡点 · 关键更新记录
 
+## 2026-10-21 · 睡眠段复审修复（结束/补记不可保存 · 跨天重叠 · 超 24h 校准）
+
+- **P0 修复**：`pages/sleep` 结束面板把 `rangeForDay` 写成 `stats.rangeForDay`，而它只在 `utils/sessions.js` 里 → `computeEndSheet()` 必抛 TypeError，`_endBedAt/_endWakeAt` 恒为 0，「记录起床 / 补记 / 修改睡眠段」三条保存路径全部静默失效。改为直接依赖 `sessions`（`rangeForDay/rangeBetween/findOverlap`），并新增页面级冒烟测试覆盖页面真实代码。
+- **P1 跨天重叠**：新增 `sessions.findOverlap(records, startAt, endAt, { id })`，`saveSession`/`updateSession`/页面预检都改成按时间区间查全表（导出 `overlaps`）。原来只查“醒来日”那条记录，3/4 22:00–23:30 与 3/4 22:30→3/5 07:00 会分别计入两天；编辑时按 session id 排除自身。
+- **P1 忘记结束超 24h**：结束面板的入睡日改为取 `pending.bedAt` 的真实日期，新增 `rangeBetween()` 显式组合“入睡日 + 醒来日”，不再靠“入睡钟点≥起床钟点就回退一天”（两天前 23:00 会被压成昨天 23:00）。超 24h 时显示只读「入睡 10月19日」+ 可选「醒来日」日期行，默认入睡次日 + 常用起床时间（未到则退回当前时间），顺序不对直接报“入睡时间需早于起床时间”，不再静默回退。
+- **P1 附带**：`updateSession` 把旧 v1 记录迁到已有记录的醒来日时改为合并（原来直接覆盖，会丢掉那天已有的段）。
+- **P2**：`endToday` 随自然日刷新（tab 页常驻跨午夜后补记选不到“今天”）；30 秒时钟拆成 `refreshClock()`（只更新时间/已睡/超时文案），跨自然日才升级为 `refreshAll()`，`pruneStalePending` 复用已读到的 pending；超 24h 提示按 pending 去重，不再每 30 秒消失再出现。
+- **P3**：保存收尾抽 `finishSave` + `closeSheet` + `syncAfterSave`/`reportSyncResult`（补记与编辑都能看到“云端校验未通过/稍后重试”）；计时结束的 session `source` 改为 `checkin`（补记仍为 `manual`）；`canOverwrite/onOverwriteTonight` 更名 `canAddSession`/直接绑 `onAddSession`；关闭按钮视觉 56rpx、`::after` 补到 80rpx 命中区；结算行允许换行，避免超时态多一段文案挤压。
+- **服务端**：`/records/sync` 的 `includeAll` 类型校验前置到写库（及换取 openid）之前，非法值不再“先写入再 400”。
+- 验证：`npm test` 182 项 / 181 通过 / 1 PG skip（新增 sessions 3 条、storage 3 条、sleep 页面级 6 条）；`npm run check` 通过；未真机验证超时 pending 的日期选择与新关闭热区手感。
+
 ## 2026-10-21 · 手动补记一段 + 睡眠段修改入口
 
 - 新增「补记一段（已发生）」：完成态和空闲态均可进入；选择醒来日 + 入睡/起床时间，直接落 v2 session，不创建 pending、不启动计时、不触发提醒。

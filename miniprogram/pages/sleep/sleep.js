@@ -2,6 +2,9 @@ const T = require('../../utils/time')
 const F = require('../../utils/format')
 const P = require('../../utils/plan')
 const S = require('../../utils/stats')
+// 睡眠段（rangeForDay/rangeBetween/findOverlap）在 sessions 里，不在 stats：
+// stats 只做按天聚合的门面，别把“段”的逻辑混进来。
+const X = require('../../utils/sessions')
 const reminder = require('../../utils/reminder')
 const tabbar = require('../../utils/tabbar')
 const storage = require('../../utils/storage')
@@ -41,8 +44,10 @@ Page({
     endMode: 'pending',
     endDate: '',
     endDateText: '',
+    endDateMin: '',
+    endStartDateText: '',
+    endStale: false,
     endToday: '',
-    endMinDate: '',
     endBedTime: '',
     endWakeTime: '',
     endDayText: '',
@@ -53,8 +58,8 @@ Page({
     weekDays: [],
     weekCount: 0,
     streak: 0,
-    canOverwrite: false,
-    overwriteText: '再记今晚（覆盖今天旧记录）',
+    canAddSession: false,
+    overwriteText: '再记一段（现在开始计时）',
     footerText: '愿今夜好眠'
   },
 
@@ -66,15 +71,17 @@ Page({
     this._dimTimer = null
     this._noticeTimer = null
     this._clockTimer = null
+    this._staleNoticeKey = ''
     this._endBedAt = 0
     this._endWakeAt = 0
     this._endBaseDay = 0
+    this._endStartDay = 0
     const now = Date.now()
     this.setData({
       endToday: T.dateKey(now),
-      endMinDate: T.dateKey(T.addDays(now, -400))
+      endDateMin: T.dateKey(T.addDays(now, -400))
     })
-    this.refresh()
+    this.refreshAll()
     adSlots.apply(this)
   },
 
@@ -82,7 +89,7 @@ Page({
     this._alive = true
     const tabBar = this.getTabBar && this.getTabBar()
     if (tabBar) tabBar.setData({ selected: 1 })
-    this.refresh()
+    this.refreshAll()
     this.startClock()
     adSlots.apply(this)
     this.openPendingAudio()
@@ -128,7 +135,7 @@ Page({
   startClock() {
     this.stopClock()
     this._clockTimer = setInterval(() => {
-      if (this._alive) this.refresh()
+      if (this._alive) this.refreshClock()
     }, CLOCK_INTERVAL)
   },
 
@@ -139,11 +146,44 @@ Page({
     }
   },
 
-  refresh() {
+  /**
+   * 30 秒时钟：只刷新随时间变化的展示字段。
+   * 之前每 30 秒都跑一次 refresh()（全表读存储 + 周统计 + 30 多个字段 setData），
+   * 低端机切页/亮屏时容易掉帧。跨自然日才升级成全量刷新。
+   */
+  refreshClock() {
+    if (!this._alive) return
+    const now = Date.now()
+    if (T.dateKey(now) !== this.data.endToday) {
+      this.refreshAll()
+      return
+    }
+    const pending = this._pending
+    if (!pending) {
+      this.setData({ nowText: F.fmtClockTs(now) })
+      return
+    }
+    const expectedWakeAt = Number(pending.expectedWakeAt) || 0
+    const overdue = !!(expectedWakeAt && now > expectedWakeAt + 5 * 60 * 1000)
+    const slept = F.fmtDuration(Math.round((now - pending.bedAt) / 60000))
+    this.setData({
+      nowText: F.fmtClockTs(now),
+      orbTime: F.fmtClockTs(pending.bedAt),
+      orbMeta: '已睡 ' + slept,
+      buttonSub: '已睡 ' + slept,
+      overdue,
+      overdueText: overdue
+        ? '已超过预计起床 ' + F.fmtDuration(Math.round((now - expectedWakeAt) / 60000))
+        : '',
+      orbCaption: overdue ? '已超过预计起床，轻触结束并校准' : '轻触圆环，记录起床'
+    })
+    this.pruneStalePending(pending, now)
+  },
+
+  refreshAll() {
     if (!this._alive) return
     const now = Date.now()
     const records = storage.getRecords()
-    this.pruneStalePending(now)
 
     let pending = storage.getPending()
     // 记录已经保存、但 removeStorageSync 失败时，pending 会残留。
@@ -163,6 +203,7 @@ Page({
         pending = null
       }
     }
+    this.pruneStalePending(pending, now)
     // 新口径：一次睡眠归到醒来日，页面按自然日查今天的记录
     const todayKey = T.dateKey(now)
     let state = 'idle'
@@ -180,7 +221,7 @@ Page({
     const button = this.buildButton(state, pending, record)
     const weekly = S.weekly(records, now)
     // 多段记录：完成态始终可以再记一段，不再覆盖旧记录
-    const canOverwrite = state === 'done'
+    const canAddSession = state === 'done'
     const hour = new Date(now).getHours()
     const nowText = F.fmtClockTs(now)
     const sleeping = state === 'sleeping'
@@ -191,9 +232,18 @@ Page({
       ? '已超过预计起床 ' + F.fmtDuration(Math.round((now - expectedWakeAt) / 60000))
       : ''
 
+    // 跨自然日（tab 页常驻）后日期上限必须跟着走，否则补记选不到“今天”
+    const endToday = todayKey
+    const endDateText =
+      this.data.endShow && this.data.endMode !== 'edit' && this.data.endDate
+        ? this.dateTextOf(this.data.endDate)
+        : this.data.endDateText
+
     this.setData({
       dateText: F.fmtDateCN(now),
       greeting: F.greeting(now),
+      endToday,
+      endDateText,
       state,
       stateText: state === 'idle' ? '未记录' : sleeping ? '睡梦中' : '已完成',
       nowText,
@@ -244,9 +294,7 @@ Page({
       recordHint: done ? '' : sleeping ? '' : '只记录时间，不做睡眠评价',
       buttonTitle: button.title,
       buttonSub: button.sub,
-      canOverwrite,
-      // 与“补记一段”区分：这里会立刻开始一次新的计时
-      overwriteText: '再记一段（现在开始计时）',
+      canAddSession,
       weekDays: this.buildWeekDays(records, now, pending),
       weekCount: weekly.current.count,
       streak: weekly.streak,
@@ -307,19 +355,23 @@ Page({
     return days
   },
 
-  pruneStalePending(now) {
-    const pending = storage.getPending()
-    if (!pending) return
-    if (now - pending.bedAt > STALE_PENDING_MS) {
-      // 不再静默丢弃：保留 pending，让用户手动结束/校准，避免丢整晚记录
-      this.setData({
-        notice: '这次入睡已超过 24 小时，请点圆环结束并校准时间'
-      })
-      clearTimeout(this._noticeTimer)
-      this._noticeTimer = setTimeout(() => {
-        if (this._alive) this.setData({ notice: '' })
-      }, 8000)
+  /** 超过 24h 的 pending 不再静默清除；同一个 pending 只提示一次，避免 30 秒一闪 */
+  pruneStalePending(pending, now) {
+    if (!pending) {
+      this._staleNoticeKey = ''
+      return
     }
+    if (now - pending.bedAt <= STALE_PENDING_MS) return
+    const key = pending.id || 'bed-' + pending.bedAt
+    if (this._staleNoticeKey === key) return
+    this._staleNoticeKey = key
+    this.setData({
+      notice: '这次入睡已超过 24 小时，请点圆环结束并校准时间'
+    })
+    clearTimeout(this._noticeTimer)
+    this._noticeTimer = setTimeout(() => {
+      if (this._alive) this.setData({ notice: '' })
+    }, 8000)
   },
 
   onPrimaryTap() {
@@ -360,7 +412,7 @@ Page({
           return
         }
         this._pending = next
-        this.refresh()
+        this.refreshAll()
         return reminder.schedule(next).then(() => {
           wx.showToast({ title: '已设置到点提醒', icon: 'none' })
         })
@@ -398,7 +450,7 @@ Page({
       return false
     }
     this._pending = pending
-    this.refresh()
+    this.refreshAll()
     this.setData({ dim: true })
 
     if (wx.vibrateShort) wx.vibrateShort({ type: 'light' })
@@ -412,11 +464,25 @@ Page({
     return true
   },
 
-  /** 打开结束面板：默认现在起床，允许校准入睡/起床时间 */
+  /** 日期文案：今天/昨天加后缀，跨午夜后也不会停在旧口径 */
+  dateTextOf(key) {
+    const now = Date.now()
+    const today = T.dateKey(now)
+    const yesterday = T.dateKey(T.addDays(now, -1))
+    if (key === today) return F.fmtDayCN(key) + ' · 今天'
+    if (key === yesterday) return F.fmtDayCN(key) + ' · 昨天'
+    return F.fmtDayCN(key)
+  },
+
+  /**
+   * 打开结束面板：入睡日取自 pending 的真实打卡日，醒来日默认今天 + 当前时间。
+   * 忘记结束超过 24 小时时，醒来日改成“入睡日次日 + 常用起床时间”并显式可选，
+   * 否则两天前 23:00 的入睡会被算成昨天 23:00（时长/归属双错）。
+   */
   openEndSheet() {
     const pending = this._pending || storage.getPending()
     if (!pending) {
-      this.refresh()
+      this.refreshAll()
       return
     }
     const now = Date.now()
@@ -427,7 +493,14 @@ Page({
     this._pending = pending
     this._editingDay = ''
     this._editingSessionId = ''
-    this._endBaseDay = T.startOfDay(now)
+    const bedDay = T.startOfDay(pending.bedAt)
+    const stale = now - pending.bedAt > STALE_PENDING_MS
+    const wakeDay = stale ? T.addDays(bedDay, 1) : T.startOfDay(now)
+    let wakeTime = stale ? storage.getPrefs().wakeTime || '07:30' : F.fmtClockTs(now)
+    // 常用起床时间可能还没到（凌晨刚过 24h 时），不能默认一个未来时间
+    if (T.clockTs(wakeDay, T.parseClock(wakeTime)) > now) wakeTime = F.fmtClockTs(now)
+    this._endBaseDay = wakeDay
+    this._endStartDay = bedDay
     // 自定义 tabBar 可能由微信渲染在页面之上，仅靠 z-index 压不住；
     // 打开结束面板时主动隐藏，关闭后恢复（与抽屉/背景选择器同一套机制）。
     this.hideTabbarForSheet()
@@ -435,10 +508,13 @@ Page({
       {
         endShow: true,
         endMode: 'pending',
-        endDate: '',
-        endDateText: '',
+        endStale: stale,
+        endDate: T.dateKey(wakeDay),
+        endDateText: this.dateTextOf(T.dateKey(wakeDay)),
+        endDateMin: T.dateKey(bedDay),
+        endStartDateText: stale ? F.fmtDayCN(T.dateKey(bedDay)) : '',
         endBedTime: F.fmtClockTs(pending.bedAt),
-        endWakeTime: F.fmtClockTs(now),
+        endWakeTime: wakeTime,
         endError: ''
       },
       () => this.computeEndSheet()
@@ -454,13 +530,17 @@ Page({
     this._editingDay = ''
     this._editingSessionId = ''
     this._endBaseDay = T.startOfDay(now)
+    this._endStartDay = 0
     this.hideTabbarForSheet()
     this.setData(
       {
         endShow: true,
         endMode: 'manual',
+        endStale: false,
         endDate: today,
-        endDateText: F.fmtDayCN(today) + ' · 今天',
+        endDateText: this.dateTextOf(today),
+        endDateMin: T.dateKey(T.addDays(now, -400)),
+        endStartDateText: '',
         endBedTime: F.fmtClockTs(start),
         endWakeTime: F.fmtClockTs(now),
         endError: ''
@@ -472,11 +552,12 @@ Page({
   onEndDateChange(event) {
     const date = event.detail.value
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return
+    if (this.data.endMode === 'edit') return
     this._endBaseDay = T.parseDateKey(date)
     this.setData(
       {
         endDate: date,
-        endDateText: F.fmtDayCN(date) + (date === this.data.endToday ? ' · 今天' : '')
+        endDateText: this.dateTextOf(date)
       },
       () => this.computeEndSheet()
     )
@@ -492,34 +573,37 @@ Page({
 
   computeEndSheet() {
     const now = Date.now()
-    const todayBase = this._endBaseDay || T.startOfDay(now)
+    const wakeBase = this._endBaseDay || T.startOfDay(now)
     const bedMinutes = T.parseClock(this.data.endBedTime)
     const wakeMinutes = T.parseClock(this.data.endWakeTime)
-    const range = S.rangeForDay(todayBase, bedMinutes, wakeMinutes, now)
-    const wakeAt = range.wakeAt
-    const bedAt = range.bedAt
-    const durationMin = range.durationMin
+    // pending 的入睡日是打卡那一刻，精确到天；补记/编辑仍按“醒来日 + 跨午夜回退一天”
+    const range =
+      this.data.endMode === 'pending' && this._endStartDay
+        ? X.rangeBetween(this._endStartDay, bedMinutes, wakeBase, wakeMinutes, now)
+        : X.rangeForDay(wakeBase, bedMinutes, wakeMinutes, now)
     let error = ''
     if (range.error === 'future') error = '起床时间不能晚于现在'
     else if (range.error === 'short') error = '睡眠时长至少 1 分钟'
+    else if (range.error === 'order') error = '入睡时间需早于起床时间，请检查醒来日'
     else if (range.error === 'long') error = '单段睡眠不能超过 24 小时'
-    // 补记/结束都要先挡重叠，避免存不进去才报“写入失败”
-    if (!error && this.data.endMode !== 'edit') {
-      const target = storage.getRecords()[T.dateKey(wakeAt)]
-      if (
-        target &&
-        S.sessionsOf(target).some(
-          (item) => item.startAt < wakeAt && item.endAt > bedAt
-        )
-      ) {
+    // 补记/结束/编辑都要先挡重叠，避免存不进去才报“写入失败”。
+    // 必须按时间区间查全表：只看醒来日会漏掉前一天那段（跨天双计）。
+    if (!error) {
+      const excludeId =
+        this.data.endMode === 'edit'
+          ? this._editingSessionId
+          : this.data.endMode === 'pending' && this._pending
+            ? this._pending.id
+            : ''
+      if (X.findOverlap(storage.getRecords(), range.bedAt, range.wakeAt, { id: excludeId })) {
         error = '与已有睡眠段重叠，请调整时间'
       }
     }
-    this._endBedAt = bedAt
-    this._endWakeAt = wakeAt
+    this._endBedAt = range.bedAt
+    this._endWakeAt = range.wakeAt
     this.setData({
-      endDayText: F.fmtDayCN(T.dateKey(wakeAt)),
-      endDurationText: durationMin > 0 ? F.fmtDuration(durationMin) : '—',
+      endDayText: F.fmtDayCN(T.dateKey(range.wakeAt)),
+      endDurationText: range.durationMin > 0 ? F.fmtDuration(range.durationMin) : '—',
       endError: error
     })
   },
@@ -534,8 +618,15 @@ Page({
   onEndCancel() {
     this._editingDay = ''
     this._editingSessionId = ''
+    this._endStartDay = 0
     tabbar.show()
-    this.setData({ endShow: false, endError: '', endMode: 'pending' })
+    this.setData({
+      endShow: false,
+      endError: '',
+      endMode: 'pending',
+      endStale: false,
+      endStartDateText: ''
+    })
   },
 
   /** 编辑某一段：打开同一套结束面板，保存时走 updateSession */
@@ -549,13 +640,16 @@ Page({
     this._editingDay = day
     this._editingSessionId = id
     this._endBaseDay = T.startOfDay(session.endAt)
+    this._endStartDay = 0
     this.hideTabbarForSheet()
     this.setData(
       {
         endShow: true,
         endMode: 'edit',
+        endStale: false,
         endDate: '',
         endDateText: '',
+        endStartDateText: '',
         endBedTime: F.fmtClockTs(session.startAt),
         endWakeTime: F.fmtClockTs(session.endAt),
         endError: ''
@@ -587,21 +681,14 @@ Page({
         wx.showToast({ title: '修改未写入，请重试一次', icon: 'none' })
         return
       }
-      this._editingDay = ''
-      this._editingSessionId = ''
-      tabbar.show()
-      this.setData({ endShow: false, endError: '', endMode: 'pending' })
-      this.refresh()
-      wx.showToast({ title: '时间已更新', icon: 'none' })
-      syncNow(true).catch(() => {})
+      this.finishSave({ toast: '时间已更新' })
       return
     }
 
     const pending = this._pending || storage.getPending()
     if (!pending) {
-      tabbar.show()
-      this.setData({ endShow: false })
-      this.refresh()
+      this.closeSheet()
+      this.refreshAll()
       return
     }
     const record = storage.saveSession({
@@ -609,7 +696,8 @@ Page({
       startAt: this._endBedAt,
       endAt: this._endWakeAt,
       durationMin: Math.round((this._endWakeAt - this._endBedAt) / 60000),
-      source: 'manual',
+      // 与“补记”区分：这一段是点过入睡、计时结束的真实打卡
+      source: 'checkin',
       editedAt: Date.now()
     })
     if (!record) {
@@ -619,21 +707,51 @@ Page({
     reminder.cancel(pending.id).catch(() => {})
     const cleared = storage.clearPending()
     this._pending = null
+    this.finishSave({
+      toast: cleared ? '已记录，可随时校准' : '已记录（会话清理稍后重试）',
+      event: 'checkin'
+    })
+  },
+
+  /** 保存/编辑成功后的统一收尾：关面板、刷新、埋点、云端反馈 */
+  finishSave(options) {
+    const opts = options || {}
+    this._editingDay = ''
+    this._editingSessionId = ''
+    this._endStartDay = 0
+    this._staleNoticeKey = ''
+    this.closeSheet()
+    this.refreshAll()
+    if (opts.toast) wx.showToast({ title: opts.toast, icon: 'none' })
+    if (opts.event) events.track(opts.event, '')
+    this.syncAfterSave()
+  },
+
+  closeSheet() {
     tabbar.show()
-    this.setData({ endShow: false, endError: '', endMode: 'pending' })
-    this.refresh()
-    wx.showToast({ title: cleared ? '已记录，可随时校准' : '已记录（会话清理稍后重试）', icon: 'none' })
-    events.track('checkin', '')
+    this.setData({
+      endShow: false,
+      endError: '',
+      endMode: 'pending',
+      endStale: false,
+      endStartDateText: ''
+    })
+  },
+
+  /** 保存后同步：区分“跳过/云端拒收/网络失败”，不再只有补记分支有反馈 */
+  syncAfterSave() {
     syncNow(true)
-      .then((res) => {
-        if (res && res.skipped === 'stale') return
-        if (res && res.synced === 0 && res.dropped > 0) {
-          wx.showToast({ title: '记录已存本机，云端校验未通过', icon: 'none' })
-        }
-      })
+      .then((res) => this.reportSyncResult(res))
       .catch(() => {
-        wx.showToast({ title: '已记录，云端备份稍后重试', icon: 'none' })
+        wx.showToast({ title: '已存本机，云端稍后重试', icon: 'none' })
       })
+  },
+
+  reportSyncResult(res) {
+    if (!res || res.skipped === 'stale') return
+    if (res.synced === 0 && res.dropped > 0) {
+      wx.showToast({ title: '记录已存本机，云端校验未通过', icon: 'none' })
+    }
   },
 
   /** 手动补记一段：不创建 pending、不发提醒，直接落 v2 session */
@@ -652,14 +770,7 @@ Page({
       return
     }
     const day = T.dateKey(this._endWakeAt)
-    tabbar.show()
-    this.setData({ endShow: false, endError: '', endMode: 'pending' })
-    this.refresh()
-    wx.showToast({ title: '已补记 ' + F.fmtDayCN(day), icon: 'none' })
-    events.track('manual_sleep', '')
-    syncNow(true).catch(() => {
-      wx.showToast({ title: '已存本机，云端稍后重试', icon: 'none' })
-    })
+    this.finishSave({ toast: '已补记 ' + F.fmtDayCN(day), event: 'manual_sleep' })
   },
 
   /** 完成态再记一段：不覆盖已有记录，追加午休/间断睡眠 */
@@ -678,10 +789,6 @@ Page({
     })
   },
 
-  onOverwriteTonight() {
-    this.onAddSession()
-  },
-
   onUndoTap() {
     const record = this.data.record
     if (!record) return
@@ -696,7 +803,7 @@ Page({
           wx.showToast({ title: '撤销未完成，请重试（避免云端恢复）', icon: 'none' })
           return
         }
-        this.refresh()
+        this.refreshAll()
         // 把本地墓碑同步到云端，换机后也不会被旧记录回填
         syncNow(true).catch(() => {})
       }
@@ -719,7 +826,7 @@ Page({
           return
         }
         this._pending = null
-        this.refresh()
+        this.refreshAll()
         wx.showToast({ title: '已撤销', icon: 'none' })
       }
     })

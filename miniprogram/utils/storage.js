@@ -91,6 +91,9 @@ function saveSession(session) {
   const day = X.sessionDay(normalized)
   if (!day) return false
   const all = getRawRecords()
+  // 先按时间区间查全表：只看目标日会漏掉“前一天已有一段”的跨天重叠。
+  // 同 id 的旧副本会被 upsert 替换，不算冲突。
+  if (X.findOverlap(all, normalized.startAt, normalized.endAt, { id: normalized.id })) return false
   // 旧 v1 记录按入睡日存放；当它的醒来日正好是本次归档日时，顺带并到新记录，
   // 避免“昨晚记录挂在昨天、今天午休另起一条”的过渡期割裂。
   const legacyKeys = []
@@ -120,7 +123,9 @@ function updateSession(day, sessionId, startAt, endAt) {
   const all = getRawRecords()
   const record = all[day]
   if (!record) return false
-  const list = X.sessionsOf(record)
+  const source = X.sessionsOf(record)
+  if (!source.some((item) => item.id === sessionId)) return false
+  const list = source
     .map((item) =>
       item.id === sessionId
         ? X.normalizeSession(Object.assign({}, item, { startAt, endAt, editedAt: Date.now() }))
@@ -132,10 +137,16 @@ function updateSession(day, sessionId, startAt, endAt) {
   if (X.totalDurationOf(list) > 24 * 60) return false
   const nextDay = X.sessionDay(target)
   if (!nextDay) return false
+  // 跨天查重（排除被编辑的这一段本身）
+  if (X.findOverlap(all, target.startAt, target.endAt, { id: sessionId })) return false
   // 旧 v1 记录按入睡日归档；首次编辑时迁到醒来日（仅单段可迁，避免拆天）
   if (nextDay !== day) {
-    if (X.sessionsOf(record).length > 1) return false
-    const next = X.aggregate(nextDay, list, Date.now())
+    if (source.length > 1) return false
+    // 目标日可能已有新记录：合并而不是整体覆盖，否则那天的段会凭空消失
+    const merged = X.upsert({ sessions: X.sessionsOf(all[nextDay]) }, target)
+    if (!merged || merged.length > 8 || X.hasOverlap(merged)) return false
+    if (X.totalDurationOf(merged) > 24 * 60) return false
+    const next = X.aggregate(nextDay, merged, Date.now())
     if (!next) return false
     all[nextDay] = next
     delete all[day]

@@ -81,4 +81,52 @@ test('同一天重叠段会被检出', () => {
   const c = { startAt: at(2026, 10, 21, 7, 0), endAt: at(2026, 10, 21, 8, 0) }
   assert.equal(X.hasOverlap([a, b]), true)
   assert.equal(X.hasOverlap([a, c]), false)
+  assert.equal(typeof X.overlaps, 'function')
+  assert.equal(X.overlaps(a, c), false)
+})
+
+test('显式入睡日/醒来日：忘记结束两天也能落到真实日期', () => {
+  const bedDay = T.parseDateKey('2026-10-19')
+  const wakeDay = T.parseDateKey('2026-10-20')
+  const now = at(2026, 10, 21, 10, 0)
+  const range = X.rangeBetween(bedDay, 23 * 60, wakeDay, 7 * 60, now)
+  assert.equal(T.dateKey(range.bedAt), '2026-10-19')
+  assert.equal(T.dateKey(range.wakeAt), '2026-10-20')
+  assert.equal(range.durationMin, 8 * 60)
+  assert.equal(range.error, '')
+})
+
+test('显式区间顺序不对时报 order，不再静默回退一天', () => {
+  const day = T.parseDateKey('2026-10-21')
+  const now = at(2026, 10, 21, 22, 0)
+  const wrong = X.rangeBetween(day, 23 * 60, day, 7 * 60, now)
+  assert.equal(wrong.error, 'order')
+  assert.ok(wrong.durationMin < 0)
+  // 同样两个钟点用 rangeForDay 仍按“昨晚入睡”处理（补记口径不变）
+  assert.equal(X.rangeForDay(day, 23 * 60, 7 * 60, now).error, '')
+})
+
+test('跨天重叠：只看醒来日会漏，查全表才拦得住', () => {
+  const early = {
+    id: 'early',
+    startAt: at(2026, 10, 23, 22, 0),
+    endAt: at(2026, 10, 23, 23, 30)
+  }
+  const records = {
+    '2026-10-23': { day: '2026-10-23', dayRule: 'wake-v1', sessions: [early] }
+  }
+  // 22:30 → 次日 07:00 与 22:00–23:30 相交，但醒来日不同
+  const hit = X.findOverlap(records, at(2026, 10, 23, 22, 30), at(2026, 10, 24, 7, 0))
+  assert.ok(hit)
+  assert.equal(hit.id, 'early')
+  // 首尾相接不算重叠
+  assert.equal(
+    X.findOverlap(records, at(2026, 10, 23, 23, 30), at(2026, 10, 24, 7, 0)),
+    null
+  )
+  // 编辑自己时排除自身
+  assert.equal(
+    X.findOverlap(records, early.startAt, early.endAt, { id: 'early' }),
+    null
+  )
 })

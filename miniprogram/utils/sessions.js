@@ -50,6 +50,23 @@ function rangeForDay(dayTs, bedMinutes, wakeMinutes, now) {
   return { bedAt, wakeAt, durationMin, error }
 }
 
+/**
+ * 精确指定“入睡日 + 醒来日”的组合。
+ * 结束一次忘记关掉的 pending 时不能再用 rangeForDay 的“回退一天”：
+ * 两天前 23:00 入睡会被压成昨天 23:00，时长和归属都错。
+ * 这里不做任何猜测，时间顺序不对直接返回 order，交给用户改日期。
+ */
+function rangeBetween(startDayTs, bedMinutes, wakeDayTs, wakeMinutes, now) {
+  const bedAt = T.clockTs(startDayTs, bedMinutes)
+  const wakeAt = T.clockTs(wakeDayTs, wakeMinutes)
+  const durationMin = Math.round((wakeAt - bedAt) / T.MINUTE_MS)
+  let error = ''
+  if (wakeAt > (Number(now) || Date.now()) + T.MINUTE_MS) error = 'future'
+  else if (durationMin < 1) error = 'order'
+  else if (wakeAt - bedAt > MAX_SESSION_MS) error = 'long'
+  return { bedAt, wakeAt, durationMin, error }
+}
+
 /** 兼容 v1：旧记录没有 sessions，用 bedAt/wakeAt 合成一段 */
 function sessionsOf(record) {
   if (!record) return []
@@ -144,9 +161,36 @@ function hasOverlap(list) {
   return false
 }
 
+/**
+ * 跨天重叠检测：一段睡眠只归一个醒来日，但可能和相邻两天的段相交。
+ * 例：3/4 22:00–23:30 已存在，再补记 3/4 22:30 → 3/5 07:00，
+ * 按醒来日只会查 3/5，查不到 3/4 那段，两段就会分别计入两天。
+ * exclude 传入 { id } 时跳过正在编辑的那一段。
+ */
+function findOverlap(records, startAt, endAt, exclude) {
+  if (!records || typeof records !== 'object') return null
+  const start = Number(startAt)
+  const end = Number(endAt)
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null
+  const skipId = exclude && exclude.id ? String(exclude.id) : ''
+  const keys = Object.keys(records)
+  for (let i = 0; i < keys.length; i += 1) {
+    const record = records[keys[i]]
+    if (!record) continue
+    const list = sessionsOf(record)
+    for (let j = 0; j < list.length; j += 1) {
+      const item = list[j]
+      if (skipId && item.id === skipId) continue
+      if (overlaps(item, { startAt: start, endAt: end })) return item
+    }
+  }
+  return null
+}
+
 module.exports = {
   MAX_SESSION_MS,
   rangeForDay,
+  rangeBetween,
   normalizeSession,
   sessionsOf,
   sessionDay,
@@ -154,5 +198,7 @@ module.exports = {
   totalDurationOf,
   aggregate,
   upsert,
-  hasOverlap
+  overlaps,
+  hasOverlap,
+  findOverlap
 }

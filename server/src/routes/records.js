@@ -24,10 +24,17 @@ function createRecordsRoute(options) {
       const code = req.body && req.body.code
       if (!code) throw invalidBody('缺少 code')
 
-      const openid = await codeToOpenid(code, config.wx)
+      // 参数校验必须全部前置：includeAll 非法时若已写库再返回 400，
+      // 客户端会按失败重试，造成重复上传与误导性错误码；也避免为坏请求换取 openid。
+      const rawIncludeAll = req.body && req.body.includeAll
+      if (rawIncludeAll !== undefined && typeof rawIncludeAll !== 'boolean') {
+        throw invalidBody('includeAll 必须是布尔值')
+      }
+      const includeAll = rawIncludeAll !== false
       const current = now()
       const parsed = validateRecords(req.body && req.body.records, { now: current })
       const deletedDays = validateDeletions(req.body && req.body.deletedDays, { now: current })
+      const openid = await codeToOpenid(code, config.wx)
 
       // 没有 syncRecords 的旧/自定义存储无法处理墓碑与 erasure 水位；
       // 继续用 upsert 降级会静默绕过合规删除（旧设备可把已删记录写回），故 fail-closed。
@@ -43,11 +50,6 @@ function createRecordsRoute(options) {
 
       // 分片上传时只有首片需要云端全量回填；后续片省掉 records/deletedDays，
       // 避免 400 条历史 × 7 片 = 7 倍全量下载。
-      const rawIncludeAll = req.body && req.body.includeAll
-      if (rawIncludeAll !== undefined && typeof rawIncludeAll !== 'boolean') {
-        throw invalidBody('includeAll 必须是布尔值')
-      }
-      const includeAll = rawIncludeAll !== false
       res.json({
         synced: result.accepted,
         dropped: parsed.dropped + result.dropped,

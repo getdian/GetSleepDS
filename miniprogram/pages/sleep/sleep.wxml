@@ -89,7 +89,7 @@
         </view>
       </view>
       <view class="done-actions">
-        <view wx:if="{{canOverwrite}}" class="overwrite" bindtap="onOverwriteTonight">{{overwriteText}}</view>
+        <view wx:if="{{canAddSession}}" class="overwrite" bindtap="onAddSession">{{overwriteText}}</view>
         <view class="manual-add" bindtap="openManualSheet">补记一段已发生的睡眠</view>
         <view class="undo" bindtap="onUndoTap">记录有误？撤销当天记录</view>
       </view>
@@ -137,15 +137,15 @@
     <view class="end-head">
       <view>
         <text class="end-title">{{endMode === 'manual' ? '补记一段睡眠' : (endMode === 'edit' ? '修改这段睡眠' : '结束本次入睡')}}</text>
-        <text class="end-sub">{{endMode === 'manual' ? '选择醒来日与真实入睡/起床时间，不会启动计时' : (endMode === 'edit' ? '只调整时间，归属日保持不变' : '时间不准可以直接改，保存后归入醒来日')}}</text>
+        <text class="end-sub">{{endMode === 'manual' ? '选择醒来日与真实入睡/起床时间，不会启动计时' : (endMode === 'edit' ? '只调整时间，归属日保持不变' : (endStale ? '超过 24 小时未结束：请确认真实醒来日与时间' : '时间不准可以直接改，保存后归入醒来日'))}}</text>
       </view>
       <text class="end-close" catchtap="onEndCancel">×</text>
     </view>
     <picker
-      wx:if="{{endMode === 'manual'}}"
+      wx:if="{{endMode === 'manual' || endStale}}"
       mode="date"
       value="{{endDate}}"
-      start="{{endMinDate}}"
+      start="{{endDateMin}}"
       end="{{endToday}}"
       bindchange="onEndDateChange"
     >
@@ -173,6 +173,8 @@
       </picker>
     </view>
     <view class="end-summary">
+      <text wx:if="{{endStartDateText}}">入睡 {{endStartDateText}}</text>
+      <text wx:if="{{endStartDateText}}">·</text>
       <text>归入 {{endDayText}}（醒来日）</text>
       <text>·</text>
       <text>时长 {{endDurationText}}</text>

@@ -74,6 +74,118 @@ test('saveSession 按醒来日聚合，并把同醒来日的旧 v1 记录并进�
   assert.ok(store[storage.KEYS.deleted]['2026-10-20'])
 })
 
+test('saveSession 拒绝跨天重叠（只查醒来日会漏）', () => {
+  store[KEY] = {}
+  store[storage.KEYS.deleted] = {}
+  const earlyStart = ts(2026, 10, 23, 22, 0)
+  const earlyEnd = ts(2026, 10, 23, 23, 30)
+  store[KEY]['2026-10-23'] = {
+    day: '2026-10-23',
+    dayRule: 'wake-v1',
+    schemaVersion: 2,
+    bedAt: earlyStart,
+    wakeAt: earlyEnd,
+    durationMin: 90,
+    nightDurationMin: 90,
+    totalDurationMin: 90,
+    sessions: [{ id: 'early', startAt: earlyStart, endAt: earlyEnd }],
+    updatedAt: 1
+  }
+  const blocked = storage.saveSession({
+    id: 'night',
+    startAt: ts(2026, 10, 23, 22, 30),
+    endAt: ts(2026, 10, 24, 7, 0)
+  })
+  assert.equal(blocked, false)
+  assert.equal(store[KEY]['2026-10-24'], undefined)
+  // 首尾相接（23:30 起床、23:30 再睡）允许
+  const ok = storage.saveSession({
+    id: 'night',
+    startAt: earlyEnd,
+    endAt: ts(2026, 10, 24, 7, 0)
+  })
+  assert.ok(ok)
+  assert.equal(ok.day, '2026-10-24')
+})
+
+test('updateSession 迁移旧 v1 记录到已有醒来日时合并，不覆盖那天的段', () => {
+  store[KEY] = {}
+  store[storage.KEYS.deleted] = {}
+  const bedAt = ts(2026, 10, 25, 23, 0)
+  const wakeAt = ts(2026, 10, 26, 7, 0)
+  store[KEY]['2026-10-25'] = {
+    day: '2026-10-25',
+    bedAt,
+    wakeAt,
+    durationMin: 480,
+    updatedAt: 1
+  }
+  const napStart = ts(2026, 10, 26, 13, 0)
+  const napEnd = ts(2026, 10, 26, 13, 30)
+  store[KEY]['2026-10-26'] = {
+    day: '2026-10-26',
+    dayRule: 'wake-v1',
+    schemaVersion: 2,
+    bedAt: napStart,
+    wakeAt: napEnd,
+    durationMin: 30,
+    nightDurationMin: 30,
+    totalDurationMin: 30,
+    sessions: [{ id: 'nap', startAt: napStart, endAt: napEnd }],
+    updatedAt: 2
+  }
+  const next = storage.updateSession(
+    '2026-10-25',
+    'legacy-' + wakeAt,
+    bedAt,
+    ts(2026, 10, 26, 6, 30)
+  )
+  assert.ok(next)
+  assert.equal(next.day, '2026-10-26')
+  assert.equal(next.sessions.length, 2)
+  assert.equal(next.totalDurationMin, 450 + 30)
+  assert.equal(store[KEY]['2026-10-25'], undefined)
+})
+
+test('updateSession 拒绝与另一天已有段重叠的编辑', () => {
+  store[KEY] = {}
+  store[storage.KEYS.deleted] = {}
+  const nightStart = ts(2026, 10, 27, 20, 0)
+  const nightEnd = ts(2026, 10, 27, 23, 0)
+  store[KEY]['2026-10-27'] = {
+    day: '2026-10-27',
+    dayRule: 'wake-v1',
+    schemaVersion: 2,
+    bedAt: nightStart,
+    wakeAt: nightEnd,
+    durationMin: 180,
+    nightDurationMin: 180,
+    totalDurationMin: 180,
+    sessions: [{ id: 'night', startAt: nightStart, endAt: nightEnd }],
+    updatedAt: 1
+  }
+  store[KEY]['2026-10-28'] = {
+    day: '2026-10-28',
+    dayRule: 'wake-v1',
+    schemaVersion: 2,
+    bedAt: ts(2026, 10, 28, 8, 0),
+    wakeAt: ts(2026, 10, 28, 9, 0),
+    durationMin: 60,
+    nightDurationMin: 60,
+    totalDurationMin: 60,
+    sessions: [{ id: 'other', startAt: ts(2026, 10, 28, 8, 0), endAt: ts(2026, 10, 28, 9, 0) }],
+    updatedAt: 2
+  }
+  const next = storage.updateSession(
+    '2026-10-27',
+    'night',
+    nightStart,
+    ts(2026, 10, 28, 8, 30)
+  )
+  assert.equal(next, false)
+  assert.equal(store[KEY]['2026-10-28'].sessions.length, 1)
+})
+
 test('updateSession 修改同一天的一段并重算总时长', () => {
   const day = '2026-10-22'
   store[KEY] = {
