@@ -1,6 +1,7 @@
 const F = require('../../utils/format')
 const T = require('../../utils/time')
 const S = require('../../utils/stats')
+const R = require('../../utils/regularity')
 const storage = require('../../utils/storage')
 const cache = require('../../utils/audio-cache')
 const backgrounds = require('../../utils/backgrounds')
@@ -8,6 +9,7 @@ const api = require('../../utils/api')
 const { withLogin } = require('../../utils/login')
 const { syncNow, whenIdle } = require('../../utils/sync')
 const audioTimer = require('../../utils/audio-timer')
+const reminder = require('../../utils/reminder')
 const events = require('../../utils/events')
 const adSlots = require('../../utils/ads')
 const { getConfig, loadConfig } = require('../../utils/config')
@@ -26,6 +28,7 @@ Page({
     avgDuration: '--',
     weekCount: 0,
     streak: 0,
+    regularity: { enough: false, count: 0 },
     cells: [],
     colCount: 0,
     months: [],
@@ -81,7 +84,7 @@ Page({
     const list = S.completedList(records)
     const weekly = S.weekly(records, now)
     const pending = storage.getPending()
-    const partialDay = pending ? T.sleepDayOf(pending.bedAt) : ''
+    const partialDay = pending ? T.dateKey(now) : ''
 
     // 月对齐图板：3 个月前的 1 号起，末尾约 3 周为未来占位（当前 10 月即 7 月 1 日起）
     const span = S.monthsSpan(now, HEAT_MONTHS_BACK)
@@ -114,6 +117,17 @@ Page({
           ? '仅存本机 · 未开启云备份'
           : '仅存本机 · 服务端暂未开放云备份'
 
+    const reg = R.analyze(records, now, 7)
+    const regularity = reg.enough
+      ? {
+          enough: true,
+          label: reg.label,
+          bedSpread: reg.bedSpreadMin,
+          wakeSpread: reg.wakeSpreadMin,
+          avgDuration: F.fmtHours(reg.avgDurationMin)
+        }
+      : { enough: false, count: reg.count }
+
     // onShow 会连续 refresh 两次（本地一次、配置到位后一次），cells 有 150+ 个节点。
     // 数据没变时跳过 setData，避免每次进页都把整块热力图重新过桥一遍。
     const signature = [
@@ -129,6 +143,7 @@ Page({
       // 逐格 level + 今天所在位置：只看 marked 数量会漏掉「某天时长变了但总数没变」
       heat.cells.map((cell) => (cell && cell.level) || 0).join(''),
       heat.cells.findIndex((cell) => cell && cell.isToday),
+      JSON.stringify(regularity),
       syncText
     ].join('|')
     if (signature !== this._refreshSignature) {
@@ -140,6 +155,7 @@ Page({
         avgDuration,
         weekCount: current.count,
         streak: weekly.streak,
+        regularity,
         cells: heat.cells,
         colCount: heat.colCount,
         months: heat.months,
@@ -435,6 +451,8 @@ Page({
     try {
       wx.getBackgroundAudioManager().stop()
     } catch (e) {}
+    const pending = storage.getPending()
+    if (pending && pending.id) reminder.cancel(pending.id).catch(() => {})
     const cleared = storage.clearAll()
     events.clearQueue()
     cache.cleanAll()

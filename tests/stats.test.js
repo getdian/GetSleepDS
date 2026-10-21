@@ -91,18 +91,17 @@ test('没有记录时不报错', () => {
   assert.equal(weekly.streak, 0)
 })
 
-test('C 态同睡眠日凌晨可重新开始，白天跨睡眠日不放开', () => {
-  // 周二 13:00-14:00 小睡，睡眠日周二；周三 00:30 仍属于周二睡眠日
+test('完成态可追加多段：跨天直接允许，同天满 3 小时允许', () => {
+  // 周二 13:00-14:00 小睡
   const bed = local(2026, 10, 20, 13, 0)
   const wake = local(2026, 10, 20, 14, 0)
   const record = { day: '2026-10-20', bedAt: bed, wakeAt: wake, durationMin: 60 }
-  assert.equal(S.canStartNewSleep(record, local(2026, 10, 21, 0, 30), '2026-10-20'), true)
-  assert.equal(S.canStartNewSleep(record, local(2026, 10, 21, 13, 0), '2026-10-21'), false)
-
-  // 正常 23:00-07:00，周二 13:00 不允许新增会覆盖晚上的午睡
-  const normal = { day: '2026-10-19', bedAt: local(2026, 10, 19, 23, 0), wakeAt: local(2026, 10, 20, 7, 0) }
-  assert.equal(S.canStartNewSleep(normal, local(2026, 10, 20, 13, 0), '2026-10-20'), false)
-  assert.equal(S.canStartNewSleep(normal, local(2026, 10, 20, 19, 0), '2026-10-20'), true)
+  // 周三凌晨已跨天，允许追加
+  assert.equal(S.canStartNewSleep(record, local(2026, 10, 21, 0, 30), '2026-10-21'), true)
+  // 同日刚醒 1 小时，不鼓励马上再记
+  assert.equal(S.canStartNewSleep(record, local(2026, 10, 20, 15, 0), '2026-10-20'), false)
+  // 同日已过 3 小时，可追加午休/第二段
+  assert.equal(S.canStartNewSleep(record, local(2026, 10, 20, 17, 1), '2026-10-20'), true)
 })
 
 test('事实回顾指纹会随同周新增记录变化', () => {

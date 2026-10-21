@@ -36,6 +36,13 @@
       </view>
       <text class="orb-caption">{{orbCaption}}</text>
       <text wx:if="{{recordHint}}" class="orb-note">{{recordHint}}</text>
+      <view wx:if="{{state === 'sleeping'}}" class="sleep-reminder {{reminderOn ? 'is-on' : ''}}" bindtap="onReminderTap">
+        {{reminderOn ? '已开启到点提醒' : '到点提醒我结束'}}
+      </view>
+      <view wx:if="{{overdue}}" class="sleep-overdue" bindtap="openEndSheet">
+        <text class="sleep-overdue-title">该结束入睡啦</text>
+        <text class="sleep-overdue-sub">{{overdueText}} · 点此校准并保存</text>
+      </view>
       <view wx:if="{{state === 'sleeping'}}" class="undo-bed" bindtap="onUndoBed">
         点错了？撤销本次入睡
       </view>
@@ -46,10 +53,10 @@
     <view class="done-section fade-up">
       <text class="done-kicker">{{greeting}} · SLEEP LOG</text>
       <text class="done-duration">{{recordView.duration}}</text>
-      <text class="done-duration-k">在床时长</text>
+      <text class="done-duration-k">当天总睡眠（含午休/间断）</text>
       <view class="done-timeline">
         <view class="done-time">
-          <text class="done-time-k">入睡</text>
+          <text class="done-time-k">主睡眠入睡</text>
           <text class="done-time-v">{{recordView.bed}}</text>
         </view>
         <view class="done-rail">
@@ -58,13 +65,21 @@
           <view class="done-rail-dot is-end"></view>
         </view>
         <view class="done-time is-right">
-          <text class="done-time-k">起床</text>
+          <text class="done-time-k">主睡眠起床</text>
           <text class="done-time-v">{{recordView.wake}}</text>
+        </view>
+      </view>
+      <view wx:if="{{recordView.sessions.length}}" class="done-sessions">
+        <text class="done-sessions-k">本日睡眠段（可校准）</text>
+        <view wx:for="{{recordView.sessions}}" wx:key="id" class="done-session-row">
+          <text class="done-session-time">{{item.bed}} – {{item.wake}}</text>
+          <text class="done-session-dur">{{item.duration}}</text>
+          <text class="done-session-edit" data-id="{{item.id}}" data-day="{{item.day}}" catchtap="onEditSession">改</text>
         </view>
       </view>
       <view class="done-actions">
         <view wx:if="{{canOverwrite}}" class="overwrite" bindtap="onOverwriteTonight">{{overwriteText}}</view>
-        <view class="undo" bindtap="onUndoTap">记录有误？撤销</view>
+        <view class="undo" bindtap="onUndoTap">记录有误？撤销当天记录</view>
       </view>
     </view>
   </block>
@@ -104,6 +119,43 @@
 </view>
 
 <audio-dock id="dock" />
+
+<view wx:if="{{endShow}}" class="end-mask" catchtap="onEndCancel">
+  <view class="end-sheet" catchtap="noop">
+    <view class="end-head">
+      <view>
+        <text class="end-title">结束本次入睡</text>
+        <text class="end-sub">时间不准可以直接改，保存后归入醒来日</text>
+      </view>
+      <text class="end-close" catchtap="onEndCancel">×</text>
+    </view>
+    <view class="end-times">
+      <picker mode="time" value="{{endBedTime}}" data-field="endBedTime" bindchange="onEndTimeChange">
+        <view class="end-time-item">
+          <text class="end-time-k">入睡</text>
+          <text class="end-time-v">{{endBedTime}}</text>
+        </view>
+      </picker>
+      <text class="end-arrow">→</text>
+      <picker mode="time" value="{{endWakeTime}}" data-field="endWakeTime" bindchange="onEndTimeChange">
+        <view class="end-time-item">
+          <text class="end-time-k">起床</text>
+          <text class="end-time-v">{{endWakeTime}}</text>
+        </view>
+      </picker>
+    </view>
+    <view class="end-summary">
+      <text>归入 {{endDayText}}（醒来日）</text>
+      <text>·</text>
+      <text>时长 {{endDurationText}}</text>
+    </view>
+    <text wx:if="{{endError}}" class="end-error">{{endError}}</text>
+    <view class="end-actions">
+      <view class="end-btn ghost" catchtap="onEndCancel">取消</view>
+      <view class="end-btn primary {{endError ? 'is-disabled' : ''}}" catchtap="onEndConfirm">保存记录</view>
+    </view>
+  </view>
+</view>
 
 <view class="dim-mask {{dim ? 'is-on' : ''}}" bindtap="onDimTap">
   <text class="dim-text font-poetic">晚安</text>

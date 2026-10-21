@@ -1,4 +1,5 @@
 const T = require('./time')
+const F = require('./format')
 
 const CYCLE = T.CYCLE_MIN
 const CYCLES = [5, 4, 3]
@@ -17,6 +18,23 @@ function nextWakeAt(now, wakeMinutes, fallMinutes) {
   let wakeAt = T.clockTs(T.startOfDay(now), wakeMinutes)
   if (wakeAt - fallMinutes * T.MINUTE_MS <= now) wakeAt += T.DAY_MS
   return wakeAt
+}
+
+/**
+ * 起床选择的上下文：今天/明天 + 时段词 + 24 小时制。
+ * 12 小时制的“下午 11:26 / 上午 12:26”在中文里既不合习惯也容易和中午混淆；
+ * 统一用“晚上 23:26 / 凌晨 00:26”，与结果面时段词保持一致。
+ */
+function wakeContextText(now, wakeMinutes, fallMinutes) {
+  const wakeAt = nextWakeAt(now, wakeMinutes, fallMinutes)
+  return (
+    dayLabel(wakeAt, now) +
+    ' ' +
+    F.periodLabel(wakeAt) +
+    ' ' +
+    F.fmtClock(wakeMinutes) +
+    ' 起床'
+  )
 }
 
 /**
@@ -82,6 +100,7 @@ module.exports = {
   CYCLES,
   dayLabel,
   nextWakeAt,
+  wakeContextText,
   bedtimesForWake,
   wakeTimesForSleep
 }

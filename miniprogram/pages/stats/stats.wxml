@@ -40,6 +40,18 @@
       <text>连续 {{streak}} 天</text>
     </view>
 
+    <view wx:if="{{regularity.enough}}" class="section fade-up">
+      <view class="section-head">
+        <text class="section-title">最近 7 天规律性</text>
+        <text class="section-tag">只看波动</text>
+      </view>
+      <view class="regularity-main">
+        <text class="regularity-label">{{regularity.label}}</text>
+        <text class="regularity-copy">入睡波动约 {{regularity.bedSpread}} 分钟 · 起床波动约 {{regularity.wakeSpread}} 分钟</text>
+        <text class="regularity-copy">平均睡眠 {{regularity.avgDuration}}</text>
+      </view>
+    </view>
+
     <view class="section fade-up">
       <view class="section-hero">
         <view class="section-head">

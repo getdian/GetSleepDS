@@ -47,7 +47,8 @@ Component({
     unlockHours: 24,
     unlockRemainText: '',
     timerOptions: TIMER_OPTIONS,
-    timerMinutes: 60,
+    // 默认不自动关闭：用户明确选 30/60/90 后才开始倒计时
+    timerMinutes: 0,
     timerRemainText: '',
     currentId: '',
     currentTitle: '',
@@ -135,9 +136,10 @@ Component({
       if (!this._cfg.features || this._cfg.features.timer === false) {
         this.setData({ timerMinutes: 0 })
       } else if (typeof meta.audioTimerMinutes === 'number') {
+        // 尊重用户上次明确选择的档位；没有记录则保持“关”
         this.setData({ timerMinutes: meta.audioTimerMinutes })
       } else {
-        this.setData({ timerMinutes: 60 })
+        this.setData({ timerMinutes: 0 })
       }
 
       loadConfig(true).then((cfg) => {
@@ -410,9 +412,9 @@ Component({
           this.setData({ playing: true, loading: false })
           // 系统侧恢复（通知栏/锁屏/耳机）与首次起播都走这里：
           // 暂停事件已冻结倒计时，这里续剩余；没有运行中的倒计时才按偏好起表。
-          if (this.data.timerEnabled) {
-            audioTimer.arm(Number(storage.getMeta().audioTimerMinutes) || this.data.timerMinutes || 0)
-          }
+          this.applyTimerPreference(
+            Number(storage.getMeta().audioTimerMinutes) || this.data.timerMinutes || 0
+          )
           this.syncPlayerText()
         },
         pause: () => {
@@ -668,7 +670,7 @@ Component({
       if (!savedMeta) wx.showToast({ title: '播放状态保存失败', icon: 'none' })
       events.track('audio_play', track.id)
 
-      if (this.data.timerEnabled) audioTimer.arm(this.data.timerMinutes)
+      this.applyTimerPreference(this.data.timerMinutes)
     },
 
     /** play() 在部分基础库会同步抛错；失败时回到暂停态，别留下“正在播放”的假状态 */
@@ -753,14 +755,14 @@ Component({
           lastTrackActive: true,
           lastTrackPlaying: true
         })
-        if (this.data.timerEnabled) audioTimer.arm(this.data.timerMinutes)
+        this.applyTimerPreference(this.data.timerMinutes)
         // 系统侧 stop 后重设 src 不会自动起播：必须显式 play，否则首次点击无声、
         // 需要再点一次（与同函数末尾的正常恢复分支一致）。
         this.safePlay()
         return
       }
 
-      if (this.data.timerEnabled) audioTimer.arm(this.data.timerMinutes)
+      this.applyTimerPreference(this.data.timerMinutes)
       storage.patchMeta({ lastTrackPlaying: true })
       this.clearCollapseTimer()
       this.setData({ playing: true, miniExpanded: false, collapsed: false, collapsing: false })
@@ -979,6 +981,14 @@ Component({
     },
 
     /* ---------------- 定时 ---------------- */
+    /** 定时偏好为 0（默认关）时清掉可能残留的暂停倒计时，不能让它悄悄复活 */
+    applyTimerPreference(minutes) {
+      if (!this.data.timerEnabled) return
+      const value = Number(minutes) || 0
+      if (value > 0) audioTimer.arm(value)
+      else audioTimer.clear()
+    },
+
     onTimerTap(event) {
       const minutes = Number(event.currentTarget.dataset.value)
       // 页面隐藏期间系统侧暂停/恢复会让 data.playing 滞后，起表判断必须用真实播放器状态

@@ -1,15 +1,54 @@
 const { invalidBody, payloadTooLarge } = require('./errors')
-const { sleepDayOf } = require('./time')
+const { sleepDayOf, calendarDayOf } = require('./time')
 
 const DAY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/
 const MAX_RECORDS = 62
 const MAX_DELETIONS = 400
-const MAX_SLEEP_MS = 20 * 60 * 60 * 1000
+const MAX_SLEEP_MS = 24 * 60 * 60 * 1000
+const MAX_SESSIONS = 8
+const MAX_DAY_SLEEP_MS = 24 * 60 * 60 * 1000
 const MAX_AGE_MS = 400 * 24 * 60 * 60 * 1000
 const MAX_FUTURE_MS = 24 * 60 * 60 * 1000
 
 function inWindow(value, now) {
   return value >= now - MAX_AGE_MS && value <= now + MAX_FUTURE_MS
+}
+
+function normalizeSession(raw) {
+  if (!raw || typeof raw !== 'object') return null
+  const startAt = Number(raw.startAt)
+  const endAt = Number(raw.endAt)
+  if (!Number.isFinite(startAt) || !Number.isFinite(endAt)) return null
+  if (endAt <= startAt || endAt - startAt > MAX_SLEEP_MS) return null
+  const id = String(raw.id || 's-' + startAt + '-' + endAt).slice(0, 64)
+  if (!/^[a-zA-Z0-9_-]+$/.test(id)) return null
+  return {
+    id,
+    startAt,
+    endAt,
+    durationMin: Math.max(1, Math.round((endAt - startAt) / 60000)),
+    source: String(raw.source || 'manual').slice(0, 16),
+    editedAt: Number(raw.editedAt) || endAt
+  }
+}
+
+function validSessions(list, now) {
+  if (!Array.isArray(list) || !list.length || list.length > MAX_SESSIONS) return null
+  const sessions = []
+  for (let i = 0; i < list.length; i += 1) {
+    const session = normalizeSession(list[i])
+    if (!session) return null
+    if (!inWindow(session.startAt, now) || !inWindow(session.endAt, now)) return null
+    sessions.push(session)
+  }
+  sessions.sort((a, b) => a.startAt - b.startAt)
+  let total = 0
+  for (let i = 0; i < sessions.length; i += 1) {
+    total += sessions[i].durationMin
+    if (i > 0 && sessions[i - 1].endAt > sessions[i].startAt) return null
+  }
+  if (total * 60000 > MAX_DAY_SLEEP_MS) return null
+  return sessions
 }
 
 /** 校验真实日历日，避免 2026-02-30 之类在 PG 触发 503。 */
@@ -50,6 +89,47 @@ function validateRecords(input, options) {
       continue
     }
 
+    const rawUpdatedAt = Number(item.updatedAt)
+    const isV2 = Number(item.schemaVersion) === 2 && Array.isArray(item.sessions)
+
+    if (isV2) {
+      const sessions = validSessions(item.sessions, now)
+      if (!sessions) {
+        dropped += 1
+        continue
+      }
+      const primary = sessions.reduce((best, current) => {
+        if (!best) return current
+        if (current.durationMin > best.durationMin) return current
+        if (current.durationMin === best.durationMin && current.endAt > best.endAt) return current
+        return best
+      }, null)
+      const day = calendarDayOf(primary.endAt)
+      // 一条记录只装同一天醒来的段；跨天段由客户端拆到各自醒来日
+      if (sessions.some((session) => calendarDayOf(session.endAt) !== day)) {
+        dropped += 1
+        continue
+      }
+      const updatedAt = Number.isFinite(rawUpdatedAt) && rawUpdatedAt > 0 ? rawUpdatedAt : primary.endAt
+      if (!inWindow(updatedAt, now)) {
+        dropped += 1
+        continue
+      }
+      normalized.push({
+        day,
+        dayRule: 'wake-v1',
+        schemaVersion: 2,
+        bedAt: primary.startAt,
+        wakeAt: primary.endAt,
+        durationMin: primary.durationMin,
+        nightDurationMin: primary.durationMin,
+        totalDurationMin: sessions.reduce((sum, session) => sum + session.durationMin, 0),
+        sessions,
+        updatedAt
+      })
+      continue
+    }
+
     const bedAt = Number(item.bedAt)
     const wakeAt = Number(item.wakeAt)
     if (!Number.isFinite(bedAt) || !Number.isFinite(wakeAt)) {
@@ -65,7 +145,6 @@ function validateRecords(input, options) {
       continue
     }
 
-    const rawUpdatedAt = Number(item.updatedAt)
     const updatedAt = Number.isFinite(rawUpdatedAt) && rawUpdatedAt > 0 ? rawUpdatedAt : wakeAt
     if (!inWindow(updatedAt, now)) {
       dropped += 1
@@ -73,11 +152,23 @@ function validateRecords(input, options) {
     }
 
     normalized.push({
-      // 只信任时间戳；客户端传的 day 仅用于兼容旧协议，不参与校验
+      // 旧记录保持“入睡日”口径，避免历史统计被重排
       day: sleepDayOf(bedAt),
+      dayRule: 'bed-v1',
+      schemaVersion: 1,
       bedAt,
       wakeAt,
       durationMin: Math.round((wakeAt - bedAt) / 60000),
+      nightDurationMin: Math.round((wakeAt - bedAt) / 60000),
+      totalDurationMin: Math.round((wakeAt - bedAt) / 60000),
+      sessions: [{
+        id: 'legacy-' + wakeAt,
+        startAt: bedAt,
+        endAt: wakeAt,
+        durationMin: Math.round((wakeAt - bedAt) / 60000),
+        source: 'legacy',
+        editedAt: wakeAt
+      }],
       updatedAt
     })
   }

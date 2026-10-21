@@ -16,9 +16,19 @@ CREATE TABLE IF NOT EXISTS sleep_records (
     bed_at       BIGINT NOT NULL,
     wake_at      BIGINT NOT NULL,
     duration_min INTEGER NOT NULL,
+    day_rule     TEXT NOT NULL DEFAULT 'bed-v1',
+    schema_version INTEGER NOT NULL DEFAULT 1,
+    sessions     JSONB NOT NULL DEFAULT '[]'::jsonb,
+    night_duration_min INTEGER,
+    total_duration_min INTEGER,
     updated_at   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (openid, day)
 );
+ALTER TABLE sleep_records ADD COLUMN IF NOT EXISTS day_rule TEXT NOT NULL DEFAULT 'bed-v1';
+ALTER TABLE sleep_records ADD COLUMN IF NOT EXISTS schema_version INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE sleep_records ADD COLUMN IF NOT EXISTS sessions JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE sleep_records ADD COLUMN IF NOT EXISTS night_duration_min INTEGER;
+ALTER TABLE sleep_records ADD COLUMN IF NOT EXISTS total_duration_min INTEGER;
 
 CREATE TABLE IF NOT EXISTS app_config (
     key          TEXT PRIMARY KEY,
@@ -35,6 +45,22 @@ CREATE TABLE IF NOT EXISTS sleep_record_deletions (
 );
 CREATE INDEX IF NOT EXISTS idx_sleep_record_deletions_openid
     ON sleep_record_deletions (openid, deleted_at DESC);
+
+-- 一次性的结束入睡提醒；只存发送所需的最小字段
+CREATE TABLE IF NOT EXISTS sleep_reminders (
+    openid       VARCHAR(64) NOT NULL,
+    session_id   VARCHAR(64) NOT NULL,
+    fire_at      BIGINT NOT NULL,
+    template_id  TEXT NOT NULL,
+    page         TEXT NOT NULL,
+    status       TEXT NOT NULL DEFAULT 'pending',
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    sent_at      TIMESTAMPTZ,
+    cancelled_at TIMESTAMPTZ,
+    PRIMARY KEY (openid, session_id)
+);
+CREATE INDEX IF NOT EXISTS idx_sleep_reminders_due
+    ON sleep_reminders (status, fire_at);
 
 -- 全量清除水位：清除/后台删除后，早于 erased_at 的记录不能再写回
 CREATE TABLE IF NOT EXISTS user_erasures (
@@ -72,6 +98,7 @@ function createMemoryDb() {
   const settings = new Map()
   const events = []
   const audits = []
+  const reminders = new Map()
   let appConfig = null
 
   return {
@@ -143,6 +170,65 @@ function createMemoryDb() {
       const list = deletions.get(openid)
       if (!list) return []
       return Array.from(list, ([day, deletedAt]) => ({ day, deletedAt }))
+    },
+
+    async saveReminder(openid, reminder) {
+      let bucket = reminders.get(openid)
+      if (!bucket) {
+        bucket = new Map()
+        reminders.set(openid, bucket)
+      }
+      const previous = bucket.get(reminder.sessionId)
+      if (previous && previous.status !== 'pending') return previous
+      const next = Object.assign({}, reminder, { openid, status: 'pending' })
+      bucket.set(reminder.sessionId, next)
+      return next
+    },
+
+    async cancelReminder(openid, sessionId) {
+      const bucket = reminders.get(openid)
+      const item = bucket && bucket.get(sessionId)
+      if (!item || item.status !== 'pending') return false
+      item.status = 'cancelled'
+      item.cancelledAt = Date.now()
+      return true
+    },
+
+    async dueReminders(nowTs, limit) {
+      const out = []
+      reminders.forEach((bucket, openid) => {
+        bucket.forEach((item) => {
+          if (item.status === 'pending' && item.fireAt <= nowTs) {
+            out.push(Object.assign({}, item, { openid }))
+          }
+        })
+      })
+      out.sort((a, b) => a.fireAt - b.fireAt)
+      return out.slice(0, Math.max(1, Number(limit) || 50))
+    },
+
+    async markReminder(openid, sessionId, status, atTs) {
+      const bucket = reminders.get(openid)
+      const item = bucket && bucket.get(sessionId)
+      if (!item) return false
+      item.status = status
+      if (status === 'sent') item.sentAt = atTs || Date.now()
+      else item.cancelledAt = atTs || Date.now()
+      return true
+    },
+
+    async cleanupReminders(beforeTs) {
+      let removed = 0
+      reminders.forEach((bucket) => {
+        Array.from(bucket.keys()).forEach((key) => {
+          const item = bucket.get(key)
+          if (item && item.status !== 'pending' && (item.sentAt || item.cancelledAt || 0) < beforeTs) {
+            bucket.delete(key)
+            removed += 1
+          }
+        })
+      })
+      return removed
     },
 
     /**
@@ -426,6 +512,71 @@ function createPostgresDb(connectionString) {
       return result.rowCount
     },
 
+    async saveReminder(openid, reminder) {
+      const result = await pool.query(
+        `INSERT INTO sleep_reminders (openid, session_id, fire_at, template_id, page, status)
+         VALUES ($1, $2, $3, $4, $5, 'pending')
+         ON CONFLICT (openid, session_id) DO UPDATE SET
+           fire_at = EXCLUDED.fire_at,
+           template_id = EXCLUDED.template_id,
+           page = EXCLUDED.page,
+           status = 'pending'
+         WHERE sleep_reminders.status = 'pending'
+         RETURNING session_id`,
+        [openid, reminder.sessionId, reminder.fireAt, reminder.templateId, reminder.page]
+      )
+      return result.rowCount > 0
+    },
+
+    async cancelReminder(openid, sessionId) {
+      const result = await pool.query(
+        `UPDATE sleep_reminders SET status = 'cancelled', cancelled_at = now()
+         WHERE openid = $1 AND session_id = $2 AND status = 'pending'`,
+        [openid, sessionId]
+      )
+      return result.rowCount > 0
+    },
+
+    async dueReminders(nowTs, limit) {
+      const result = await pool.query(
+        `SELECT openid, session_id, fire_at, template_id, page
+         FROM sleep_reminders
+         WHERE status = 'pending' AND fire_at <= $1
+         ORDER BY fire_at
+         LIMIT $2`,
+        [nowTs, Math.max(1, Number(limit) || 50)]
+      )
+      return result.rows.map((row) => ({
+        openid: row.openid,
+        sessionId: row.session_id,
+        fireAt: Number(row.fire_at),
+        templateId: row.template_id,
+        page: row.page
+      }))
+    },
+
+    async markReminder(openid, sessionId, status, atTs) {
+      const result = await pool.query(
+        `UPDATE sleep_reminders
+         SET status = $3,
+             sent_at = CASE WHEN $3 = 'sent' THEN to_timestamp($4::bigint / 1000.0) ELSE sent_at END,
+             cancelled_at = CASE WHEN $3 <> 'sent' THEN to_timestamp($4::bigint / 1000.0) ELSE cancelled_at END
+         WHERE openid = $1 AND session_id = $2`,
+        [openid, sessionId, status, atTs || Date.now()]
+      )
+      return result.rowCount > 0
+    },
+
+    async cleanupReminders(beforeTs) {
+      const result = await pool.query(
+        `DELETE FROM sleep_reminders
+         WHERE status <> 'pending'
+           AND COALESCE(sent_at, cancelled_at) < to_timestamp($1::bigint / 1000.0)`,
+        [beforeTs]
+      )
+      return result.rowCount
+    },
+
     async upsertRecords(openid, list) {
       const client = await pool.connect()
       try {
@@ -433,15 +584,34 @@ function createPostgresDb(connectionString) {
         for (let i = 0; i < list.length; i += 1) {
           const record = list[i]
           await client.query(
-            `INSERT INTO sleep_records (openid, day, bed_at, wake_at, duration_min, updated_at)
-             VALUES ($1, $2, $3, $4, $5, to_timestamp($6::bigint / 1000.0))
+            `INSERT INTO sleep_records
+               (openid, day, bed_at, wake_at, duration_min, day_rule, schema_version,
+                sessions, night_duration_min, total_duration_min, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, to_timestamp($11::bigint / 1000.0))
              ON CONFLICT (openid, day) DO UPDATE SET
                bed_at = EXCLUDED.bed_at,
                wake_at = EXCLUDED.wake_at,
                duration_min = EXCLUDED.duration_min,
+               day_rule = EXCLUDED.day_rule,
+               schema_version = EXCLUDED.schema_version,
+               sessions = EXCLUDED.sessions,
+               night_duration_min = EXCLUDED.night_duration_min,
+               total_duration_min = EXCLUDED.total_duration_min,
                updated_at = GREATEST(sleep_records.updated_at, EXCLUDED.updated_at)
              WHERE EXCLUDED.updated_at >= sleep_records.updated_at`,
-            [openid, record.day, record.bedAt, record.wakeAt, record.durationMin, record.updatedAt]
+            [
+              openid,
+              record.day,
+              record.bedAt,
+              record.wakeAt,
+              record.durationMin,
+              record.dayRule || 'bed-v1',
+              record.schemaVersion || 1,
+              JSON.stringify(record.sessions || []),
+              record.nightDurationMin || record.durationMin,
+              record.totalDurationMin || record.durationMin,
+              record.updatedAt
+            ]
           )
         }
         await client.query('COMMIT')
@@ -456,15 +626,21 @@ function createPostgresDb(connectionString) {
 
     async getRecords(openid) {
       const result = await pool.query(
-        `SELECT to_char(day, 'YYYY-MM-DD') AS day, bed_at, wake_at, duration_min, updated_at
+        `SELECT to_char(day, 'YYYY-MM-DD') AS day, bed_at, wake_at, duration_min,
+                day_rule, schema_version, sessions, night_duration_min, total_duration_min, updated_at
          FROM sleep_records WHERE openid = $1 ORDER BY day`,
         [openid]
       )
       return result.rows.map((row) => ({
         day: row.day,
+        dayRule: row.day_rule || 'bed-v1',
+        schemaVersion: row.schema_version || 1,
         bedAt: Number(row.bed_at),
         wakeAt: Number(row.wake_at),
         durationMin: row.duration_min,
+        nightDurationMin: row.night_duration_min || row.duration_min,
+        totalDurationMin: row.total_duration_min || row.duration_min,
+        sessions: Array.isArray(row.sessions) ? row.sessions : [],
         updatedAt: new Date(row.updated_at).getTime()
       }))
     },
@@ -541,16 +717,35 @@ function createPostgresDb(connectionString) {
           }
 
           const saved = await client.query(
-            `INSERT INTO sleep_records (openid, day, bed_at, wake_at, duration_min, updated_at)
-             VALUES ($1, $2, $3, $4, $5, to_timestamp($6::bigint / 1000.0))
+            `INSERT INTO sleep_records
+               (openid, day, bed_at, wake_at, duration_min, day_rule, schema_version,
+                sessions, night_duration_min, total_duration_min, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, to_timestamp($11::bigint / 1000.0))
              ON CONFLICT (openid, day) DO UPDATE SET
                bed_at = EXCLUDED.bed_at,
                wake_at = EXCLUDED.wake_at,
                duration_min = EXCLUDED.duration_min,
+               day_rule = EXCLUDED.day_rule,
+               schema_version = EXCLUDED.schema_version,
+               sessions = EXCLUDED.sessions,
+               night_duration_min = EXCLUDED.night_duration_min,
+               total_duration_min = EXCLUDED.total_duration_min,
                updated_at = GREATEST(sleep_records.updated_at, EXCLUDED.updated_at)
              WHERE EXCLUDED.updated_at >= sleep_records.updated_at
              RETURNING day`,
-            [openid, record.day, record.bedAt, record.wakeAt, record.durationMin, record.updatedAt]
+            [
+              openid,
+              record.day,
+              record.bedAt,
+              record.wakeAt,
+              record.durationMin,
+              record.dayRule || 'bed-v1',
+              record.schemaVersion || 1,
+              JSON.stringify(record.sessions || []),
+              record.nightDurationMin || record.durationMin,
+              record.totalDurationMin || record.durationMin,
+              record.updatedAt
+            ]
           )
           if (saved.rowCount) accepted += 1
           else dropped += 1
@@ -568,7 +763,8 @@ function createPostgresDb(connectionString) {
         }
 
         const stored = await client.query(
-          `SELECT to_char(day, 'YYYY-MM-DD') AS day, bed_at, wake_at, duration_min, updated_at
+          `SELECT to_char(day, 'YYYY-MM-DD') AS day, bed_at, wake_at, duration_min,
+                  day_rule, schema_version, sessions, night_duration_min, total_duration_min, updated_at
            FROM sleep_records WHERE openid = $1 ORDER BY day`,
           [openid]
         )
@@ -586,9 +782,14 @@ function createPostgresDb(connectionString) {
           erasedAt,
           records: stored.rows.map((row) => ({
             day: row.day,
+            dayRule: row.day_rule || 'bed-v1',
+            schemaVersion: row.schema_version || 1,
             bedAt: Number(row.bed_at),
             wakeAt: Number(row.wake_at),
             durationMin: row.duration_min,
+            nightDurationMin: row.night_duration_min || row.duration_min,
+            totalDurationMin: row.total_duration_min || row.duration_min,
+            sessions: Array.isArray(row.sessions) ? row.sessions : [],
             updatedAt: new Date(row.updated_at).getTime()
           })),
           deletedDays: deletionRows.rows.map((row) => ({

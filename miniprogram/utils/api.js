@@ -35,6 +35,24 @@ function syncRecords(code, records, deletedDays, includeAll) {
   })
 }
 
+function createReminder(code, sessionId, fireAt) {
+  return request({
+    path: '/api/reminders',
+    method: 'POST',
+    data: { code, action: 'create', sessionId, fireAt },
+    timeout: 8000
+  })
+}
+
+function cancelReminder(code, sessionId) {
+  return request({
+    path: '/api/reminders',
+    method: 'POST',
+    data: { code, action: 'cancel', sessionId },
+    timeout: 8000
+  })
+}
+
 function trackEvents(code, events) {
   return request({
     path: '/api/events',
@@ -88,6 +106,8 @@ module.exports = {
   unlockAudio,
   fetchSummary,
   syncRecords,
+  createReminder,
+  cancelReminder,
   eraseRecords,
   trackEvents,
   fetchPosterQr

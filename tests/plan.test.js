@@ -52,6 +52,16 @@ test('选的入睡时间已过去很多时，按次日处理', () => {
   assert.equal(T.minutesOf(plan.slots[0].at), 15 * 60 + 45)
 })
 
+test('起床上下文用 24h + 时段词，避免 12 小时制歧义', () => {
+  const evening = local(2026, 10, 17, 20, 0)
+  assert.equal(P.wakeContextText(evening, 23 * 60 + 26, 15), '今天 晚上 23:26 起床')
+  assert.equal(P.wakeContextText(evening, 0 * 60 + 26, 15), '明天 凌晨 00:26 起床')
+  assert.equal(P.wakeContextText(evening, 12 * 60 + 26, 15), '明天 中午 12:26 起床')
+
+  const morning = local(2026, 10, 17, 6, 0)
+  assert.equal(P.wakeContextText(morning, 7 * 60 + 30, 15), '今天 早晨 07:30 起床')
+})
+
 test('nextWakeAt 只有留出入睡耗时后仍来得及才算今天', () => {
   const evening = local(2026, 10, 17, 21, 50)
   assert.equal(P.dayLabel(P.nextWakeAt(evening, 7 * 60 + 30, 15), evening), '明天')

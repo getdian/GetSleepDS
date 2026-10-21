@@ -41,6 +41,10 @@ module.exports = {
     maxMB: 80,
     ttlDays: 7
   },
+  reminder: {
+    templateId: '',
+    page: '/pages/sleep/sleep?end=1'
+  },
   copy: {
     unlockTitle: '解锁环境音',
     unlockDesc: '观看视频，解锁今晚的环境声音（24小时内有效）',

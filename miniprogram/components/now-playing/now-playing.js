@@ -123,6 +123,13 @@ Component({
       return !cfg.features || cfg.features.timer !== false
     },
 
+    applyTimerPreference(minutes) {
+      if (!this.timerEnabled()) return
+      const value = Number(minutes) || 0
+      if (value > 0) audioTimer.arm(value)
+      else audioTimer.clear()
+    },
+
     armLoadingGuard() {
       this.disarmLoadingGuard()
       this._loadingTimer = setTimeout(() => {
@@ -185,9 +192,7 @@ Component({
       this.setData({ loading: false })
       this.sync(true)
       // 系统侧暂停已冻结倒计时；恢复播放时续剩余，没有运行中的倒计时才按偏好起表。
-      if (this.timerEnabled()) {
-        audioTimer.arm(Number(storage.getMeta().audioTimerMinutes) || 0)
-      }
+      this.applyTimerPreference(Number(storage.getMeta().audioTimerMinutes) || 0)
     },
 
     handlePause() {
@@ -491,9 +496,7 @@ Component({
           const app = getApp()
           if (app && app.globalData) app.globalData.audioSession = true
           // 与入睡页 dock 一致：暂停中续剩余，没有运行中的倒计时才按偏好重新起表
-          if (this.timerEnabled()) {
-            audioTimer.arm(Number(storage.getMeta().audioTimerMinutes) || 0)
-          }
+          this.applyTimerPreference(Number(storage.getMeta().audioTimerMinutes) || 0)
           this.armLoadingGuard()
           audio.play()
         } else {

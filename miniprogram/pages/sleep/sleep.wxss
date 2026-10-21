@@ -634,3 +634,226 @@
     height: 430rpx;
   }
 }
+
+/* 到点提醒入口：未开启是弱提示，开启后变紫色 */
+.sleep-reminder {
+  align-self: center;
+  margin-top: 16rpx;
+  padding: 10rpx 18rpx;
+  border-radius: 999rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.1);
+  font-size: 20rpx;
+  color: var(--text-muted);
+}
+
+.sleep-reminder.is-on {
+  border-color: rgba(167, 164, 255, 0.34);
+  background: rgba(139, 135, 255, 0.12);
+  color: var(--color-primary-soft);
+}
+
+/* 超过预计起床：在圆环下方给一个明确的结束入口 */
+.sleep-overdue {
+  margin: 18rpx auto 0;
+  max-width: 560rpx;
+  padding: 18rpx 22rpx;
+  border-radius: 20rpx;
+  border: 1rpx solid rgba(245, 194, 107, 0.32);
+  background: rgba(245, 194, 107, 0.08);
+  text-align: center;
+}
+
+.sleep-overdue-title {
+  display: block;
+  font-size: 25rpx;
+  color: #f5c26b;
+}
+
+.sleep-overdue-sub {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 20rpx;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+/* 本日多段睡眠明细 */
+.done-sessions {
+  width: 100%;
+  margin-top: 18rpx;
+  padding: 14rpx 18rpx;
+  border-radius: 18rpx;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.done-sessions-k {
+  display: block;
+  margin-bottom: 6rpx;
+  font-size: 19rpx;
+  color: rgba(255, 255, 255, 0.46);
+}
+
+.done-session-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+  padding: 5rpx 0;
+  font-size: 21rpx;
+  color: rgba(220, 230, 255, 0.8);
+}
+
+.done-session-dur {
+  flex: none;
+  color: rgba(167, 164, 255, 0.9);
+}
+
+.done-session-edit {
+  flex: none;
+  padding: 4rpx 10rpx;
+  border-radius: 999rpx;
+  border: 1rpx solid rgba(167, 164, 255, 0.24);
+  font-size: 18rpx;
+  color: var(--color-primary-soft);
+}
+
+/* 结束/校准面板 */
+.end-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: var(--z-sheet-mask, 180);
+  display: flex;
+  align-items: flex-end;
+  background: rgba(4, 7, 15, 0.62);
+  -webkit-backdrop-filter: blur(8rpx);
+  backdrop-filter: blur(8rpx);
+}
+
+.end-sheet {
+  width: 100%;
+  padding: 30rpx 32rpx calc(30rpx + env(safe-area-inset-bottom));
+  border-radius: 32rpx 32rpx 0 0;
+  border-top: 1rpx solid rgba(255, 255, 255, 0.1);
+  background: rgba(16, 22, 40, 0.98);
+  box-shadow: 0 -18rpx 60rpx rgba(0, 0, 0, 0.45);
+}
+
+.end-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.end-title {
+  display: block;
+  font-size: 32rpx;
+  color: var(--text-primary);
+}
+
+.end-sub {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 20rpx;
+  color: var(--text-muted);
+}
+
+.end-close {
+  flex: none;
+  width: 56rpx;
+  height: 56rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36rpx;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.end-times {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  margin-top: 22rpx;
+}
+
+.end-times picker {
+  flex: 1;
+  min-width: 0;
+}
+
+.end-time-item {
+  padding: 14rpx 16rpx;
+  border-radius: 16rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  text-align: center;
+}
+
+.end-time-k {
+  display: block;
+  font-size: 19rpx;
+  color: var(--text-muted);
+}
+
+.end-time-v {
+  display: block;
+  margin-top: 2rpx;
+  font-size: 34rpx;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.end-arrow {
+  flex: none;
+  font-size: 26rpx;
+  color: rgba(255, 255, 255, 0.34);
+}
+
+.end-summary {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  margin-top: 14rpx;
+  font-size: 21rpx;
+  color: var(--color-primary-soft);
+}
+
+.end-error {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 20rpx;
+  color: #fca5a5;
+}
+
+.end-actions {
+  display: flex;
+  gap: 12rpx;
+  margin-top: 20rpx;
+}
+
+.end-btn {
+  flex: 1;
+  min-height: 84rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999rpx;
+  font-size: 26rpx;
+}
+
+.end-btn.ghost {
+  border: 1rpx solid rgba(255, 255, 255, 0.12);
+  color: var(--text-secondary);
+}
+
+.end-btn.primary {
+  background: linear-gradient(135deg, #8b87ff, #6f6ae8);
+  color: #fff;
+  font-weight: 600;
+}
+
+.end-btn.primary.is-disabled {
+  opacity: 0.38;
+}

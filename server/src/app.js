@@ -14,6 +14,8 @@ const { createAudioRoute } = require('./routes/audio')
 const { createEventsRoute } = require('./routes/events')
 const { createSummaryRoute } = require('./routes/summary')
 const { createRecordsRoute } = require('./routes/records')
+const { createRemindersRoute } = require('./routes/reminders')
+const { createReminderService } = require('./services/reminders')
 const { createShareRoute } = require('./routes/share')
 
 const ADMIN_DIR = path.join(__dirname, '..', 'public', 'admin')
@@ -200,7 +202,7 @@ function createApp(options) {
 
   app.use('/admin', express.static(ADMIN_DIR, { index: 'index.html', setHeaders: setAdminHeaders }))
 
-  app.use('/api', createConfigRoute({ store }))
+  app.use('/api', createConfigRoute({ store, config }))
   app.use(
     '/api',
     createAdminRoute({
@@ -244,6 +246,10 @@ function createApp(options) {
   )
   app.use(
     '/api',
+    createRemindersRoute({ config, db, codeToOpenid, limitIp: recordsIp, now })
+  )
+  app.use(
+    '/api',
     createShareRoute({ config, codeToOpenid, limitIp: shareIp, limitOpenid: shareOpenid })
   )
 
@@ -270,6 +276,18 @@ function createApp(options) {
   })
 
   app.use(createErrorHandler(logger))
+
+  // 订阅消息调度器：未配置模板 ID 时完全不启动，不影响本地/测试环境
+  const reminderService = createReminderService({
+    db,
+    wx: config.wx,
+    templateId: (config.wx && config.wx.reminderTemplateId) || '',
+    page: 'pages/sleep/sleep?end=1',
+    logger,
+    now
+  })
+  reminderService.start()
+  app.locals.reminderService = reminderService
 
   return app
 }

@@ -114,22 +114,10 @@ Page({
     if (this.data.mode === 'wake') this.refreshWakeContext()
   },
 
-  /** 起床选择的上下文：今天/明天 + 上午/下午 + 12h 时间 */
+  /** 起床选择的上下文：今天/明天 + 时段词 + 24h 时间（与结果面一致） */
   wakeContextText(wakeValue, fallMinutes, now) {
     const wakeMinutes = typeof wakeValue === 'number' ? wakeValue : T.parseClock(wakeValue)
-    const wakeAt = P.nextWakeAt(now, wakeMinutes, Number(fallMinutes) || 0)
-    const period = wakeMinutes < 12 * 60 ? '上午' : '下午'
-    const h12 = Math.floor(wakeMinutes / 60) % 12 || 12
-    return (
-      P.dayLabel(wakeAt, now) +
-      ' ' +
-      period +
-      ' ' +
-      T.pad2(h12) +
-      ':' +
-      T.pad2(wakeMinutes % 60) +
-      ' 起床'
-    )
+    return P.wakeContextText(now, wakeMinutes, Number(fallMinutes) || 0)
   },
 
   refreshWakeContext(wakeValue, fallMinutes) {

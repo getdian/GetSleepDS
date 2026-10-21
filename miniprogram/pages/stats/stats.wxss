@@ -434,3 +434,23 @@
   font-size: 20rpx;
   color: var(--text-muted);
 }
+
+/* 最近 7 天规律性：只展示波动，不评分 */
+.regularity-main {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  padding: 4rpx 2rpx 2rpx;
+}
+
+.regularity-label {
+  font-size: 40rpx;
+  font-weight: 300;
+  color: var(--color-primary-soft, #a7a4ff);
+}
+
+.regularity-copy {
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}

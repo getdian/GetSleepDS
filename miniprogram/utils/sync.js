@@ -1,6 +1,7 @@
 const api = require('./api')
 const storage = require('./storage')
 const T = require('./time')
+const X = require('./sessions')
 const { getConfig } = require('./config')
 const { withLogin } = require('./login')
 
@@ -9,7 +10,7 @@ const THROTTLE_MS = 60 * 60 * 1000
 const SPAN_DAYS = 400
 const CHUNK_SIZE = 60
 const DAY_MS = 24 * 60 * 60 * 1000
-const MAX_SLEEP_MS = 20 * 60 * 60 * 1000
+const MAX_SLEEP_MS = 24 * 60 * 60 * 1000
 const DAY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/
 
 let inflight = null
@@ -42,8 +43,15 @@ function collect(now, spanDays) {
     if (current - r.bedAt > span) return
     list.push({
       day: r.day,
+      dayRule: r.dayRule || 'bed-v1',
+      schemaVersion: r.schemaVersion || 1,
       bedAt: r.bedAt,
       wakeAt: r.wakeAt,
+      durationMin: r.durationMin,
+      nightDurationMin: r.nightDurationMin || r.durationMin,
+      totalDurationMin: r.totalDurationMin || r.durationMin,
+      // 旧记录也合成一段，服务端可统一按 v2 存储；dayRule 仍标记旧口径
+      sessions: X.sessionsOf(r),
       updatedAt: r.updatedAt || r.wakeAt
     })
   })
@@ -118,8 +126,9 @@ function mergeServerRecords(serverRecords, options) {
     if (deleted[item.day] && deleted[item.day] >= stamp) return
 
     // 设备时区与服务端固定 +8 不一致时，服务端 day 为准：
-    // 删除本地按设备时区算出的另一个 key，避免同一夜出现两条记录。
-    const localDay = T.sleepDayOf(item.bedAt)
+    // 删除本地按旧口径算出的另一个 key，避免同一夜出现两条记录。
+    const isWakeRule = item.dayRule === 'wake-v1'
+    const localDay = isWakeRule ? T.dateKey(item.wakeAt) : T.sleepDayOf(item.bedAt)
     if (localDay && localDay !== item.day && local[localDay]) {
       dropLocal(local, deleted, localDay, stamp)
       changed += 1
@@ -129,11 +138,21 @@ function mergeServerRecords(serverRecords, options) {
     const current = local[item.day]
     if (current && (current.updatedAt || 0) >= stamp) return
 
+    const sessions = X.sessionsOf(item)
     local[item.day] = {
       day: item.day,
+      dayRule: item.dayRule || 'bed-v1',
+      schemaVersion: item.schemaVersion || 1,
       bedAt: item.bedAt,
       wakeAt: item.wakeAt,
       durationMin: item.durationMin || Math.round((item.wakeAt - item.bedAt) / 60000),
+      nightDurationMin:
+        item.nightDurationMin || item.durationMin || Math.round((item.wakeAt - item.bedAt) / 60000),
+      totalDurationMin:
+        item.totalDurationMin ||
+        item.durationMin ||
+        Math.round((item.wakeAt - item.bedAt) / 60000),
+      sessions,
       updatedAt: stamp
     }
     // 与 storage.saveRecord 的语义保持一致：新记录会清掉同一天的旧墓碑。

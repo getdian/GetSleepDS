@@ -205,17 +205,19 @@
 
 ## 6. 数据规则
 
-### 6.1 睡眠日
+### 6.1 归属日
 
-一条记录归属哪一天，以**入睡时间往前推 12 小时**的日期为准：
+新记录按“醒来日”归属，一天可有多段（夜间睡眠 + 午休/间断睡眠）：
 
 ```
-睡眠日 = localDate(bedAt - 12h)
+记录日 = localDate(session.endAt)
 ```
 
-- 10-17 23:40 入睡 → 睡眠日 10-17
-- 10-18 01:30 入睡 → 睡眠日 10-17
-- 10-18 08:00 查看"今天" → 睡眠日 10-17（与昨晚记录对齐）
+- 10-17 23:40 入睡、10-18 07:30 起床 → 归 10-18
+- 10-18 01:30 入睡、10-18 08:00 起床 → 归 10-18
+- 10-18 13:00–13:25 午休 → 归 10-18
+
+旧版 v1 记录保留原“入睡日”口径（`dayRule: 'bed-v1'`），不静默重排历史；新记录写 `dayRule: 'wake-v1'`。
 
 ### 6.2 平均时间
 
@@ -223,9 +225,10 @@
 
 ### 6.3 时长与缺记录
 
-- `durationMin = round((wakeAt - bedAt) / 60000)`。
-- 只有入睡、没有起床的记录不写入 `records`，只在 `pending` 中存在，不参与任何统计。
-- 时长上限按 20 小时校验，超出视为脏数据丢弃。
+- 每段 `durationMin = round((endAt - startAt) / 60000)`；当天 `totalDurationMin` 为各段之和。
+- 主睡眠取最长一段（`nightDurationMin`），热力图/周均值/连续天数使用主睡眠；当天总睡眠含午休/间断段。
+- 只有入睡、没有起床的记录不写入 `records`，只在 `pending` 中存在，不参与任何统计；超过 24 小时不再静默清除，提示手动校准。
+- 单段上限按 24 小时校验，单日总睡眠上限 24 小时，超出视为脏数据丢弃。
 - `0 点后入睡` 定义为入睡时刻落在 `00:00–05:59`。
 
 ### 6.4 连续天数
@@ -236,8 +239,8 @@
 
 | 键 | 内容 |
 |---|---|
-| `sleep:records:v1` | `{ [day]: { day, bedAt, wakeAt, durationMin, updatedAt } }` |
-| `sleep:pending:v1` | `{ bedAt }` |
+| `sleep:records:v1` | v2：`{ [day]: { day, dayRule, schemaVersion, bedAt, wakeAt, durationMin, nightDurationMin, totalDurationMin, sessions[], updatedAt } }` |
+| `sleep:pending:v1` | `{ bedAt, expectedWakeAt, reminderOptIn, id }` |
 | `sleep:config:v1` | `{ fetchedAt, data }` |
 | `audio_unlock_expire` | 毫秒时间戳（沿用原始 PRD 键名） |
 | `sleep:meta:v1` | `{ lastSyncAt, lastTrackId }` |
@@ -283,7 +286,7 @@
 - [ ] 记录起床 → 显示时长 → 再进入睡页仍是“已完成”，可撤销。
 - [ ] 入睡页声音入口 → 抽屉 → 收起后迷你播放器仍在，可暂停/展开。
 - [ ] 清除数据（云端+本机）成功后记录、会话、缓存全部消失，不会被同步拉回。
-- [ ] 记录归属正确的睡眠日（凌晨 1 点打卡算前一天）。
+- [ ] 记录归属正确的醒来日（23:30→次日 07:00 算次日；午休算当天）。
 - [ ] 热力图格子数量、周一对齐、颜色分级正确；点击有 tooltip。
 - [ ] 平均入睡时间跨午夜正确（23:50 + 00:10 → 00:00）。
 - [ ] 本周不足 3 条时不显示回顾；≥3 条时返回 2 句以内客观描述。

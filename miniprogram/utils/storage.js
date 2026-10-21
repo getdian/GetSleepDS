@@ -3,6 +3,8 @@
  * 任何存储异常都不应该让页面白屏。
  */
 
+const X = require('./sessions')
+
 const KEYS = {
   records: 'sleep:records:v1',
   pending: 'sleep:pending:v1',
@@ -79,6 +81,75 @@ function saveRecord(record) {
   return clearDeleted(record.day)
 }
 
+/**
+ * 追加/更新一段睡眠，按醒来日归档。
+ * 同一天已有的旧 v1 记录会先合成一段，再与新段一起聚合。
+ */
+function saveSession(session) {
+  const normalized = X.normalizeSession(session)
+  if (!normalized) return false
+  const day = X.sessionDay(normalized)
+  if (!day) return false
+  const all = getRawRecords()
+  // 旧 v1 记录按入睡日存放；当它的醒来日正好是本次归档日时，顺带并到新记录，
+  // 避免“昨晚记录挂在昨天、今天午休另起一条”的过渡期割裂。
+  const legacyKeys = []
+  let baseSessions = X.sessionsOf(all[day])
+  Object.keys(all).forEach((key) => {
+    if (key === day || !all[key] || all[key].dayRule === 'wake-v1') return
+    const sessions = X.sessionsOf(all[key])
+    const last = sessions[sessions.length - 1]
+    if (!last || X.sessionDay(last) !== day) return
+    legacyKeys.push(key)
+    baseSessions = baseSessions.concat(sessions)
+  })
+  const list = X.upsert({ sessions: baseSessions }, normalized)
+  if (!list || list.length > 8 || X.hasOverlap(list)) return false
+  if (X.totalDurationOf(list) > 24 * 60) return false
+  const record = X.aggregate(day, list, Date.now())
+  if (!record) return false
+  all[day] = record
+  legacyKeys.forEach((key) => delete all[key])
+  if (!safeSet(KEYS.records, all)) return false
+  legacyKeys.forEach((key) => markDeleted(key, Date.now()))
+  return clearDeleted(day) ? record : false
+}
+
+/** 编辑同一天的某一段；不允许通过编辑把记录移到另一天（避免墓碑拆天） */
+function updateSession(day, sessionId, startAt, endAt) {
+  const all = getRawRecords()
+  const record = all[day]
+  if (!record) return false
+  const list = X.sessionsOf(record)
+    .map((item) =>
+      item.id === sessionId
+        ? X.normalizeSession(Object.assign({}, item, { startAt, endAt, editedAt: Date.now() }))
+        : item
+    )
+    .filter(Boolean)
+  const target = list.filter((item) => item.id === sessionId)[0]
+  if (!target || X.hasOverlap(list)) return false
+  if (X.totalDurationOf(list) > 24 * 60) return false
+  const nextDay = X.sessionDay(target)
+  if (!nextDay) return false
+  // 旧 v1 记录按入睡日归档；首次编辑时迁到醒来日（仅单段可迁，避免拆天）
+  if (nextDay !== day) {
+    if (X.sessionsOf(record).length > 1) return false
+    const next = X.aggregate(nextDay, list, Date.now())
+    if (!next) return false
+    all[nextDay] = next
+    delete all[day]
+    if (!safeSet(KEYS.records, all)) return false
+    markDeleted(day, Date.now())
+    return clearDeleted(nextDay) ? next : false
+  }
+  const next = X.aggregate(day, list, Date.now())
+  if (!next) return false
+  all[day] = next
+  if (!safeSet(KEYS.records, all)) return false
+  return clearDeleted(day) ? next : false
+}
+
 /** 开发工具用：整体替换记录表（调用方负责墓碑等一致性） */
 function replaceRecords(map) {
   return safeSet(KEYS.records, map && typeof map === 'object' ? map : {})
@@ -137,8 +208,15 @@ function getPending() {
   return raw
 }
 
-function setPending(bedAt) {
-  return safeSet(KEYS.pending, { bedAt })
+function setPending(value) {
+  const data = typeof value === 'number' ? { bedAt: value } : value
+  if (!data || !Number.isFinite(Number(data.bedAt))) return false
+  return safeSet(KEYS.pending, {
+    bedAt: Number(data.bedAt),
+    expectedWakeAt: Number(data.expectedWakeAt) || 0,
+    reminderOptIn: data.reminderOptIn === true,
+    id: data.id ? String(data.id) : ''
+  })
 }
 
 function clearPending() {
@@ -268,6 +346,8 @@ module.exports = {
   getRecords,
   getRawRecords,
   saveRecord,
+  saveSession,
+  updateSession,
   replaceRecords,
   removeRecord,
   getDeleted,

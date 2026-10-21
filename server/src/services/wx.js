@@ -158,4 +158,48 @@ async function codeToOpenid(code, options) {
   return data.openid
 }
 
-module.exports = { codeToOpenid, getAccessToken, getUnlimitedQrCode }
+/**
+ * 发送一次性订阅消息。
+ * @param {object} options 微信配置（appid/secret/fetchImpl）
+ * @param {object} message { openid, templateId, page, data }
+ */
+async function sendSubscribeMessage(options, message) {
+  const config = options || {}
+  const payload = message || {}
+  if (!payload.openid || !payload.templateId) {
+    throw apiError('WX_MESSAGE_INVALID', '订阅消息参数不完整', 400)
+  }
+  const token = await getAccessToken(config)
+  const fetchImpl = config.fetchImpl || globalThis.fetch
+  let data = null
+  try {
+    const response = await fetchImpl(
+      'https://api.weixin.qq.com/cgi-bin/message/subscribe/send?access_token=' +
+        encodeURIComponent(token),
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          touser: payload.openid,
+          template_id: payload.templateId,
+          page: payload.page || 'pages/sleep/sleep?end=1',
+          data: payload.data || {}
+        }),
+        signal: timeoutSignal(8000)
+      }
+    )
+    data = await response.json()
+  } catch (e) {
+    data = null
+  }
+  if (!data || Number(data.errcode) !== 0) {
+    const errcode = data ? data.errcode : 'network'
+    // 43101 = 用户未订阅/已取消；调用方应停止重试，避免继续骚扰
+    const error = apiError('WX_MESSAGE_FAILED', '订阅消息发送失败', 502)
+    error.errcode = errcode
+    throw error
+  }
+  return true
+}
+
+module.exports = { codeToOpenid, getAccessToken, getUnlimitedQrCode, sendSubscribeMessage }

@@ -122,6 +122,8 @@ H5 读取同一份 `/api/config`，后台改音频或文案会同步反映；演
 
 ```bash
 cp .env.example .env      # 填 POSTGRES_PASSWORD、WX_APPID、WX_SECRET、ADMIN_PASSWORD、CONFIG_SECRET、TRUST_PROXY=1
+# 结束入睡提醒：在微信后台申请一次性订阅消息模板后填 WX_REMINDER_TEMPLATE_ID；
+# 模板字段需为 thing1（事项）+ time2（时间），未配置时只提供手机日历兜底
 docker compose up -d --build
 curl http://127.0.0.1:3000/api/ready
 ```

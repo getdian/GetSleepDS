@@ -108,7 +108,9 @@ function loadConfig(env) {
     wx: {
       appid,
       secret,
-      allowDevLogin: !isProd && allowDevLogin
+      allowDevLogin: !isProd && allowDevLogin,
+      // 订阅消息模板由运营在微信后台申请后通过环境变量注入；为空时客户端只提供日历兜底
+      reminderTemplateId: source.WX_REMINDER_TEMPLATE_ID || ''
     },
     unlockTtlHours: ttlHours,
     admin,

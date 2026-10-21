@@ -4,6 +4,7 @@
  */
 
 const T = require('./time')
+const X = require('./sessions')
 
 const CYCLE_MIN = T.CYCLE_MIN
 
@@ -26,9 +27,25 @@ function sum(list, pick) {
   return total
 }
 
+/** 主睡眠（最长一段）：热力图/周均值/连续天数使用 */
 function durationOf(record) {
-  if (record.durationMin) return record.durationMin
-  return Math.round((record.wakeAt - record.bedAt) / T.MINUTE_MS)
+  if (record && record.nightDurationMin) return record.nightDurationMin
+  if (record && record.durationMin) return record.durationMin
+  return record ? Math.round((record.wakeAt - record.bedAt) / T.MINUTE_MS) : 0
+}
+
+/** 当天总睡眠（夜间 + 午休/间断段）：详情/总时长使用 */
+function totalDurationOf(record) {
+  if (!record) return 0
+  if (record.totalDurationMin) return record.totalDurationMin
+  if (Array.isArray(record.sessions) && record.sessions.length) {
+    return X.totalDurationOf(X.sessionsOf(record))
+  }
+  return durationOf(record)
+}
+
+function sessionsOf(record) {
+  return X.sessionsOf(record)
 }
 
 function levelOf(minutes) {
@@ -90,14 +107,8 @@ function inRange(list, start, end) {
  */
 function canStartNewSleep(record, now, todayKey) {
   if (!record || !record.wakeAt) return false
-  const hour = new Date(now).getHours()
-  const stale = now - record.wakeAt >= 3 * 60 * 60 * 1000
-  // 跨睡眠日：仍只在晚上开放“再记今晚”，避免白天新增一条会被晚上覆盖的午睡。
-  if (record.day !== todayKey) return hour >= 18
-  if (hour >= 18) return true
-  // 同一睡眠日的凌晨窗口：下午小睡后 00:00–12:00 仍能开始新记录；
-  // 12:00 之后不放开，避免把任何白天小睡都当成新的一晚。
-  return hour < 12 && stale
+  // 新口径允许一天多段：完成态即可追加，不再用“睡眠日名额”限制午休
+  return record.day !== todayKey || now - record.wakeAt >= 3 * 60 * 60 * 1000
 }
 
 function streakDays(records, now) {
@@ -106,10 +117,10 @@ function streakDays(records, now) {
     done[r.day] = true
   })
 
-  let key = T.sleepDayOf(now)
+  let key = T.dateKey(now)
   if (!done[key]) {
     // 今天还没打卡不算断，从昨天开始数
-    key = T.sleepDayOf(T.addDays(now, -1))
+    key = T.dateKey(T.addDays(now, -1))
     if (!done[key]) return 0
   }
 
@@ -324,6 +335,8 @@ module.exports = {
   CYCLE_MIN,
   completedList,
   durationOf,
+  totalDurationOf,
+  sessionsOf,
   levelOf,
   digest,
   weekly,

@@ -39,6 +39,7 @@ function merge(raw) {
     backgroundUnlockHours:
       Number(raw.backgroundUnlockHours) || FALLBACK.backgroundUnlockHours,
     features: Object.assign({}, FALLBACK.features, raw.features || {}),
+    reminder: Object.assign({}, FALLBACK.reminder, raw.reminder || {}),
     cache: Object.assign({}, FALLBACK.cache, raw.cache || {}),
     copy: Object.assign({}, FALLBACK.copy, raw.copy || {})
   }

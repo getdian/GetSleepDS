@@ -162,3 +162,60 @@ test('includeAll 必须是布尔值，字符串不能触发全量回填', async 
   assert.equal(res.status, 400)
   assert.equal(res.body.error.code, 'INVALID_BODY')
 })
+
+test('v2 多段记录按醒来日归档，并保留 sessions/总时长', async () => {
+  const nightStart = bj(2026, 10, 14, 23, 50)
+  const nightEnd = bj(2026, 10, 15, 7, 30)
+  const napStart = bj(2026, 10, 15, 8, 30)
+  const napEnd = bj(2026, 10, 15, 9, 0)
+  const res = await post('/api/records/sync', {
+    code: 'sync-v2',
+    records: [
+      {
+        day: '2026-10-15',
+        dayRule: 'wake-v1',
+        schemaVersion: 2,
+        bedAt: nightStart,
+        wakeAt: nightEnd,
+        durationMin: 460,
+        sessions: [
+          { id: 'night', startAt: nightStart, endAt: nightEnd, source: 'manual' },
+          { id: 'nap', startAt: napStart, endAt: napEnd, source: 'manual' }
+        ],
+        totalDurationMin: 490,
+        updatedAt: FIXED_NOW + 4000
+      }
+    ],
+    deletedDays: [],
+    includeAll: true
+  })
+  assert.equal(res.status, 200)
+  assert.equal(res.body.synced, 1)
+  const saved = res.body.records.filter((item) => item.day === '2026-10-15')[0]
+  assert.ok(saved)
+  assert.equal(saved.dayRule, 'wake-v1')
+  assert.equal(saved.sessions.length, 2)
+  assert.equal(saved.totalDurationMin, 490)
+})
+
+test('v2 重叠段会被丢弃，不污染云端', async () => {
+  const start = bj(2026, 10, 15, 21, 0)
+  const end = bj(2026, 10, 16, 5, 0)
+  const res = await post('/api/records/sync', {
+    code: 'sync-v2',
+    records: [
+      {
+        schemaVersion: 2,
+        sessions: [
+          { id: 'a', startAt: start, endAt: end },
+          { id: 'b', startAt: bj(2026, 10, 16, 4, 0), endAt: bj(2026, 10, 16, 6, 0) }
+        ],
+        updatedAt: FIXED_NOW + 5000
+      }
+    ],
+    includeAll: false
+  })
+  assert.equal(res.status, 200)
+  assert.equal(res.body.synced, 0)
+  assert.equal(res.body.dropped, 1)
+})
