@@ -192,7 +192,9 @@ Component({
       this.setData({ loading: false })
       this.sync(true)
       // 系统侧暂停已冻结倒计时；恢复播放时续剩余，没有运行中的倒计时才按偏好起表。
-      this.applyTimerPreference(Number(storage.getMeta().audioTimerMinutes) || 0)
+      // 与入睡页 dock 同口径：偏好取内存中的 audioTimer.total()（默认“关”=0，
+      // 不跨会话回忆 meta 里的旧档位）。
+      this.applyTimerPreference(audioTimer.total())
     },
 
     handlePause() {
@@ -495,8 +497,9 @@ Component({
         if (next) {
           const app = getApp()
           if (app && app.globalData) app.globalData.audioSession = true
-          // 与入睡页 dock 一致：暂停中续剩余，没有运行中的倒计时才按偏好重新起表
-          this.applyTimerPreference(Number(storage.getMeta().audioTimerMinutes) || 0)
+          // 与入睡页 dock 一致：暂停中续剩余，没有运行中的倒计时才按偏好重新起表；
+          // 偏好取 audioTimer.total()（默认“关”=0，不跨会话回忆旧档位）
+          this.applyTimerPreference(audioTimer.total())
           this.armLoadingGuard()
           audio.play()
         } else {

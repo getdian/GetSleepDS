@@ -3,8 +3,8 @@
   position: fixed;
   left: 0;
   right: 0;
-  /* 与入睡页 dock 共用同一套底部安全位：避开 tabBar，又不压住计算器主按钮 */
-  bottom: calc(132rpx + env(safe-area-inset-bottom));
+  /* 与入睡页 dock 共用同一套底部安全位：避开 tabBar 并拉开间距，又不压住计算器主按钮 */
+  bottom: calc(176rpx + env(safe-area-inset-bottom));
   z-index: var(--z-overlay, 9999);
   padding: 0 0 0 24rpx;
   pointer-events: none;
@@ -109,11 +109,11 @@
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: rgba(8, 11, 20, 0.46);
+  background: rgba(8, 11, 20, 0.3);
   border: none;
-  -webkit-backdrop-filter: blur(14rpx);
-  backdrop-filter: blur(14rpx);
-  box-shadow: 0 12rpx 30rpx rgba(0, 0, 0, 0.28);
+  -webkit-backdrop-filter: blur(18rpx);
+  backdrop-filter: blur(18rpx);
+  box-shadow: 0 8rpx 22rpx rgba(0, 0, 0, 0.2);
   animation: npFloat 3.4s ease-in-out infinite;
 }
 

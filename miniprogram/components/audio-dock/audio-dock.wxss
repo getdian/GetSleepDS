@@ -864,7 +864,8 @@
 .dock-fab {
   position: fixed;
   right: 30rpx;
-  bottom: 42rpx;
+  /* 与下方玻璃态覆盖块、now-playing.np-shell 保持同一底部安全位（176rpx + safe-area） */
+  bottom: calc(176rpx + env(safe-area-inset-bottom));
   z-index: var(--z-fab, 40);
   width: 118rpx;
   height: 118rpx;
@@ -1339,15 +1340,15 @@
 /* 悬浮音符：页面主题深色 + 透明玻璃圆底，无边框、不描高光 */
 .dock-fab {
   right: 26rpx;
-  bottom: calc(132rpx + env(safe-area-inset-bottom));
+  bottom: calc(176rpx + env(safe-area-inset-bottom));
   width: 108rpx;
   height: 108rpx;
   border-radius: 50%;
-  background: rgba(8, 11, 20, 0.46);
+  background: rgba(8, 11, 20, 0.3);
   border: none;
-  -webkit-backdrop-filter: blur(14rpx);
-  backdrop-filter: blur(14rpx);
-  box-shadow: 0 12rpx 30rpx rgba(0, 0, 0, 0.28);
+  -webkit-backdrop-filter: blur(18rpx);
+  backdrop-filter: blur(18rpx);
+  box-shadow: 0 8rpx 22rpx rgba(0, 0, 0, 0.2);
   animation: noteFloat 3.8s ease-in-out infinite;
 }
 
@@ -1368,7 +1369,7 @@
 .dock-note {
   position: fixed;
   right: 26rpx;
-  bottom: calc(132rpx + env(safe-area-inset-bottom));
+  bottom: calc(176rpx + env(safe-area-inset-bottom));
   z-index: var(--z-fab, 40);
   width: 108rpx;
   height: 108rpx;
@@ -1376,11 +1377,11 @@
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: rgba(8, 11, 20, 0.46);
+  background: rgba(8, 11, 20, 0.3);
   border: none;
-  -webkit-backdrop-filter: blur(14rpx);
-  backdrop-filter: blur(14rpx);
-  box-shadow: 0 12rpx 30rpx rgba(0, 0, 0, 0.28);
+  -webkit-backdrop-filter: blur(18rpx);
+  backdrop-filter: blur(18rpx);
+  box-shadow: 0 8rpx 22rpx rgba(0, 0, 0, 0.2);
   animation: noteFloat 3.4s ease-in-out infinite;
 }
 
@@ -1434,7 +1435,7 @@
 .dock-mini {
   left: auto;
   right: 0;
-  bottom: calc(132rpx + env(safe-area-inset-bottom));
+  bottom: calc(176rpx + env(safe-area-inset-bottom));
   width: 480rpx;
   max-width: calc(100% - 24rpx);
   min-height: 88rpx;

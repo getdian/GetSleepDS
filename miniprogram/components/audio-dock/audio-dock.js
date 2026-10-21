@@ -122,7 +122,8 @@ Component({
           ) {
             wx.showToast({ title: '定时结束，已停止播放', icon: 'none' })
           }
-          this.setData({ currentId: '', currentTitle: '', currentCategory: '', playing: false })
+          // 到点即结束这一段会话：定时胶囊复位到“关”，不会静默重新起表
+          this.setData({ currentId: '', currentTitle: '', currentCategory: '', playing: false, timerMinutes: 0 })
         }
         // 隐藏页不逐秒算文案，回到前台时由 show 补一次
         if (this._pageVisible) this.syncPlayerText()
@@ -132,15 +133,10 @@ Component({
         if (this._alive && this._pageVisible) this.refreshUnlock()
       }, 60 * 1000)
 
-      const meta = storage.getMeta()
-      if (!this._cfg.features || this._cfg.features.timer === false) {
-        this.setData({ timerMinutes: 0 })
-      } else if (typeof meta.audioTimerMinutes === 'number') {
-        // 尊重用户上次明确选择的档位；没有记录则保持“关”
-        this.setData({ timerMinutes: meta.audioTimerMinutes })
-      } else {
-        this.setData({ timerMinutes: 0 })
-      }
+      // 定时关闭默认“关”：不跨会话回忆上次档位——旧版本会把默认 60 分钟写进
+      // meta.audioTimerMinutes，“回忆旧值”会让默认值失效；有跨进程恢复的
+      // 运行中/暂停中倒计时时，按真实状态回显档位。
+      this.setData({ timerMinutes: audioTimer.total() || 0 })
 
       loadConfig(true).then((cfg) => {
         if (!this._alive || !cfg) return
@@ -180,8 +176,9 @@ Component({
       // 回到前台/切回入睡页时按墙钟再校准一次定时；app.onShow 之外的幂等兜底
       audioTimer.restore()
       // 统计页“清除数据”会 stop 音频并清空 meta；回到入睡页时同步清掉残留迷你条
+      // 与定时胶囊（数据已清，偏好回到默认“关”）
       if (storage.getMeta().lastTrackActive === false && this.data.currentId) {
-        this.setData({ currentId: '', currentTitle: '', currentCategory: '', playing: false, loading: false, playerSub: '', timerRemainText: '', miniExpanded: false, collapsed: false, collapsing: false })
+        this.setData({ currentId: '', currentTitle: '', currentCategory: '', playing: false, loading: false, playerSub: '', timerRemainText: '', timerMinutes: 0, miniExpanded: false, collapsed: false, collapsing: false })
       }
       // 从计算器/统计页切回来时以真实 BackgroundAudioManager 状态为准，
       // 不能沿用隐藏前的 playing，否则会出现“已暂停却显示正在播放、点暂停无效”。
@@ -411,10 +408,9 @@ Component({
           storage.patchMeta({ lastTrackPlaying: true })
           this.setData({ playing: true, loading: false })
           // 系统侧恢复（通知栏/锁屏/耳机）与首次起播都走这里：
-          // 暂停事件已冻结倒计时，这里续剩余；没有运行中的倒计时才按偏好起表。
-          this.applyTimerPreference(
-            Number(storage.getMeta().audioTimerMinutes) || this.data.timerMinutes || 0
-          )
+          // 暂停事件已冻结倒计时，这里续剩余；没有运行中的倒计时才按本会话已明确
+          // 选择的档位起表（默认“关”= 不起表，不跨会话回忆旧档位）。
+          this.applyTimerPreference(this.data.timerMinutes)
           this.syncPlayerText()
         },
         pause: () => {
@@ -493,7 +489,9 @@ Component({
             playing: false,
             loading: false,
             playerSub: '',
-            timerRemainText: ''
+            timerRemainText: '',
+            // 终态失败同样结束这一段会话：定时胶囊复位到“关”
+            timerMinutes: 0
           })
           storage.patchMeta({ lastTrackActive: false, lastTrackPlaying: false })
           audioTimer.clear(undefined, true)
@@ -796,13 +794,13 @@ Component({
     stopPlayback() {
       this._stopRequested = true
       this.disarmLoadingGuard()
-      // 停止本次播放，但保留“下次定时多久”的偏好
+      // 停止本次播放即结束这一段会话：定时偏好回到“关”，下次播放需明确重新选择
       audioTimer.clear(undefined, true)
       storage.patchMeta({ lastTrackActive: false, lastTrackPlaying: false })
       const app = getApp()
       if (app && app.globalData) app.globalData.audioSession = false
       this.clearCollapseTimer()
-      this.setData({ currentId: '', currentTitle: '', currentCategory: '', playing: false, loading: false, playerSub: '', timerRemainText: '', miniExpanded: false, collapsed: false, collapsing: false })
+      this.setData({ currentId: '', currentTitle: '', currentCategory: '', playing: false, loading: false, playerSub: '', timerRemainText: '', timerMinutes: 0, miniExpanded: false, collapsed: false, collapsing: false })
       if (this._audio) {
         try {
           this._audio.stop()
