@@ -22,6 +22,13 @@
 - **GEO / SEO**：`robots.txt`（明确放行 GPTBot / ClaudeBot / PerplexityBot 等 AI 爬虫）、`sitemap.xml`、`llms.txt`（产品事实 + FAQ + 链接，页脚有入口）；页面 head 含 keywords / canonical / OG / `MobileApplication` 与 `FAQPage` JSON-LD。
 - **注意**：`landing.css` 里 `.qr-img-box img` 有 `display:block`，因此必须保留 `img[hidden]` 显式压回 `display:none`，否则空态会渲染破图占位。
 
+## 1.6 备案与主体信息
+
+- **备案**：页脚展示工信部备案号 `粤ICP备2026037774号-3`（链接 `https://beian.miit.gov.cn/`）与公安备案号 `粤公网安备44030002013825号`（链接 `https://beian.mps.gov.cn/#/query/webSearch?code=44030002013825`）。备案号必须保留并链接官方查询；主体公司名称不是强制展示项。
+- **主体信息**：睡点是主体公司下的工具产品，公开站点不展示公司名称——页脚、`<meta name="author">`、JSON-LD `author`、`llms.txt` 的「主办方」均已移除或改为产品名。
+- **排版**：备案号有浅下划线提示可点击；≤600px 页脚纵向堆叠，备案信息逐行展示，长号码允许换行，避免与页脚导航挤压。
+- **验证**：桌面 1440px / 移动 390px 截图核对；两个 JSON-LD 块 JSON 校验通过；`npm test` 152 passed / 0 failed（1 个 PG skip）。
+
 ## 2. 一致性
 
 | 项 | 小程序 | H5 |

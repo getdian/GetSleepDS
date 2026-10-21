@@ -197,9 +197,34 @@ img {
 }
 
 @media (max-width: 600px) {
-  /* 窄屏两项会换行，分隔点留在上一行末尾会显得悬空 */
+  /* 窄屏页脚纵向堆叠：备案号与页脚导航不再抢同一行 */
+  .footer-inner {
+    display: block;
+  }
+
+  .footer-links {
+    margin-top: 14px;
+  }
+
+  /* 窄屏下 flex 的 min-content 会把长备案号挤出容器，改为逐行块级展示 */
+  .footer-legal {
+    display: block;
+  }
+
+  .footer-legal span {
+    display: block;
+  }
+
+  .footer-legal span + span {
+    margin-top: 2px;
+  }
+
   .footer-legal .sep {
     display: none;
+  }
+
+  .footer-legal a {
+    word-break: break-all;
   }
 }
 

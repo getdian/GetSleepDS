@@ -1,5 +1,12 @@
 # 睡点 · 关键更新记录
 
+## 2026-10-21 · 落地页备案与主体信息收敛
+
+- **备案**：页脚替换占位号为正式备案信息——工信部备案号 `粤ICP备2026037774号-3`（链接 `https://beian.miit.gov.cn/`）、公安备案号 `粤公网安备44030002013825号`（链接 `https://beian.mps.gov.cn/#/query/webSearch?code=44030002013825`）；均 `target="_blank" rel="noopener noreferrer"`。
+- **主体信息**：睡点作为主体公司下的工具产品，公开站点不再展示公司名称——移除页脚公司名、`<meta name="author">`、JSON-LD `author` 组织主体；`llms.txt` 的「主办方」改为「产品 / 睡点（微信小程序）」。
+- **排版**：备案号加浅下划线提示可点击；≤600px 页脚纵向堆叠、备案信息逐行展示、长号码 `word-break: break-all`，避免与页脚导航挤压。
+- 验证：桌面 1440px / 移动 390px 截图核对；两个 JSON-LD 块 JSON 校验通过；`npm test` 152 passed / 0 failed（1 个 PG skip）。
+
 ## 2026-10-21 · 复审补丁（迷你条权益 / 弱网 loading）
 
 - `now-playing.toggle()` 不再在权益校验前写 `audioSession`，只在真正起播时标记会话；播放失败回滚时同步清 `loading`，不再停在「缓冲中…」。
