@@ -187,6 +187,20 @@ img {
 .footer-legal a {
   color: inherit;
   text-decoration: none;
+  /* 备案号必须可点，浅下划线给出可点击提示，同时不破坏页脚的克制感 */
+  border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+  padding-bottom: 1px;
+}
+
+.footer-legal a:hover {
+  border-bottom-color: var(--muted);
+}
+
+@media (max-width: 600px) {
+  /* 窄屏两项会换行，分隔点留在上一行末尾会显得悬空 */
+  .footer-legal .sep {
+    display: none;
+  }
 }
 
 .footer a:hover {
