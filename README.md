@@ -232,6 +232,7 @@ npm run check   # JSON / WXML 标签 / WXSS 括号 / 页面四件套 / 组件引
 11. [常用操作](docs/10-operations.md) —— 极客混跑、打包、1Panel 部署的标准口令
 12. [关键更新](docs/11-changelog.md) —— 2026-10-19 同步/删除/解锁/交互加固记录
 13. [入睡页与环境声音升级](docs/12-sleep-audio-refresh.md) —— 复用计算器视觉：Hero 背景、月相打卡卡、7 天柱图、抽屉头部/当前播放/单曲提示
+14. [验收清单](docs/13-acceptance-checklist.md) —— 提审前总表：本机已验收（CLI 390×844 实测）/ 待真机 / 待外部输入三区
 
 ## 下一步
 

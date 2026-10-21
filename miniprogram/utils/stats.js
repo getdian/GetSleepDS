@@ -271,7 +271,8 @@ function deltaAmount(minutes) {
   const abs = Math.abs(Math.round(minutes || 0))
   const h = Math.floor(abs / 60)
   const m = abs % 60
-  return h ? (m ? h + 'h' + T.pad2(m) : h + 'h') : m + ' 分'
+  // 5h42 这种写法会被读成"5 点 42"，补 m 后缀消除歧义；纯分钟同样用 m
+  return h ? (m ? h + 'h' + T.pad2(m) + 'm' : h + 'h') : m + 'm'
 }
 
 // 统计页的「常见睡眠时长」参照：7.5–8 小时，只做事实陈述，不评价好坏
@@ -315,7 +316,13 @@ function metricsOf(records, now) {
       key: 'duration',
       label: '平均睡眠',
       value: compactDuration(total),
-      sub: d.total === null ? '' : d.total === 0 ? '持平' : (d.total > 0 ? '多 ' : '少 ') + deltaAmount(d.total),
+      // 一行变化必须带主语：单独"少 5h42"读不出是和谁比
+      sub:
+        d.total === null
+          ? ''
+          : d.total === 0
+            ? '与上周持平'
+            : '比上周' + (d.total > 0 ? '多 ' : '少 ') + deltaAmount(d.total),
       detail: [
         '本周 ' + cur.count + ' 天平均 ' + durationText(total) + '，含午休与间断段',
         reference,
@@ -328,7 +335,12 @@ function metricsOf(records, now) {
       key: 'bed',
       label: '平均入睡',
       value: clockText(cur.avgBedMin),
-      sub: d.bed === null ? '' : d.bed === 0 ? '持平' : (d.bed > 0 ? '晚 ' : '早 ') + deltaAmount(d.bed),
+      sub:
+        d.bed === null
+          ? ''
+          : d.bed === 0
+            ? '与上周持平'
+            : '比上周' + (d.bed > 0 ? '晚 ' : '早 ') + deltaAmount(d.bed),
       detail: [
         '本周 ' + cur.count + ' 天平均 ' + clockText(cur.avgBedMin) + ' 入睡',
         clockCompare(d.bed),
@@ -341,7 +353,12 @@ function metricsOf(records, now) {
       key: 'wake',
       label: '平均起床',
       value: clockText(cur.avgWakeMin),
-      sub: d.wake === null ? '' : d.wake === 0 ? '持平' : (d.wake > 0 ? '晚 ' : '早 ') + deltaAmount(d.wake),
+      sub:
+        d.wake === null
+          ? ''
+          : d.wake === 0
+            ? '与上周持平'
+            : '比上周' + (d.wake > 0 ? '晚 ' : '早 ') + deltaAmount(d.wake),
       detail: [
         '本周 ' + cur.count + ' 天平均 ' + clockText(cur.avgWakeMin) + ' 起床（主睡眠）',
         clockCompare(d.wake),

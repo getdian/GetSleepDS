@@ -8,6 +8,17 @@
   padding-top: 8rpx;
 }
 
+/* 底部清场（档位经运营定为 180rpx）：音符/播放条从 176rpx 起、高 108rpx，
+   浮动动画顶点约 292rpx。180rpx + 页脚广告位（待载约 100rpx / 实载更高）≈ 320rpx，
+   「数据与备份」行在 resting 位置高出音符带——截图里的压住即修复。
+   已知代价（几何决定，非缺陷）：① 页脚广告实载时会落在音符带内、下部被音符遮；
+   ② 广告位关闭/加载失败（高度 0）时，行会落回音符带、重新被压住。
+   要两者都避免需把清场加到 292rpx 以上（约 300rpx），或给 settings-head
+   加右内边距让「展开」避开音符列——按运营取舍留 180。 */
+.stats-page .safe-bottom {
+  padding-bottom: calc(180rpx + env(safe-area-inset-bottom));
+}
+
 .stats-hero {
   display: flex;
   flex-direction: column;
@@ -19,11 +30,16 @@
   margin-top: 4rpx;
 }
 
-/* 3 列核心指标：大数字 + 短标签 + 一行变化；点击展开说明 */
+/* 3 列核心指标：大数字 + 短标签 + 一行变化；点击展开说明。
+   极淡容器卡让三个数字成组，与下方说明/日历拉开层级 */
 .metrics {
   display: flex;
   align-items: stretch;
-  margin-top: 8rpx;
+  margin-top: 12rpx;
+  padding: 6rpx 6rpx;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.035);
+  border: 1rpx solid rgba(255, 255, 255, 0.05);
 }
 
 .metric {
@@ -65,10 +81,13 @@
 }
 
 .metric-sub {
+  max-width: 100%;
   font-size: 18rpx;
   line-height: 1.2;
   color: var(--color-primary-soft);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .metrics-empty {
@@ -122,14 +141,28 @@
   color: var(--text-secondary);
 }
 
-/* 参照陈述：常见 7.5–8 小时；记录不足时第二行给补记引导 */
+/* 参照陈述：常见 7.5–8 小时；记录不足时第二行给补记引导。
+   打卡天数是关键数据：提级到正文色，数字再加重；右侧给一条轻量操作引导 */
 .week-line {
   display: flex;
   align-items: center;
   gap: 8rpx;
-  margin-top: 10rpx;
-  font-size: 20rpx;
+  margin-top: 14rpx;
+  font-size: 22rpx;
+  color: var(--text-secondary);
+}
+
+.week-num {
+  color: var(--text-primary);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.week-hint {
+  margin-left: auto;
+  font-size: 19rpx;
   color: var(--text-muted);
+  opacity: 0.85;
 }
 
 .week-dot {
@@ -217,6 +250,11 @@
   gap: 6rpx;
   font-size: 18rpx;
   color: var(--text-muted);
+}
+
+/* 行首读色说明：比档位微亮，让"颜色越亮=睡得越久"先入眼 */
+.cal-legend-item.is-note {
+  color: var(--text-secondary);
 }
 
 .cal-swatch {

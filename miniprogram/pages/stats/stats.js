@@ -92,10 +92,13 @@ Page({
       calendarSpan > 1 ? S.calendarMonths(records, now, calendarSpan, partialDay) : []
     let calendarNote = ''
     if (calendarSpan === 1) {
-      calendarNote = calendar.marked ? calendar.marked + ' 天有记录' : '这个月还没有完整记录'
+      // 底注说明的是"这个月"，不写月份主语会被读成整段历史的记录数
+      calendarNote = calendar.marked ? '本月已记录 ' + calendar.marked + ' 天' : '本月还没有完整记录'
     } else {
       const marked = calendarMonths.reduce((sum, month) => sum + month.marked, 0)
-      calendarNote = marked ? '近 ' + calendarSpan + ' 个月 ' + marked + ' 天有记录' : '这段时间还没有完整记录'
+      calendarNote = marked
+        ? '近 ' + calendarSpan + ' 个月已记录 ' + marked + ' 天'
+        : '这段时间还没有完整记录'
     }
     const meta = storage.getMeta()
     const config = getConfig()
@@ -871,7 +874,7 @@ Page({
     const duration = this.data.metrics.filter((item) => item.key === 'duration')[0]
     const payload = {
       title: duration
-        ? '本周记录 ' + this.data.weekCount + ' 天 · 平均睡 ' + duration.value + '，来「睡点」记录睡眠'
+        ? '本周打卡 ' + this.data.weekCount + ' 天 · 平均睡 ' + duration.value + '，来「睡点」记录睡眠'
         : '睡点 · 只看数据、不做评价的睡眠记录',
       path: '/pages/stats/stats?from=share'
     }

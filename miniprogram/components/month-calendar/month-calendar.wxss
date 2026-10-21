@@ -104,13 +104,15 @@
   margin-top: 6rpx;
 }
 
-/* 空格子：直接写「补记」，但色弱处理，不抢有记录的格子 */
+/* 空格子：只放一枚极淡的＋，示意"可点可补记"。
+   逐格写「补记」两个字是视觉噪音，动作入口在点击后的详情卡里 */
 .mc-add {
-  margin-top: 6rpx;
-  font-size: 15rpx;
+  margin-top: 2rpx;
+  font-size: 24rpx;
   line-height: 1;
+  font-weight: 300;
   color: var(--text-muted);
-  opacity: 0.8;
+  opacity: 0.32;
 }
 
 /* 4 档：短睡不再和长睡同色；亮档改用深字保证对比 */

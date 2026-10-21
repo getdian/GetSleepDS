@@ -50,9 +50,14 @@
     </view>
 
     <view wx:if="{{metrics.length}}" class="week-line fade-up">
-      <text>本周记录 {{weekCount}} 天</text>
+      <text class="week-main">
+        <text>本周打卡 </text><text class="week-num">{{weekCount}}</text><text> 天</text>
+      </text>
       <text class="week-dot">·</text>
-      <text>连续 {{streak}} 天</text>
+      <text class="week-main">
+        <text>连续 </text><text class="week-num">{{streak}}</text><text> 天</text>
+      </text>
+      <text wx:if="{{!metricDetail}}" class="week-hint">点数字看说明</text>
     </view>
 
     <ad-slot wx:if="{{hasData}}" slot-name="stats" enabled="{{ads.stats.enabled}}" unit-id="{{ads.stats.unitId}}" type="{{ads.stats.type}}" />
@@ -88,9 +93,12 @@
       />
 
       <view class="cal-legend">
+        <view class="cal-legend-item is-note">
+          <text>颜色越亮 = 睡得越久</text>
+        </view>
         <view class="cal-legend-item">
           <view class="cal-swatch lv-1"></view>
-          <text>4h 内</text>
+          <text>＜4h</text>
         </view>
         <view class="cal-legend-item">
           <view class="cal-swatch lv-2"></view>
@@ -102,7 +110,7 @@
         </view>
         <view class="cal-legend-item">
           <view class="cal-swatch lv-4"></view>
-          <text>8h 以上</text>
+          <text>8h+</text>
         </view>
         <view class="cal-legend-item">
           <view class="cal-swatch is-partial"></view>
@@ -130,9 +138,9 @@
         <text class="heat-note">{{calendarNote}}</text>
         <view class="section-actions">
           <share-btn variant="icon" />
-          <view class="poster-btn" bindtap="onMakePoster" aria-role="button" aria-label="生成近 30 天回顾海报">
+          <view class="poster-btn" bindtap="onMakePoster" aria-role="button" aria-label="生成近 30 天海报并保存到相册">
             <text class="poster-spark">✦</text>
-            <text>近 30 天回顾</text>
+            <text>生成 30 天海报</text>
           </view>
         </view>
       </view>

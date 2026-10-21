@@ -142,7 +142,7 @@ test('3 列核心指标：大数字 + 短标签 + 一行变化，说明卡固定
   )
   assert.equal(result.metrics[0].label, '平均睡眠')
   assert.equal(result.metrics[0].value, '3h39')
-  assert.equal(result.metrics[0].sub, '持平')
+  assert.equal(result.metrics[0].sub, '与上周持平')
   assert.equal(result.metrics[2].label, '平均起床')
   result.metrics.forEach((item) => {
     assert.equal(item.detail.length, 3)
