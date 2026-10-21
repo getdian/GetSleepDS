@@ -101,7 +101,7 @@ tests/            Node 纯逻辑测试
 
 - `npm test`：**182 项 / 181 通过 / 0 失败 / 1 skip**（PG 集成用例在未设置 `PG_TEST_URL` 时跳过）。
 - `npm run check`：3 页面 / 21 JSON / 16 WXML / 17 WXSS，主包约 432.7 KB（以最新输出为准）。
-- 交付包：`release-artifacts/getsleep-L4-20261021.zip`（223 文件 / 2.51 MB，含 `RELEASE-MANIFEST.json` 与逐文件 sha256）。
+- 交付包：以 `release-artifacts/` 下最新 `getsleep-<label>.zip` 为准（`npm run pack` 生成，含 `RELEASE-MANIFEST.json` 与逐文件 sha256，同时留 `.sha256` 校验文件）；打包前会强制跑 `npm test` + `npm run check`。
 - 分享归因冒烟（2026-10-19，内存模式）：`app_open` 带 `1007|pages/index/index|share` 上报 → `/api/admin/analytics` 的 `topSources` 聚合出现；`/api/share/qrcode` 无 code 返 400、密钥不可用返 503，均为优雅报错。
 - 微信开发者工具（AppID `wx378b0a7437d60998`）：三页真实编译；热力图滚到最新周；C 态“覆盖今晚”渲染；控制台无 error；实际触发 `/api/records/sync` 返回 20 条并带 `deletedDays/erasedAt`。
 - 本地 PostgreSQL + API（3100）：`/api/ready` 200；PG `syncRecords` 的 day 归一化/墓碑/erasure 事务、`saveUnlock` 单行覆盖均实测通过。
