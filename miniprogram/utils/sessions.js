@@ -34,6 +34,22 @@ function normalizeSession(session) {
   }
 }
 
+/**
+ * 以“醒来日”为基准，把两个 HH:MM 组合成一段睡眠。
+ * 入睡时间 >= 起床时间时自动落到前一天，处理 23:00→07:00 的跨午夜补记。
+ */
+function rangeForDay(dayTs, bedMinutes, wakeMinutes, now) {
+  let wakeAt = T.clockTs(dayTs, wakeMinutes)
+  let bedAt = T.clockTs(dayTs, bedMinutes)
+  if (bedAt >= wakeAt) bedAt -= T.DAY_MS
+  const durationMin = Math.round((wakeAt - bedAt) / T.MINUTE_MS)
+  let error = ''
+  if (wakeAt > (Number(now) || Date.now()) + T.MINUTE_MS) error = 'future'
+  else if (durationMin < 1) error = 'short'
+  else if (wakeAt - bedAt > MAX_SESSION_MS) error = 'long'
+  return { bedAt, wakeAt, durationMin, error }
+}
+
 /** 兼容 v1：旧记录没有 sessions，用 bedAt/wakeAt 合成一段 */
 function sessionsOf(record) {
   if (!record) return []
@@ -130,6 +146,7 @@ function hasOverlap(list) {
 
 module.exports = {
   MAX_SESSION_MS,
+  rangeForDay,
   normalizeSession,
   sessionsOf,
   sessionDay,

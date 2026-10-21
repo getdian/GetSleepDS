@@ -676,44 +676,138 @@
   color: rgba(255, 255, 255, 0.62);
 }
 
-/* 本日多段睡眠明细 */
+/* 本日多段睡眠明细：每段 88rpx 高，右侧修改按钮有独立命中区 */
 .done-sessions {
   width: 100%;
   margin-top: 18rpx;
-  padding: 14rpx 18rpx;
+  padding: 14rpx 18rpx 6rpx;
   border-radius: 18rpx;
   background: rgba(255, 255, 255, 0.035);
 }
 
+.done-sessions-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12rpx;
+  padding-bottom: 6rpx;
+}
+
 .done-sessions-k {
   display: block;
-  margin-bottom: 6rpx;
   font-size: 19rpx;
   color: rgba(255, 255, 255, 0.46);
 }
 
+.done-sessions-hint {
+  flex: none;
+  font-size: 17rpx;
+  color: rgba(255, 255, 255, 0.3);
+}
+
 .done-session-row {
+  min-height: 88rpx;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12rpx;
-  padding: 5rpx 0;
-  font-size: 21rpx;
+  gap: 14rpx;
+  padding: 8rpx 0;
+  border-top: 1rpx solid rgba(255, 255, 255, 0.055);
   color: rgba(220, 230, 255, 0.8);
 }
 
+.done-session-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3rpx;
+}
+
+.done-session-time {
+  font-size: 26rpx;
+  font-variant-numeric: tabular-nums;
+  color: rgba(228, 236, 255, 0.9);
+}
+
 .done-session-dur {
-  flex: none;
+  font-size: 19rpx;
   color: rgba(167, 164, 255, 0.9);
 }
 
 .done-session-edit {
+  position: relative;
   flex: none;
-  padding: 4rpx 10rpx;
+  min-height: 56rpx;
+  display: inline-flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 0 18rpx;
   border-radius: 999rpx;
   border: 1rpx solid rgba(167, 164, 255, 0.24);
-  font-size: 18rpx;
+  background: rgba(139, 135, 255, 0.08);
+  font-size: 21rpx;
   color: var(--color-primary-soft);
+}
+
+/* 视觉 56rpx，命中区补到 72rpx */
+.done-session-edit::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -8rpx;
+  bottom: -8rpx;
+}
+
+.done-session-edit:active {
+  background: rgba(139, 135, 255, 0.16);
+}
+
+/* 细线铅笔：笔身 + 笔尖，随 currentColor 变色，不依赖字体图标 */
+.edit-pen {
+  position: relative;
+  width: 20rpx;
+  height: 6rpx;
+  border-radius: 2rpx;
+  background: currentColor;
+  transform: rotate(-45deg);
+}
+
+.edit-pen::after {
+  content: "";
+  position: absolute;
+  right: -8rpx;
+  top: 50%;
+  width: 0;
+  height: 0;
+  border-left: 8rpx solid currentColor;
+  border-top: 5rpx solid transparent;
+  border-bottom: 5rpx solid transparent;
+  transform: translateY(-50%);
+}
+
+.manual-add,
+.manual-entry {
+  min-height: 76rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 20rpx;
+  text-align: center;
+  font-size: 21rpx;
+  color: var(--text-secondary);
+}
+
+.manual-add {
+  margin-top: 2rpx;
+  text-decoration: underline;
+}
+
+.manual-entry {
+  margin-top: 10rpx;
+  color: var(--color-primary-soft);
+  text-decoration: underline;
 }
 
 /* 结束/校准面板 */
@@ -769,6 +863,37 @@
   justify-content: center;
   font-size: 36rpx;
   color: rgba(255, 255, 255, 0.55);
+}
+
+.end-date-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-top: 20rpx;
+  padding: 16rpx;
+  border-radius: 16rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.end-date-k {
+  flex: none;
+  font-size: 19rpx;
+  color: var(--text-muted);
+}
+
+.end-date-v {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  font-size: 24rpx;
+  color: var(--text-primary);
+}
+
+.end-date-arrow {
+  font-size: 28rpx;
+  color: var(--text-muted);
 }
 
 .end-times {

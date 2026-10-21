@@ -38,6 +38,11 @@ Page({
     overdue: false,
     overdueText: '',
     endShow: false,
+    endMode: 'pending',
+    endDate: '',
+    endDateText: '',
+    endToday: '',
+    endMinDate: '',
     endBedTime: '',
     endWakeTime: '',
     endDayText: '',
@@ -64,6 +69,11 @@ Page({
     this._endBedAt = 0
     this._endWakeAt = 0
     this._endBaseDay = 0
+    const now = Date.now()
+    this.setData({
+      endToday: T.dateKey(now),
+      endMinDate: T.dateKey(T.addDays(now, -400))
+    })
     this.refresh()
     adSlots.apply(this)
   },
@@ -420,6 +430,8 @@ Page({
       return
     }
     this._pending = pending
+    this._editingDay = ''
+    this._editingSessionId = ''
     this._endBaseDay = T.startOfDay(now)
     // 自定义 tabBar 可能由微信渲染在页面之上，仅靠 z-index 压不住；
     // 打开结束面板时主动隐藏，关闭后恢复（与抽屉/背景选择器同一套机制）。
@@ -427,9 +439,49 @@ Page({
     this.setData(
       {
         endShow: true,
+        endMode: 'pending',
+        endDate: '',
+        endDateText: '',
         endBedTime: F.fmtClockTs(pending.bedAt),
         endWakeTime: F.fmtClockTs(now),
         endError: ''
+      },
+      () => this.computeEndSheet()
+    )
+  },
+
+  /** 补记一段已经发生的睡眠：不创建 pending、不涉及提醒 */
+  openManualSheet() {
+    if (this.data.state === 'sleeping') return
+    const now = Date.now()
+    const start = now - 30 * 60 * 1000
+    const today = T.dateKey(now)
+    this._editingDay = ''
+    this._editingSessionId = ''
+    this._endBaseDay = T.startOfDay(now)
+    this.hideTabbarForSheet()
+    this.setData(
+      {
+        endShow: true,
+        endMode: 'manual',
+        endDate: today,
+        endDateText: F.fmtDayCN(today) + ' · 今天',
+        endBedTime: F.fmtClockTs(start),
+        endWakeTime: F.fmtClockTs(now),
+        endError: ''
+      },
+      () => this.computeEndSheet()
+    )
+  },
+
+  onEndDateChange(event) {
+    const date = event.detail.value
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return
+    this._endBaseDay = T.parseDateKey(date)
+    this.setData(
+      {
+        endDate: date,
+        endDateText: F.fmtDayCN(date) + (date === this.data.endToday ? ' · 今天' : '')
       },
       () => this.computeEndSheet()
     )
@@ -448,15 +500,26 @@ Page({
     const todayBase = this._endBaseDay || T.startOfDay(now)
     const bedMinutes = T.parseClock(this.data.endBedTime)
     const wakeMinutes = T.parseClock(this.data.endWakeTime)
-    let wakeAt = T.clockTs(todayBase, wakeMinutes)
-    let bedAt = T.clockTs(todayBase, bedMinutes)
-    // 入睡晚于起床时，说明是昨晚入睡；不能把“23:30 入睡”落到今天 23:30
-    if (bedAt >= wakeAt) bedAt -= T.DAY_MS
-    const durationMin = Math.round((wakeAt - bedAt) / 60000)
+    const range = S.rangeForDay(todayBase, bedMinutes, wakeMinutes, now)
+    const wakeAt = range.wakeAt
+    const bedAt = range.bedAt
+    const durationMin = range.durationMin
     let error = ''
-    if (wakeAt > now + 60 * 1000) error = '起床时间不能晚于现在'
-    else if (durationMin < 1) error = '睡眠时长至少 1 分钟'
-    else if (wakeAt - bedAt > MAX_SLEEP_MS) error = '单段睡眠不能超过 24 小时'
+    if (range.error === 'future') error = '起床时间不能晚于现在'
+    else if (range.error === 'short') error = '睡眠时长至少 1 分钟'
+    else if (range.error === 'long') error = '单段睡眠不能超过 24 小时'
+    // 补记/结束都要先挡重叠，避免存不进去才报“写入失败”
+    if (!error && this.data.endMode !== 'edit') {
+      const target = storage.getRecords()[T.dateKey(wakeAt)]
+      if (
+        target &&
+        S.sessionsOf(target).some(
+          (item) => item.startAt < wakeAt && item.endAt > bedAt
+        )
+      ) {
+        error = '与已有睡眠段重叠，请调整时间'
+      }
+    }
     this._endBedAt = bedAt
     this._endWakeAt = wakeAt
     this.setData({
@@ -477,7 +540,7 @@ Page({
     this._editingDay = ''
     this._editingSessionId = ''
     tabbar.show()
-    this.setData({ endShow: false, endError: '' })
+    this.setData({ endShow: false, endError: '', endMode: 'pending' })
   },
 
   /** 编辑某一段：打开同一套结束面板，保存时走 updateSession */
@@ -495,6 +558,9 @@ Page({
     this.setData(
       {
         endShow: true,
+        endMode: 'edit',
+        endDate: '',
+        endDateText: '',
         endBedTime: F.fmtClockTs(session.startAt),
         endWakeTime: F.fmtClockTs(session.endAt),
         endError: ''
@@ -505,6 +571,10 @@ Page({
 
   onEndConfirm() {
     if (this.data.endError || !this._endBedAt || !this._endWakeAt) return
+    if (this.data.endMode === 'manual') {
+      this.saveManualSession()
+      return
+    }
     if (this._editingSessionId) {
       const editingRecord = this.data.record
       const legacy = !editingRecord || editingRecord.dayRule !== 'wake-v1'
@@ -525,7 +595,7 @@ Page({
       this._editingDay = ''
       this._editingSessionId = ''
       tabbar.show()
-      this.setData({ endShow: false, endError: '' })
+      this.setData({ endShow: false, endError: '', endMode: 'pending' })
       this.refresh()
       wx.showToast({ title: '时间已更新', icon: 'none' })
       syncNow(true).catch(() => {})
@@ -555,7 +625,7 @@ Page({
     const cleared = storage.clearPending()
     this._pending = null
     tabbar.show()
-    this.setData({ endShow: false, endError: '' })
+    this.setData({ endShow: false, endError: '', endMode: 'pending' })
     this.refresh()
     wx.showToast({ title: cleared ? '已记录，可随时校准' : '已记录（会话清理稍后重试）', icon: 'none' })
     events.track('checkin', '')
@@ -569,6 +639,32 @@ Page({
       .catch(() => {
         wx.showToast({ title: '已记录，云端备份稍后重试', icon: 'none' })
       })
+  },
+
+  /** 手动补记一段：不创建 pending、不发提醒，直接落 v2 session */
+  saveManualSession() {
+    const now = Date.now()
+    const record = storage.saveSession({
+      id: 'manual-' + now,
+      startAt: this._endBedAt,
+      endAt: this._endWakeAt,
+      durationMin: Math.round((this._endWakeAt - this._endBedAt) / 60000),
+      source: 'manual',
+      editedAt: now
+    })
+    if (!record) {
+      this.setData({ endError: '补记失败：时间可能与已有段重叠，或当天段数/总时长已满' })
+      return
+    }
+    const day = T.dateKey(this._endWakeAt)
+    tabbar.show()
+    this.setData({ endShow: false, endError: '', endMode: 'pending' })
+    this.refresh()
+    wx.showToast({ title: '已补记 ' + F.fmtDayCN(day), icon: 'none' })
+    events.track('manual_sleep', '')
+    syncNow(true).catch(() => {
+      wx.showToast({ title: '已存本机，云端稍后重试', icon: 'none' })
+    })
   },
 
   /** 完成态再记一段：不覆盖已有记录，追加午休/间断睡眠 */
