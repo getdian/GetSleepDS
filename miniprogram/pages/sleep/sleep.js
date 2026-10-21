@@ -181,9 +181,7 @@ Page({
     const weekly = S.weekly(records, now)
     // 多段记录：完成态始终可以再记一段，不再覆盖旧记录
     const canOverwrite = state === 'done'
-    const crossDay = !!record && record.day !== todayKey
     const hour = new Date(now).getHours()
-    const evening = hour >= 18
     const nowText = F.fmtClockTs(now)
     const sleeping = state === 'sleeping'
     const done = state === 'done'
@@ -247,11 +245,8 @@ Page({
       buttonTitle: button.title,
       buttonSub: button.sub,
       canOverwrite,
-      overwriteText: crossDay
-        ? '再记一段'
-        : evening
-          ? '再记一段（同一天可多段）'
-          : '再记一段（午休/间断睡眠）',
+      // 与“补记一段”区分：这里会立刻开始一次新的计时
+      overwriteText: '再记一段（现在开始计时）',
       weekDays: this.buildWeekDays(records, now, pending),
       weekCount: weekly.current.count,
       streak: weekly.streak,
