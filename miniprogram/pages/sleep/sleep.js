@@ -5,6 +5,8 @@ const S = require('../../utils/stats')
 // 睡眠段（rangeForDay/rangeBetween/findOverlap）在 sessions 里，不在 stats：
 // stats 只做按天聚合的门面，别把“段”的逻辑混进来。
 const X = require('../../utils/sessions')
+// 补记编排（默认时间/错误文案/保存入参）：与统计页同一真源
+const MS = require('../../utils/manual-sleep')
 const reminder = require('../../utils/reminder')
 const tabbar = require('../../utils/tabbar')
 const storage = require('../../utils/storage')
@@ -16,6 +18,8 @@ const MAX_SLEEP_MS = 24 * 60 * 60 * 1000
 // 超过 24h 不静默清除，只标记为“需要校准”；用户可手动结束/编辑
 const STALE_PENDING_MS = MAX_SLEEP_MS
 const CLOCK_INTERVAL = 30 * 1000
+// 睡梦中无操作多久回熄灯（睡前不该一直亮屏）
+const LIGHTS_OUT_DELAY = 30 * 1000
 
 Page({
   data: {
@@ -66,7 +70,7 @@ Page({
     this._busy = false
     this._pending = null
     this._autoEnd = !!(options && options.end === '1')
-    this._dimTimer = null
+    this._lightsTimer = null
     this._noticeTimer = null
     this._clockTimer = null
     this._staleNoticeKey = ''
@@ -100,6 +104,10 @@ Page({
     }
     // 统计页点空格子补记：带日期跳过来，直接打开补记面板
     this.openPendingManual()
+    // 熄灯是睡眠中的状态：熄着就继续保持（tabBar 也要再次隐藏），
+    // 没熄则重新起 30s 倒计时（用户刚回到页面，不该突然变黑）
+    if (this.data.dim) tabbar.hide()
+    else this.scheduleLightsOut()
   },
 
   /** 消费统计页传来的补记日期（meta.manualDay），打开补记面板并预填该日期 */
@@ -136,12 +144,16 @@ Page({
 
   onHide() {
     this.stopClock()
+    // 页面不可见时不计时；tabBar 属于当前页实例，离开前恢复，
+    // 避免切到计算器/统计页后底部仍被隐藏（tabbar.show 对新页面无副作用）
+    this.clearLightsTimer()
+    if (this.data.dim) tabbar.show()
   },
 
   onUnload() {
     this._alive = false
     this.stopClock()
-    clearTimeout(this._dimTimer)
+    this.clearLightsTimer()
     clearTimeout(this._noticeTimer)
   },
 
@@ -305,6 +317,13 @@ Page({
             ? '夜色正安'
             : '愿今夜好眠'
     })
+    // 熄灯态随状态收敛：只有睡梦中允许熄灯；完成/空闲时唤醒并停表，
+    // 睡梦中且当前亮屏则重新起 30s 倒计时（markSleep 之后这里不会覆盖熄灯）
+    if (state !== 'sleeping') {
+      this.wakeUp()
+    } else if (!this.data.dim) {
+      this.scheduleLightsOut()
+    }
   },
 
   /** 最近 12 小时内完成、但睡眠日已滚到昨天的记录 */
@@ -458,17 +477,65 @@ Page({
     }
     this._pending = pending
     this.refreshAll()
-    this.setData({ dim: true })
 
     if (wx.vibrateShort) wx.vibrateShort({ type: 'light' })
 
-    clearTimeout(this._dimTimer)
-    this._dimTimer = setTimeout(() => {
-      if (this._alive) this.setData({ dim: false })
-    }, 1600)
+    // 打卡后直接熄灯（睡前不该继续看亮屏）；点触任意处唤醒，30s 无操作再熄
+    this.enterLightsOut()
 
     this._busy = false
     return true
+  },
+
+  /**
+   * 熄灯（睡前模式）：毛玻璃压暗整页，只留熄灭态的入睡时间。
+   *
+   * 只作用于「睡梦中」且没有弹层的时刻：
+   * - 结束面板打开时不遮，否则用户正在核对时间会被盖住；
+   * - 声音抽屉打开时不遮，否则操作被打断；
+   * - tabBar 是独立 root，页面 z-index 压不住，只能主动隐藏，
+   *   否则熄灯后底部仍亮着两个 tab 图标（与抽屉/背景选择器同一套机制）。
+   */
+  enterLightsOut() {
+    if (!this._alive) return
+    if (this.data.state !== 'sleeping') return
+    if (this.data.endShow) return
+    const dock = this.selectComponent && this.selectComponent('#dock')
+    if (dock && dock.data && dock.data.open) return
+    tabbar.hide()
+    this.setData({ dim: true })
+    this.clearLightsTimer()
+  },
+
+  /** 唤醒：恢复正常亮度并隐藏熄灯层；不改变计时状态 */
+  wakeUp() {
+    this.clearLightsTimer()
+    if (this.data.dim) {
+      this.setData({ dim: false })
+      tabbar.show()
+    }
+  },
+
+  clearLightsTimer() {
+    if (this._lightsTimer) {
+      clearTimeout(this._lightsTimer)
+      this._lightsTimer = null
+    }
+  },
+
+  /**
+   * 安排「无操作 30s 后熄灯」。delay 供测试注入；
+   * 只有睡梦中且无弹层才排定，done/idle 态永远不熄灯。
+   */
+  scheduleLightsOut(delay) {
+    this.clearLightsTimer()
+    if (!this._alive) return
+    if (this.data.state !== 'sleeping' || this.data.endShow) return
+    const wait = typeof delay === 'number' ? delay : LIGHTS_OUT_DELAY
+    this._lightsTimer = setTimeout(() => {
+      this._lightsTimer = null
+      this.enterLightsOut()
+    }, wait)
   },
 
   /** 日期文案：今天/昨天加后缀，跨午夜后也不会停在旧口径 */
@@ -487,6 +554,9 @@ Page({
    * 否则两天前 23:00 的入睡会被算成昨天 23:00（时长/归属双错）。
    */
   openEndSheet() {
+    // 面板打开期间不熄灯（否则用户正在核对时间会被遮罩盖住）
+    this.clearLightsTimer()
+    this.wakeUp()
     const pending = this._pending || storage.getPending()
     if (!pending) {
       this.refreshAll()
@@ -534,30 +604,15 @@ Page({
    */
   openManualSheet(presetDay) {
     if (this.data.state === 'sleeping') return
+    this.clearLightsTimer()
+    this.wakeUp()
     const now = Date.now()
     const today = T.dateKey(now)
     const hasPreset = typeof presetDay === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(presetDay)
     const day = hasPreset ? presetDay : today
     const dayTs = T.parseDateKey(day)
-    let bedMinutes
-    let wakeMinutes
-    if (hasPreset) {
-      // 统计页补记：默认一整夜 23:00 → 07:00；当天则把起床压到当前时间之前
-      bedMinutes = 23 * 60
-      wakeMinutes = 7 * 60
-      if (day === today) {
-        const d = new Date(now)
-        const nowMinutes = d.getHours() * 60 + d.getMinutes()
-        wakeMinutes = Math.max(0, Math.min(wakeMinutes, nowMinutes - 10))
-      }
-    } else {
-      // 入睡页手动补记：保留原来的「30 分钟前 → 现在」，适合刚发生的小睡
-      const d = new Date(now)
-      const nowMinutes = d.getHours() * 60 + d.getMinutes()
-      wakeMinutes = nowMinutes
-      bedMinutes = nowMinutes - 30
-      if (bedMinutes < 0) bedMinutes += 24 * 60
-    }
+    // 有预设（统计页带日期）：整夜 23:00 → 07:00；无预设（本页补记）：30 分钟前 → 现在
+    const times = MS.defaultTimesFor(day, now, { preset: hasPreset })
     this._editingDay = ''
     this._editingSessionId = ''
     this._endBaseDay = T.startOfDay(dayTs)
@@ -570,10 +625,10 @@ Page({
         endStale: false,
         endDate: day,
         endDateText: this.dateTextOf(day),
-        endDateMin: T.dateKey(T.addDays(now, -400)),
+        endDateMin: MS.minDayKey(now),
         endStartDateText: '',
-        endBedTime: F.fmtClock(bedMinutes),
-        endWakeTime: F.fmtClock(wakeMinutes),
+        endBedTime: F.fmtClock(times.bedMinutes),
+        endWakeTime: F.fmtClock(times.wakeMinutes),
         endError: ''
       },
       () => this.computeEndSheet()
@@ -612,11 +667,8 @@ Page({
       this.data.endMode === 'pending' && this._endStartDay
         ? X.rangeBetween(this._endStartDay, bedMinutes, wakeBase, wakeMinutes, now)
         : X.rangeForDay(wakeBase, bedMinutes, wakeMinutes, now)
-    let error = ''
-    if (range.error === 'future') error = '起床时间不能晚于现在'
-    else if (range.error === 'short') error = '睡眠时长至少 1 分钟'
-    else if (range.error === 'order') error = '入睡时间需早于起床时间，请检查醒来日'
-    else if (range.error === 'long') error = '单段睡眠不能超过 24 小时'
+    // 错误文案与统计页补记共用 manual-sleep 模块，禁止各自写 if 链
+    let error = MS.errorTextOf(range.error)
     // 补记/结束/编辑都要先挡重叠，避免存不进去才报“写入失败”。
     // 必须按时间区间查全表：只看醒来日会漏掉前一天那段（跨天双计）。
     if (!error) {
@@ -627,7 +679,7 @@ Page({
             ? this._pending.id
             : ''
       if (X.findOverlap(storage.getRecords(), range.bedAt, range.wakeAt, { id: excludeId })) {
-        error = '与已有睡眠段重叠，请调整时间'
+        error = MS.errorTextOf('overlap')
       }
     }
     this._endBedAt = range.bedAt
@@ -672,6 +724,8 @@ Page({
       endHint: '',
       endStartDateText: ''
     })
+    // 取消结束：仍睡梦中就继续按 30s 倒计时熄灯
+    this.scheduleLightsOut()
   },
 
   /** 编辑某一段：打开同一套结束面板，保存时走 updateSession */
@@ -782,6 +836,8 @@ Page({
       endHint: '',
       endStartDateText: ''
     })
+    // 保存/编辑后仍睡梦中：延迟熄灯继续生效（done/idle 由 refreshAll 收敛）
+    this.scheduleLightsOut()
   },
 
   /** 保存后同步：区分“跳过/云端拒收/网络失败”，不再只有补记分支有反馈 */
@@ -803,14 +859,7 @@ Page({
   /** 手动补记一段：不创建 pending、不发提醒，直接落 v2 session */
   saveManualSession() {
     const now = Date.now()
-    const record = storage.saveSession({
-      id: 'manual-' + now,
-      startAt: this._endBedAt,
-      endAt: this._endWakeAt,
-      durationMin: Math.round((this._endWakeAt - this._endBedAt) / 60000),
-      source: 'manual',
-      editedAt: now
-    })
+    const record = storage.saveSession(MS.buildSaveArgs(this._endBedAt, this._endWakeAt, now))
     if (!record) {
       this.setData({ endError: '补记失败：时间可能与已有段重叠，或当天段数/总时长已满' })
       return
@@ -916,9 +965,19 @@ Page({
 
   noop() {},
 
+  /** 熄灯层点击 = 唤醒；仍睡梦中则重新起 30s 倒计时 */
   onDimTap() {
-    clearTimeout(this._dimTimer)
-    if (this._alive) this.setData({ dim: false })
+    this.wakeUp()
+    this.scheduleLightsOut()
+  },
+
+  /**
+   * 页面任意触摸：先唤醒（熄灯时），再重置 30s 倒计时。
+   * 熄灯层在页面之外（fixed 兄弟节点），它自己的点击走 onDimTap。
+   */
+  onPageTouch() {
+    this.wakeUp()
+    this.scheduleLightsOut()
   },
 
   onNoticeClose() {

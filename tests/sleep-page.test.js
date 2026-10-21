@@ -58,12 +58,14 @@ function makePage() {
   page._alive = true
   page._busy = false
   page._pending = null
+  page._lightsTimer = null
   page._editingDay = ''
   page._editingSessionId = ''
   page._endBaseDay = 0
   page._endStartDay = 0
   page._endBedAt = 0
   page._endWakeAt = 0
+  page.selectComponent = () => null
   return page
 }
 
@@ -231,6 +233,83 @@ test('单段记录时间线保持「入睡 / 起床」，不引入新概念', ()
   assert.equal(view.sessionCount, 1)
   assert.equal(view.timelineFirstK, '入睡')
   assert.equal(view.timelineLastK, '起床')
+})
+
+/* ---------------- 熄灯（睡前模式） ---------------- */
+
+test('熄灯：打卡后进入熄灯态，且不会自动亮起', () => {
+  resetStore()
+  const page = makePage()
+  page.selectComponent = () => null
+  const ok = page.markSleep()
+  assert.equal(ok, true)
+  assert.equal(page.data.state, 'sleeping')
+  assert.equal(page.data.dim, true, '点入睡后应立即熄灯')
+  // 熄灯期间不排定“再次熄灯”（避免重复计时）
+  assert.equal(page._lightsTimer, null)
+})
+
+test('熄灯：只有睡梦中才熄灯，空闲/完成态不熄', () => {
+  resetStore()
+  const page = makePage()
+  page.selectComponent = () => null
+  page.setData({ state: 'idle' })
+  page.enterLightsOut()
+  assert.equal(page.data.dim, false)
+  page.setData({ state: 'done' })
+  page.enterLightsOut()
+  assert.equal(page.data.dim, false)
+})
+
+test('熄灯：结束面板打开时不熄灯，也不会被计时器偷袭', async () => {
+  resetStore()
+  const page = makePage()
+  page.selectComponent = () => null
+  page.setData({ state: 'sleeping', endShow: true })
+  page.scheduleLightsOut(15)
+  assert.equal(page._lightsTimer, null, '面板打开时不该排定')
+  await new Promise((resolve) => setTimeout(resolve, 35))
+  assert.equal(page.data.dim, false)
+})
+
+test('熄灯：无操作排定生效，唤醒后立即亮起并重新起表', async () => {
+  resetStore()
+  const page = makePage()
+  page.selectComponent = () => null
+  page.setData({ state: 'sleeping', dim: false })
+  page.scheduleLightsOut(20)
+  await new Promise((resolve) => setTimeout(resolve, 45))
+  assert.equal(page.data.dim, true, '到点应熄灯')
+  page.onDimTap()
+  assert.equal(page.data.dim, false, '点遮罩应唤醒')
+  assert.ok(page._lightsTimer, '唤醒后应重新排定熄灯')
+  page.clearLightsTimer()
+})
+
+test('熄灯：页面触摸同样唤醒并重置计时；完成后 refreshAll 自动亮起', () => {
+  resetStore()
+  const page = makePage()
+  page.selectComponent = () => null
+  page.setData({ state: 'sleeping', dim: true })
+  page.onPageTouch()
+  assert.equal(page.data.dim, false)
+  assert.ok(page._lightsTimer)
+  page.clearLightsTimer()
+
+  // 保存起床后（无 pending、无今日记录 → idle）必须自动退出熄灯
+  page.setData({ state: 'sleeping', dim: true })
+  page.refreshAll()
+  assert.equal(page.data.state, 'idle')
+  assert.equal(page.data.dim, false)
+})
+
+test('熄灯：声音抽屉打开时 enteredLightsOut 不遮罩', () => {
+  resetStore()
+  const page = makePage()
+  page.selectComponent = () => ({ data: { open: true } })
+  page.setData({ state: 'sleeping' })
+  page.enterLightsOut()
+  assert.equal(page.data.dim, false)
 })
 
 test('onDeleteSession：确认删除单段并刷新，取消则原样保留', () => {

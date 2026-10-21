@@ -2,7 +2,7 @@
 <hero-backdrop />
 <top-bar brand-only="{{true}}" style="display:block;width:100%;" />
 
-<view class="page sleep-page">
+<view class="page sleep-page" bindtouchstart="onPageTouch">
   <view class="sleep-hero fade-up">
     <view class="sleep-hero-meta">
       <text class="sleep-eyebrow">TONIGHT</text>
@@ -114,14 +114,20 @@
 
 <audio-dock id="dock" />
 
-<view wx:if="{{endShow}}" class="end-mask" catchtap="onEndCancel">
-  <view class="end-sheet" catchtap="noop">
+<view wx:if="{{endShow}}" class="end-mask" catchtap="onEndCancel" catchtouchmove="noop">
+  <view
+    class="end-sheet"
+    catchtap="noop"
+    catchtouchmove="noop"
+    aria-role="dialog"
+    aria-label="{{endMode === 'manual' ? '补记一段睡眠' : (endMode === 'edit' ? '修改这段睡眠' : '结束本次入睡')}}"
+  >
     <view class="end-head">
       <view>
         <text class="end-title">{{endMode === 'manual' ? '补记一段睡眠' : (endMode === 'edit' ? '修改这段睡眠' : '结束本次入睡')}}</text>
         <text class="end-sub">{{endMode === 'manual' ? '选择醒来日与真实入睡/起床时间，不会启动计时' : (endMode === 'edit' ? '只调整时间，归属日保持不变' : (endStale ? '超过 24 小时未结束：请确认真实醒来日与时间' : '时间不准可以直接改，保存后归入醒来日'))}}</text>
       </view>
-      <text class="end-close" catchtap="onEndCancel">×</text>
+      <text class="end-close" catchtap="onEndCancel" aria-role="button" aria-label="关闭">×</text>
     </view>
     <picker
       wx:if="{{endMode === 'manual' || endStale}}"
@@ -170,8 +176,14 @@
   </view>
 </view>
 
-<view class="dim-mask {{dim ? 'is-on' : ''}}" bindtap="onDimTap">
-  <text class="dim-text font-poetic">晚安</text>
+<view class="dim-mask {{dim ? 'is-on' : ''}}" catchtap="onDimTap" catchtouchmove="noop">
+  <text class="dim-kicker">晚安</text>
+  <view class="dim-orb">
+    <text class="dim-orb-kicker">入睡时间</text>
+    <text class="dim-orb-time">{{orbTime}}</text>
+    <text class="dim-orb-meta">{{orbMeta}}</text>
+  </view>
+  <text class="dim-hint">轻触任意处唤醒</text>
 </view>
 
 <custom-tab-bar />

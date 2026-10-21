@@ -61,3 +61,111 @@ test('claimExpiryToast 在窗口内只让一个组件弹提示', () => {
     Date.now = originalNow
   }
 })
+
+/** 伪造 BackgroundAudioManager：只需 paused/duration/currentTime/seek/play */
+function fakeAudio(overrides) {
+  return Object.assign(
+    {
+      paused: false,
+      duration: 180,
+      currentTime: 0,
+      seeks: 0,
+      plays: 0,
+      seek() {
+        this.seeks += 1
+      },
+      play() {
+        this.plays += 1
+        this.paused = false
+      }
+    },
+    overrides || {}
+  )
+}
+
+test('seamlessLoop 只在结尾前窗口内回环（保住微信悬浮音符）', () => {
+  const originalNow = Date.now
+  let now = 1000000
+  Date.now = () => now
+  try {
+    const audio = fakeAudio({ currentTime: 170 })
+    // 距结尾还有 10 秒：不能提前跳走
+    assert.equal(playerState.seamlessLoop(audio), false)
+    assert.equal(audio.seeks, 0)
+
+    audio.currentTime = 179
+    assert.equal(playerState.seamlessLoop(audio), true)
+    assert.equal(audio.seeks, 1)
+
+    now += 1300
+    // 可自定义更宽的窗口
+    const wide = fakeAudio({ currentTime: 176 })
+    assert.equal(playerState.seamlessLoop(wide, 5), true)
+    assert.equal(wide.seeks, 1)
+  } finally {
+    Date.now = originalNow
+  }
+})
+
+test('seamlessLoop 同一轮回环只由一个组件执行', () => {
+  const originalNow = Date.now
+  let now = 2000000
+  Date.now = () => now
+  try {
+    // audio-dock 与 now-playing 都监听同一个播放器的 onTimeUpdate
+    const dock = fakeAudio({ currentTime: 179 })
+    const np = fakeAudio({ currentTime: 179 })
+    assert.equal(playerState.seamlessLoop(dock), true)
+    assert.equal(playerState.seamlessLoop(np), false)
+    assert.equal(dock.seeks, 1)
+    assert.equal(np.seeks, 0)
+
+    // 窗口过后回到开头再播到结尾，仍能再次回环
+    now += 1300
+    assert.equal(playerState.seamlessLoop(np), true)
+    assert.equal(np.seeks, 1)
+  } finally {
+    Date.now = originalNow
+  }
+})
+
+test('seamlessLoop 在 seek 顺带暂停时补一次播放', () => {
+  const originalNow = Date.now
+  let now = 2500000
+  Date.now = () => now
+  try {
+    const audio = fakeAudio({ currentTime: 179 })
+    // 个别基础库 seek(0) 会把播放器置为暂停，回环后必须续播
+    audio.seek = function () {
+      this.seeks += 1
+      this.paused = true
+    }
+    assert.equal(playerState.seamlessLoop(audio), true)
+    assert.equal(audio.seeks, 1)
+    assert.equal(audio.plays, 1)
+    assert.equal(audio.paused, false)
+  } finally {
+    Date.now = originalNow
+  }
+})
+
+test('seamlessLoop 暂停或时长未知时不动', () => {
+  const originalNow = Date.now
+  let now = 3000000
+  Date.now = () => now
+  try {
+    const paused = fakeAudio({ currentTime: 179, paused: true })
+    assert.equal(playerState.seamlessLoop(paused), false)
+    assert.equal(paused.seeks, 0)
+
+    const unknown = fakeAudio({ currentTime: 10, duration: NaN })
+    assert.equal(playerState.seamlessLoop(unknown), false)
+    assert.equal(unknown.seeks, 0)
+
+    const zero = fakeAudio({ currentTime: 10, duration: 0 })
+    assert.equal(playerState.seamlessLoop(zero), false)
+    assert.equal(zero.seeks, 0)
+  } finally {
+    Date.now = originalNow
+  }
+})

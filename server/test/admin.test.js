@@ -430,6 +430,15 @@ test('事件上报与看板聚合', async () => {
   assert.equal(sent.status, 200)
   assert.equal(sent.body.accepted, 5)
 
+  // 补记事件：两个页面的补记成功都会 track('manual_sleep')。
+  // 它曾不在白名单，导致整批事件被 400 拒绝后由客户端丢弃（静默丢数）。
+  const manual = await call('/api/events', {
+    method: 'POST',
+    body: { code: 'events-code', events: [{ type: 'manual_sleep', ts: FIXED_NOW }] }
+  })
+  assert.equal(manual.status, 200)
+  assert.equal(manual.body.accepted, 1)
+
   const bad = await call('/api/events', {
     method: 'POST',
     body: { code: 'events-code', events: [{ type: 'hack', ts: FIXED_NOW }] }

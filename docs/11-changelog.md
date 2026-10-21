@@ -1,5 +1,66 @@
 # 睡点 · 关键更新记录
 
+## 2026-10-22 · L4 评审整改：补记编排单源 · 事件白名单 · 弹层样式共享
+
+> 起因：代码评审指出统计页补记与入睡页「补记一段睡眠」是两套复制实现（约 130 行 JS + 53 行 WXML + 180 行 WXSS 近同构）。
+
+- **抽出共享编排模块 `miniprogram/utils/manual-sleep.js`**（纯函数，不读写 storage）：
+  - `defaultTimesFor(dayKey, now, { preset })`：预设=整夜 23:00→07:00（当天 07:00 未到才下压到 now-10min，至少 1 分钟）；`preset:false`=30 分钟前→现在（入睡页「补记入睡」语义）；
+  - `errorTextOf(code)`：future/short/order/long + overlap 五类文案唯一出口；
+  - `evaluateManualRange({records, dayTs, bedMinutes, wakeMinutes, now})`：`rangeForDay` + 跨天 `findOverlap` + 文案；
+  - `buildSaveArgs(bedAt, wakeAt, now)`：`saveSession` 入参（source=manual、id 带时间戳）；
+  - `minDayKey(now)` + `MONTH_LOOKBACK=24`：补记日期下限与统计页月份翻页共用同一回溯范围（修「能翻到 24 个月前但补记只能选 400 天」的越界）。
+  - 两页改为调用：入睡页 `openManualSheet` 默认值、`computeEndSheet` 错误文案、`saveManualSession` 入参；统计页同。新增 `tests/manual-sleep.test.js` 9 条（默认值三态/跨午夜/五类文案/区间与重叠/入参/回溯范围）。
+- **修复既有埋点缺陷（P1）**：`manual_sleep` 不在服务端事件白名单 `TYPES`，入睡页每次补记都会让整批事件被 400 拒绝、客户端按永久脏数据**整批丢弃**（含同批 app_open/checkin）。已加入白名单并在 `server/test/admin.test.js` 锁定可接受；统计页补记也补上 `events.track('manual_sleep')`，两页口径一致。
+- **弹层样式单源**：新增 `miniprogram/styles/sheet.wxss`（`.end-*` 全套），入睡页与统计页 `@import` 引入并删除各自副本（净减约 260 行重复样式）；统计页面板类名由 `manual-*` 统一为 `end-*`。
+- **交互加固**：两个面板遮罩与面板本体加 `catchtouchmove="noop"`（阻止穿透滚动）；面板 `aria-role="dialog"` + 关闭按钮 `aria-role="button"` + 文案标签。
+- **口径记录**：统计页允许在「正在入睡中」补记历史日（数据模型支持多段，历史段与进行中会话不冲突）；入睡页仍只在 idle/done 提供入口——属刻意差异，不是缺口。
+- 验证：`npm test` **218 项 / 217 通过 / 1 PG skip**；`npm run check` 通过（3 页面 / 23 JSON / 18 WXML / **20 WXSS**，主包约 477.1 KB）；CLI 模拟器回归——统计页点空格弹面板→保存落库（10-16 480 分钟 source=manual）→格子变色/本月 +1；入睡页「补记入睡」（03:41→04:11 30 分钟）→保存后 C 态；2 小时 pending 结束面板正常打开且重叠校验走共享文案；console 无 error。
+
+## 2026-10-22 · 计算器页 Hero 文案随计算方向切换 +「换背景」移入顶栏右侧
+
+- **Hero 文案跟随模式**：标题/副标改为 `mode` 三元——「选择起床时间」问「今晚，几点睡？」；切到「选择入睡时间」改为「想几点起？」/「选一个时间，找到你的起床时间。」。原实现是静态文案，切模式后仍在问“几点睡”，与实际计算方向相反。
+- **刻意不写「明早」**：白天小睡（如 14:00 选 14:00 入睡，结果落在当天下午）时「明早，几点起？」属错误陈述，与「只陈述事实」的产品原则冲突；「想几点起？」任何时刻成立，且不需要按小时切换文案的条件逻辑。
+- **「换背景」归位顶栏右侧**：`components/top-bar` 新增可选 `actionText` 属性 + `action` 事件（沿用项目 `triggerEvent` 约定，未用 slot），按钮贴微信胶囊安全距离（复用组件已测量的 `capsuleGap`）右对齐；页面级工具动作回到导航栏，同时解除 Hero 大标题 `padding-right: 148rpx` 的让位，标题恢复满宽。未传 `actionText` 的入睡/统计页零渲染、零交互变化。
+- **删除死代码**：`index.wxss` 的 `.hero-tools` / `.hero-bg-btn` / `::after` / `:active` / `.hero-bg-arrow`（−43 行）；360px 断点内的 `padding-right: 132rpx` 同步删除。
+- 验证：`npm run check` 通过（3 页面 / 23 JSON / 18 WXML / 20 WXSS，主包约 478.5 KB）；`npm test` 224 项 / 223 通过 / 1 PG skip；CLI 模拟器 390×844 实测——两模式文案与顶栏按钮、**真实坐标点击命中**（`app.globalData` 存活标记确认本轮无重编译：标记存活 + 路由不变 + `bgOpen: true`）、统计页顶栏无动作按钮、console 无 error。**待真机**：胶囊安全距离的贴合度（DevTools 与真机胶囊位置可能不同）。
+- **工具事实（便于复用）**：wechatide CLI 的 `automation_element_action --x/--y` 是视口 CSS 像素、顶左原点；若点击后路由莫名漂移，先排查是否因并发保存触发重编译导致页面恢复（用 `getApp().globalData` 存活标记区分）；自定义组件内部节点无法被 automator 选择器命中，需 `selectComponent + SelectorQuery.in()` 量出 `boundingClientRect` 再坐标点击。
+
+## 2026-10-22 · 睡前熄灯（打卡即关灯 · 点触唤醒 · 30s 回熄灯）
+
+- **打卡即熄灯**：点「入睡」后不再只闪 1.6s「晚安」再回到全亮页面，改为进入**持久熄灯**——全屏毛玻璃压暗整页（`rgba(4,7,15,0.84)` + `backdrop-filter: blur(20rpx)`；不支持的机型靠 0.84 深底自然退回“接近关灯”，不会出现半透明花屏），只留熄灭态的入睡时间（`filter: brightness(0.84)`）+ 顶部「晚安」+ 底部「轻触任意处唤醒」。
+- **tabBar 同步隐藏**：自定义 tabBar 在独立 root，页面 `z-index` 压不住（项目已知层级事实），熄灯时调 `utils/tabbar.hide()`、唤醒时 `show()`，否则底部会亮着两个 tab 图标破坏关灯。
+- **熄灯态 orb 不可点**：任意点触都是“唤醒”，唤醒后再点圆环才进结束面板。理由：躺床误触结束计时会截断入睡时长，代价远高于多点一次。
+- **30s 回熄灯**：唤醒后 30s 无操作自动回熄灯（`LIGHTS_OUT_DELAY`），页面根 `bindtouchstart` 任意触摸重置倒计时；`onShow` 若仍熄着则保持（切走再回来不突然变亮）。
+- **不熄灯的场合**：结束/补记面板打开时、声音抽屉打开时（`selectComponent('#dock').data.open`）、done/idle 态、页面 onHide；保存或取消面板后恢复倒计时。熄灯层 `catchtouchmove` 阻止滚动。
+- 验证：`npm test` 224 项 / 223 通过 / 1 PG skip（新增熄灯 7 条：打卡即熄灯/仅睡梦中熄/面板打开不排定/到点熄灯与唤醒重排/页面触摸与完成后自动亮/抽屉打开不遮）；`npm run check` 通过（主包约 478.4 KB）。**模拟器实测**（390×844）：打卡即熄灯（毛玻璃 + tabBar 隐藏）、点任意处唤醒（恢复全亮与 tabBar、仍睡梦中）、34s 后自动回熄灯且「已睡」随时钟更新；console 无 error/warn；截图 `docs/assets/sleep-lights-out.png`。真机仅剩毛玻璃观感与 Android 降级确认。
+
+## 2026-10-22 · 统计页三轮：日历格尺寸与页内补记
+
+- **日历格改扁格、行列间距不对称**：7 列 × 5 行用 92×76rpx 扁格，列间距 4rpx（收密）、行间距 16rpx（放大）；7×92+6×4=668rpx 仍近满宽（左右各约 9rpx）。星期行列宽同步，保持列对齐。
+- **空格恢复「补记」文字**（15rpx / opacity 0.62），替代上一轮的极淡＋。
+- **点空格直接在统计页弹补记面板**（不再跳入睡页、不再落到日历下方详情卡）：面板与入睡页「补记入睡」同口径——醒来日（可选最近 400 天、不晚于今天）+ 入睡/起床时间 + 「归入 X（醒来日）· 时长」预览 + 取消/保存补记；校验复用 `sessions.rangeForDay` 与跨天 `findOverlap`（future/short/order/long + 重叠五类错误同文案）；打开时 `tabbar.hide()`、取消/保存/切页（onHide）恢复；保存走 `storage.saveSession({source:'manual'})`，成功后 `_signature` 置空刷新 + toast「已补记 X月X日」+ `syncNow` 云端反馈（跳过/拒收/网络失败分提示）。
+- **点格分流**：无记录的过去日 → 弹补记面板；有记录 / 进行中 / 未来日 → 详情卡（选中描边由页面受控）。详情卡内的「补记这一天的睡眠」按钮与 `onAddMissing`（写 meta.manualDay + switchTab）整体删除；入睡页的 `openPendingManual` 保留（兼容任何遗留 meta.manualDay）。
+- 测试：`tests/manual-day.test.js` 按新交互重写——新增「点空格弹面板不写 meta 不跳页」「保存直接落 v2 session」「有记录日走详情卡」3 条；旧链路 3 条保留。`npm test` 209 项 / 208 通过 / 1 PG skip；`npm run check` 通过（473.5KB）。
+- 模拟器实测：格尺寸/补记文字、点 10月1日空格弹面板（tabBar 隐藏、时长 8 小时 00 分预览）、保存后格变 8.0h 且本月已记录 +1、点 10月20日有记录格出详情卡、console 无 error。
+
+## 2026-10-22 · 曲末无缝回环：修复微信悬浮音符在每曲播完后消失
+
+- **现象**（真机反馈）：锁屏/切桌面后音乐可后台循环，但每一曲播完的瞬间，微信自带的左侧悬浮音符消失且不再出现；小程序内的播放状态正常。
+- **根因**：该浮窗跟随「同一次音频会话」；原实现在 `onEnded` 重设 `src` 续播，被微信视为新音频——浮窗在 ended 时被收掉，程序化续播不会让它回来（只有用户主动起播才会再次出现）。
+- **修法**：`utils/player-state.js` 新增 `seamlessLoop(audio)` + `claimLoop()`：在 `onTimeUpdate` 检测「距结尾 ≤2 秒」时 `seek(0)`，同一会话永不进入 ended、不换 `src`；1.2s 去重避免 dock/now-playing 双 seek。`onEnded → replay` 保留为兜底（后台节流错过窗口时仍能续播，该轮浮窗会掉）。
+- **不改的边界**：暂停仍只 `pause()` 不 `stop()`；定时到点、解锁到期、点微信浮窗 X 的现有行为不变（X 之后小程序内保留「已暂停」条，经运营确认接受——点击即用户主动起播，浮窗会重新出现）。
+- 验证：`node --test tests/player-state.test.js` 8/8（新增 3 组：窗口边界/跨组件去重/暂停与非法时长）；`npm test` 205 通过 / 0 失败 / 1 PG skip；`node tools/check.mjs` 通过（主包约 463.0 KB）；改动文件 lint 0 错误。**未真机复验**：连续多轮回环后浮窗是否常驻、回环点听感、低端机 `onTimeUpdate` 节流时退回 ended 的表现。
+
+## 2026-10-22 · 统计页视觉二轮收敛（真机截图反馈）
+
+- **指标区去底去框**：运营判定"背景框"与全局"层级只用字号/颜色/留白"原则冲突，`.metrics` 的淡容器卡（0.035 底 + 描边）整体移除，恢复裸排三列。
+- **周打卡行删除**：「本周打卡 N 天 · 连续 N 天」从统计页移除（连续/周计数在入睡页统计行与分享文案仍可用，`weekCount/streak` 数据与 `onShareAppMessage` 不变）；原右侧引导改为整行居中弱色「点上方↑数字看说明」（19rpx、muted、opacity 0.75；指标展开后隐藏）。
+- **日历呼吸距**：星期行与格间距 6→18rpx；格宽按内容宽 686rpx 铺满 = 88.5rpx（7×88.5+6×8=667.5rpx，左右各让约 9rpx，回到 PRD 原始 88rpx 规格附近；星期行与网格两处列宽同步改保持列对齐）。**过程记录**：先按"左右大留边"改到 68rpx（左右 ~50rpx），运营澄清"小格子近满宽、只让 8–10rpx"后回调——"留呼吸距离"指边距不要贴页边，不是收窄网格。
+- **图例清理**：删「颜色越亮 = 睡得越久」说明句（重复显而易见的读色规则）与「仅入睡」档（仅入睡 = 当天有开始未结束的进行中会话，是瞬时单日状态，真实解释面在点击格子后的详情卡「已记录入睡，还没有结束时间」；且旧图例空心色块与真实 partial 格（档位底色 + 内描边 + 小点）并不同形，反而误导）；剩余 `<4h / 4–6h / 6–8h / 8h+` 整体压弱（`.cal-legend` opacity 0.6）；`is-note`、`is-partial` 两条死规则同步删除。
+- **口径澄清（写死防再问）**：日历色阶与格内时长用的是**当天总睡眠**（`totalDurationMin` = 夜间主睡眠 + 午休/间断段之和），不是最长主睡眠；主睡眠（最长段）只用于连续天数与服务端模板。双口径并存见 context.md 第 4 节与 ADR-009，详情卡里拆「夜间 / 午休/间断」。
+- 验证：`npm test` 203/202/1 PG skip、`npm run check` 通过（462.9KB）；CLI 模拟器截图复核（网格近满宽、左右 ~9rpx、图例 4 档弱化），console 无 error。**未提交未推送**（等用户确认）。
+
 ## 2026-10-22 · 统计页 Hero 与打卡日历重梳（真机截图反馈）
 
 - **指标对比副标补主语与单位**：`少 5h42` → `比上周少 5h42m`、`晚 1h12` → `比上周晚 1h12m`、`持平` → `与上周持平`（`deltaAmount` 补 `m` 后缀，消除 "5h42" 被读成时刻的歧义）；`.metric-sub` 补 ellipsis 兜底。

@@ -33,6 +33,17 @@ Component({
     brandOnly: {
       type: Boolean,
       value: false
+    },
+    // 右侧页面级动作文案（如「换背景」）；为空时不渲染，其他页面不受影响
+    actionText: {
+      type: String,
+      value: ''
+    }
+  },
+
+  methods: {
+    onActionTap() {
+      this.triggerEvent('action')
     }
   },
 

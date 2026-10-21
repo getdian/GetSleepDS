@@ -1,6 +1,8 @@
 /**
- * 补记链路：统计页点空格子 → 写 meta.manualDay → 切入睡页 → 自动打开补记面板。
- * 用户反馈「点补记没有弹窗口」，这里用页面级桩把整条链跑一遍。
+ * 补记链路：
+ * - 旧链路（保留兼容）：统计页写 meta.manualDay → 入睡页 openPendingManual 消费并弹面板；
+ * - 新链路（2026-10-22）：统计页点空格子直接在本页弹补记面板，不写 meta、不跳页。
+ * 用户反馈「点补记没有弹窗口」，这里用页面级桩把两条链都跑一遍。
  */
 const test = require('node:test')
 const assert = require('node:assert/strict')
@@ -126,8 +128,8 @@ test('补记链路：没有 manualDay 时什么都不做', () => {
   assert.equal(page.data.endShow, false)
 })
 
-test('统计页点补记：写入 meta.manualDay 并切到入睡页', () => {
-  resetStore()
+/** 加载统计页的 Page 配置并套最小桩 */
+function makeStatsPage() {
   const configs = {}
   global.Page = (value) => {
     configs.stats = value
@@ -136,12 +138,19 @@ test('统计页点补记：写入 meta.manualDay 并切到入睡页', () => {
   require('../miniprogram/pages/stats/stats')
   const page = Object.assign({}, configs.stats)
   page.data = JSON.parse(JSON.stringify(configs.stats.data))
-  page.setData = function setData(patch) {
+  page.setData = function setData(patch, cb) {
     Object.assign(this.data, patch)
+    if (typeof cb === 'function') cb()
   }
   page._alive = true
   page._records = {}
   page._signature = ''
+  return page
+}
+
+test('统计页点空格子：直接弹页内补记面板，不写 meta、不跳页', () => {
+  resetStore()
+  const page = makeStatsPage()
 
   const original = global.wx.switchTab
   let switched = ''
@@ -149,10 +158,51 @@ test('统计页点补记：写入 meta.manualDay 并切到入睡页', () => {
     switched = options.url
   }
   try {
-    page.onAddMissing({ currentTarget: { dataset: { day: '2026-10-18' } } })
+    page.openDay('2026-10-18')
   } finally {
     global.wx.switchTab = original
   }
-  assert.equal(storage.getMeta().manualDay, '2026-10-18')
-  assert.equal(switched, '/pages/sleep/sleep')
+
+  assert.equal(page.data.manualShow, true, '必须在当前页弹出补记面板')
+  assert.equal(page.data.manualDay, '2026-10-18')
+  // 过去日期默认一整夜 23:00 → 07:00
+  assert.equal(page.data.manualBedTime, '23:00')
+  assert.equal(page.data.manualWakeTime, '07:00')
+  assert.equal(page.data.manualDurationText, '8 小时 00 分')
+  assert.equal(page.data.manualError, '')
+  assert.equal(switched, '', '不再跳转入睡页')
+  assert.ok(!storage.getMeta().manualDay, '不再写 meta.manualDay')
+})
+
+test('页内补记保存：直接落 v2 session 并收起面板', () => {
+  resetStore()
+  const page = makeStatsPage()
+  page.openDay('2026-10-18')
+  page.onManualConfirm()
+
+  const record = storage.getRecords()['2026-10-18']
+  assert.ok(record, '补记必须写入醒来日对应记录')
+  assert.equal(record.totalDurationMin, 480)
+  assert.equal(page.data.manualShow, false, '保存后面板收起')
+})
+
+test('有记录的日期点格子仍走详情卡，不弹补记面板', () => {
+  resetStore()
+  const page = makeStatsPage()
+  const bedAt = new Date(2026, 9, 17, 23, 0, 0, 0).getTime()
+  const wakeAt = new Date(2026, 9, 18, 7, 0, 0, 0).getTime()
+  storage.saveSession({
+    id: 'manual-seed',
+    startAt: bedAt,
+    endAt: wakeAt,
+    durationMin: 480,
+    source: 'manual',
+    editedAt: wakeAt
+  })
+  page._records = storage.getRecords()
+
+  page.openDay('2026-10-18')
+
+  assert.equal(page.data.manualShow, false)
+  assert.equal(page.data.detail && page.data.detail.tag, '已记录')
 })

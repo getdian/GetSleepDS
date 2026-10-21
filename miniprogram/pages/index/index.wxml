@@ -10,19 +10,14 @@
   <view class="hero-bg-scrim"></view>
 </view>
 
-<top-bar brand-only="{{true}}" />
+<top-bar brand-only="{{true}}" action-text="换背景" bind:action="openBgPicker" />
 
 <view class="page calc-page">
   <view class="calc-hero">
-    <text class="hero-title">今晚，几点睡？</text>
-    <text class="hero-sub">选一个时间，找到适合你的睡点。</text>
-
-    <view class="hero-tools">
-      <view class="hero-bg-btn" bindtap="openBgPicker">
-        <text>换背景</text>
-        <text class="hero-bg-arrow">›</text>
-      </view>
-    </view>
+    <!-- Hero 文案跟随计算方向：选起床时间→问入睡点；选入睡时间→问起床点。
+         入睡模式不写「明早」：白天小睡时结果可能落在当天，陈述必须始终成立。 -->
+    <text class="hero-title">{{mode === 'wake' ? '今晚，几点睡？' : '想几点起？'}}</text>
+    <text class="hero-sub">{{mode === 'wake' ? '选一个时间，找到适合你的睡点。' : '选一个时间，找到你的起床时间。'}}</text>
   </view>
 
   <!-- 玻璃卡外壳：静态不翻转，作为视觉锚点 -->

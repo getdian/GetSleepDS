@@ -428,6 +428,11 @@ Component({
           this.disarmLoadingGuard()
           if (this.data.loading) this.setData({ loading: false })
         },
+        timeupdate: () => {
+          if (!this._alive || this._stopRequested) return
+          // 曲末前无缝回环：不进 ended、不换 src，保住微信悬浮音符（见 player-state.seamlessLoop）
+          playerState.seamlessLoop(this._audio)
+        },
         stop: () => {
           if (!this._alive) return
           this.disarmLoadingGuard()
@@ -506,6 +511,7 @@ Component({
       audio.onEnded(handlers.ended)
       audio.onError(handlers.error)
       if (audio.onCanplay) audio.onCanplay(handlers.canplay)
+      if (audio.onTimeUpdate) audio.onTimeUpdate(handlers.timeupdate)
     },
 
     offAudio() {
@@ -518,7 +524,8 @@ Component({
           ['offStop', 'stop'],
           ['offEnded', 'ended'],
           ['offError', 'error'],
-          ['offCanplay', 'canplay']
+          ['offCanplay', 'canplay'],
+          ['offTimeUpdate', 'timeupdate']
         ]
         pairs.forEach((pair) => {
           if (typeof audio[pair[0]] !== 'function') return

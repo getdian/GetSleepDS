@@ -10,5 +10,10 @@
         <text class="island-title">{{title}}</text>
       </block>
     </view>
+    <!-- 页面级右侧动作：贴胶囊安全距离右对齐，不占用 Hero 标题宽度 -->
+    <view wx:if="{{actionText}}" class="topbar-action" bindtap="onActionTap">
+      <text>{{actionText}}</text>
+      <text class="topbar-action-arrow">›</text>
+    </view>
   </view>
 </view>

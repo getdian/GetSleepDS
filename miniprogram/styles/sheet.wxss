@@ -1,0 +1,203 @@
+/**
+ * 底部弹层面板（sleep-sheet）：入睡页「结束/补记/编辑」与统计页「补记」共用。
+ *
+ * 类名沿用 end-* 前缀（历史命名），页面通过 @import 引入：
+ *   @import "../../styles/sheet.wxss";
+ * 页面 wxss 仍需把 @import 放在首位（CSS 规则要求，且微信同此约束）。
+ *
+ * 改这里的任何一个值（圆角/热区/文案容器）会同时作用于两个页面的补记面板——
+ * 这正是把它抽出来的目的，别再往页面 wxss 里复制一份。
+ */
+
+/* 遮罩：页面在 wxml 上还需 catchtouchmove="noop" 阻止穿透滚动 */
+.end-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: var(--z-sheet-mask, 180);
+  display: flex;
+  align-items: flex-end;
+  background: rgba(4, 7, 15, 0.62);
+  -webkit-backdrop-filter: blur(8rpx);
+  backdrop-filter: blur(8rpx);
+}
+
+.end-sheet {
+  width: 100%;
+  padding: 30rpx 32rpx calc(30rpx + env(safe-area-inset-bottom));
+  border-radius: 32rpx 32rpx 0 0;
+  border-top: 1rpx solid rgba(255, 255, 255, 0.1);
+  background: rgba(16, 22, 40, 0.98);
+  box-shadow: 0 -18rpx 60rpx rgba(0, 0, 0, 0.45);
+}
+
+.end-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.end-title {
+  display: block;
+  font-size: 32rpx;
+  color: var(--text-primary);
+}
+
+.end-sub {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 20rpx;
+  color: var(--text-muted);
+}
+
+.end-close {
+  position: relative;
+  flex: none;
+  width: 56rpx;
+  height: 56rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36rpx;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* 视觉 56rpx，命中区补到 80rpx */
+.end-close::after {
+  content: "";
+  position: absolute;
+  left: -12rpx;
+  right: -12rpx;
+  top: -12rpx;
+  bottom: -12rpx;
+}
+
+.end-date-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-top: 20rpx;
+  padding: 16rpx;
+  border-radius: 16rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.end-date-k {
+  flex: none;
+  font-size: 19rpx;
+  color: var(--text-muted);
+}
+
+.end-date-v {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  font-size: 24rpx;
+  color: var(--text-primary);
+}
+
+.end-date-arrow {
+  font-size: 28rpx;
+  color: var(--text-muted);
+}
+
+.end-times {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  margin-top: 22rpx;
+}
+
+.end-times picker {
+  flex: 1;
+  min-width: 0;
+}
+
+.end-time-item {
+  padding: 14rpx 16rpx;
+  border-radius: 16rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  text-align: center;
+}
+
+.end-time-k {
+  display: block;
+  font-size: 19rpx;
+  color: var(--text-muted);
+}
+
+.end-time-v {
+  display: block;
+  margin-top: 2rpx;
+  font-size: 34rpx;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.end-arrow {
+  flex: none;
+  font-size: 26rpx;
+  color: rgba(255, 255, 255, 0.34);
+}
+
+.end-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6rpx 8rpx;
+  margin-top: 14rpx;
+  font-size: 21rpx;
+  color: var(--color-primary-soft);
+}
+
+.end-hint {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 20rpx;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.end-error {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 20rpx;
+  color: #fca5a5;
+}
+
+.end-actions {
+  display: flex;
+  gap: 12rpx;
+  margin-top: 20rpx;
+}
+
+.end-btn {
+  flex: 1;
+  min-height: 84rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999rpx;
+  font-size: 26rpx;
+}
+
+.end-btn.ghost {
+  border: 1rpx solid rgba(255, 255, 255, 0.12);
+  color: var(--text-secondary);
+}
+
+.end-btn.primary {
+  background: linear-gradient(135deg, #8b87ff, #6f6ae8);
+  color: #fff;
+  font-weight: 600;
+}
+
+.end-btn.primary.is-disabled {
+  opacity: 0.38;
+}

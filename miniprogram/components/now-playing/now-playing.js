@@ -49,6 +49,7 @@ Component({
       this._onEnded = () => this.handleEnded()
       this._onError = () => this.handleError()
       this._onCanplay = () => this.handleCanPlay()
+      this._onTimeUpdate = () => this.handleTimeUpdate()
       this.setup()
       this.sync(false)
       this._unsubTimer = audioTimer.subscribe(() => {
@@ -103,6 +104,7 @@ Component({
       this._audio.onEnded(this._onEnded)
       this._audio.onError(this._onError)
       if (this._audio.onCanplay) this._audio.onCanplay(this._onCanplay)
+      if (this._audio.onTimeUpdate) this._audio.onTimeUpdate(this._onTimeUpdate)
     },
 
     off() {
@@ -114,6 +116,7 @@ Component({
         if (this._audio.offEnded) this._audio.offEnded(this._onEnded)
         if (this._audio.offError) this._audio.offError(this._onError)
         if (this._audio.offCanplay) this._audio.offCanplay(this._onCanplay)
+        if (this._audio.offTimeUpdate) this._audio.offTimeUpdate(this._onTimeUpdate)
       } catch (e) {}
       this._audio = null
     },
@@ -211,6 +214,12 @@ Component({
       if (!this._alive) return
       this.disarmLoadingGuard()
       if (this.data.loading) this.setData({ loading: false })
+    },
+
+    handleTimeUpdate() {
+      if (!this._alive) return
+      // 曲末前无缝回环：不进 ended、不换 src，保住微信悬浮音符（见 player-state.seamlessLoop）
+      playerState.seamlessLoop(this._audio)
     },
 
     /** 按 meta.lastTrackId 从配置重建播放源：部分基础库在系统 stop 后会清空 src。 */

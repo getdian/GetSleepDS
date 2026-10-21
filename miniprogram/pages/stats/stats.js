@@ -1,6 +1,8 @@
 const F = require('../../utils/format')
 const T = require('../../utils/time')
 const S = require('../../utils/stats')
+// 补记编排（默认时间/错误文案/保存入参）：与入睡页同一真源
+const MS = require('../../utils/manual-sleep')
 const storage = require('../../utils/storage')
 const cache = require('../../utils/audio-cache')
 const backgrounds = require('../../utils/backgrounds')
@@ -9,11 +11,13 @@ const { withLogin } = require('../../utils/login')
 const { syncNow, whenIdle } = require('../../utils/sync')
 const audioTimer = require('../../utils/audio-timer')
 const reminder = require('../../utils/reminder')
+const tabbar = require('../../utils/tabbar')
 const events = require('../../utils/events')
 const adSlots = require('../../utils/ads')
 const { getConfig, loadConfig } = require('../../utils/config')
 
-const MONTH_MIN_OFFSET = -24
+// 日历可翻月份与补记可选日期共用同一回溯范围，避免"能翻到但补不了"
+const MONTH_MIN_OFFSET = -MS.MONTH_LOOKBACK
 
 Page({
   data: {
@@ -37,6 +41,17 @@ Page({
     monthOffset: 0,
     detail: null,
     selectedKey: '',
+    // 页内补记面板（与入睡页同一套口径：醒来日 + 入睡/起床时间）
+    manualShow: false,
+    manualDay: '',
+    manualDateText: '',
+    manualDateMin: '',
+    manualToday: '',
+    manualBedTime: '23:00',
+    manualWakeTime: '07:00',
+    manualDayText: '',
+    manualDurationText: '',
+    manualError: '',
     settingsOpen: false,
     syncText: '尚未同步',
     syncBusy: false,
@@ -64,6 +79,14 @@ Page({
         if (this._alive) this.refresh()
       })
       .catch(() => {})
+  },
+
+  /** 补记面板打开时切走页面：收起面板并恢复 tabBar，避免回来时导航是隐藏的 */
+  onHide() {
+    if (this.data.manualShow) {
+      this.setData({ manualShow: false, manualError: '' })
+      tabbar.show()
+    }
   },
 
   onUnload() {
@@ -196,28 +219,136 @@ Page({
   onCalendarTap(e) {
     const cell = e.detail && e.detail.cell
     if (!cell || !cell.day) return
-    // 选中态由页面统一持有：refresh 清空详情时能同步清掉描边
-    this.setData({ selectedKey: cell.key })
-    this.showDetail(cell.day)
+    this.openDay(cell.day)
   },
 
   onStripTap(e) {
     const day = e.detail && e.detail.day
     if (!day) return
+    this.openDay(day)
+  },
+
+  /**
+   * 点格子的统一分流：无记录的过去日直接弹页内补记面板；
+   * 有记录 / 进行中 / 未来日走详情卡（选中态由页面统一持有）。
+   */
+  openDay(day) {
+    const now = Date.now()
+    const todayKey = T.dateKey(now)
+    const record = (this._records || {})[day]
+    const pending = storage.getPending()
+    const pendingDay = pending ? todayKey : ''
+    if (!record && day <= todayKey && !(pendingDay && day === pendingDay)) {
+      // 弹面板时清掉选中态与详情，避免“描边还在、详情不对应”
+      this.setData({ selectedKey: '', detail: null })
+      this.openManualSheet(day)
+      return
+    }
     this.setData({ selectedKey: day })
     this.showDetail(day)
   },
 
-  /** 空格子补记：把日期带到入睡页，由它打开补记面板 */
-  onAddMissing(e) {
-    const day = e.currentTarget.dataset.day
-    if (!day) return
-    if (!storage.patchMeta({ manualDay: day })) {
-      wx.showToast({ title: '本地存储写入失败，请重试', icon: 'none' })
+  /** 打开补记面板：默认时间与错误文案都走 manual-sleep 共享模块 */
+  openManualSheet(day) {
+    const now = Date.now()
+    const today = T.dateKey(now)
+    const target = typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : today
+    const times = MS.defaultTimesFor(target, now)
+    this._manualBaseDay = T.parseDateKey(target)
+    this._manualBedAt = 0
+    this._manualWakeAt = 0
+    tabbar.hide()
+    this.setData(
+      {
+        manualShow: true,
+        manualDay: target,
+        manualDateText: F.fmtDateCN(this._manualBaseDay),
+        manualDateMin: MS.minDayKey(now),
+        manualToday: today,
+        manualBedTime: F.fmtClock(times.bedMinutes),
+        manualWakeTime: F.fmtClock(times.wakeMinutes),
+        manualError: ''
+      },
+      () => this.computeManualSheet()
+    )
+  },
+
+  /** 与入睡页同口径：先挡时间错误，再挡跨天重叠（校验在共享模块里） */
+  computeManualSheet() {
+    const now = Date.now()
+    const result = MS.evaluateManualRange({
+      records: storage.getRecords(),
+      dayTs: this._manualBaseDay || T.startOfDay(now),
+      bedMinutes: T.parseClock(this.data.manualBedTime),
+      wakeMinutes: T.parseClock(this.data.manualWakeTime),
+      now
+    })
+    this._manualBedAt = result.bedAt
+    this._manualWakeAt = result.wakeAt
+    this.setData({
+      manualDayText: F.fmtDayCN(T.dateKey(result.wakeAt)),
+      manualDurationText: result.durationMin > 0 ? F.fmtDuration(result.durationMin) : '—',
+      manualError: result.error
+    })
+  },
+
+  onManualDateChange(event) {
+    const date = event.detail.value
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return
+    this._manualBaseDay = T.parseDateKey(date)
+    this.setData(
+      { manualDay: date, manualDateText: F.fmtDateCN(this._manualBaseDay) },
+      () => this.computeManualSheet()
+    )
+  },
+
+  onManualTimeChange(event) {
+    const field = event.currentTarget.dataset.field
+    const value = event.detail.value
+    if (field !== 'manualBedTime' && field !== 'manualWakeTime') return
+    this.setData({ [field]: value }, () => this.computeManualSheet())
+  },
+
+  onManualCancel() {
+    tabbar.show()
+    this.setData({ manualShow: false, manualError: '' })
+  },
+
+  onManualConfirm() {
+    if (this.data.manualError || !this._manualBedAt || !this._manualWakeAt) return
+    this.saveManualSession()
+  },
+
+  /** 手动补记一段：不创建 pending、不发提醒，直接落 v2 session */
+  saveManualSession() {
+    const now = Date.now()
+    const record = storage.saveSession(MS.buildSaveArgs(this._manualBedAt, this._manualWakeAt, now))
+    if (!record) {
+      this.setData({ manualError: '补记失败：时间可能与已有段重叠，或当天段数/总时长已满' })
       return
     }
-    wx.switchTab({ url: '/pages/sleep/sleep' })
+    const day = T.dateKey(this._manualWakeAt)
+    tabbar.show()
+    this.setData({ manualShow: false, manualError: '' })
+    this._signature = ''
+    this.refresh()
+    // 与入睡页同口径：补记是独立事件，用于看板补记使用率
+    events.track('manual_sleep', '')
+    wx.showToast({ title: '已补记 ' + F.fmtDayCN(day), icon: 'none' })
+    // 与入睡页同一套云端反馈：跳过/云端拒收/网络失败分别提示
+    syncNow(true)
+      .then((res) => {
+        if (!res || res.skipped === 'stale') return
+        if (res.synced === 0 && res.dropped > 0) {
+          wx.showToast({ title: '记录已存本机，云端校验未通过', icon: 'none' })
+        }
+      })
+      .catch(() => {
+        wx.showToast({ title: '已存本机，云端稍后重试', icon: 'none' })
+      })
   },
+
+  noop() {},
 
   showDetail(day) {
     const records = this._records || {}
@@ -228,7 +359,7 @@ Page({
 
     if (day > todayKey) {
       this.setData({
-        detail: { day, title, tag: '还没到', main: '这一天还没到', sub: '', canAdd: false }
+        detail: { day, title, tag: '还没到', main: '这一天还没到', sub: '' }
       })
       return
     }
@@ -243,8 +374,7 @@ Page({
             title,
             tag: '仅入睡',
             main: '已记录入睡，还没有结束时间',
-            sub: '结束后才会进入时长统计',
-            canAdd: false
+            sub: '结束后才会进入时长统计'
           }
         })
         return
@@ -255,8 +385,7 @@ Page({
           title,
           tag: '未记录',
           main: '这天还没有记录',
-          sub: '可以补记这一段睡眠',
-          canAdd: true
+          sub: '点击格子可直接补记'
         }
       })
       return
@@ -273,7 +402,7 @@ Page({
       (nap > 0 ? '夜间 ' + F.fmtDuration(night) + ' · 午休/间断 ' + F.fmtDuration(nap) : '夜间 ' + F.fmtDuration(night)) +
       ' · 按醒来日归档' +
       inProgress
-    this.setData({ detail: { day, title, tag: '已记录', main, sub, canAdd: false } })
+    this.setData({ detail: { day, title, tag: '已记录', main, sub } })
   },
 
   onMonthPrev() {

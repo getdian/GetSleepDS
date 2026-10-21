@@ -48,8 +48,6 @@
 
 .hero-title {
   display: block;
-  /* 给右上角“换背景”留出安全距离，320 宽也不挤字 */
-  padding-right: 148rpx;
   font-family: var(--font-sans);
   font-size: 72rpx;
   font-weight: 700;
@@ -65,46 +63,6 @@
   font-size: 26rpx;
   line-height: 1.5;
   color: rgba(220, 230, 255, 0.78);
-}
-
-.hero-tools {
-  position: absolute;
-  right: 8rpx;
-  top: 24rpx;
-}
-
-.hero-bg-btn {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6rpx;
-  min-height: 56rpx;
-  padding: 0 16rpx;
-  border-radius: 999rpx;
-  background: rgba(8, 11, 20, 0.28);
-  border: 1rpx solid rgba(255, 255, 255, 0.12);
-  font-size: 22rpx;
-  color: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(12rpx);
-}
-
-/* 视觉更小，实际可点区域仍补到约 72rpx */
-.hero-bg-btn::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: -8rpx;
-  bottom: -8rpx;
-}
-
-.hero-bg-btn:active {
-  opacity: 0.7;
-}
-
-.hero-bg-arrow {
-  color: var(--c-primary-soft);
 }
 
 /* 极简无框外壳：去掉边框和厚重背景，让时钟滚轮自然漂浮在夜空中 */
@@ -863,7 +821,6 @@
 @media (max-width: 360px) {
   .hero-title {
     font-size: 64rpx;
-    padding-right: 132rpx;
   }
 
   .result-badge {

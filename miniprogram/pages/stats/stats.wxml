@@ -49,15 +49,8 @@
       <text wx:for="{{metricDetail.detail}}" wx:key="*this" class="md-line">{{item}}</text>
     </view>
 
-    <view wx:if="{{metrics.length}}" class="week-line fade-up">
-      <text class="week-main">
-        <text>本周打卡 </text><text class="week-num">{{weekCount}}</text><text> 天</text>
-      </text>
-      <text class="week-dot">·</text>
-      <text class="week-main">
-        <text>连续 </text><text class="week-num">{{streak}}</text><text> 天</text>
-      </text>
-      <text wx:if="{{!metricDetail}}" class="week-hint">点数字看说明</text>
+    <view wx:if="{{metrics.length && !metricDetail}}" class="week-line fade-up">
+      <text class="week-hint">点上方↑数字看说明</text>
     </view>
 
     <ad-slot wx:if="{{hasData}}" slot-name="stats" enabled="{{ads.stats.enabled}}" unit-id="{{ads.stats.unitId}}" type="{{ads.stats.type}}" />
@@ -93,9 +86,6 @@
       />
 
       <view class="cal-legend">
-        <view class="cal-legend-item is-note">
-          <text>颜色越亮 = 睡得越久</text>
-        </view>
         <view class="cal-legend-item">
           <view class="cal-swatch lv-1"></view>
           <text>＜4h</text>
@@ -112,10 +102,6 @@
           <view class="cal-swatch lv-4"></view>
           <text>8h+</text>
         </view>
-        <view class="cal-legend-item">
-          <view class="cal-swatch is-partial"></view>
-          <text>仅入睡</text>
-        </view>
       </view>
 
       <view wx:if="{{detail}}" class="day-detail">
@@ -125,13 +111,6 @@
         </view>
         <text class="dd-main">{{detail.main}}</text>
         <text wx:if="{{detail.sub}}" class="dd-sub">{{detail.sub}}</text>
-        <view
-          wx:if="{{detail.canAdd}}"
-          class="dd-action"
-          data-day="{{detail.day}}"
-          bindtap="onAddMissing"
-          aria-role="button"
-        >补记这一天的睡眠</view>
       </view>
 
       <view class="section-foot">
@@ -197,5 +176,58 @@
 </view>
 
 <view class="np-host"><now-playing /></view>
+
+<!-- 页内补记面板：与入睡页"补记入睡"同一套口径，不跳页 -->
+<view wx:if="{{manualShow}}" class="end-mask" catchtap="onManualCancel" catchtouchmove="noop">
+  <view class="end-sheet" catchtap="noop" catchtouchmove="noop" aria-role="dialog" aria-label="补记一段睡眠">
+    <view class="end-head">
+      <view>
+        <text class="end-title">补记一段睡眠</text>
+        <text class="end-sub">选择醒来日与真实入睡/起床时间，不会启动计时</text>
+      </view>
+      <text class="end-close" catchtap="onManualCancel" aria-role="button" aria-label="关闭">×</text>
+    </view>
+    <picker
+      mode="date"
+      value="{{manualDay}}"
+      start="{{manualDateMin}}"
+      end="{{manualToday}}"
+      bindchange="onManualDateChange"
+    >
+      <view class="end-date-row">
+        <text class="end-date-k">醒来日</text>
+        <view class="end-date-v">
+          <text>{{manualDateText}}</text>
+          <text class="end-date-arrow">›</text>
+        </view>
+      </view>
+    </picker>
+    <view class="end-times">
+      <picker mode="time" value="{{manualBedTime}}" data-field="manualBedTime" bindchange="onManualTimeChange">
+        <view class="end-time-item">
+          <text class="end-time-k">入睡</text>
+          <text class="end-time-v">{{manualBedTime}}</text>
+        </view>
+      </picker>
+      <text class="end-arrow">→</text>
+      <picker mode="time" value="{{manualWakeTime}}" data-field="manualWakeTime" bindchange="onManualTimeChange">
+        <view class="end-time-item">
+          <text class="end-time-k">起床</text>
+          <text class="end-time-v">{{manualWakeTime}}</text>
+        </view>
+      </picker>
+    </view>
+    <view class="end-summary">
+      <text>归入 {{manualDayText}}（醒来日）</text>
+      <text>·</text>
+      <text>时长 {{manualDurationText}}</text>
+    </view>
+    <text wx:if="{{manualError}}" class="end-error">{{manualError}}</text>
+    <view class="end-actions">
+      <view class="end-btn ghost" catchtap="onManualCancel">取消</view>
+      <view class="end-btn primary {{manualError ? 'is-disabled' : ''}}" catchtap="onManualConfirm">保存补记</view>
+    </view>
+  </view>
+</view>
 
 <custom-tab-bar />

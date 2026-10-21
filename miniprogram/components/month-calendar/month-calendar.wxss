@@ -43,13 +43,14 @@
   background: rgba(255, 255, 255, 0.06);
 }
 
-/* 星期行与格子共用同一套正方形网格，保证列对齐 */
+/* 星期行与格子共用同一套列网格，保证列对齐。
+   横向间距收密（4rpx）、纵向留给行呼吸（16rpx） */
 .mc-week {
   display: grid;
-  grid-template-columns: repeat(7, 72rpx);
-  gap: 8rpx;
+  grid-template-columns: repeat(7, 92rpx);
+  gap: 0 4rpx;
   justify-content: center;
-  margin-bottom: 6rpx;
+  margin-bottom: 18rpx;
 }
 
 .mc-week-cell {
@@ -58,12 +59,13 @@
   color: var(--text-muted);
 }
 
-/* 72rpx 正方形格 + 8rpx 间距：宽高一致，格子之间有呼吸感 */
+/* 92×76rpx 扁格：7 列铺满内容宽（7×92 + 6×4 = 668rpx，左右各让约 9rpx），
+   列间距 4rpx 收密、行间距 16rpx 放大——7 列紧凑、5 行之间透气 */
 .mc-grid {
   display: grid;
-  grid-template-columns: repeat(7, 72rpx);
-  grid-auto-rows: 72rpx;
-  gap: 8rpx;
+  grid-template-columns: repeat(7, 92rpx);
+  grid-auto-rows: 76rpx;
+  gap: 16rpx 4rpx;
   justify-content: center;
 }
 
@@ -104,15 +106,13 @@
   margin-top: 6rpx;
 }
 
-/* 空格子：只放一枚极淡的＋，示意"可点可补记"。
-   逐格写「补记」两个字是视觉噪音，动作入口在点击后的详情卡里 */
+/* 空格子：写「补记」，点击直接弹页内补记面板（不再跳入睡页 / 不落到下方详情卡） */
 .mc-add {
   margin-top: 2rpx;
-  font-size: 24rpx;
+  font-size: 15rpx;
   line-height: 1;
-  font-weight: 300;
   color: var(--text-muted);
-  opacity: 0.32;
+  opacity: 0.62;
 }
 
 /* 4 档：短睡不再和长睡同色；亮档改用深字保证对比 */
