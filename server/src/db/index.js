@@ -121,7 +121,10 @@ function createMemoryDb() {
 
     async getRecords(openid) {
       const bucket = records.get(openid)
-      return bucket ? Array.from(bucket.values()) : []
+      // 与 PG 实现保持一致（ORDER BY day），否则后台/接口在两种模式下的顺序不同
+      return bucket
+        ? Array.from(bucket.values()).sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0))
+        : []
     },
 
     async deleteRecords(openid) {
@@ -296,7 +299,28 @@ function createMemoryDb() {
     },
 
     async listEvents(sinceTs) {
-      return events.filter((event) => event.ts >= sinceTs)
+      // 与 PG 实现对齐：最新在前 + 20000 条上限，避免内存模式一次扫全量、PG 模式静默截断
+      return events
+        .filter((event) => event.ts >= sinceTs)
+        .sort((a, b) => b.ts - a.ts)
+        .slice(0, 20000)
+    },
+
+    /**
+     * 清理过期删除墓碑。客户端只上传最近 400 天的删除，更老的墓碑不再有作用，
+     * 但会被每次 sync 全量回传，长期使用后响应体单调增长。
+     */
+    async cleanupDeletions(beforeTs) {
+      let removed = 0
+      deletions.forEach((list) => {
+        list.forEach((deletedAt, day) => {
+          if (deletedAt < beforeTs) {
+            list.delete(day)
+            removed += 1
+          }
+        })
+      })
+      return removed
     },
 
     async cleanupEvents(beforeTs) {
@@ -389,6 +413,15 @@ function createPostgresDb(connectionString) {
     async cleanupExpired() {
       const result = await pool.query(
         "DELETE FROM audio_unlocks WHERE expire_time < now() - interval '7 days'"
+      )
+      return result.rowCount
+    },
+
+    /** 清理过期删除墓碑（超出客户端 400 天同步窗口后已无作用），防止表与响应体单调增长 */
+    async cleanupDeletions(beforeTs) {
+      const result = await pool.query(
+        'DELETE FROM sleep_record_deletions WHERE deleted_at < to_timestamp($1::bigint / 1000.0)',
+        [beforeTs]
       )
       return result.rowCount
     },

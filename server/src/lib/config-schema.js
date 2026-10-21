@@ -10,6 +10,8 @@ const AD_TYPES = ['template', 'banner']
 // 首页背景图：默认免费；用户主动更换需看广告解锁
 const MAX_BACKGROUNDS = 20
 const DEFAULT_BACKGROUND_UNLOCK_HOURS = 24
+// 落地页展示：小程序码（后台可上传/清除）与二维码下方的引导文案
+const DEFAULT_SITE = { mpQrCodeUrl: '', mpQrNote: '微信搜索「睡点」' }
 
 function isObject(value) {
   return !!value && typeof value === 'object' && !Array.isArray(value)
@@ -54,6 +56,25 @@ function normalizeAds(input, fallback) {
     out[slot] = normalizeAdSlot(source[slot], base[slot])
   })
   return out
+}
+
+function normalizeSite(input, fallback) {
+  const source = isObject(input) ? input : {}
+  const base = isObject(fallback) ? fallback : DEFAULT_SITE
+  return {
+    mpQrCodeUrl:
+      typeof source.mpQrCodeUrl === 'string'
+        ? source.mpQrCodeUrl
+        : typeof base.mpQrCodeUrl === 'string'
+          ? base.mpQrCodeUrl
+          : DEFAULT_SITE.mpQrCodeUrl,
+    mpQrNote:
+      typeof source.mpQrNote === 'string' && source.mpQrNote
+        ? source.mpQrNote
+        : typeof base.mpQrNote === 'string' && base.mpQrNote
+          ? base.mpQrNote
+          : DEFAULT_SITE.mpQrNote
+  }
 }
 
 function readText(value, label, max, required) {
@@ -123,6 +144,7 @@ function normalizeConfig(input, base) {
       Number(source.backgroundUnlockHours) ||
       Number(fallback.backgroundUnlockHours) ||
       DEFAULT_BACKGROUND_UNLOCK_HOURS,
+    site: normalizeSite(source.site, fallback.site),
     features: Object.assign({}, DEFAULT_FEATURES, fallback.features || {}, isObject(source.features) ? source.features : {}),
     cache: Object.assign({}, DEFAULT_CACHE, fallback.cache || {}, isObject(source.cache) ? source.cache : {}),
     copy
@@ -347,6 +369,20 @@ function validateConfig(input, base) {
     backgroundUnlockHours = n
   }
 
+  const siteInput = Object.assign(
+    {},
+    isObject(baseConfig.site) ? baseConfig.site : {},
+    isObject(input.site) ? input.site : {}
+  )
+  const site = {
+    // 小程序码可留空（落地页回退为“微信搜索」提示），但填了必须是 https 图片地址
+    mpQrCodeUrl: readText(siteInput.mpQrCodeUrl, '小程序码地址', 500, false)
+  }
+  if (site.mpQrCodeUrl && !/^https:\/\//i.test(site.mpQrCodeUrl)) {
+    throw invalidBody('小程序码地址必须以 https:// 开头')
+  }
+  site.mpQrNote = readText(siteInput.mpQrNote, '小程序码文案', 30, false) || '微信搜索「睡点」'
+
   const copyInput = Object.assign(
     {},
     isObject(baseConfig.copy) ? baseConfig.copy : {},
@@ -374,6 +410,7 @@ function validateConfig(input, base) {
     backgrounds,
     defaultBackgroundId,
     backgroundUnlockHours,
+    site,
     features,
     cache: { maxMB, ttlDays },
     copy

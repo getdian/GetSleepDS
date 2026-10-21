@@ -1,13 +1,15 @@
 /* 首页局部设计 token：只作用于计算器页，不改其他页面的全局色板 */
 .calc-page {
   --c-primary: #8B87FF;
-  --c-primary-soft: #A7A4FF;
+  /* 与全局 --color-primary-soft 同值：本页历史上自建过一套局部 token，
+     保留变量名兼容既有引用，值必须与 app.wxss 保持一致 */
+  --c-primary-soft: var(--color-primary-soft, #A7A4FF);
   --c-text: rgba(255, 255, 255, 0.96);
   --c-text-2: rgba(255, 255, 255, 0.72);
   --c-text-3: rgba(255, 255, 255, 0.52);
   --c-border: rgba(255, 255, 255, 0.07);
   position: relative;
-  z-index: 1;
+  z-index: var(--z-page, 1);
   padding-top: 8rpx;
 }
 
@@ -19,7 +21,7 @@
   left: 0;
   right: 0;
   min-height: 560rpx;
-  z-index: 0;
+  z-index: var(--z-hero, 0);
   overflow: hidden;
   pointer-events: none;
 }
@@ -36,14 +38,9 @@
   left: 0;
   right: 0;
   bottom: 0;
-  /* 后台可能上传亮图：整体压暗，保证状态栏、标题、时间轮在图上仍可读 */
-  background: linear-gradient(
-    180deg,
-    rgba(8, 11, 20, 0.55) 0%,
-    rgba(8, 13, 29, 0.5) 38%,
-    rgba(8, 13, 29, 0.82) 78%,
-    #080B14 100%
-  );
+  /* 后台可能上传亮图：整体压暗，保证状态栏、标题、时间轮在图上仍可读。
+     与 hero-backdrop 组件共用 app.wxss 的 --hero-scrim，避免两页亮度不一致。 */
+  background: var(--hero-scrim);
 }
 
 /* 标题区 */
@@ -81,18 +78,29 @@
 }
 
 .hero-bg-btn {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6rpx;
-  min-height: 72rpx;
-  padding: 0 20rpx;
+  min-height: 56rpx;
+  padding: 0 16rpx;
   border-radius: 999rpx;
-  background: rgba(8, 11, 20, 0.45);
-  border: 1rpx solid rgba(255, 255, 255, 0.16);
-  font-size: 24rpx;
-  color: rgba(255, 255, 255, 0.86);
-  backdrop-filter: blur(16rpx);
+  background: rgba(8, 11, 20, 0.28);
+  border: 1rpx solid rgba(255, 255, 255, 0.12);
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(12rpx);
+}
+
+/* 视觉更小，实际可点区域仍补到约 72rpx */
+.hero-bg-btn::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -8rpx;
+  bottom: -8rpx;
 }
 
 .hero-bg-btn:active {
@@ -187,7 +195,9 @@
   /* 不在正面常驻 perspective：即使没有 rotate，3D 透视也会让
      scroll-view/上午下午的 tap 命中偏移。透视只放在翻转时的 transform 里。 */
   width: 100%;
-  height: 780rpx;
+  /* 舞台高度同时决定正/背面：正面主按钮靠 margin-top:auto 贴底，
+     缩短舞台 = 按钮上移 + 整张卡片变矮。背面结果内容需放得下。 */
+  height: 712rpx;
 }
 
 .calc-flip {
@@ -265,7 +275,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10rpx 14rpx 0;
+  padding: 0 14rpx;
 }
 
 .now-hint {
@@ -280,7 +290,7 @@
 
 .now-link {
   flex: none;
-  min-height: 72rpx;
+  min-height: 64rpx;
   display: inline-flex;
   align-items: center;
   padding: 0 12rpx;
@@ -304,7 +314,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 16rpx;
-  margin-top: 26rpx;
+  margin-top: 10rpx;
   padding: 0 12rpx;
 }
 
@@ -474,7 +484,7 @@
   background: linear-gradient(90deg, rgba(65, 85, 175, 0.35) 0%, rgba(45, 60, 130, 0.25) 100%);
   border: 1.5rpx solid rgba(140, 175, 255, 0.3);
   box-shadow: 0 8rpx 28rpx rgba(15, 25, 70, 0.4);
-  margin-bottom: 20rpx;
+  margin-bottom: 16rpx;
 }
 
 .result-bar {
@@ -598,7 +608,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20rpx 8rpx;
+  padding: 16rpx 8rpx;
   border-bottom: 1rpx solid rgba(255, 255, 255, 0.08);
 }
 
@@ -700,7 +710,7 @@
 }
 
 .result-extra {
-  margin-top: 20rpx;
+  margin-top: 14rpx;
   padding: 0 4rpx;
 }
 
@@ -767,6 +777,29 @@
   margin-top: 4rpx;
 }
 
+/* 全部周期都已错过（view.compact）时结果多一行，压缩纵向节奏，
+   保证内容仍落在翻转舞台内，不会压到脚注 */
+.calc-back.is-compact .result-head {
+  margin-bottom: 12rpx;
+}
+
+.calc-back.is-compact .result-main {
+  padding: 16rpx 20rpx;
+  margin-bottom: 12rpx;
+}
+
+.calc-back.is-compact .result-row {
+  padding: 10rpx 8rpx;
+}
+
+.calc-back.is-compact .result-extra {
+  margin-top: 10rpx;
+}
+
+.calc-back.is-compact .result-go {
+  margin-top: 8rpx;
+}
+
 /* 320 宽小屏：隐藏推荐徽标，让主时间与 meta 有空间 */
 @media (max-width: 360px) {
   .result-badge {
@@ -790,7 +823,7 @@
 /* 跨页播放器宿主：压在页面内容之上，否则音符/播放条会被底部主按钮拦截点击 */
 .np-host {
   position: relative;
-  z-index: 120;
+  z-index: var(--z-player-host, 120);
 }
 
 /* 脚注 */

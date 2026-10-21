@@ -5,6 +5,7 @@ const G = require('../../utils/sleep-guide')
 const storage = require('../../utils/storage')
 const adSlots = require('../../utils/ads')
 const backgrounds = require('../../utils/backgrounds')
+const tabbar = require('../../utils/tabbar')
 const ad = require('../../utils/ad')
 const { getConfig, loadConfig, getConfigStatus } = require('../../utils/config')
 
@@ -40,6 +41,9 @@ Page({
     this._cfgLoaded = false
     this._sleepTouched = false
     this._bgExpiryNotified = false
+    // 结果面的计算锚点：同一次结果内的重算（改入睡耗时以外的重算、切后台回来）
+    // 必须沿用同一个“现在”，否则入睡模式会因 30 分钟宽限把推荐静默推后一天。
+    this._anchorAt = 0
     const now = Date.now()
     const prefs = storage.getPrefs()
     // 入睡默认跟随真实当前时间（时间轮支持 1 分钟粒度），不再固定白天 23:00
@@ -169,6 +173,8 @@ Page({
     const key = this.data.mode === 'wake' ? 'wakeTime' : 'sleepTime'
     if (value === this.data[key]) return
     if (this.data.mode === 'sleep') this._sleepTouched = true
+    // 输入变了：下一次计算重新取“现在”
+    this._anchorAt = 0
 
     const patch = { flipped: false, view: null }
     patch[key] = value
@@ -183,6 +189,7 @@ Page({
 
   toggleMode() {
     const next = this.data.mode === 'wake' ? 'sleep' : 'wake'
+    this._anchorAt = 0
     const patch = { mode: next, flipped: false, view: null }
     // 从结果面反向切换时，用刚算出的推荐时间作为种子，保持双向计算连续；
     // 只有正面的普通切换才退回“跟随当前时间”。种子是一次明确的用户意图，不再被 onShow 覆盖。
@@ -216,6 +223,7 @@ Page({
     const now = Date.now()
     const value = F.fmtClock(T.minutesOf(now))
     this._sleepTouched = true
+    this._anchorAt = 0
     this.setData({
       sleepTime: value,
       nowText: value,
@@ -229,6 +237,7 @@ Page({
   onFallAsleepTap(event) {
     const minutes = Number(event.currentTarget.dataset.min)
     if (!minutes || minutes === this.data.fallAsleep) return
+    this._anchorAt = 0
     this.setData({ fallAsleep: minutes })
     if (this.data.mode === 'wake') this.refreshWakeContext(this.data.wakeTime, minutes)
     if (this.data.flipped) this.calc(true)
@@ -239,6 +248,7 @@ Page({
     const options = this.data.fallOptions
     const index = options.indexOf(this.data.fallAsleep)
     const minutes = options[(index + 1) % options.length]
+    this._anchorAt = 0
     this.setData({ fallAsleep: minutes })
     if (this.data.mode === 'wake') this.refreshWakeContext(this.data.wakeTime, minutes)
     if (wx.vibrateShort) wx.vibrateShort({ type: 'light' })
@@ -246,6 +256,8 @@ Page({
   },
 
   onCalc() {
+    // 点主按钮 = 明确的一次计算：以此刻为锚点，结果面的后续重算沿用这个锚点
+    this._anchorAt = Date.now()
     const key = this.data.mode === 'wake' ? 'wakeTime' : 'sleepTime'
     let value = this.data[key]
     const wheel = this.selectComponent('#calc-wheel')
@@ -258,7 +270,8 @@ Page({
   },
 
   calc(silent, explicitValue) {
-    const now = Date.now()
+    // 锚点固定后，切后台回来/在结果面改入睡耗时都不会让 recommended 时间整体漂移一天
+    const now = this._anchorAt || Date.now()
     const value =
       explicitValue || (this.data.mode === 'wake' ? this.data.wakeTime : this.data.sleepTime)
     let view = null
@@ -321,6 +334,9 @@ Page({
       const main = plan.slots[0]
       const mainGuide = G.guidanceOf(main.cycles)
       const late = G.isLateNight(plan.sleepAt)
+      // 结果面主时间只用「凌晨/早晨」这类时段词，不含日期；
+      // 入睡时间已过 30 分钟宽限时会按次日算，这里必须把「明天」写出来，否则用户看不到日期已经变了。
+      const sleepDay = P.dayLabel(plan.sleepAt, now)
 
       const rows = plan.slots.slice(1).map((slot) => {
         const guide = G.guidanceOf(slot.cycles)
@@ -342,7 +358,11 @@ Page({
         mainMeta: main.cycles + ' 个周期 · ' + F.fmtDuration(main.durationMin),
         mainGuideLabel: mainGuide.label,
         mainGuideTone: mainGuide.tone,
-        note: late ? G.lateNote() : '从 ' + value + ' 上床算起，已含 ' + this.data.fallAsleep + ' 分钟入睡',
+        note: late
+          ? G.lateNote()
+          : (sleepDay === '今天' ? '从 ' + value + ' 上床算起，已含 ' : sleepDay + ' ' + value + ' 上床，已含 ') +
+            this.data.fallAsleep +
+            ' 分钟入睡',
         allPassed: false,
         compact: false,
         rows
@@ -354,6 +374,8 @@ Page({
   },
 
   reset() {
+    // 回到正面后下次计算重新取“现在”
+    this._anchorAt = 0
     this.setData({ flipped: false, view: null })
   },
 
@@ -477,10 +499,12 @@ Page({
     }
     // 打开前重算一次，刷新到期/解锁状态
     this.loadBackgrounds()
+    tabbar.hide()
     this.setData({ bgOpen: true })
   },
 
   closeBgPicker() {
+    tabbar.show()
     this.setData({ bgOpen: false })
   },
 
@@ -604,6 +628,7 @@ Page({
     }
     this._pendingBgGrant = ''
     this.loadBackgrounds()
+    tabbar.show()
     this.setData({ bgOpen: false })
     wx.showToast({ title: '背景已解锁', icon: 'none' })
   },
@@ -623,6 +648,7 @@ Page({
     }
 
     const localPath = backgrounds.localPathOf(item.url)
+    tabbar.show()
     this.setData({
       background: Object.assign({}, item, { localPath }),
       bgError: false,

@@ -1,6 +1,7 @@
 Component({
   data: {
     selected: 0,
+    hidden: false,
     list: [
       { pagePath: '/pages/index/index', text: '计算器', key: 'calc' },
       { pagePath: '/pages/sleep/sleep', text: '入睡', key: 'sleep' },

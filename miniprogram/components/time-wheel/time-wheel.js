@@ -405,7 +405,12 @@ Component({
       } else {
         if (nextM !== this.data.selM) patch.selM = nextM
       }
-      patch[isHour ? 'hourTop' : 'minuteTop'] = raw * rowH
+      // 小幅拖动（不足半行）时 raw*rowH 与当前 scroll-top 完全相同，
+      // setData 视为无变化，scroll-view 不会回滚，整列会一直停在两行之间。
+      // 加 1px 强制产生一次真实滚动把列对齐回整行（视觉不可察觉）。
+      const snapTop = raw * rowH
+      const topKey = isHour ? 'hourTop' : 'minuteTop'
+      patch[topKey] = this.data[topKey] === snapTop ? snapTop + 1 : snapTop
       this.mergeDrum(patch, which, raw * rowH)
 
       this.setData(patch, () => {

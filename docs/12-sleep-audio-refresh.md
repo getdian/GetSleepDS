@@ -20,7 +20,7 @@
 - 新增 [hero-backdrop](../miniprogram/components/hero-backdrop/hero-backdrop.js) 组件，复用后台背景图、分类/解锁选择和本地缓存回退；入睡页与计算器页使用同一张当前背景。
 - 标题改为参考稿的「我准备睡了」，副标题「记录这一刻，明早回来告诉我几点醒。」；入睡/完成态会切换为「夜色正浓」「今晚的记录完成了」。
 - 顶部面包屑去掉：入睡/统计页只保留「睡点」品牌，不再显示「睡点 / 入睡」「睡点 / 统计」。
-- 环境声音入口保留为右下角悬浮 `♪`，无圆框背景，只有轻微上下浮动和柔光；不再放 Hero 文字按钮。
+- 环境声音入口保留为右下角悬浮 `♪`，2026-10-21 改为「页面主题深色 + 透明玻璃」圆底（`rgba(8,11,20,.46)` + `blur(14rpx)`，无边框、无高光线），保留轻微上下浮动与柔光；不再放 Hero 文字按钮。
 
 ![入睡页](assets/sleep-page-20261020.png)
 
@@ -75,14 +75,21 @@
 - 胶囊左右各留 24rpx，底部 `16rpx + safe-area`，高 112rpx；实色深蓝底、极细描边和轻阴影，不做渐变/内高光。
 - 中间「入睡」用 158rpx 同色圆形凸起 + 淡紫月晕，左侧细线时钟、右侧四根细柱；月牙用 CSS 圆形缺口切出，避免字体符号粗细不一致。
 - 当前页用图标/文字提亮 + 文字 `500` 字重表示，非当前页统一低对比灰；点击用 `wx.switchTab`，三个页面在 `onShow` 同步 `selected`。
-- 自定义 tabBar 的 `z-index: 90`，低于环境声抽屉（200）和播放器折叠遮罩，避免盖住弹层。
+- 自定义 tabBar 是独立组件层，普通页面遮罩压不住；打开环境声抽屉/背景选择器时通过 `utils/tabbar.hide()` 主动隐藏，关闭时恢复，而不是只靠 z-index。
 - 播放器整体从 `90rpx` 抬到 `132rpx + safe-area`，刚好在悬浮 tabBar 上方、计算器主按钮下方。
+
+### 4.1 背景、浮层与玻璃
+
+- 统计页补 `<hero-backdrop />`，和计算器/入睡页共用同一套后台背景图、下载缓存与渐隐 scrim。
+- 计算器右上「换背景」缩到 56rpx 高、半透明底 + 细边，仍用伪元素保留约 72rpx 命中区。
+- 播放条改为深色透明玻璃：`rgba(8,11,20,.62)` + `blur(26rpx)`、无边框；折叠音符为 108rpx 的同色系玻璃圆底（`rgba(8,11,20,.46)` + `blur(14rpx)`），`audio-dock` 与 `now-playing` 同一套值。
+- 背景选择器、环境声抽屉、解锁弹窗打开时 tabBar 隐藏，避免悬浮胶囊压在弹层上。
 
 ## 5. 验证
 
 - 微信开发者工具 iPhone 12/13 390×844 编译通过；入睡页、环境声音抽屉截图见上。
 - `npm test`：139 passed / 0 failed + 1 个 PG 集成用例（未设置 `PG_TEST_URL` 时跳过）。
-- `node tools/check.mjs`：3 页面 / 21 JSON / 16 WXML / 17 WXSS，主包约 378.9 KB。
+- `node tools/check.mjs`：3 页面 / 21 JSON / 16 WXML / 17 WXSS，主包约 385.0 KB。
 - 本轮不新增依赖；`hero-backdrop` 复用 `utils/backgrounds` 与现有配置缓存。
 
 ## 6. 未覆盖
@@ -90,3 +97,10 @@
 - 完成态（C）与睡梦中（B）的实机截图未在当前数据下生成，需要本机已有记录后复验。
 - 真机小屏 320/iPhone SE、刘海/安全区、音频抽屉键盘顶起仍需真机验收。
 - 环境音播放、解锁、定时关闭的行为未改，仍按 `docs/01-architecture.md` 的既有边界验收。
+
+## 7. 播放状态机收口（2026-10-21）
+
+- **冷启动不再出现幽灵播放态**：`audio-dock.syncFromAudio` 与 `now-playing.sync` 统一按「播放器是否有 `src` + 本进程是否创建过 `audioSession`」判定；两者都没有时视为上个进程残影，清掉 `lastTrackActive/lastTrackPlaying` 并收起迷你条。`attached` 改为先 `audioTimer.restore()`（可能顺带清理）再 `syncFromAudio()`。修复了「界面显示正在播放但无声、点暂停反而起播」。
+- **循环重播只有一个处理人**：`audio-dock` 与 `now-playing` 都会收到同一个 `BackgroundAudioManager.onEnded`，新增 `playerState.claimEnded()`（800ms 去重窗口），抢到的组件才重建音源；避免同一 `src` 被两次赋值 + 两次 `play()`。
+- **加载兜底**：起播后 12s 内没有 `play/canplay/error` 时，`loading` 置 false 并显示「加载超时，点音符重试」，不再永久停在「正在连接音频…」。
+- 仍需真机：杀进程重进、短音源循环点、锁屏/通知栏暂停后恢复。

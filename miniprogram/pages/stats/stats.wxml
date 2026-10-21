@@ -1,4 +1,5 @@
 <ambient />
+<hero-backdrop />
 <top-bar brand-only="{{true}}" style="display:block;width:100%;" />
 
 <view class="page stats-page">
@@ -53,11 +54,30 @@
           bind:celltap="onHeatTap"
         />
 
+        <view class="heat-legend">
+          <text class="heat-legend-label">少</text>
+          <view class="heat-legend-cells">
+            <view class="heat-legend-cell l0"></view>
+            <view class="heat-legend-cell l1"></view>
+            <view class="heat-legend-cell l2"></view>
+            <view class="heat-legend-cell l3"></view>
+            <view class="heat-legend-cell l4"></view>
+            <view class="heat-legend-cell l5"></view>
+          </view>
+          <text class="heat-legend-label">多</text>
+          <view class="heat-legend-partial">
+            <view class="heat-legend-cell is-partial"></view>
+            <text>仅入睡</text>
+          </view>
+        </view>
+
+        <view wx:if="{{heatDetail}}" class="heat-detail">{{heatDetail}}</view>
+
         <view class="section-foot">
           <text class="heat-note">{{marked ? '共 ' + marked + ' 天完整记录' : '近 3 个月还没有完整记录'}}</text>
           <view class="section-actions">
             <share-btn variant="icon" />
-            <view class="poster-btn" bindtap="onMakePoster">
+            <view class="poster-btn" bindtap="onMakePoster" aria-role="button" aria-label="生成月度海报">
               <text class="poster-spark">✦</text>
               <text>生成月度海报</text>
             </view>
@@ -112,12 +132,13 @@
       <text class="sync-sub">{{syncText}}</text>
     </view>
     <view class="sync-ops">
-      <view wx:if="{{syncEnabled}}" class="sync-btn {{syncBusy ? 'is-busy' : ''}}" bindtap="onSyncTap">{{syncBusy ? '同步中…' : '同步'}}</view>
+      <view wx:if="{{syncEnabled}}" class="sync-btn {{syncBusy ? 'is-busy' : ''}}" bindtap="onSyncTap" aria-role="button">{{syncBusy ? '同步中…' : '同步'}}</view>
       <view
         class="sync-toggle-hit"
         bindtap="onSyncToggle"
         aria-role="switch"
         aria-checked="{{syncEnabled}}"
+        aria-label="云备份"
       >
         <view class="sync-toggle {{syncEnabled ? 'is-on' : ''}}">
           <view class="sync-toggle-knob"></view>
@@ -128,9 +149,9 @@
 
   <view wx:if="{{hasCloudCopy && !syncEnabled}}" class="cloud-del" bindtap="eraseCloudOnly">删除云端副本（保留本机）</view>
 
-  <view wx:if="{{hasData}}" class="danger-entry fade-up" bindtap="onClearData">
+  <view wx:if="{{hasData}}" class="danger-entry fade-up" bindtap="onClearData" aria-role="button">
     <text class="danger-entry-title">{{syncEnabled ? '清除数据（云端+本机）' : '清除本机睡眠数据'}}</text>
-    <text class="danger-entry-hint">默认只存本机；开启云备份后以匿名标识保存，换机可恢复</text>
+    <text class="danger-entry-hint">{{syncEnabled ? '云端和本机记录都会删除，且不可恢复' : '本机记录会删除，且不可恢复'}}</text>
   </view>
 
   <ad-slot slot-name="statsFooter" enabled="{{ads.statsFooter.enabled}}" unit-id="{{ads.statsFooter.unitId}}" type="{{ads.statsFooter.type}}" />

@@ -14,6 +14,14 @@
 
 落地页负责对外解释产品，H5 负责让人点一遍。
 
+## 1.5 落地页（2026-10-21 改版）
+
+- **视觉口径**：App 简约风，层级只用字号 / 颜色 / 留白表达，不用背景卡片框；深色夜空底 + 圆月 Logo（与小程序图标一致，内联 SVG）。
+- **结构**：Hero（睡前 3 秒，算出你的入睡点 + 小程序码 + 网页版入口）→ 三件事，做到干净 → 我们的原则 → 常见问题 → CTA。
+- **小程序码**：后台 `/admin` →「落地页」上传（进 COS `site/` 前缀），存 `config.site.mpQrCodeUrl`，页面用 `landing.js` 读 `/api/config` 动态展示；未上传或加载失败显示深色虚线占位 + 「微信搜索」提示。
+- **GEO / SEO**：`robots.txt`（明确放行 GPTBot / ClaudeBot / PerplexityBot 等 AI 爬虫）、`sitemap.xml`、`llms.txt`（产品事实 + FAQ + 链接，页脚有入口）；页面 head 含 keywords / canonical / OG / `MobileApplication` 与 `FAQPage` JSON-LD。
+- **注意**：`landing.css` 里 `.qr-img-box img` 有 `display:block`，因此必须保留 `img[hidden]` 显式压回 `display:none`，否则空态会渲染破图占位。
+
 ## 2. 一致性
 
 | 项 | 小程序 | H5 |

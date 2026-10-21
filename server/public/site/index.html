@@ -3,9 +3,73 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>睡点 · 今晚几点睡，才算刚刚好</title>
-  <meta name="description" content="按 90 分钟睡眠周期倒推入睡时间，一键打卡，睡前听环境音。零登录、零授权，数据默认只存本机。">
-  <link rel="icon" href="data:,">
+  <title>睡点 · 睡前 3 秒，算出你的入睡点</title>
+  <meta name="description" content="睡点，打开即用的微信小程序：按 90 分钟睡眠周期倒推入睡时间，设定起床点，告诉你该在几分几刻上床。一键打卡、近 3 个月热力图回顾、睡前环境音。零登录、零授权，数据默认只存本机。">
+  <meta name="keywords" content="入睡点,睡眠计算器,几点睡,90分钟睡眠周期,睡眠周期计算,起床时间倒推,睡眠打卡,睡眠热力图,白噪音,环境音,雨声助眠,睡前放松,睡眠小程序,微信小程序">
+  <meta name="author" content="深圳市牧码人网络科技有限公司">
+  <link rel="canonical" href="https://sleep.qfmaster.com/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="睡点">
+  <meta property="og:title" content="睡点 · 睡前 3 秒，算出你的入睡点">
+  <meta property="og:description" content="按 90 分钟睡眠周期倒推入睡时间的微信小程序。零登录、零授权，数据默认只存本机。">
+  <meta property="og:url" content="https://sleep.qfmaster.com/">
+  <meta property="og:locale" content="zh_CN">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="睡点 · 睡前 3 秒，算出你的入睡点">
+  <meta name="twitter:description" content="按 90 分钟睡眠周期倒推入睡时间的微信小程序。零登录、零授权，数据默认只存本机。">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "MobileApplication",
+    "name": "睡点",
+    "applicationCategory": "LifestyleApplication",
+    "operatingSystem": "WeChat Mini Program",
+    "inLanguage": "zh-CN",
+    "description": "按 90 分钟睡眠周期倒推入睡时间的微信小程序：设定起床点，给出三档入睡时刻；一键打卡、近 3 个月热力图回顾、睡前环境音。",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CNY" },
+    "featureList": [
+      "90 分钟睡眠周期倒推，一次给出三档入睡时刻",
+      "入睡 / 起床一键打卡，自动计算睡眠时长",
+      "近 3 个月睡眠热力图与本周均值回顾",
+      "雨声、海浪、篝火、白噪音等环境音，锁屏续播",
+      "零登录、零授权，数据默认只存本机，云备份可随时关闭与删除"
+    ],
+    "author": { "@type": "Organization", "name": "深圳市牧码人网络科技有限公司" }
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "睡点是怎么计算入睡时间的？",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "按 90 分钟一个睡眠周期倒推：以你的起床时间为终点，扣除预计入睡耗时（默认 15 分钟），给出 5、4、3 个完整周期对应的三个上床时刻，并实时显示「现在睡还能睡几个完整周期」。"
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "睡点会收集我的睡眠数据吗？",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "默认不会。打卡记录只存在你的手机里；云备份默认关闭，只有你显式开启后才会用匿名标识上传，并可随时在统计页删除云端副本。"
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "使用睡点需要付费或注册吗？",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "不需要。打开即用，无需注册、无需授权任何个人信息；基础计算与打卡免费。"
+        }
+      }
+    ]
+  }
+  </script>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='64' y2='64' gradientUnits='userSpaceOnUse'%3E%3Cstop offset='0' stop-color='%237B7DF6'/%3E%3Cstop offset='1' stop-color='%234F46E5'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='32' cy='32' r='32' fill='url(%23g)'/%3E%3Ccircle cx='32' cy='32' r='17' fill='%23F8FAFC'/%3E%3Ccircle cx='40' cy='26' r='16' fill='url(%23g)'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="/site.css">
   <link rel="stylesheet" href="/landing.css">
 </head>
@@ -15,9 +79,9 @@
       <a class="brand" href="/"><span class="logo"></span>睡点</a>
       <nav class="nav-links">
         <a href="#features">功能</a>
-        <a href="#how">怎么用</a>
-        <a href="#privacy">边界</a>
-        <a class="pill" href="/demo/">交互演示</a>
+        <a href="#principles">原则</a>
+        <a href="#faq">常见问题</a>
+        <a class="pill" href="/demo/">先用网页版试试</a>
       </nav>
     </div>
   </header>
@@ -25,17 +89,26 @@
   <main>
     <section class="hero container">
       <div class="hero-copy">
-        <span class="eyebrow">微信小程序 · 睡眠时间计算与打卡</span>
-        <h1>今晚几点睡，<br>才算刚刚好？</h1>
+        <span class="eyebrow">微信小程序 · 打开即用</span>
+        <h1>睡前 3 秒<br>算出你的<em>入睡点</em></h1>
         <p class="lead">
-          按 90 分钟周期倒推三个入睡时间，一键记录入睡与起床，睡前放一段环境音。
-          打开即用：零登录、零授权，数据默认只存本机。
+          基于 90 分钟睡眠周期倒推入睡时间。设定起床点，我们告诉你，该在几分几刻上床。
         </p>
-        <div class="hero-actions">
-          <a class="btn btn-primary" href="/demo/">打开交互演示</a>
-          <a class="btn btn-ghost" href="#features">看看功能</a>
+
+        <div class="hero-download">
+          <div class="qr">
+            <div class="qr-img-box">
+              <img id="mp-qr-img" alt="睡点小程序码" hidden>
+              <div class="qr-empty" id="mp-qr-empty">小程序码<br>后台可上传</div>
+            </div>
+            <span class="qr-cap" id="mp-qr-note">微信扫码 · 打开「睡点」</span>
+          </div>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="/demo/">先用网页版试试</a>
+            <p class="hero-note">无需登录 · 无需授权 · <em class="hl">数据默认只存本地</em></p>
+            <p class="hero-search">微信搜索「睡点」</p>
+          </div>
         </div>
-        <p class="hero-note">H5 页面只用于预览交互；正式形态是微信小程序。</p>
       </div>
 
       <div class="phone-wrap">
@@ -47,121 +120,133 @@
               <span>23:41</span>
               <span class="status-icons">●●●</span>
             </div>
+            <div class="app-brand"><span class="logo logo-sm"></span>睡点</div>
+
             <div class="app-head">
-              <span class="app-date">10月18日 周六</span>
-              <strong>夜深了，今天几点睡？</strong>
+              <strong>今晚，几点睡？</strong>
+              <span>设定起床点，算出最佳上床时刻</span>
             </div>
 
-            <div class="mock-card">
-              <div class="mock-row">
-                <span>起床时间</span>
-                <b>07:30</b>
-              </div>
-              <div class="mock-divider"></div>
-              <span class="mock-label">如果 07:30 起床，你应该在</span>
-              <div class="mock-slots">
-                <div><b>23:45</b><span>5 个周期</span></div>
-                <div><b>01:15</b><span>4 个周期</span></div>
-                <div><b>02:45</b><span>3 个周期</span></div>
-              </div>
-              <div class="mock-now">现在睡 · 约 4 个完整周期 · 6 小时</div>
+            <div class="mock-step">① 选择起床时间</div>
+            <div class="mock-mode">
+              <span>☼ 选择起床时间</span>
+              <i>⇄</i>
             </div>
+            <div class="mock-wheel">
+              <span>06:30</span>
+              <span>07:00</span>
+              <b>07:30</b>
+              <span>08:00</span>
+              <span>08:30</span>
+            </div>
+            <div class="mock-fall">
+              <span class="mock-fall-label">预计入睡耗时</span>
+              <span class="mock-chip">15 分</span>
+              <span class="mock-chip on">20 分</span>
+              <span class="mock-chip">30 分</span>
+            </div>
+            <div class="mock-cta">计算我的睡点 <i>→</i></div>
 
-            <div class="mock-dial">
-              <span>入睡打卡</span>
-              <small>现在 23:41</small>
+            <div class="mock-step">② 得到三档入睡时刻</div>
+            <div class="mock-result">
+              <div class="res-head">如果 07:30 起床 · 今晚推荐</div>
+              <div class="res-main">
+                <b>23:45</b>
+                <span>5 个周期 · 约 7.5 小时</span>
+                <em class="res-badge">★ 精神饱满</em>
+              </div>
+              <div class="res-row"><b>01:15</b><span>4 个周期 · 睡到自然醒</span></div>
+              <div class="res-row"><b>02:45</b><span>3 个周期 · 只求快睡</span></div>
             </div>
 
             <div class="mock-tabbar">
-              <span class="on">几点睡</span>
-              <span>回顾</span>
-              <span>环境音</span>
+              <span class="on">计算器</span>
+              <span>入睡</span>
+              <span>统计</span>
             </div>
           </div>
         </div>
+        <p class="phone-cap">拖动时间轮选起床点 → 一键算出今晚的上床时刻</p>
       </div>
     </section>
 
     <section id="features" class="section container">
-      <div class="section-head">
-        <span class="eyebrow">三个功能，够用就好</span>
-        <h2>不做睡眠监测，只解决今晚的问题</h2>
+      <div class="section-head center">
+        <span class="eyebrow">核心功能</span>
+        <h2>三件事，做到干净</h2>
       </div>
       <div class="feature-grid">
-        <article class="feature panel">
+        <article class="feature">
           <div class="feature-icon icon-clock"></div>
-          <h3>90 分钟倒推</h3>
-          <p>给出 3 个入睡时刻，并实时算出“现在睡还能睡几个完整周期”。改起床时间，结果立刻变。</p>
+          <h3>入睡点计算</h3>
+          <p>按 90 分钟睡眠周期倒推，一次给出三档入睡时间。起床时间与入睡耗时都可调，结果即时刷新。</p>
         </article>
-        <article class="feature panel">
-          <div class="feature-icon icon-check"></div>
-          <h3>一键打卡</h3>
-          <p>入睡按一下，起床按一下，自动算时长。数据存本地，开启备份后换设备也能找回。</p>
+        <article class="feature">
+          <div class="feature-icon icon-grid"></div>
+          <h3>打卡与回顾</h3>
+          <p>一键入睡 / 起床打卡，近 3 个月热力图，本周平均入睡与起床。只有客观事实，没有评分，没有建议。</p>
         </article>
-        <article class="feature panel">
+        <article class="feature">
           <div class="feature-icon icon-wave"></div>
-          <h3>环境音与缓存</h3>
-          <p>雨声、海浪或白噪音，锁屏继续放。Wi-Fi 下自动预热，播放过的声音可缓存到本地。</p>
+          <h3>环境声音</h3>
+          <p>雨声、海浪、篝火、白噪音，锁屏继续放。Wi-Fi 下自动缓存，下次秒播。看一次视频，解锁 24 小时。</p>
         </article>
       </div>
     </section>
 
-    <section id="how" class="section container">
-      <div class="section-head">
-        <span class="eyebrow">怎么用</span>
-        <h2>从打开到放下手机，三步</h2>
+    <section id="principles" class="section container">
+      <div class="section-head center">
+        <span class="eyebrow">产品底线</span>
+        <h2>我们的原则</h2>
       </div>
-      <ol class="steps">
-        <li>
-          <span class="step-no">01</span>
-          <div>
-            <h3>看一个数字</h3>
-            <p>默认 07:30 起床、15 分钟入睡，首页直接给出 23:45 / 01:15 / 02:45。</p>
-          </div>
-        </li>
-        <li>
-          <span class="step-no">02</span>
-          <div>
-            <h3>按一下，睡觉</h3>
-            <p>“入睡打卡”记录当前时间，屏幕渐暗，显示晚安。</p>
-          </div>
-        </li>
-        <li>
-          <span class="step-no">03</span>
-          <div>
-            <h3>早上补一刀</h3>
-            <p>记录起床，自动算时长。回顾页看本周均值与近 30 天 / 近 3 个月热力图。</p>
-          </div>
-        </li>
-      </ol>
+      <div class="feature-grid">
+        <article class="feature">
+          <span class="feature-no">01</span>
+          <h3>打开即用</h3>
+          <p>零登录、零授权、零弹窗拦截。基础计算与打卡，永久免费。</p>
+        </article>
+        <article class="feature">
+          <span class="feature-no">02</span>
+          <h3>数据本地优先</h3>
+          <p>打卡记录默认存在你的手机里。云备份默认关闭，开启只为换机找回，随时可删。</p>
+        </article>
+        <article class="feature">
+          <span class="feature-no">03</span>
+          <h3>只陈述事实</h3>
+          <p>不做睡眠质量评估、不给健康建议、不制造焦虑。所有数字都只是时间与时长。</p>
+        </article>
+      </div>
+      <p class="footnote">不申请手机号、位置、通讯录、相册 · 环境音仅用于放松，不宣称任何功效</p>
     </section>
 
-    <section id="privacy" class="section container">
-      <div class="privacy panel">
-        <div>
-          <span class="eyebrow">产品边界</span>
-          <h2>只陈述事实，不做健康判断</h2>
-          <p>所有输出都是时间与时长本身：几点入睡、几点起床、平均多少。没有睡眠质量评分，也没有建议、诊断或治疗相关表述。</p>
-        </div>
-        <ul class="checks">
-          <li>零登录、零授权、数据默认本地</li>
-          <li>不申请手机号、位置、通讯录、相册</li>
-          <li>打卡数据默认只存本机，云备份可选开启</li>
-          <li>环境音仅用于放松，不宣称任何功效</li>
-        </ul>
+    <section id="faq" class="section container">
+      <div class="section-head center">
+        <span class="eyebrow">常见问题</span>
+        <h2>直接回答</h2>
       </div>
+      <dl class="faq-list">
+        <div class="faq-item">
+          <dt>睡点是怎么计算入睡时间的？</dt>
+          <dd>按 90 分钟一个睡眠周期倒推：以你的起床时间为终点，扣除预计入睡耗时（默认 15 分钟），给出 5、4、3 个完整周期对应的三个上床时刻，并实时显示「现在睡还能睡几个完整周期」。</dd>
+        </div>
+        <div class="faq-item">
+          <dt>睡点会收集我的睡眠数据吗？</dt>
+          <dd>默认不会。打卡记录只存在你的手机里；云备份默认关闭，只有你显式开启后才会用匿名标识上传，并可随时在统计页删除云端副本。</dd>
+        </div>
+        <div class="faq-item">
+          <dt>使用睡点需要付费或注册吗？</dt>
+          <dd>不需要。打开即用，无需注册、无需授权任何个人信息；基础计算与打卡免费。</dd>
+        </div>
+      </dl>
     </section>
 
     <section class="cta container">
-      <div class="cta-panel panel">
-        <div>
-          <span class="eyebrow">先看效果</span>
-          <h2>完整交互，浏览器里就能点</h2>
-          <p>计算器、打卡、热力图、环境音、解锁与缓存状态，都在 H5 演示里。</p>
-        </div>
+      <div class="cta-body">
+        <span class="eyebrow">今晚就试试</span>
+        <h2>放下手机前，<br>先把入睡点算好</h2>
+        <p>微信搜索「睡点」，或扫描上方二维码；也可以先在浏览器里体验完整交互。</p>
         <div class="cta-actions">
           <a class="btn btn-primary" href="/demo/">进入交互演示</a>
-          <a class="btn btn-ghost" href="/admin/">后台入口</a>
         </div>
       </div>
     </section>
@@ -175,10 +260,12 @@
       </div>
       <div class="footer-links">
         <a href="/demo/">交互演示</a>
-        <a href="/admin/">后台管理</a>
-        <a href="#privacy">产品边界</a>
+        <a href="#principles">产品边界</a>
+        <a href="/llms.txt">AI 使用说明</a>
       </div>
     </div>
   </footer>
+
+  <script src="/landing.js" defer></script>
 </body>
 </html>

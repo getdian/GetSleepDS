@@ -298,6 +298,10 @@ function cachedCount(tracks, ttlDays) {
 }
 
 function cleanAll(exceptUrl) {
+  // 先中止在途下载：否则「清理」完成后，还没下完的任务会把文件与计数重新写回来
+  Array.from(inflight.keys()).forEach((url) => {
+    if (!exceptUrl || url !== exceptUrl) cancel(url)
+  })
   const meta = readMeta()
   const kept = {}
   Object.keys(meta).forEach((url) => {

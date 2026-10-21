@@ -25,6 +25,10 @@
   "backgrounds": [],
   "defaultBackgroundId": "",
   "backgroundUnlockHours": 24,
+  "site": {
+    "mpQrCodeUrl": "",
+    "mpQrNote": "微信搜索「睡点」"
+  },
   "features": {
     "summary": true,
     "sync": true,

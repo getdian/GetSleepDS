@@ -30,6 +30,7 @@ Page({
     colCount: 0,
     months: [],
     marked: 0,
+    heatDetail: '',
     fact: '',
     factState: 'idle',
     factSource: '',
@@ -97,31 +98,59 @@ Page({
     }
     const cloudPending = !!meta.cloudPendingErase
 
-    this.setData({
-      hasData: list.length > 0 || !!pending,
-      avgBed: current.avgBedMin === null ? '--:--' : F.fmtClock(current.avgBedMin),
-      avgWake: current.avgWakeMin === null ? '--:--' : F.fmtClock(current.avgWakeMin),
-      avgDuration: current.avgDurationMin === null ? '--' : F.fmtHours(current.avgDurationMin),
-      weekCount: current.count,
-      streak: weekly.streak,
-      cells: heat.cells,
-      colCount: heat.colCount,
-      months: heat.months,
-      marked: heat.marked,
-      syncEnabled,
-      hasCloudCopy: !!meta.lastSyncAt,
-      syncText: cloudPending
-        ? '云端副本尚未删除，请先删除'
-        : syncEnabled
-          ? meta.lastSyncPartial
-            ? '上次同步有 ' + (Number(meta.lastSyncDropped) || 0) + ' 条记录云端未写入'
-            : meta.lastSyncAt
-              ? '上次同步 ' + F.fmtClockTs(meta.lastSyncAt)
-              : '已开启，尚未同步'
-          : syncFeature
-            ? '仅存本机 · 未开启云备份'
-            : '仅存本机 · 服务端暂未开放云备份'
-    })
+    const hasData = list.length > 0 || !!pending
+    const avgBed = current.avgBedMin === null ? '--:--' : F.fmtClock(current.avgBedMin)
+    const avgWake = current.avgWakeMin === null ? '--:--' : F.fmtClock(current.avgWakeMin)
+    const avgDuration = current.avgDurationMin === null ? '--' : F.fmtHours(current.avgDurationMin)
+    const syncText = cloudPending
+      ? '云端副本尚未删除，请先删除'
+      : syncEnabled
+        ? meta.lastSyncPartial
+          ? '上次同步有 ' + (Number(meta.lastSyncDropped) || 0) + ' 条记录云端未写入'
+          : meta.lastSyncAt
+            ? '上次同步 ' + F.fmtClockTs(meta.lastSyncAt)
+            : '已开启，尚未同步'
+        : syncFeature
+          ? '仅存本机 · 未开启云备份'
+          : '仅存本机 · 服务端暂未开放云备份'
+
+    // onShow 会连续 refresh 两次（本地一次、配置到位后一次），cells 有 150+ 个节点。
+    // 数据没变时跳过 setData，避免每次进页都把整块热力图重新过桥一遍。
+    const signature = [
+      hasData ? 1 : 0,
+      avgBed,
+      avgWake,
+      avgDuration,
+      current.count,
+      weekly.streak,
+      heat.colCount,
+      heat.marked,
+      heat.months.length,
+      // 逐格 level + 今天所在位置：只看 marked 数量会漏掉「某天时长变了但总数没变」
+      heat.cells.map((cell) => (cell && cell.level) || 0).join(''),
+      heat.cells.findIndex((cell) => cell && cell.isToday),
+      syncText
+    ].join('|')
+    if (signature !== this._refreshSignature) {
+      this._refreshSignature = signature
+      this.setData({
+        hasData,
+        avgBed,
+        avgWake,
+        avgDuration,
+        weekCount: current.count,
+        streak: weekly.streak,
+        cells: heat.cells,
+        colCount: heat.colCount,
+        months: heat.months,
+        marked: heat.marked,
+        // 数据变了才清空格子详情，避免选中态指向一条已被修改/删除的记录
+        heatDetail: '',
+        syncEnabled,
+        hasCloudCopy: !!meta.lastSyncAt,
+        syncText
+      })
+    }
 
     this.refreshFact(weekly, records, now, forceSummary)
   },
@@ -196,13 +225,14 @@ Page({
     const cell = e.detail && e.detail.cell
     if (!cell || !cell.day) return
     if (cell.future) {
-      wx.showToast({ title: '这一天还没到', icon: 'none' })
+      this.setData({ heatDetail: F.fmtDayCN(cell.day) + ' · 还没到' })
       return
     }
     let text = F.fmtDayCN(cell.day) + ' · 未打卡'
     if (cell.durationMin) text = F.fmtDayCN(cell.day) + ' · ' + F.fmtDuration(cell.durationMin)
     else if (cell.partial) text = F.fmtDayCN(cell.day) + ' · 仅入睡未完成'
-    wx.showToast({ title: text, icon: 'none' })
+    // 用固定的一行详情取代会消失的 toast，方便对照日期和时长
+    this.setData({ heatDetail: text })
   },
 
   // 自绘开关：状态完全由 data.syncEnabled 驱动，失败/取消时不需要回滚组件状态

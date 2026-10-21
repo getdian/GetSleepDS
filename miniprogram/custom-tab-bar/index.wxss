@@ -3,7 +3,7 @@
   left: 24rpx;
   right: 24rpx;
   bottom: calc(16rpx + env(safe-area-inset-bottom));
-  z-index: 90;
+  z-index: var(--z-tabbar, 90);
   height: 112rpx;
   display: flex;
   align-items: center;
@@ -11,8 +11,17 @@
   box-sizing: border-box;
   border-radius: 999rpx;
   border: 1rpx solid rgba(255, 255, 255, 0.04);
-  background: #0A0E1A;
+  background: var(--color-tabbar-surface, #0A0E1A);
   box-shadow: 0 12rpx 32rpx rgba(0, 0, 0, 0.28);
+  transition: opacity 0.18s ease, transform 0.18s ease, visibility 0s linear 0s;
+}
+
+.tabbar.is-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(28rpx);
+  transition: opacity 0.16s ease, transform 0.16s ease, visibility 0s linear 0.16s;
 }
 
 .tab-item {
@@ -46,7 +55,7 @@
   transform: translateX(-50%);
   border-radius: 50%;
   border: 1rpx solid rgba(255, 255, 255, 0.04);
-  background: #0A0E1A;
+  background: var(--color-tabbar-surface, #0A0E1A);
   box-shadow: 0 0 34rpx rgba(99, 102, 241, 0.14);
   z-index: 0;
 }

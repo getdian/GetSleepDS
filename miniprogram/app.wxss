@@ -26,6 +26,7 @@ page {
 
   /* 主色与点缀 */
   --color-primary: #818CF8;
+  --color-primary-soft: #A7A4FF;
   --color-primary-dark: #4F46E5;
   --color-accent-moon: #FDE68A;
   --color-calm-teal: #2DD4BF;
@@ -36,6 +37,33 @@ page {
   --text-primary: #E2E8F0;
   --text-secondary: #94A3B8;
   --text-muted: #7C8799;
+
+  /* 表面色：悬浮 tabBar 比页面底色略亮一档，单独出声，避免各处裸写 */
+  --color-tabbar-surface: #0A0E1A;
+
+  /* Hero 背景压暗：计算器页与 hero-backdrop 组件共用同一份，避免两套数值漂移 */
+  --hero-scrim: linear-gradient(
+    180deg,
+    rgba(8, 11, 20, 0.58) 0%,
+    rgba(8, 13, 29, 0.55) 36%,
+    rgba(8, 13, 29, 0.86) 76%,
+    #080B14 100%
+  );
+
+  /* 层级表：唯一来源，值越大越靠前；使用处一律带 fallback */
+  --z-hero: 0;
+  --z-page: 1;
+  --z-topbar: 30;
+  --z-fab: 40;
+  --z-collapse-mask: 85;
+  --z-tabbar: 90;
+  --z-player: 100;
+  --z-player-host: 120;
+  --z-dim: 150;
+  --z-sheet-mask: 180;
+  --z-sheet: 200;
+  --z-unlock: 300;
+  --z-overlay: 9999;
 
   /* 圆角 */
   --radius-sm: 16rpx;
@@ -96,7 +124,7 @@ picker-view {
 /* 页面骨架：氛围背景固定，内容在其上 */
 .page {
   position: relative;
-  z-index: 1;
+  z-index: var(--z-page, 1);
   padding: 32rpx 32rpx 200rpx;
 }
 

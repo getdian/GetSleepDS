@@ -1,5 +1,26 @@
 # 睡点 · 关键更新记录
 
+## 2026-10-21 · L4 收口（深审修复 · 视觉治理 · 交付打包）
+
+- **音频状态机（P1）**：`audio-dock` 冷启动不再采信上个进程残留的 `lastTrackPlaying`——与 `now-playing` 统一按「本进程有 `audioSession` / 播放器有 `src`」判定，无会话时清 meta 与迷你条（修复「显示正在播放但无声、点暂停反而起播」）；`attached` 顺序改为 `audioTimer.restore()` 先于 `syncFromAudio()`。`audio-dock` 与 `now-playing` 的 `onEnded` 用新增 `playerState.claimEnded()`（800ms 窗口）去重，每轮循环只有一个组件重建音源，消除同一 `src` 双写 + 双 `play()`。起播新增 12s 加载兜底（超时提示「加载超时，点音符重试」）。
+- **计算器**：结果态新增计算锚点 `_anchorAt`，同一次结果内的重算（切后台回来、结果面换入睡耗时）沿用同一「现在」，修复入睡模式被 30 分钟宽限静默推后一天却不提示；入睡结果在非「今天」时把日期写进 note（「明天 19:30 上床，已含 15 分钟入睡」）。同时收紧正面纵向节奏：舞台 780→712rpx、提示行 72→64rpx、耗时行上距 26→10rpx。
+- **本地存储/同步**：`saveRecord/removeRecord` 改为基于原始记录表浅合并，`mergeServerRecords` 同样用原始表，避免「读过滤子集 → 整表覆盖」丢掉缺 `day` 的旧条目；同步分片循环内复查云备份开关，关闭后立即停止后续上传/回填。
+- **统计页**：`refresh` 增加数据签名（含逐格 level、今天列、同步文案），onShow 的连续两次刷新不再全量 `setData`；热力图只在首次渲染或「今天」换列时 seek，避免把用户左滑查看的历史月份拽回；海报按钮（64→80rpx）与入睡页提示条（59→75rpx）补命中区。
+- **后台并发**：配置保存引入乐观并发——后台提交带 `baseUpdatedAt`，服务端不一致返回 `409 CONFIG_CONFLICT`，不再出现两位运营同时保存时后保存者静默抹掉前者新增的环境音/背景图；内存模式在后台来源行明示「重启后会丢失配置」。
+- **服务端**：新增墓碑回收（400 天外的 `sleep_record_deletions` 定期清理，避免每次 sync 全量回传且无限增长）；memory 实现补齐 `getRecords` 按日排序、`listEvents` 最新在前 + 20000 上限，与 PG 对齐；补 `unhandledRejection` 日志与 `uncaughtException` 记录后优雅退出。
+- **视觉治理**：`app.wxss` 新增 `--hero-scrim`（计算器页与 `hero-backdrop` 共用，消除两页压暗值漂移）、`--color-primary-soft`（此前 16 处引用但从未定义，导致入睡页时间轴起点圆点与音频抽屉电平条透明）、`--color-tabbar-surface` 与 z-index 层级表（`--z-hero` … `--z-overlay`）；熄灯遮罩提到 150；audio-dock / now-playing 的绿音符、月金、危险红与 tabbar 表面色收敛为 token。
+- **验证**：`npm test` 148 项 / 147 通过 / 0 失败（1 项 PG 集成 skip），新增 storage 合并 2 条、ended 去重 2 条、配置冲突 2 条；`npm run check` 通过（3 页面 / 21 JSON / 16 WXML / 17 WXSS，396.1 KB）；开发者工具 390×844 三页 + 音频抽屉 + 熄灯遮罩截图复核，console 无 JS 异常；打包 `release-artifacts/getsleep-L4-20261021.zip`（223 文件 / 2.51 MB，含 `RELEASE-MANIFEST.json`）。
+- **真机待验**：播放中杀进程重进不出现幽灵播放态、短音源循环只重播一次、时间轮小幅拖动回中、展开迷你条后第一次点 tab 直接切页。
+
+## 2026-10-21 · 落地页改版 + 小程序码后台上传 + GEO
+
+- **落地页改版**（`server/public/site/index.html` / `landing.css`）：按 App 简约风重写——层级只用字号/颜色/留白表达，全部去掉背景卡片框；Hero 对齐「睡前 3 秒，算出你的入睡点」口径（入睡点渐变强调），副文案「基于 90 分钟睡眠周期倒推入睡时间…」；下方内容重排为「三件事，做到干净」（入睡点计算 / 打卡与回顾 / 环境声音）与「我们的原则」（01 打开即用 / 02 数据本地优先 / 03 只陈述事实）+ 一行边界小字 + 3 条常见问题。
+- **手机演示重做**：旧版手机壳内容难懂，改为按真实计算器叙事分两步——「① 选择起床时间」（模式胶囊 + 时间轮 07:30 选中 + 入睡耗时档位 + 计算按钮）→「② 得到三档入睡时刻」（23:45 主推荐 + 01:15 / 02:45 弱化行），底部说明「拖动时间轮选起床点 → 一键算出今晚的上床时刻」。
+- **Logo**：`.logo` 从渐变方块改为「圆形 + 月牙」（内联 SVG data-URI，与小程序图标一致），落地页导航/页脚、手机壳内品牌行、`/demo/` 导航共用。
+- **小程序码后台上传**：配置新增 `site` 段（`mpQrCodeUrl` / `mpQrNote`，旧配置自动补默认值）；后台新增「落地页」面板（上传 / 预览 / 清除 / 文案），新接口 `POST /api/admin/site/qrcode`（图片 ≤5MB 进 COS `site/` 前缀，复用图片上传器与鉴权）；落地页通过 `landing.js` 读 `/api/config` 动态展示，未上传时显示深色虚线占位，加载失败回退占位。
+- **GEO**：新增 `robots.txt`（放行 GPTBot / OAI-SearchBot / ClaudeBot / PerplexityBot / Google-Extended 等 AI 爬虫，Disallow /admin 与 /api）、`sitemap.xml`、`llms.txt`（面向生成式引擎的产品事实 / FAQ / 链接）；`index.html` 补 keywords、canonical、OG / Twitter 卡、`MobileApplication` 与 `FAQPage` JSON-LD（FAQ 与页面可见内容一致），favicon 换成圆月 SVG。
+- **验证**：`npm test` 141 pass / 0 fail（+1 PG skip，新增 site 配置 3 用例、更新落地页冒烟断言）；`npm run check` 通过；内存模式冒烟——`/api/config` 下发 site、GEO 三文件可访问、未登录上传 401、未配 COS 上传优雅 400、http URL 保存被拒、中文文案保存下发无乱码；桌面 + 390px 移动端整页截图核对（`docs/assets/landing.png` 已更新），控制台无 error。修复一处 `img[hidden]` 被 `display:block` 覆盖导致空态渲染破图的问题（同 `.toast[hidden]` 先例）。
+
 ## 2026-10-21 · 环境声抽屉收口 + 悬浮 tabBar
 
 - **底部导航**：`app.json` 开启 `tabBar.custom`，新增 `custom-tab-bar/` 悬浮胶囊；实色深蓝、极细描边/轻阴影，中间「入睡」用同色圆凸起 + CSS 月牙，左右为细线时钟/四柱统计；当前页图标、文字提亮并加 `500` 字重，三页 `onShow` 同步 `selected`。
@@ -7,7 +28,9 @@
 - **环境声抽屉**：分类 `28rpx` 加粗选中、收藏 `36rpx`、播放圆钮 `76rpx` 且可独立点击；定时关闭复用计算器「预计入睡耗时」的 44rpx 小胶囊；移除标题副文案、免费收听提示和列表底部建议卡；去掉搜索与定时之间的重复分隔线，并拉开各区块间距。
 - **播放器**：`audio-dock` 与 `now-playing` 统一 108/66rpx 音符、右缘 26rpx、480rpx 右贴边播放条、48rpx 左留白；去掉易误解的关闭 X，点击条打开抽屉、点击外部向右收缩回音符（暂停态也生效），结束播放收进抽屉标题栏；修复 `.np-shell.is-in .now-playing` 权重压过折叠动画的问题。
 - **跨页状态**：`lastTrackPlaying` + `audioSession` 兜底 `audio.src` 短暂为空；暂停/恢复/停止/错误/定时到点统一清理会话，冷启动不画残留播放条。
-- **文档/验证**：更新 `docs/09-redesign.md`、`docs/12-sleep-audio-refresh.md`、`README.md`；`npm test` 140（139 pass / 1 PG skip），`node tools/check.mjs` 通过（3 页面 / 21 JSON / 16 WXML / 17 WXSS，约 378.9 KB）；开发者工具编译通过，自定义 tab 切换实测可用。
+- **统计页**：热力图下方补“少→多 / 仅入睡”图例；点格子从一次性 toast 改为卡片内固定详情行（日期 + 时长/未完成/未到）；危险入口说明改为“会删除什么、不可恢复”，补分享/海报/同步/清除的 ARIA 角色；无数据空状态重做月相 orb（实心月牙 + 细轨道 + 星点）。
+- **背景/浮层/玻璃**：统计页接入 `hero-backdrop`，与计算器/入睡共用后台背景；「换背景」缩到 56rpx 高并半透明；环境声抽屉、背景选择器打开时隐藏自定义 tabBar；播放条改半透明玻璃，折叠音符补淡玻璃圆底。
+- **文档/验证**：更新 `docs/09-redesign.md`、`docs/12-sleep-audio-refresh.md`、`README.md`；`npm test` 140（139 pass / 1 PG skip），`node tools/check.mjs` 通过（3 页面 / 21 JSON / 16 WXML / 17 WXSS，约 385.0 KB）；开发者工具编译通过，自定义 tab 切换实测可用。
 
 ## 2026-10-20 · 结果页时长护栏与晚睡提示
 

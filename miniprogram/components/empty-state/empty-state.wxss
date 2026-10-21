@@ -1,30 +1,124 @@
 .empty {
-  padding: 100rpx 40rpx;
+  padding: 88rpx 40rpx 100rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
 }
 
-.empty-orb {
+.empty-scene {
   position: relative;
-  width: 168rpx;
-  height: 168rpx;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, rgba(129, 140, 248, 0.26), rgba(20, 27, 45, 0.2) 70%);
-  border: 1rpx solid var(--border-moon-subtle);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: var(--shadow-moon);
+  width: 208rpx;
+  height: 184rpx;
 }
 
-.empty-moon {
-  width: 64rpx;
-  height: 64rpx;
+/* 柔光底：去掉硬边圆盘与描边，避免“星球/按钮”感 */
+.es-halo {
+  position: absolute;
+  left: 10rpx;
+  top: 2rpx;
+  width: 164rpx;
+  height: 164rpx;
   border-radius: 50%;
-  box-shadow: -18rpx 8rpx 0 0 var(--text-secondary);
-  transform: translateX(9rpx);
-  opacity: 0.9;
+  background: radial-gradient(
+    circle at 48% 46%,
+    rgba(167, 164, 255, 0.24) 0%,
+    rgba(99, 102, 241, 0.09) 42%,
+    rgba(13, 19, 34, 0) 70%
+  );
+  animation: empty-breathe 6.4s ease-in-out infinite;
+}
+
+/* 月牙：inset shadow 直接形成缺口，不再用页面底色“挖洞”，边缘更干净 */
+.es-moon {
+  position: absolute;
+  left: 26rpx;
+  top: 12rpx;
+  width: 98rpx;
+  height: 98rpx;
+  border-radius: 50%;
+  box-shadow: inset 21rpx 10rpx 0 0 #EDF1FF;
+  transform: rotate(-16deg);
+  filter: drop-shadow(0 0 18rpx rgba(199, 210, 254, 0.34))
+    drop-shadow(0 14rpx 26rpx rgba(0, 0, 0, 0.38));
+}
+
+/* 四颗疏星：大小与透明度错落，避免均匀排布的“装饰感” */
+.es-star {
+  position: absolute;
+  border-radius: 50%;
+  background: #E4E9FF;
+  box-shadow: 0 0 10rpx rgba(199, 210, 254, 0.75);
+}
+
+.es-star-a {
+  left: 18rpx;
+  top: 60rpx;
+  width: 7rpx;
+  height: 7rpx;
+  opacity: 0.85;
+}
+
+.es-star-b {
+  right: 20rpx;
+  top: 18rpx;
+  width: 5rpx;
+  height: 5rpx;
+  opacity: 0.62;
+}
+
+.es-star-c {
+  right: 46rpx;
+  top: 92rpx;
+  width: 4rpx;
+  height: 4rpx;
+  opacity: 0.45;
+}
+
+.es-star-d {
+  left: 48rpx;
+  bottom: 4rpx;
+  width: 5rpx;
+  height: 5rpx;
+  opacity: 0.34;
+}
+
+/* 3×3 迷你格：右下角第一格亮起，呼应“打一次卡，这里就会长出一格” */
+.es-grid {
+  position: absolute;
+  right: 10rpx;
+  bottom: 2rpx;
+  display: grid;
+  grid-template-columns: repeat(3, 20rpx);
+  grid-auto-rows: 20rpx;
+  gap: 7rpx;
+  transform: rotate(-6deg);
+}
+
+.es-cell {
+  box-sizing: border-box;
+  border-radius: 7rpx;
+  background: rgba(167, 164, 255, 0.06);
+  border: 1rpx solid rgba(167, 164, 255, 0.12);
+}
+
+.es-cell.is-lit {
+  background: linear-gradient(145deg, #F3F6FF 0%, #C7D2FE 42%, #8B87FF 100%);
+  border-color: rgba(238, 242, 255, 0.86);
+  box-shadow:
+    0 0 14rpx rgba(199, 210, 254, 0.55),
+    0 0 30rpx rgba(99, 102, 241, 0.3);
+}
+
+@keyframes empty-breathe {
+  0%,
+  100% {
+    opacity: 0.76;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.035);
+  }
 }
 
 .empty-title {

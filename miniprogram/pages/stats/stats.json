@@ -5,6 +5,7 @@
   "backgroundTextStyle": "light",
   "usingComponents": {
     "ambient": "/components/ambient/ambient",
+    "hero-backdrop": "/components/hero-backdrop/hero-backdrop",
     "top-bar": "/components/top-bar/top-bar",
     "heatmap": "/components/heatmap/heatmap",
     "empty-state": "/components/empty-state/empty-state",

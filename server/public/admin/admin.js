@@ -134,6 +134,7 @@
     unlock: { title: '广告与解锁', sub: '激励视频、页面展示位与失败降级', badge: '变现' },
     features: { title: '功能与缓存', sub: '开关、预加载、容量与有效期', badge: '运行' },
     copy: { title: '解锁文案', sub: '抽屉里的标题、说明与按钮', badge: '文案' },
+    landing: { title: '落地页', sub: '落地页展示的小程序码与引导文案', badge: '内容' },
     users: { title: '用户数据', sub: '按 openid 查询与删除云端记录', badge: '客服 / 合规' },
     storage: { title: '存储与上传', sub: 'COS 凭证、加密保存与连通性测试', badge: '安全' },
     advanced: { title: '配置 JSON', sub: '只读检查当前下发的完整配置', badge: '只读' }
@@ -145,7 +146,8 @@
       name === 'backgrounds' ||
       name === 'unlock' ||
       name === 'features' ||
-      name === 'copy'
+      name === 'copy' ||
+      name === 'landing'
     )
   }
 
@@ -188,7 +190,9 @@
     const updated = state.meta.updatedAt
       ? new Date(state.meta.updatedAt).toLocaleString('zh-CN', { hour12: false })
       : '尚未在后台保存'
-    $('#source-line').textContent = source + ' · ' + updated
+    // 内存模式下保存只写进程内存，容器重启会回滚；必须让运营看得见
+    const memory = state.meta.storage === 'memory' ? ' · 内存模式，重启后会丢失配置' : ''
+    $('#source-line').textContent = source + ' · ' + updated + memory
   }
 
   /* ---------- 看板 ---------- */
@@ -619,6 +623,10 @@
         unlockDesc: $('#copy-desc').value.trim(),
         unlockConfirm: $('#copy-confirm').value.trim(),
         unlockCancel: $('#copy-cancel').value.trim()
+      },
+      site: {
+        mpQrCodeUrl: $('#site-qr-url').value.trim(),
+        mpQrNote: $('#site-qr-note').value.trim()
       }
     }
   }
@@ -628,6 +636,23 @@
     // 面板标题是“下发的 JSON”，必须展示服务端已生效的配置，
     // 而不是 collect() 里尚未保存、也未经 normalize 的表单值。
     jsonView.textContent = JSON.stringify(state.config, null, 2)
+  }
+
+  function renderSite(site) {
+    const value = (site && site.mpQrCodeUrl) || ''
+    $('#site-qr-url').value = value
+    $('#site-qr-note').value = (site && site.mpQrNote) || ''
+    const preview = $('#site-qr-preview')
+    const placeholder = $('#site-qr-placeholder')
+    if (value) {
+      preview.src = value
+      preview.hidden = false
+      placeholder.hidden = true
+    } else {
+      preview.removeAttribute('src')
+      preview.hidden = true
+      placeholder.hidden = false
+    }
   }
 
   function render() {
@@ -658,6 +683,8 @@
     $('#copy-desc').value = config.copy.unlockDesc || ''
     $('#copy-confirm').value = config.copy.unlockConfirm || ''
     $('#copy-cancel').value = config.copy.unlockCancel || ''
+
+    renderSite(config.site)
 
     renderAudio(config.audio)
     renderBackgrounds(config.backgrounds || [], config.defaultBackgroundId || '')
@@ -709,6 +736,9 @@
       if (!defaultBg) return '默认背景图不在列表中'
       if (defaultBg.enabled === false) return '默认背景图已停用，请先启用或换一张'
     }
+
+    const qrUrl = (payload.site && payload.site.mpQrCodeUrl) || ''
+    if (qrUrl && !/^https:\/\//i.test(qrUrl)) return '小程序码地址必须是 https'
     return ''
   }
 
@@ -1198,6 +1228,81 @@
     xhr.send(data)
   }
 
+  /* ---------- 落地页小程序码 ---------- */
+
+  function applyQrUrl(url) {
+    $('#site-qr-url').value = url || ''
+    const preview = $('#site-qr-preview')
+    const placeholder = $('#site-qr-placeholder')
+    if (url) {
+      preview.src = url
+      preview.hidden = false
+      placeholder.hidden = true
+    } else {
+      preview.removeAttribute('src')
+      preview.hidden = true
+      placeholder.hidden = false
+    }
+  }
+
+  function uploadQrCode(file) {
+    if (!state.storage || !state.storage.configured) {
+      toast('先在“存储与上传”配置 COS', true)
+      return
+    }
+
+    const status = $('#qr-upload-status')
+    status.hidden = false
+    status.textContent = '上传中 0%'
+
+    const data = new FormData()
+    data.append('file', file, file.name || 'qrcode.png')
+
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', '/api/admin/site/qrcode')
+    xhr.withCredentials = true
+
+    xhr.upload.onprogress = function (event) {
+      if (!event.lengthComputable) return
+      status.textContent = '上传中 ' + Math.round((event.loaded / event.total) * 100) + '%'
+    }
+
+    xhr.onload = function () {
+      let body = null
+      try {
+        body = JSON.parse(xhr.responseText)
+      } catch (e) {
+        body = null
+      }
+
+      status.hidden = true
+
+      if (xhr.status === 401) {
+        showLogin('登录已过期，请重新登录')
+        return
+      }
+
+      if (xhr.status >= 200 && xhr.status < 300 && body && body.url) {
+        applyQrUrl(body.url)
+        setDirty(true)
+        updateJson()
+        toast('上传完成，记得点“保存并生效”')
+        return
+      }
+
+      const message =
+        body && body.error && body.error.message ? body.error.message : '上传失败（' + xhr.status + '）'
+      toast(message, true)
+    }
+
+    xhr.onerror = function () {
+      status.hidden = true
+      toast('上传失败，请检查网络', true)
+    }
+
+    xhr.send(data)
+  }
+
   /* ---------- 数据加载 ---------- */
 
   async function loadAll() {
@@ -1337,6 +1442,19 @@
     if (file) uploadBackground(file)
   })
 
+  $('#qr-file').addEventListener('change', function (event) {
+    const file = event.target.files && event.target.files[0]
+    event.target.value = ''
+    if (file) uploadQrCode(file)
+  })
+
+  $('#site-qr-clear').addEventListener('click', function () {
+    applyQrUrl('')
+    setDirty(true)
+    updateJson()
+    toast('已清除，保存后落地页回退为搜索提示')
+  })
+
   bgList.addEventListener('click', function (event) {
     const button = event.target.closest('button')
     if (!button) return
@@ -1456,6 +1574,9 @@
     if (state.preview) stopPreview()
 
     const payload = collect()
+    // 乐观并发：带上载入时的 updatedAt。服务端发现已被别人改过会返 409，
+    // 而不是用这份全量表单静默覆盖对方刚保存的环境音/背景图/文案。
+    payload.baseUpdatedAt = (state.meta && state.meta.updatedAt) || 0
     const problem = validatePayload(payload)
     if (problem) {
       toast(problem, true)

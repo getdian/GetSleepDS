@@ -77,6 +77,49 @@ test('部分字段保存不会重置 unlock/features/cache/copy', () => {
   assert.equal(partial.copy.unlockTitle, '自定义标题')
 })
 
+test('旧配置缺少 site 时按默认值补齐，落地页有兜底口径', () => {
+  const base = normalizeConfig({ audio: FILE_AUDIO, unlock: {}, features: {}, copy: {} })
+  assert.equal(base.site.mpQrCodeUrl, '')
+  assert.equal(base.site.mpQrNote, '微信搜索「睡点」')
+
+  // 旧库行没有 site 字段：读取路径必须补默认值而不是 undefined
+  const normalized = normalizeConfig(
+    { version: 3, audio: FILE_AUDIO, unlock: base.unlock, copy: base.copy },
+    base
+  )
+  assert.equal(normalized.site.mpQrCodeUrl, '')
+  assert.equal(normalized.site.mpQrNote, '微信搜索「睡点」')
+})
+
+test('site 保存校验：https 限制、可清空、部分保存沿用旧值', () => {
+  const base = validateConfig({
+    audio: FILE_AUDIO,
+    site: { mpQrCodeUrl: 'https://img.example.com/sleep/mp-qr.png', mpQrNote: '扫码打开' }
+  })
+  assert.equal(base.site.mpQrCodeUrl, 'https://img.example.com/sleep/mp-qr.png')
+  assert.equal(base.site.mpQrNote, '扫码打开')
+
+  // 未提交 site 时沿用当前配置，避免旧后台保存把小程序码静默清掉
+  const partial = validateConfig({ audio: base.audio }, base)
+  assert.equal(partial.site.mpQrCodeUrl, 'https://img.example.com/sleep/mp-qr.png')
+  assert.equal(partial.site.mpQrNote, '扫码打开')
+
+  // 显式置空 URL 允许（落地页回退搜索提示）；未提交的文案沿用旧值
+  const cleared = validateConfig({ audio: base.audio, site: { mpQrCodeUrl: '' } }, base)
+  assert.equal(cleared.site.mpQrCodeUrl, '')
+  assert.equal(cleared.site.mpQrNote, '扫码打开')
+
+  // URL 与文案同时提交为空：URL 清空、文案回默认
+  const clearedAll = validateConfig({ audio: base.audio, site: { mpQrCodeUrl: '', mpQrNote: '' } }, base)
+  assert.equal(clearedAll.site.mpQrCodeUrl, '')
+  assert.equal(clearedAll.site.mpQrNote, '微信搜索「睡点」')
+
+  assert.throws(
+    () => validateConfig({ audio: base.audio, site: { mpQrCodeUrl: 'http://insecure.example.com/a.png' } }),
+    /https/
+  )
+})
+
 test('未知 DB_MODE 在生产启动即失败，createDb 不静默落内存', async () => {
   assert.throws(
     () =>

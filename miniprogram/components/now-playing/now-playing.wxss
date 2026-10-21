@@ -5,7 +5,7 @@
   right: 0;
   /* 与入睡页 dock 共用同一套底部安全位：避开 tabBar，又不压住计算器主按钮 */
   bottom: calc(132rpx + env(safe-area-inset-bottom));
-  z-index: 9999;
+  z-index: var(--z-overlay, 9999);
   padding: 0 0 0 24rpx;
   pointer-events: none;
   visibility: hidden;
@@ -27,13 +27,14 @@
 }
 
 /* 展开态点击外部：只折叠回音符，不停止播放 */
+/* 同上：低于悬浮 tabBar(90)，避免吞掉第一次切 tab 的点击 */
 .np-collapse-mask {
   position: fixed;
   left: 0;
   right: 0;
   top: 0;
   bottom: 0;
-  z-index: 9998;
+  z-index: var(--z-collapse-mask, 85);
   background: transparent;
 }
 
@@ -48,11 +49,11 @@
   margin-left: auto;
   padding: 14rpx 18rpx 14rpx 48rpx;
   border-radius: 999rpx 0 0 999rpx;
-  border: 1rpx solid var(--border-moon-subtle);
-  background: var(--glass-card-active);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
-  box-shadow: var(--shadow-moon);
+  border: none;
+  background: rgba(8, 11, 20, 0.62);
+  -webkit-backdrop-filter: blur(26rpx);
+  backdrop-filter: blur(26rpx);
+  box-shadow: 0 18rpx 44rpx rgba(0, 0, 0, 0.32);
   opacity: 0;
   /* 从右缘音符位置向左展开；收起时反向收回去 */
   transform: translate3d(60rpx, 0, 0) scale(0.92);
@@ -97,7 +98,7 @@
   gap: 7rpx;
 }
 
-/* 播放中收起：右侧绿色音符，无圆框 */
+/* 播放中收起：右侧绿色音符，深色透明玻璃圆底，无边框 */
 .np-float {
   position: relative;
   width: 108rpx;
@@ -107,6 +108,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: 50%;
+  background: rgba(8, 11, 20, 0.46);
+  border: none;
+  -webkit-backdrop-filter: blur(14rpx);
+  backdrop-filter: blur(14rpx);
+  box-shadow: 0 12rpx 30rpx rgba(0, 0, 0, 0.28);
   animation: npFloat 3.4s ease-in-out infinite;
 }
 
@@ -124,7 +131,7 @@
   font-family: var(--font-cn-serif);
   font-size: 66rpx;
   line-height: 1;
-  color: #34D399;
+  color: var(--color-calm-teal, #34D399);
   text-shadow:
     0 0 22rpx rgba(52, 211, 153, 0.55),
     0 4rpx 16rpx rgba(0, 0, 0, 0.4);

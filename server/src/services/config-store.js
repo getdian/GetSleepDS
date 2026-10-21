@@ -53,8 +53,21 @@ function createConfigStore(options) {
     return cache.value
   }
 
-  async function save(input) {
+  /**
+   * @param input 完整配置（后台每次提交全量）
+   * @param options { expectedUpdatedAt } 后台载入时的 updatedAt，用于乐观并发：
+   *   不传（脚本/内部调用）不做校验；传了但对不上说明另一个管理员已经保存过，
+   *   此时必须拒绝，否则后保存者会静默覆盖前者新增的环境音/背景图/文案。
+   */
+  async function save(input, options) {
     const current = await get()
+    const expected = options && options.expectedUpdatedAt
+    if (expected !== undefined && expected !== null && Number(expected) !== Number(current.updatedAt)) {
+      const conflict = new Error('配置已被其他管理员更新，请刷新页面后重新保存')
+      conflict.code = 'CONFIG_CONFLICT'
+      conflict.status = 409
+      throw conflict
+    }
     const clean = validateConfig(input, current.config)
     const next = Object.assign({}, clean, {
       version: (current.config.version || 1) + 1

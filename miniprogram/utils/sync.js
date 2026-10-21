@@ -77,7 +77,8 @@ function dropLocal(local, deleted, day, stamp) {
  */
 function mergeServerRecords(serverRecords, options) {
   const opts = options || {}
-  const local = storage.getRecords()
+  // 用原始表做合并：getRecords() 会过滤掉缺 day 的旧条目，直接用它整体回写会静默丢历史
+  const local = storage.getRawRecords()
   const deleted = storage.getDeleted()
   const erasedAt = Number(opts.erasedAt) || 0
   let changed = 0
@@ -178,6 +179,8 @@ function doSync(force) {
     let writeFailed = false
 
     for (let i = 0; i < batches.length; i += 1) {
+      // 用户在同步途中关掉云备份：立刻停止后续分片，不再继续上传本机记录/回填云端
+      if (!storage.getSyncEnabled()) return { skipped: 'sync_off' }
       // 每个请求都使用一次新的 wx.login code；不能复用同一个 code 调多次接口。
       // 只有首片需要云端全量回填，后续分片让服务端省略 records，避免 N 倍全量下载。
       const res = await withLogin((code) =>

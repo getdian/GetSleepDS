@@ -138,7 +138,10 @@ function createAdminRoute(options) {
     wrap(async (req, res) => {
       let saved = null
       try {
-        saved = await store.save(req.body)
+        // baseUpdatedAt 由后台在载入配置时记录；不一致返回 409，避免并发保存互相覆盖
+        saved = await store.save(req.body, {
+          expectedUpdatedAt: req.body && req.body.baseUpdatedAt
+        })
       } catch (error) {
         if (error.code === 'DB_UNAVAILABLE') throw dbUnavailable()
         throw error
@@ -393,6 +396,49 @@ function createAdminRoute(options) {
         })
       } catch (error) {
         log.error('[cos] background upload failed:', error.code || error.message)
+        throw apiError('UPLOAD_FAILED', '上传失败，请检查 COS 配置与权限', 502)
+      }
+
+      res.json({
+        key,
+        url: cos.objectUrl(settings, key),
+        size: req.file.size
+      })
+    })
+  )
+
+  // 落地页小程序码上传：只接受图片，5MB 上限，进 COS 的 site/ 前缀
+  // 返回 URL 后由后台填入 config.site.mpQrCodeUrl，随“保存并生效”一起下发
+  router.post(
+    '/admin/site/qrcode',
+    auth.requireAuth,
+    imageUpload.single('file'),
+    wrap(async (req, res) => {
+      if (!req.file) throw invalidBody('没有收到图片文件')
+
+      const settings = await storage.getRaw()
+      if (!settings || !settings.bucket || !settings.secretId || !settings.secretKey) {
+        throw apiError('STORAGE_NOT_CONFIGURED', '请先在“存储与上传”里配置 COS', 400)
+      }
+
+      const prefix = (settings.prefix || 'sleep').replace(/^\/+|\/+$/g, '')
+      const key =
+        (prefix ? prefix + '/' : '') +
+        'site/mp-qr-' +
+        Date.now() +
+        '-' +
+        crypto.randomBytes(4).toString('hex') +
+        '.' +
+        imageExtension(req.file)
+
+      try {
+        await cos.uploadBuffer(settings, {
+          key,
+          buffer: req.file.buffer,
+          contentType: IMAGE_TYPES[req.file.mimetype] || 'image/png'
+        })
+      } catch (error) {
+        log.error('[cos] qrcode upload failed:', error.code || error.message)
         throw apiError('UPLOAD_FAILED', '上传失败，请检查 COS 配置与权限', 502)
       }
 

@@ -268,7 +268,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 180;
+  z-index: var(--z-sheet-mask, 180);
   background: transparent;
   pointer-events: none;
   transition: background 0.28s var(--ease-gentle);
@@ -284,7 +284,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 200;
+  z-index: var(--z-sheet, 200);
   height: 86vh;
   display: flex;
   flex-direction: column;
@@ -996,7 +996,7 @@
   position: fixed;
   right: 30rpx;
   bottom: 42rpx;
-  z-index: 40;
+  z-index: var(--z-fab, 40);
   width: 118rpx;
   height: 118rpx;
   display: flex;
@@ -1294,7 +1294,7 @@
 
 .dock-tcat.tone-teal { color: #5EEAD4; }
 .dock-tcat.tone-blue { color: #93C5FD; }
-.dock-tcat.tone-amber { color: #FDE68A; }
+.dock-tcat.tone-amber { color: var(--color-accent-moon, #FDE68A); }
 .dock-tcat.tone-violet { color: #C4B5FD; }
 
 .dock-tstate {
@@ -1311,7 +1311,7 @@
 }
 
 .dock-fav.is-on {
-  color: #FDE68A;
+  color: var(--color-accent-moon, #FDE68A);
   text-shadow: 0 0 16rpx rgba(253, 230, 138, 0.4);
 }
 
@@ -1509,14 +1509,18 @@
    悬浮音符 / 绿色吸附音符 / 极简播放条
    ============================================================ */
 
-/* 无圆框：只有一个大音符，透明底 */
+/* 悬浮音符：页面主题深色 + 透明玻璃圆底，无边框、不描高光 */
 .dock-fab {
   right: 26rpx;
   bottom: calc(132rpx + env(safe-area-inset-bottom));
   width: 108rpx;
   height: 108rpx;
-  background: transparent;
+  border-radius: 50%;
+  background: rgba(8, 11, 20, 0.46);
   border: none;
+  -webkit-backdrop-filter: blur(14rpx);
+  backdrop-filter: blur(14rpx);
+  box-shadow: 0 12rpx 30rpx rgba(0, 0, 0, 0.28);
   animation: noteFloat 3.8s ease-in-out infinite;
 }
 
@@ -1533,17 +1537,23 @@
     0 4rpx 16rpx rgba(0, 0, 0, 0.45);
 }
 
-/* 播放中收起：绿色音符吸附右侧，仍然无圆框 */
+/* 播放中收起：绿色音符吸附右侧，同为深色透明玻璃圆底，无边框 */
 .dock-note {
   position: fixed;
   right: 26rpx;
   bottom: calc(132rpx + env(safe-area-inset-bottom));
-  z-index: 40;
+  z-index: var(--z-fab, 40);
   width: 108rpx;
   height: 108rpx;
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: 50%;
+  background: rgba(8, 11, 20, 0.46);
+  border: none;
+  -webkit-backdrop-filter: blur(14rpx);
+  backdrop-filter: blur(14rpx);
+  box-shadow: 0 12rpx 30rpx rgba(0, 0, 0, 0.28);
   animation: noteFloat 3.4s ease-in-out infinite;
 }
 
@@ -1551,7 +1561,7 @@
   font-family: var(--font-cn-serif);
   font-size: 66rpx;
   line-height: 1;
-  color: #34D399;
+  color: var(--color-calm-teal, #34D399);
   text-shadow:
     0 0 22rpx rgba(52, 211, 153, 0.55),
     0 4rpx 16rpx rgba(0, 0, 0, 0.4);
@@ -1580,17 +1590,20 @@
 }
 
 /* 展开播放器时点击外部：折叠回音符，不停止播放 */
+/* 层级必须低于悬浮 tabBar(90)：否则展开迷你条后第一次点 tab 只会收起播放条，
+   要把遮罩铺在 tabBar 之上。 */
 .dock-collapse-mask {
   position: fixed;
   left: 0;
   right: 0;
   top: 0;
   bottom: 0;
-  z-index: 95;
+  z-index: var(--z-collapse-mask, 85);
   background: transparent;
 }
 
-/* 播放条：与 now-playing 共用宽度、右贴边、圆角和底部安全位 */
+/* 播放条：与 now-playing 共用宽度、右贴边、圆角和底部安全位；
+   深色透明玻璃、无边框，与悬浮音符同一套质感 */
 .dock-mini {
   left: auto;
   right: 0;
@@ -1600,7 +1613,12 @@
   min-height: 88rpx;
   padding: 14rpx 18rpx 14rpx 48rpx;
   border-radius: 999rpx 0 0 999rpx;
-  z-index: 100;
+  border: none;
+  background: rgba(8, 11, 20, 0.62);
+  -webkit-backdrop-filter: blur(26rpx);
+  backdrop-filter: blur(26rpx);
+  box-shadow: 0 18rpx 44rpx rgba(0, 0, 0, 0.32);
+  z-index: var(--z-player, 100);
 }
 
 .dock-mini .dock-pbar {

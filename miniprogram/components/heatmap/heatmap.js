@@ -51,8 +51,23 @@ Component({
       if (size !== this.data.cellSize) this.setData({ cellSize: size })
     },
 
-    'cells, colCount': function () {
-      // 先清空再指向最后一格，保证数据刷新后仍自动滚到“今天”一侧
+    'cells, colCount': function (cells) {
+      const list = cells || []
+      if (!list.length) return
+      // 只在“今天”换列（首次渲染 / 跨天）时滚到右侧。
+      // 每次 refresh 都 seek 会把用户正左滑查看的历史月份硬拽回今天。
+      let todayKey = ''
+      for (let i = 0; i < list.length; i += 1) {
+        if (list[i] && list[i].isToday) {
+          todayKey = list[i].key || '#' + i
+          break
+        }
+      }
+      const firstRender = !this._lastTodayKey
+      const dayChanged = !!todayKey && todayKey !== this._lastTodayKey
+      this._lastTodayKey = todayKey || this._lastTodayKey
+      if (!firstRender && !dayChanged) return
+      // 先清空再指向，保证同一个 target 也能重新触发一次对齐
       this.setData({ scrollTarget: '' }, () => {
         const next = wx.nextTick || ((fn) => setTimeout(fn, 0))
         next(() => {

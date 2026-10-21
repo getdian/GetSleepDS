@@ -59,8 +59,18 @@ function getRecords() {
   return out
 }
 
+/**
+ * 原始记录表：保留未识别 / 旧结构的条目。
+ * 写回时必须基于它做浅合并，否则「读过滤后子集 → 整体覆盖写」会把
+ * 缺 day 字段的旧记录、被其他端写坏的条目一次性删掉，且没有任何提示。
+ */
+function getRawRecords() {
+  const raw = safeGet(KEYS.records, {})
+  return raw && typeof raw === 'object' ? raw : {}
+}
+
 function saveRecord(record) {
-  const all = getRecords()
+  const all = getRawRecords()
   all[record.day] = record
   const ok = safeSet(KEYS.records, all)
   if (!ok) return false
@@ -75,7 +85,7 @@ function replaceRecords(map) {
 }
 
 function removeRecord(day, deletedAt) {
-  const all = getRecords()
+  const all = getRawRecords()
   delete all[day]
   const saved = safeSet(KEYS.records, all)
   // 墓碑：阻止云端旧记录在下次同步时被回填；写入失败必须让调用方知道。
@@ -254,6 +264,7 @@ function clearAll() {
 module.exports = {
   KEYS,
   getRecords,
+  getRawRecords,
   saveRecord,
   replaceRecords,
   removeRecord,

@@ -7,6 +7,7 @@ const ad = require('../../utils/ad')
 const events = require('../../utils/events')
 const audioTimer = require('../../utils/audio-timer')
 const playerState = require('../../utils/player-state')
+const tabbar = require('../../utils/tabbar')
 
 const ICONS = ['rain', 'wave', 'fire', 'noise', 'night']
 const TONES = {
@@ -101,8 +102,10 @@ Component({
       this.setupAudio()
       ad.init(this._cfg.unlock && this._cfg.unlock.adUnitId)
       this.refreshUnlock()
-      this.syncFromAudio()
+      // 先让定时器按“真实存活会话”清理或恢复，再同步 UI。
+      // 顺序反过来会先读到上个进程残留的 lastTrackPlaying，界面短暂显示幽灵播放态。
       audioTimer.restore()
+      this.syncFromAudio()
 
       this._unsubTimer = audioTimer.subscribe((left) => {
         if (!this._alive) return
@@ -147,6 +150,7 @@ Component({
 
     detached() {
       this._alive = false
+      this.disarmLoadingGuard()
       if (this._collapseTimer) {
         clearTimeout(this._collapseTimer)
         this._collapseTimer = null
@@ -175,6 +179,8 @@ Component({
       // 不能沿用隐藏前的 playing，否则会出现“已暂停却显示正在播放、点暂停无效”。
       this.syncFromAudio()
       this.syncPlayerText()
+      if (this.data.open) tabbar.hide()
+      else tabbar.show()
     },
     hide() {
       this._pageVisible = false
@@ -183,6 +189,26 @@ Component({
 
   methods: {
     noop() {},
+
+    /**
+     * 起播兜底：BackgroundAudioManager 在弱网/坏源时可能既不给 play 也不给 error，
+     * 没有这个定时器“正在连接音频…”会永久挂在迷你条上，且没有任何重试出口。
+     */
+    armLoadingGuard() {
+      this.disarmLoadingGuard()
+      this._loadingTimer = setTimeout(() => {
+        this._loadingTimer = null
+        if (!this._alive || !this.data.loading) return
+        this.setData({ loading: false, playerSub: '加载超时，点音符重试' })
+      }, 12000)
+    },
+
+    disarmLoadingGuard() {
+      if (this._loadingTimer) {
+        clearTimeout(this._loadingTimer)
+        this._loadingTimer = null
+      }
+    },
 
     applyConfig(cfg) {
       const tracks = (cfg.audio || []).map((item) => {
@@ -353,6 +379,7 @@ Component({
       const handlers = {
         play: () => {
           if (!this._alive) return
+          this.disarmLoadingGuard()
           playerState.clearFallback()
           const app = getApp()
           if (app && app.globalData) app.globalData.audioSession = true
@@ -367,6 +394,7 @@ Component({
         },
         pause: () => {
           if (!this._alive) return
+          this.disarmLoadingGuard()
           // 系统侧暂停（通知栏/锁屏/耳机）不走 togglePlay，必须在这里冻结倒计时，
           // 否则用户睡前从锁屏暂停后，定时仍会偷跑并在到点时把会话清掉。
           audioTimer.pause()
@@ -376,10 +404,12 @@ Component({
         },
         canplay: () => {
           if (!this._alive) return
+          this.disarmLoadingGuard()
           if (this.data.loading) this.setData({ loading: false })
         },
         stop: () => {
           if (!this._alive) return
+          this.disarmLoadingGuard()
           const stoppedByUser = this._stopRequested
           this._stopRequested = false
           storage.patchMeta({ lastTrackPlaying: false })
@@ -391,6 +421,9 @@ Component({
         },
         ended: () => {
           if (!this._alive) return
+          // now-playing 也注册了 onEnded：同一轮 ended 只让一个组件重播，
+          // 否则会重复赋同一个 src 并各自 play()，循环点必然出现重播双写。
+          if (!playerState.claimEnded()) return
           // 锁屏期间 JS 可能被挂起；重新播放前先按墙钟检查定时是否已到点。
           // restore 到点时会立刻停音频并清 endAt，之后 shouldStop() 恒 false，
           // 因此还要看“刚刚到点”的时间戳，避免到点后又循环重播。
@@ -405,6 +438,7 @@ Component({
         },
         error: () => {
           if (!this._alive) return
+          this.disarmLoadingGuard()
           if (this._playingFromCache && this._currentTrack) {
             this._playingFromCache = false
             const badUrl = this._currentTrack.url
@@ -471,26 +505,45 @@ Component({
       this._audio = null
     },
 
+    /** 清掉迷你条/音符的展示态（不动持久化的播放偏好） */
+    clearPlayerSurface() {
+      this.disarmLoadingGuard()
+      if (!this.data.currentId && !this.data.playing && !this.data.loading) return
+      this.setData({
+        currentId: '',
+        currentTitle: '',
+        currentCategory: '',
+        playing: false,
+        loading: false,
+        playerSub: '',
+        miniExpanded: false,
+        collapsed: false,
+        collapsing: false
+      })
+    },
+
     syncFromAudio() {
       if (!this._audio) return
+      this.disarmLoadingGuard()
       const meta = storage.getMeta()
+      // 冷启动/进程被杀后 BackgroundAudioManager 没有 src，本进程也没创建过音频会话：
+      // 此时 meta 里的 lastTrackPlaying 只是上个进程的残影，不能当成真实播放态，
+      // 否则会“显示正在播放但无声”，且点暂停会走进重建音源分支把声音放出来。
+      // 判据与 now-playing.sync 保持一致（audioSession 只在本次启动播放过时为 true）。
+      const app = getApp()
+      const session = !!(app && app.globalData && app.globalData.audioSession)
+      if (!this._audio.src && !session) {
+        if (meta.lastTrackActive !== false || meta.lastTrackPlaying !== false) {
+          storage.patchMeta({ lastTrackActive: false, lastTrackPlaying: false })
+        }
+        this.clearPlayerSurface()
+        return
+      }
       const track = meta.lastTrackId && meta.lastTrackActive !== false
         ? this.findTrack(meta.lastTrackId)
         : null
       if (!track) {
-        if (this.data.currentId || this.data.playing || this.data.loading) {
-          this.setData({
-            currentId: '',
-            currentTitle: '',
-            currentCategory: '',
-            playing: false,
-            loading: false,
-            playerSub: '',
-            miniExpanded: false,
-            collapsed: false,
-            collapsing: false
-          })
-        }
+        this.clearPlayerSurface()
         return
       }
       // 系统 stop 会清空 src，但会话仍有效；没有 src 时以最后一次播放事件为准
@@ -571,6 +624,7 @@ Component({
         // 源还没加载完；canplay/play 事件到达后清除，避免弱网下误显示“正在播放”
         loading: true
       })
+      this.armLoadingGuard()
       this.syncPlayerText()
 
       this._audio.title = '睡点 · ' + track.title
@@ -604,6 +658,7 @@ Component({
       const cached = this.peekCached(track.url)
       this._playingFromCache = !!cached
       this.setData({ loading: true })
+      this.armLoadingGuard()
       this._audio.title = '睡点 · ' + track.title
       this._audio.src = cached || track.url
     },
@@ -631,6 +686,7 @@ Component({
         this._playingFromCache = !!cached
         this.clearCollapseTimer()
         this.setData({ loading: true, playing: true, miniExpanded: false, collapsed: false, collapsing: false })
+        this.armLoadingGuard()
         this._audio.title = '睡点 · ' + track.title
         this._audio.epname = '环境音'
         this._audio.singer = '睡点'
@@ -679,6 +735,7 @@ Component({
 
     stopPlayback() {
       this._stopRequested = true
+      this.disarmLoadingGuard()
       // 停止本次播放，但保留“下次定时多久”的偏好
       audioTimer.clear(undefined, true)
       storage.patchMeta({ lastTrackActive: false, lastTrackPlaying: false })
@@ -698,6 +755,7 @@ Component({
       // 打开抽屉前再按真实播放器同步一次，避免抽屉里的状态和播放条相互矛盾
       this.syncFromAudio()
       this.clearCollapseTimer()
+      tabbar.hide()
       this.setData({ favoriteIds: storage.getFavorites(), miniExpanded: true, collapsed: false, collapsing: false })
       this.refreshUnlock()
       this.refreshCache()
@@ -707,6 +765,7 @@ Component({
     closeSheet() {
       // 关闭抽屉后，播放中收成绿色音符；暂停时保留播放条方便继续
       this.clearCollapseTimer()
+      tabbar.show()
       this.setData({ open: false, miniExpanded: !this.data.playing, collapsed: false, collapsing: false })
     },
 

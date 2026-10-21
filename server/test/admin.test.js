@@ -90,7 +90,11 @@ test('后台页面可访问并带安全头', async () => {
 test('落地页与 H5 演示可访问', async () => {
   const home = await fetch(base + '/')
   assert.equal(home.status, 200)
-  assert.match(await home.text(), /今晚几点睡/)
+  const html = await home.text()
+  // 新版落地页核心口径：睡点主张 + 小程序码占位 + GEO 文件引用
+  assert.match(html, /算出你的/)
+  assert.match(html, /mp-qr-img/)
+  assert.match(html, /robots\.txt|llms\.txt|application\/ld\+json/)
 
   const demo = await fetch(base + '/demo/')
   assert.equal(demo.status, 200)

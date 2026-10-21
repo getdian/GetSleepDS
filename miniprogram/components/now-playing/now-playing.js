@@ -2,7 +2,9 @@
  * 跨页迷你播放器。
  * 声音入口仍然只在入睡页（audio-dock）；这里只在「已经播放过」时出现，
  * 让用户在计算器/统计页也能暂停、继续、停止，不必切回入睡页。
- * 只监听 play/pause/stop/error，不处理 ended（循环重播仍由 audio-dock 负责）。
+ * 监听 play/pause/stop/error，并作为 ended 的“第二处理人”：audio-dock 只在入睡页常驻，
+ * 但两个组件可能同时收到同一个 ended，因此用 playerState.claimEnded() 去重，
+ * 保证每轮循环只有一个组件重建音源并重播。
  */
 const storage = require('../../utils/storage')
 const audioTimer = require('../../utils/audio-timer')
@@ -151,6 +153,8 @@ Component({
 
     handleEnded() {
       if (!this._alive) return
+      // 同一轮 ended 只允许一个组件重播（audio-dock 也会收到），否则会重复赋 src + play()。
+      if (!playerState.claimEnded()) return
       // audio-dock 只挂在入睡页；在首页/统计页自然播完时由这里接管循环与终止态，
       // 否则迷你条会停在“正在播放”再遇到 toggle 的静默 return。
       audioTimer.restore()

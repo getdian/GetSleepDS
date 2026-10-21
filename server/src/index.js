@@ -68,6 +68,12 @@ async function main() {
     db.cleanupEvents(Date.now() - 180 * 24 * 60 * 60 * 1000).catch((err) => {
       console.error('[cleanup] events', err.message)
     })
+    // 墓碑只对客户端 400 天同步窗口有意义，更老的清掉避免响应体越来越大
+    if (db.cleanupDeletions) {
+      db.cleanupDeletions(Date.now() - 400 * 24 * 60 * 60 * 1000).catch((err) => {
+        console.error('[cleanup] deletions', err.message)
+      })
+    }
   }, CLEANUP_INTERVAL)
   if (timer.unref) timer.unref()
 
@@ -87,6 +93,16 @@ async function main() {
 
   process.on('SIGINT', () => shutdown('SIGINT'))
   process.on('SIGTERM', () => shutdown('SIGTERM'))
+
+  // 兜底：Express 的 errorHandler 只覆盖请求上下文，定时器/第三方回调里的浮动异常
+  // 原先会直接崩进程且没有任何日志。未捕获异常记录后退出（由容器重启拉起）。
+  process.on('unhandledRejection', (reason) => {
+    console.error('[unhandledRejection]', reason && reason.stack ? reason.stack : reason)
+  })
+  process.on('uncaughtException', (err) => {
+    console.error('[uncaughtException]', err && err.stack ? err.stack : err)
+    shutdown('uncaughtException')
+  })
 }
 
 main().catch((err) => {

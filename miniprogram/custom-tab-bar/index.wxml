@@ -1,4 +1,4 @@
-<view class="tabbar" aria-role="tablist">
+<view class="tabbar {{hidden ? 'is-hidden' : ''}}" aria-role="tablist" aria-hidden="{{hidden}}">
   <view
     wx:for="{{list}}"
     wx:key="key"

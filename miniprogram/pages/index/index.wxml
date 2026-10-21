@@ -88,7 +88,7 @@
           </view>
 
           <!-- 背面：推荐结果（参考图下方推荐列表的翻转实现） -->
-          <view class="calc-face calc-back">
+          <view class="calc-face calc-back {{view && view.compact ? 'is-compact' : ''}}">
             <block wx:if="{{view}}">
               <view class="result-head">
                 <text class="result-moon">🌙</text>

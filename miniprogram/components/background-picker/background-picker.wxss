@@ -4,7 +4,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 199;
+  z-index: var(--z-sheet-mask, 180);
   background: rgba(4, 7, 16, 0.62);
   opacity: 0;
   pointer-events: none;
@@ -21,7 +21,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 200;
+  z-index: var(--z-sheet, 200);
   max-height: 78vh;
   display: flex;
   flex-direction: column;

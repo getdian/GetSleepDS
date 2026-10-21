@@ -1,7 +1,7 @@
 /* 跨页播放器宿主：压在页面内容之上，避免底部内容拦截音符点击 */
 .np-host {
   position: relative;
-  z-index: 120;
+  z-index: var(--z-player-host, 120);
 }
 
 .stats-page {
@@ -122,6 +122,63 @@
   color: var(--text-muted);
 }
 
+/* 热力图图例：少 → 多 + “仅入睡”特殊态；点格子后的详情固定显示，不依赖 toast */
+.heat-legend {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  margin-top: 18rpx;
+}
+
+.heat-legend-label {
+  flex: none;
+  font-size: 18rpx;
+  line-height: 1;
+  color: var(--text-muted);
+}
+
+.heat-legend-cells {
+  display: flex;
+  align-items: center;
+  gap: 4rpx;
+}
+
+.heat-legend-cell {
+  width: 14rpx;
+  height: 14rpx;
+  border-radius: 4rpx;
+  background: var(--heat-0);
+}
+
+.heat-legend-cell.l0 { background: var(--heat-0); }
+.heat-legend-cell.l1 { background: var(--heat-1); }
+.heat-legend-cell.l2 { background: var(--heat-2); }
+.heat-legend-cell.l3 { background: var(--heat-3); }
+.heat-legend-cell.l4 { background: var(--heat-4); }
+.heat-legend-cell.l5 { background: var(--heat-5); }
+
+.heat-legend-partial {
+  display: flex;
+  align-items: center;
+  gap: 6rpx;
+  margin-left: 10rpx;
+  font-size: 18rpx;
+  color: var(--text-muted);
+}
+
+.heat-legend-cell.is-partial {
+  background: transparent;
+  border: 1.5rpx solid var(--border-glow);
+}
+
+.heat-detail {
+  min-height: 34rpx;
+  margin-top: 12rpx;
+  font-size: 20rpx;
+  line-height: 1.4;
+  color: var(--color-primary-soft);
+}
+
 /* 分区底部行：左侧记录数、右侧海报入口 */
 .section-foot {
   display: flex;
@@ -155,11 +212,12 @@
   flex: none;
   display: flex;
   align-items: center;
-  gap: 12rpx;
+  gap: 16rpx;
 }
 
 /* 淡紫玻璃胶囊：图标 + 文案，低对比度 action，不抢热力图的视觉重心 */
 .poster-btn {
+  position: relative;
   flex: none;
   height: 64rpx;
   display: inline-flex;
@@ -173,6 +231,16 @@
   letter-spacing: 1rpx;
   white-space: nowrap;
   color: #C7CDFB;
+}
+
+/* 视觉 64rpx 的胶囊，可点区域补到 80rpx；与旁边的分享图标拉开间距防误触 */
+.poster-btn::after {
+  content: "";
+  position: absolute;
+  left: -4rpx;
+  right: -4rpx;
+  top: -8rpx;
+  bottom: -8rpx;
 }
 
 .poster-spark {
@@ -356,7 +424,7 @@
 
 .stats-page .danger-entry-title {
   font-size: 26rpx;
-  color: #F87171;
+  color: var(--color-danger-soft, #F87171);
   text-decoration: underline;
 }
 
