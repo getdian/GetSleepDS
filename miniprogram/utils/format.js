@@ -33,6 +33,14 @@ function fmtHours(minutes) {
   return (Math.round(minutes / 6) / 10).toFixed(1) + ' 小时'
 }
 
+/** 日历格内紧凑时长：3.7h / 45m；无记录返回空串 */
+function fmtHoursShort(minutes) {
+  const total = Math.max(0, Math.round(minutes || 0))
+  if (!total) return ''
+  if (total < 60) return total + 'm'
+  return (Math.round(total / 6) / 10).toFixed(1) + 'h'
+}
+
 function fmtDateCN(timestamp) {
   const d = new Date(timestamp)
   return (d.getMonth() + 1) + '月' + d.getDate() + '日 周' + WEEKDAYS[d.getDay()]
@@ -64,6 +72,7 @@ module.exports = {
   periodLabel,
   fmtDuration,
   fmtHours,
+  fmtHoursShort,
   fmtDateCN,
   fmtDayCN,
   greeting,

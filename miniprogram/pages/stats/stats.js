@@ -1,7 +1,6 @@
 const F = require('../../utils/format')
 const T = require('../../utils/time')
 const S = require('../../utils/stats')
-const R = require('../../utils/regularity')
 const storage = require('../../utils/storage')
 const cache = require('../../utils/audio-cache')
 const backgrounds = require('../../utils/backgrounds')
@@ -14,8 +13,7 @@ const events = require('../../utils/events')
 const adSlots = require('../../utils/ads')
 const { getConfig, loadConfig } = require('../../utils/config')
 
-// 热力图板面：3 个月前的 1 号 → 今天 + 21 天所在周的周日（末段是未来占位）
-const HEAT_MONTHS_BACK = 3
+const MONTH_MIN_OFFSET = -24
 
 Page({
   data: {
@@ -23,20 +21,26 @@ Page({
     syncEnabled: false,
     hasCloudCopy: false,
     hasData: false,
-    avgBed: '--:--',
-    avgWake: '--:--',
-    avgDuration: '--',
+    // 首屏 3 个核心指标：平均睡眠 / 平均入睡 / 平均起床
+    metrics: [],
+    metricKey: '',
+    metricDetail: null,
+    durationNote: '',
+    durationHint: '',
     weekCount: 0,
     streak: 0,
-    regularity: { enough: false, count: 0 },
-    cells: [],
-    colCount: 0,
-    months: [],
-    marked: 0,
-    heatDetail: '',
-    fact: '',
-    factState: 'idle',
-    factSource: '',
+    // 日历周期：1 = 当月，3/6/12 = 横向滑动的连续月
+    calendarSpan: 1,
+    calendarCells: [],
+    calendarMonths: [],
+    calendarTitle: '',
+    calendarNote: '',
+    calendarTip: '',
+    canNextMonth: false,
+    monthOffset: 0,
+    detail: null,
+    selectedKey: '',
+    settingsOpen: false,
     syncText: '尚未同步',
     syncBusy: false,
     posterPath: '',
@@ -45,11 +49,10 @@ Page({
 
   onLoad() {
     this._alive = true
-    this._factLoading = false
-    this._factSignature = ''
     this._records = {}
+    this._signature = ''
     // 先在 onLoad 渲染一次，避免首帧先画“还没有记录”再被 onShow 覆盖
-    this.refresh(false)
+    this.refresh()
     adSlots.apply(this)
   },
 
@@ -57,11 +60,11 @@ Page({
     this._alive = true
     const tabBar = this.getTabBar && this.getTabBar()
     if (tabBar) tabBar.setData({ selected: 2 })
-    this.refresh(false)
+    this.refresh()
     adSlots.apply(this)
     loadConfig(true)
       .then(() => {
-        if (this._alive) this.refresh(false)
+        if (this._alive) this.refresh()
       })
       .catch(() => {})
   },
@@ -71,26 +74,36 @@ Page({
   },
 
   onPullDownRefresh() {
-    this.refresh(true)
+    this.refresh()
     // 运营改完广告位后，下拉刷新可立即拿到新配置（绕过 10 分钟 TTL）。
-    // 等配置真正返回再收起转圈，否则新广告位要过几秒才出现。
     adSlots.reload(this).finally(() => wx.stopPullDownRefresh())
   },
 
-  refresh(forceSummary) {
+  refresh() {
     if (!this._alive) return
     const now = Date.now()
     const records = storage.getRecords()
     const list = S.completedList(records)
-    const weekly = S.weekly(records, now)
+    const metricData = S.metricsOf(records, now)
     const pending = storage.getPending()
     const partialDay = pending ? T.dateKey(now) : ''
-
-    // 月对齐图板：3 个月前的 1 号起，末尾约 3 周为未来占位（当前 10 月即 7 月 1 日起）
-    const span = S.monthsSpan(now, HEAT_MONTHS_BACK)
-    this._records = records
-    const heat = S.heatmapCells(records, now, span.days, partialDay, span.endOffsetDays)
-    const current = weekly.current
+    const monthOffset = Number(this.data.monthOffset) || 0
+    const calendarSpan = Number(this.data.calendarSpan) || 1
+    const calendar =
+      calendarSpan === 1 ? S.calendarCells(records, now, monthOffset, partialDay) : null
+    const calendarMonths =
+      calendarSpan > 1 ? S.calendarMonths(records, now, calendarSpan, partialDay) : []
+    let calendarNote = ''
+    if (calendarSpan === 1) {
+      calendarNote = calendar.marked ? calendar.marked + ' 天有记录' : '这个月还没有完整记录'
+    } else {
+      const marked = calendarMonths.reduce((sum, month) => sum + month.marked, 0)
+      calendarNote = marked ? '近 ' + calendarSpan + ' 个月 ' + marked + ' 天有记录' : '这段时间还没有完整记录'
+    }
+    const calendarTip =
+      calendarSpan === 1
+        ? '灰色空格是还没记录的夜晚，点一下可以补记'
+        : '左右滑动查看 · 空格点一下可以补记'
     const meta = storage.getMeta()
     const config = getConfig()
     const syncFeature = !config.features || config.features.sync !== false
@@ -100,11 +113,13 @@ Page({
       syncEnabled = false
     }
     const cloudPending = !!meta.cloudPendingErase
-
     const hasData = list.length > 0 || !!pending
-    const avgBed = current.avgBedMin === null ? '--:--' : F.fmtClock(current.avgBedMin)
-    const avgWake = current.avgWakeMin === null ? '--:--' : F.fmtClock(current.avgWakeMin)
-    const avgDuration = current.avgDurationMin === null ? '--' : F.fmtHours(current.avgDurationMin)
+    const todayKey = T.dateKey(now)
+
+    const metrics = metricData.metrics.map((item) =>
+      Object.assign({}, item, { detail: item.detail.slice() })
+    )
+
     const syncText = cloudPending
       ? '云端副本尚未删除，请先删除'
       : syncEnabled
@@ -117,138 +132,173 @@ Page({
           ? '仅存本机 · 未开启云备份'
           : '仅存本机 · 服务端暂未开放云备份'
 
-    const reg = R.analyze(records, now, 7)
-    const regularity = reg.enough
-      ? {
-          enough: true,
-          label: reg.label,
-          bedSpread: reg.bedSpreadMin,
-          wakeSpread: reg.wakeSpreadMin,
-          avgDuration: F.fmtHours(reg.avgDurationMin)
-        }
-      : { enough: false, count: reg.count }
+    this._records = records
 
-    // onShow 会连续 refresh 两次（本地一次、配置到位后一次），cells 有 150+ 个节点。
-    // 数据没变时跳过 setData，避免每次进页都把整块热力图重新过桥一遍。
+    // onShow 会连续 refresh 两次（本地一次、配置到位后一次）。
+    // 数据没变时跳过 setData，避免把日历整块重新过桥。
     const signature = [
       hasData ? 1 : 0,
-      avgBed,
-      avgWake,
-      avgDuration,
-      current.count,
-      weekly.streak,
-      heat.colCount,
-      heat.marked,
-      heat.months.length,
-      // 逐格 level + 今天所在位置：只看 marked 数量会漏掉「某天时长变了但总数没变」
-      heat.cells.map((cell) => (cell && cell.level) || 0).join(''),
-      heat.cells.findIndex((cell) => cell && cell.isToday),
-      JSON.stringify(regularity),
+      metrics.map((item) => item.value + '/' + item.sub + '/' + item.detail.join('|')).join('|'),
+      metricData.durationNote,
+      metricData.durationHint,
+      metricData.count,
+      metricData.streak,
+      calendarSpan,
+      calendar ? calendar.cells.map((cell) => cell.level).join('') : '',
+      calendarMonths.map((month) => month.cells.map((cell) => cell.level).join('')).join('|'),
+      // 跨天、进行中的会话、云端副本状态都会改变界面，必须进签名，否则不会刷新
+      todayKey,
+      partialDay,
+      syncEnabled ? 1 : 0,
+      meta.lastSyncAt ? 1 : 0,
       syncText
-    ].join('|')
-    if (signature !== this._refreshSignature) {
-      this._refreshSignature = signature
+    ].join('#')
+
+    if (signature !== this._signature) {
+      this._signature = signature
       this.setData({
         hasData,
-        avgBed,
-        avgWake,
-        avgDuration,
-        weekCount: current.count,
-        streak: weekly.streak,
-        regularity,
-        cells: heat.cells,
-        colCount: heat.colCount,
-        months: heat.months,
-        marked: heat.marked,
-        // 数据变了才清空格子详情，避免选中态指向一条已被修改/删除的记录
-        heatDetail: '',
+        metrics,
+        durationNote: metricData.durationNote,
+        durationHint: metricData.durationHint,
+        weekCount: metricData.count,
+        streak: metricData.streak,
+        calendarSpan,
+        calendarCells: calendar ? calendar.cells : [],
+        calendarMonths,
+        calendarTitle: calendar ? calendar.monthLabel : '',
+        calendarNote,
+        calendarTip,
+        canNextMonth: monthOffset < 0,
+        // 数据或周期变了才清空详情与选中态，避免指向已修改/已切换的记录
+        detail: null,
+        selectedKey: '',
+        metricKey: '',
+        metricDetail: null,
         syncEnabled,
         hasCloudCopy: !!meta.lastSyncAt,
         syncText
       })
     }
-
-    this.refreshFact(weekly, records, now, forceSummary)
   },
 
-  /** 本地模板兜底：服务端不可用、关闭同步或未开启云备份时共用。 */
-  applyLocalFact(records, now) {
-    const local = S.localFact(records, now)
-    if (!local.available) {
-      this.setData({ factState: 'insufficient', fact: '', factSource: '' })
-      return false
+  onMetricTap(e) {
+    const key = e.currentTarget.dataset.key
+    if (!key) return
+    // 再点同一项收起，避免说明卡一直占着首屏
+    if (this.data.metricKey === key) {
+      this.setData({ metricKey: '', metricDetail: null })
+      return
     }
-    this.setData({ factState: 'ok', fact: local.text, factSource: 'local' })
-    return true
+    const detail = this.data.metrics.filter((item) => item.key === key)[0] || null
+    this.setData({ metricKey: key, metricDetail: detail })
   },
 
-  refreshFact(weekly, records, now, force) {
-    const config = getConfig()
-    if (!config.features || !config.features.summary) {
-      this.setData({ factState: 'off', fact: '' })
-      return
-    }
-
-    const syncFeature = !config.features || config.features.sync !== false
-    // 未开启云备份（或服务端关闭同步）时用本地模板生成，零上传；开启后才走服务端模板
-    if (!syncFeature || !storage.getSyncEnabled()) {
-      this.applyLocalFact(records, now)
-      return
-    }
-
-    if (weekly.current.count < 3) {
-      this.setData({ factState: 'insufficient', fact: '', factSource: '' })
-      return
-    }
-
-    const signature = S.factSignature(weekly)
-    if (
-      !force &&
-      this.data.factState === 'ok' &&
-      this._factWeek === weekly.weekStart &&
-      this._factSignature === signature
-    ) {
-      return
-    }
-    if (this._factLoading) return
-
-    this._factLoading = true
-    this.setData({ factState: 'loading' })
-
-    const payload = S.summaryPayload(records, now, 14)
-    api
-      .fetchSummary(payload)
-      .then((res) => {
-        this._factLoading = false
-        if (!this._alive) return
-        if (res && res.available && res.text) {
-          this._factWeek = weekly.weekStart
-          this._factSignature = signature
-          this.setData({ fact: res.text, factState: 'ok', factSource: 'server' })
-        } else {
-          // 服务端不可用（关闭功能、口径不一致或瞬时故障）时回退本地模板，
-          // 不能让“重试”成为唯一出口。
-          this.applyLocalFact(records, now)
-        }
-      })
-      .catch(() => {
-        this._factLoading = false
-        if (this._alive) this.applyLocalFact(records, now)
-      })
+  onSpanTap(e) {
+    const span = Number(e.currentTarget.dataset.span) || 1
+    if (span === this.data.calendarSpan) return
+    this.setData({ calendarSpan: span, monthOffset: 0, selectedKey: '', detail: null }, () =>
+      this.refresh()
+    )
   },
 
-  onHeatTap(e) {
+  onCalendarTap(e) {
     const cell = e.detail && e.detail.cell
     if (!cell || !cell.day) return
-    if (cell.future) {
-      this.setData({ heatDetail: F.fmtDayCN(cell.day) + ' · 还没到' })
+    // 选中态由页面统一持有：refresh 清空详情时能同步清掉描边
+    this.setData({ selectedKey: cell.key })
+    this.showDetail(cell.day)
+  },
+
+  onStripTap(e) {
+    const day = e.detail && e.detail.day
+    if (!day) return
+    this.setData({ selectedKey: day })
+    this.showDetail(day)
+  },
+
+  /** 空格子补记：把日期带到入睡页，由它打开补记面板 */
+  onAddMissing(e) {
+    const day = e.currentTarget.dataset.day
+    if (!day) return
+    if (!storage.patchMeta({ manualDay: day })) {
+      wx.showToast({ title: '本地存储写入失败，请重试', icon: 'none' })
       return
     }
-    let text = F.fmtDayCN(cell.day) + ' · 未打卡'
-    if (cell.durationMin) text = F.fmtDayCN(cell.day) + ' · ' + F.fmtDuration(cell.durationMin)
-    else if (cell.partial) text = F.fmtDayCN(cell.day) + ' · 仅入睡未完成'
-    // 用固定的一行详情取代会消失的 toast，方便对照日期和时长
-    this.setData({ heatDetail: text })
+    wx.switchTab({ url: '/pages/sleep/sleep' })
+  },
+
+  showDetail(day) {
+    const records = this._records || {}
+    const record = records[day]
+    const now = Date.now()
+    const title = F.fmtDateCN(T.parseDateKey(day))
+    const todayKey = T.dateKey(now)
+
+    if (day > todayKey) {
+      this.setData({
+        detail: { day, title, tag: '还没到', main: '这一天还没到', sub: '', canAdd: false }
+      })
+      return
+    }
+
+    if (!record || !record.bedAt || !record.wakeAt) {
+      const pending = storage.getPending()
+      const pendingDay = pending ? T.dateKey(now) : ''
+      if (pending && day === pendingDay) {
+        this.setData({
+          detail: {
+            day,
+            title,
+            tag: '仅入睡',
+            main: '已记录入睡，还没有结束时间',
+            sub: '结束后才会进入时长统计',
+            canAdd: false
+          }
+        })
+        return
+      }
+      this.setData({
+        detail: {
+          day,
+          title,
+          tag: '未记录',
+          main: '这天还没有记录',
+          sub: '可以补记这一段睡眠',
+          canAdd: true
+        }
+      })
+      return
+    }
+
+    const night = S.durationOf(record)
+    const totalMin = S.totalDurationOf(record)
+    const nap = Math.max(0, totalMin - night)
+    const pending = storage.getPending()
+    const inProgress = pending && day === T.dateKey(now) ? ' · 另有进行中的一段' : ''
+    const main =
+      F.fmtClockTs(record.bedAt) + ' 入睡 → ' + F.fmtClockTs(record.wakeAt) + ' 结束 · ' + F.fmtDuration(totalMin)
+    const sub =
+      (nap > 0 ? '夜间 ' + F.fmtDuration(night) + ' · 午休/间断 ' + F.fmtDuration(nap) : '夜间 ' + F.fmtDuration(night)) +
+      ' · 按醒来日归档' +
+      inProgress
+    this.setData({ detail: { day, title, tag: '已记录', main, sub, canAdd: false } })
+  },
+
+  onMonthPrev() {
+    const next = (Number(this.data.monthOffset) || 0) - 1
+    if (next < MONTH_MIN_OFFSET) return
+    this.setData({ monthOffset: next }, () => this.refresh())
+  },
+
+  onMonthNext() {
+    const next = (Number(this.data.monthOffset) || 0) + 1
+    if (next > 0) return
+    this.setData({ monthOffset: next }, () => this.refresh())
+  },
+
+  onToggleSettings() {
+    this.setData({ settingsOpen: !this.data.settingsOpen })
   },
 
   // 自绘开关：状态由 data.syncEnabled 驱动；写失败时保持原状态，避免 UI 与存储分叉
@@ -348,7 +398,7 @@ Page({
         if (res && res.dropped > 0) {
           // 全部被拒通常是设备时钟越界（换机后数据会全无），必须给出可行动提示；
           // 部分未写入可能是服务端已有更新版本（LWW），只做中性告知。
-          this.refresh(false)
+          this.refresh()
           wx.showToast({
             title:
               res.synced > 0
@@ -358,7 +408,7 @@ Page({
           })
           return
         }
-        this.refresh(false)
+        this.refresh()
         wx.showToast({ title: '已同步', icon: 'none' })
       })
       .catch((error) => {
@@ -421,14 +471,14 @@ Page({
             storage.patchMeta({ lastSyncAt: 0, cloudPendingErase: false })
             this._cloudBusy = false
             wx.hideLoading()
-            this.refresh(false)
+            this.refresh()
             wx.showToast({ title: '云端副本已删除', icon: 'none' })
           })
           .catch(() => {
             // 保留 lastSyncAt/cloudPendingErase：页面出现重试入口；同步已关闭，不会复活。
             this._cloudBusy = false
             wx.hideLoading()
-            this.refresh(false)
+            this.refresh()
             wx.showToast({ title: '云端删除失败，请稍后重试', icon: 'none' })
           })
       }
@@ -471,10 +521,15 @@ Page({
       patch.cloudPendingErase = false
     }
     storage.patchMeta(patch)
-    this._factWeek = null
-    this._factSignature = ''
-    this.setData({ posterPath: '', posterSharePath: '' })
-    this.refresh(true)
+    this._signature = ''
+    this.setData({
+      posterPath: '',
+      posterSharePath: '',
+      detail: null,
+      selectedKey: '',
+      monthOffset: 0
+    })
+    this.refresh()
     return cleared
   },
 
@@ -503,12 +558,12 @@ Page({
         .then(() => withLogin((code) => api.eraseRecords(code)))
         .then(() => {
           storage.patchMeta({ lastSyncAt: 0, cloudPendingErase: false })
-          this.refresh(false)
+          this.refresh()
           if (hadCloud) wx.showToast({ title: '云端副本已删除', icon: 'none' })
         })
         .catch(() => {
           // lastSyncAt/cloudPendingErase 已保留，统计页会出现“删除云端副本”重试入口
-          this.refresh(false)
+          this.refresh()
           if (hadCloud) wx.showToast({ title: '云端副本未删除，可在统计页重试', icon: 'none' })
         })
       return
@@ -541,16 +596,6 @@ Page({
           }
         })
       })
-  },
-
-  onFactRetry() {
-    if (this.data.factSource === 'local' && !storage.getSyncEnabled()) {
-      // 本地兜底时“重新获取”只会用同一份本机数据重算，结果永远不变；
-      // 直接引导开启云备份，才有服务端回顾可拿。
-      this.onSyncToggle()
-      return
-    }
-    this.refresh(true)
   },
 
   onMakePoster() {
@@ -668,7 +713,7 @@ Page({
 
     const W = 300
     const H = 480
-    const colors = ['rgba(255,255,255,0.05)', '#5A57C8', '#6C68E8', '#8A90FF', '#B4BEFF', '#E0E7FF']
+    const colors = ['rgba(255,255,255,0.05)', '#3F3C9E', '#5B57D6', '#B4BEFF', '#E0E7FF']
 
     ctx.setFillStyle('#080B14')
     ctx.fillRect(0, 0, W, H)
@@ -688,8 +733,8 @@ Page({
 
     const values = [
       { k: '平均入睡', v: digest.avgBedMin === null ? '—' : F.fmtClock(digest.avgBedMin) },
-      { k: '平均起床', v: digest.avgWakeMin === null ? '—' : F.fmtClock(digest.avgWakeMin) },
-      { k: '平均时长', v: digest.avgDurationMin === null ? '—' : F.fmtHours(digest.avgDurationMin) }
+      { k: '平均结束', v: digest.avgWakeMin === null ? '—' : F.fmtClock(digest.avgWakeMin) },
+      { k: '平均睡眠', v: digest.avgTotalMin === null ? '—' : F.fmtHours(digest.avgTotalMin) }
     ]
     values.forEach((item, index) => {
       const x = 24 + index * 88
@@ -708,7 +753,7 @@ Page({
     for (let i = 0; i < 30; i += 1) {
       const key = T.dateKey(T.addDays(start, i))
       const record = byDay[key]
-      const level = record ? S.levelOf(S.durationOf(record)) : 0
+      const level = record ? S.heatLevelOf(S.totalDurationOf(record)) : 0
       const cx = x0 + (i % 7) * (cell + gap)
       const cy = y0 + Math.floor(i / 7) * (cell + gap)
       ctx.setFillStyle(colors[level] || colors[0])
@@ -789,11 +834,11 @@ Page({
 
     const avgBed = digest.avgBedMin === null ? '—' : F.fmtClock(digest.avgBedMin)
     const avgWake = digest.avgWakeMin === null ? '—' : F.fmtClock(digest.avgWakeMin)
-    const avgDuration = digest.avgDurationMin === null ? '—' : F.fmtHours(digest.avgDurationMin)
+    const avgDuration = digest.avgTotalMin === null ? '—' : F.fmtHours(digest.avgTotalMin)
     ctx.setFillStyle('#A5B4FC')
     ctx.setFontSize(22)
     ctx.fillText(avgBed + ' 入睡', 20, 108)
-    ctx.fillText(avgWake + ' 起床', 150, 108)
+    ctx.fillText(avgWake + ' 结束', 150, 108)
     ctx.setFillStyle('#94A3B8')
     ctx.setFontSize(10)
     ctx.fillText('平均 ' + avgDuration, 20, 128)
@@ -835,9 +880,10 @@ Page({
   },
 
   onShareAppMessage() {
+    const duration = this.data.metrics.filter((item) => item.key === 'duration')[0]
     const payload = {
-      title: this.data.hasData
-        ? '本周打卡 ' + this.data.weekCount + ' 天 · 连续 ' + this.data.streak + ' 天，来「睡点」记录睡眠'
+      title: duration
+        ? '本周记录 ' + this.data.weekCount + ' 天 · 平均睡 ' + duration.value + '，来「睡点」记录睡眠'
         : '睡点 · 只看数据、不做评价的睡眠记录',
       path: '/pages/stats/stats?from=share'
     }

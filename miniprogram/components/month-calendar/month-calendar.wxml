@@ -1,0 +1,34 @@
+<view class="mc">
+  <view class="mc-head">
+    <text class="mc-title">{{title}}</text>
+    <view class="mc-nav">
+      <view class="mc-nav-btn" bindtap="onPrev" aria-role="button" aria-label="上个月">‹</view>
+      <view
+        class="mc-nav-btn {{canNext ? '' : 'is-off'}}"
+        bindtap="onNext"
+        aria-role="button"
+        aria-label="下个月"
+      >›</view>
+    </view>
+  </view>
+
+  <view class="mc-week">
+    <text wx:for="{{weekLabels}}" wx:key="*this" class="mc-week-cell">{{item}}</text>
+  </view>
+
+  <view class="mc-grid">
+    <view
+      wx:for="{{rows}}"
+      wx:key="key"
+      class="mc-cell {{item.pad ? 'is-pad' : 'lv-' + item.level}} {{item.isToday ? 'is-today' : ''}} {{item.future ? 'is-future' : ''}} {{item.partial ? 'is-partial' : ''}} {{selectedKey === item.key ? 'is-selected' : ''}}"
+      data-index="{{index}}"
+      bindtap="onTap"
+      aria-role="button"
+      aria-label="{{item.pad ? '' : item.dayNum + ' 日'}}"
+    >
+      <text wx:if="{{!item.pad}}" class="mc-num">{{item.dayNum}}</text>
+      <text wx:if="{{item.durText}}" class="mc-dur">{{item.durText}}</text>
+      <view wx:if="{{item.partial}}" class="mc-partial-dot"></view>
+    </view>
+  </view>
+</view>

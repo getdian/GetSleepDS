@@ -19,151 +19,176 @@
   </block>
 
   <block wx:else>
-    <view class="metrics fade-up">
-      <view class="metric">
-        <text class="metric-value">{{avgBed}}</text>
-        <text class="metric-key">本周平均入睡</text>
-      </view>
-      <view class="metric">
-        <text class="metric-value">{{avgWake}}</text>
-        <text class="metric-key">本周平均起床</text>
-      </view>
-      <view class="metric">
-        <text class="metric-value is-small">{{avgDuration}}</text>
-        <text class="metric-key">本周平均时长</text>
+    <!-- 3 个核心指标：平均睡眠 / 平均入睡 / 平均起床 -->
+    <view wx:if="{{metrics.length}}" class="metrics fade-up">
+      <view
+        wx:for="{{metrics}}"
+        wx:key="key"
+        class="metric {{metricKey === item.key ? 'is-active' : ''}}"
+        data-key="{{item.key}}"
+        bindtap="onMetricTap"
+        aria-role="button"
+        aria-label="{{item.label}} {{item.value}}"
+      >
+        <text class="metric-value">{{item.value}}</text>
+        <text class="metric-key">{{item.label}}</text>
+        <text wx:if="{{item.sub}}" class="metric-sub">{{item.sub}}</text>
       </view>
     </view>
+    <view wx:else class="metrics-empty fade-up">
+      <text class="metrics-empty-title">本周还没有完整记录</text>
+      <text class="metrics-empty-sub">打一次卡，这里就会出现 3 个核心数字。</text>
+    </view>
 
-    <view class="week-line fade-up">
-      <text>本周打卡 {{weekCount}} 天</text>
+    <!-- 以常见 7.5–8 小时做事实参照；记录不足时先提示补记 -->
+    <view wx:if="{{durationNote}}" class="duration-note fade-up">
+      <text class="duration-note-text">{{durationNote}}</text>
+      <text wx:if="{{durationHint}}" class="duration-note-hint">{{durationHint}}</text>
+    </view>
+
+    <text wx:if="{{metrics.length && !metricDetail}}" class="metrics-hint">点数字看说明</text>
+
+    <!-- 点指标展开的事实说明：3 行以内，口径与对比都在这里 -->
+    <view wx:if="{{metricDetail}}" class="metric-detail fade-up">
+      <view class="md-head">
+        <text class="md-title">{{metricDetail.label}}</text>
+        <text class="md-value">{{metricDetail.value}}</text>
+      </view>
+      <text wx:for="{{metricDetail.detail}}" wx:key="*this" class="md-line">{{item}}</text>
+    </view>
+
+    <view wx:if="{{metrics.length}}" class="week-line fade-up">
+      <text>本周记录 {{weekCount}} 天</text>
       <text class="week-dot">·</text>
       <text>连续 {{streak}} 天</text>
     </view>
 
-    <view wx:if="{{regularity.enough}}" class="section fade-up">
+    <ad-slot wx:if="{{hasData}}" slot-name="stats" enabled="{{ads.stats.enabled}}" unit-id="{{ads.stats.unitId}}" type="{{ads.stats.type}}" />
+
+    <!-- 打卡日历：当月可切月；3/6/12 个月改为横向滑动的紧凑月历 -->
+    <view class="section fade-up">
       <view class="section-head">
-        <text class="section-title">最近 7 天规律性</text>
-        <text class="section-tag">只看波动</text>
+        <text class="section-title">打卡日历</text>
+        <text class="range-tag">颜色越亮 = 睡得越久</text>
       </view>
-      <view class="regularity-main">
-        <text class="regularity-label">{{regularity.label}}</text>
-        <text class="regularity-copy">入睡波动约 {{regularity.bedSpread}} 分钟 · 起床波动约 {{regularity.wakeSpread}} 分钟</text>
-        <text class="regularity-copy">平均睡眠 {{regularity.avgDuration}}</text>
+
+      <view class="span-tabs">
+        <view class="span-tab {{calendarSpan === 1 ? 'is-on' : ''}}" data-span="1" bindtap="onSpanTap">当月</view>
+        <view class="span-tab {{calendarSpan === 3 ? 'is-on' : ''}}" data-span="3" bindtap="onSpanTap">3 个月</view>
+        <view class="span-tab {{calendarSpan === 6 ? 'is-on' : ''}}" data-span="6" bindtap="onSpanTap">6 个月</view>
+        <view class="span-tab {{calendarSpan === 12 ? 'is-on' : ''}}" data-span="12" bindtap="onSpanTap">1 年</view>
+      </view>
+
+      <month-calendar
+        wx:if="{{calendarSpan === 1}}"
+        cells="{{calendarCells}}"
+        title="{{calendarTitle}}"
+        can-next="{{canNextMonth}}"
+        selected-key="{{selectedKey}}"
+        bind:daytap="onCalendarTap"
+        bind:prev="onMonthPrev"
+        bind:next="onMonthNext"
+      />
+      <calendar-strip
+        wx:else
+        months="{{calendarMonths}}"
+        selected-key="{{selectedKey}}"
+        bind:daytap="onStripTap"
+      />
+
+      <view class="cal-legend">
+        <view class="cal-legend-item">
+          <view class="cal-swatch lv-1"></view>
+          <text>4h 内</text>
+        </view>
+        <view class="cal-legend-item">
+          <view class="cal-swatch lv-2"></view>
+          <text>4–6h</text>
+        </view>
+        <view class="cal-legend-item">
+          <view class="cal-swatch lv-3"></view>
+          <text>6–8h</text>
+        </view>
+        <view class="cal-legend-item">
+          <view class="cal-swatch lv-4"></view>
+          <text>8h 以上</text>
+        </view>
+        <view class="cal-legend-item">
+          <view class="cal-swatch is-partial"></view>
+          <text>仅入睡</text>
+        </view>
+      </view>
+
+      <text class="cal-tip">{{calendarTip}}</text>
+
+      <view wx:if="{{detail}}" class="day-detail">
+        <view class="dd-head">
+          <text class="dd-title">{{detail.title}}</text>
+          <text class="dd-tag">{{detail.tag}}</text>
+        </view>
+        <text class="dd-main">{{detail.main}}</text>
+        <text wx:if="{{detail.sub}}" class="dd-sub">{{detail.sub}}</text>
+        <view
+          wx:if="{{detail.canAdd}}"
+          class="dd-action"
+          data-day="{{detail.day}}"
+          bindtap="onAddMissing"
+          aria-role="button"
+        >补记这一天的睡眠</view>
+      </view>
+
+      <view class="section-foot">
+        <text class="heat-note">{{calendarNote}}</text>
+        <view class="section-actions">
+          <share-btn variant="icon" />
+          <view class="poster-btn" bindtap="onMakePoster" aria-role="button" aria-label="生成近 30 天回顾海报">
+            <text class="poster-spark">✦</text>
+            <text>近 30 天回顾</text>
+          </view>
+        </view>
       </view>
     </view>
+  </block>
 
-    <view class="section fade-up">
-      <view class="section-hero">
-        <view class="section-head">
-          <text class="section-title">打卡热力图</text>
-          <text class="range-tag">近 3 个月</text>
+  <!-- 低频操作下沉：默认只露一行状态，展开后才出现同步与删除 -->
+  <view class="settings fade-up">
+    <view class="settings-head" bindtap="onToggleSettings" aria-role="button" aria-label="数据与备份">
+      <view class="settings-info">
+        <text class="settings-title">数据与备份</text>
+        <text class="settings-sub">{{syncText}}</text>
+      </view>
+      <text class="settings-toggle">{{settingsOpen ? '收起' : '展开'}}</text>
+    </view>
+
+    <view wx:if="{{settingsOpen}}" class="settings-body">
+      <view class="sync-line">
+        <view class="sync-info">
+          <text class="sync-title">{{hasData ? '云备份（可选）' : '从云端恢复'}}</text>
+          <text class="sync-sub">{{syncEnabled ? '仅上传睡眠时间，不含手机号与位置' : '默认只存本机；开启后可换机恢复'}}</text>
         </view>
-
-        <heatmap
-          cells="{{cells}}"
-          colCount="{{colCount}}"
-          months="{{months}}"
-          bind:celltap="onHeatTap"
-        />
-
-        <view class="heat-legend">
-          <text class="heat-legend-label">少</text>
-          <view class="heat-legend-cells">
-            <view class="heat-legend-cell l0"></view>
-            <view class="heat-legend-cell l1"></view>
-            <view class="heat-legend-cell l2"></view>
-            <view class="heat-legend-cell l3"></view>
-            <view class="heat-legend-cell l4"></view>
-            <view class="heat-legend-cell l5"></view>
-          </view>
-          <text class="heat-legend-label">多</text>
-          <view class="heat-legend-partial">
-            <view class="heat-legend-cell is-partial"></view>
-            <text>仅入睡</text>
-          </view>
-        </view>
-
-        <view wx:if="{{heatDetail}}" class="heat-detail">{{heatDetail}}</view>
-
-        <view class="section-foot">
-          <text class="heat-note">{{marked ? '共 ' + marked + ' 天完整记录' : '近 3 个月还没有完整记录'}}</text>
-          <view class="section-actions">
-            <share-btn variant="icon" />
-            <view class="poster-btn" bindtap="onMakePoster" aria-role="button" aria-label="生成月度海报">
-              <text class="poster-spark">✦</text>
-              <text>生成月度海报</text>
+        <view class="sync-ops">
+          <view wx:if="{{syncEnabled}}" class="sync-btn {{syncBusy ? 'is-busy' : ''}}" bindtap="onSyncTap" aria-role="button">{{syncBusy ? '同步中…' : '同步'}}</view>
+          <view
+            class="sync-toggle-hit"
+            bindtap="onSyncToggle"
+            aria-role="switch"
+            aria-checked="{{syncEnabled}}"
+            aria-label="云备份"
+          >
+            <view class="sync-toggle {{syncEnabled ? 'is-on' : ''}}">
+              <view class="sync-toggle-knob"></view>
             </view>
           </view>
         </view>
       </view>
-    </view>
 
-    <view wx:if="{{factState !== 'off' && factState !== 'idle'}}" class="section fade-up">
-      <view class="section-head">
-        <text class="section-title">本周事实回顾</text>
-        <text class="section-tag">只陈述数据</text>
-      </view>
+      <view wx:if="{{hasCloudCopy && !syncEnabled}}" class="cloud-del" bindtap="eraseCloudOnly">删除云端副本（保留本机）</view>
 
-      <block wx:if="{{factState === 'loading'}}">
-        <text class="fact-muted">正在整理本周数据…</text>
-      </block>
-
-      <block wx:elif="{{factState === 'ok'}}">
-        <text class="fact-text">{{fact}}</text>
-        <view wx:if="{{factSource === 'local'}}" class="fact-local-row">
-          <text class="fact-local">仅统计本机记录</text>
-          <text class="fact-retry" bindtap="onFactRetry">{{syncEnabled ? '重新获取' : '开启云备份'}}</text>
-        </view>
-      </block>
-
-      <block wx:elif="{{factState === 'insufficient'}}">
-        <text class="fact-muted">本周记录满 3 天后可查看回顾</text>
-      </block>
-
-      <block wx:elif="{{factState === 'unavailable'}}">
-        <view class="fact-error">
-          <text class="fact-muted">回顾暂时不可用</text>
-          <text class="fact-retry" bindtap="onFactRetry">重试</text>
-        </view>
-      </block>
-
-      <block wx:elif="{{factState === 'error'}}">
-        <view class="fact-error">
-          <text class="fact-muted">回顾暂时不可用</text>
-          <text class="fact-retry" bindtap="onFactRetry">重试</text>
-        </view>
-      </block>
-    </view>
-  </block>
-
-  <ad-slot wx:if="{{hasData}}" slot-name="stats" enabled="{{ads.stats.enabled}}" unit-id="{{ads.stats.unitId}}" type="{{ads.stats.type}}" />
-
-  <view class="sync-line fade-up">
-    <view class="sync-info">
-      <text class="sync-title">{{hasData ? '云备份（可选）' : '从云端恢复'}}</text>
-      <text class="sync-sub">{{syncText}}</text>
-    </view>
-    <view class="sync-ops">
-      <view wx:if="{{syncEnabled}}" class="sync-btn {{syncBusy ? 'is-busy' : ''}}" bindtap="onSyncTap" aria-role="button">{{syncBusy ? '同步中…' : '同步'}}</view>
-      <view
-        class="sync-toggle-hit"
-        bindtap="onSyncToggle"
-        aria-role="switch"
-        aria-checked="{{syncEnabled}}"
-        aria-label="云备份"
-      >
-        <view class="sync-toggle {{syncEnabled ? 'is-on' : ''}}">
-          <view class="sync-toggle-knob"></view>
-        </view>
+      <view wx:if="{{hasData}}" class="danger-entry" bindtap="onClearData" aria-role="button">
+        <text class="danger-entry-title">{{syncEnabled ? '清除数据（云端+本机）' : '清除本机睡眠数据'}}</text>
+        <text class="danger-entry-hint">{{syncEnabled ? '云端和本机记录都会删除，且不可恢复' : '本机记录会删除，且不可恢复'}}</text>
       </view>
     </view>
-  </view>
-
-  <view wx:if="{{hasCloudCopy && !syncEnabled}}" class="cloud-del" bindtap="eraseCloudOnly">删除云端副本（保留本机）</view>
-
-  <view wx:if="{{hasData}}" class="danger-entry fade-up" bindtap="onClearData" aria-role="button">
-    <text class="danger-entry-title">{{syncEnabled ? '清除数据（云端+本机）' : '清除本机睡眠数据'}}</text>
-    <text class="danger-entry-hint">{{syncEnabled ? '云端和本机记录都会删除，且不可恢复' : '本机记录会删除，且不可恢复'}}</text>
   </view>
 
   <ad-slot slot-name="statsFooter" enabled="{{ads.statsFooter.enabled}}" unit-id="{{ads.statsFooter.unitId}}" type="{{ads.statsFooter.type}}" />

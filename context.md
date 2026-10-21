@@ -9,7 +9,7 @@
 - 首页 Hero：支持后台配置的多张背景图，默认图免费并静默缓存；用户选择其他背景需看激励视频解锁，到期回退默认。标题区背景图从状态栏后开始，底部渐隐到现有夜色。
 - 顶部：计算器页使用 `top-bar brand-only`，只显示「睡点」，右侧留给微信原生胶囊。
 - 入睡：A 未记录 / B 睡梦中 / C 已完成；B 态可撤销，C 态展示入睡、起床、在床时长。
-- 统计：近 3 个月（月对齐，末段未来占位）热力图、周均值、事实回顾、近 30 天海报、云同步/清除数据。
+- 统计：首屏 3 列核心指标（平均睡眠 `3h39` / 平均入睡 / 平均起床，每列一行变化，点击展开 3 行说明；平均睡眠下方按常见 7.5–8 小时给事实陈述，不足 3 天提示补记）、打卡日历（当月 88rpx 格可切月；3/6/12 个月横向滑动 48rpx 格；4 档色阶、选中态 + 详情卡；空白天可带日期跳入睡页补记）、近 30 天海报、云同步/清除数据（折叠）。近 14 天趋势已删除。
 - 声音：`audio-dock` 悬浮钮 + 迷你播放器 + 底部抽屉；搜索、分类、收藏、缓存、广告解锁、定时关闭。入口仍在入睡页；播放后首页/统计页显示 `now-playing` 迷你条，可跨页暂停/继续/停止。
 - 分享：计算器结果背面、入睡页、统计页海报区均有 `share-btn`（button open-type=share），`onShareAppMessage` 按场景动态生成标题。
 - 广告观测：`ad-slot` 加载成功/失败上报 `ad_show` / `ad_error`，后台概览显示今日/本周与分槽填充率。
@@ -28,7 +28,9 @@ miniprogram/
     top-bar/      状态栏测量 + 透明通栏 + 灵动岛
     time-wheel/   自绘 12h 循环轮（3 周期 + 无感回中）
     audio-dock/   悬浮钮/迷你播放器/抽屉/解锁/缓存/收藏/定时
-    heatmap/      7 行横向滚动热力图
+    heatmap/      旧 7 行横向热力图（统计页已改月历，保留未引用）
+    sleep-trend/  近 14 天柱状趋势（柱高=总睡眠、柱色=入睡时段）
+    month-calendar/ 当月打卡日历（4 档、可切月、选中态）
     unlock-sheet/ 解锁底部面板
     ad-slot/      页面展示位（4 槽，后台逐槽开关，未启用不渲染）
     share-btn/    页内转发入口（button open-type=share）
@@ -42,7 +44,7 @@ miniprogram/
   utils/
     time.js       睡眠日、周、圆均值
     plan.js       双向倒推纯函数
-    stats.js      周统计/热力图/汇总 payload
+    stats.js      周统计/结构化事实/趋势/月历/汇总 payload
     format.js     时间/时长/问候
     storage.js    记录、会话、偏好、收藏、配置缓存、清除
     sync.js       云同步与回填
@@ -88,6 +90,7 @@ tests/            Node 纯逻辑测试
 ## 4. 数据与同步
 
 - 本地记录存 `sleep:records:v1`，按**醒来日**归档（v2：`records[day].sessions[]`，一天可多段）；`pending` 是进行中会话。
+- **统计口径**：统计页 Hero / 趋势 / 日历 / 海报统一用**当天总睡眠**（主睡眠 + 午休/间断段，`totalDurationMin`）；详情里拆分夜间与午休。`durationMin`（主睡眠）仍用于连续天数与服务端模板，两套字段并存但页面不再混用。
 - **云备份默认关闭**（`meta.syncEnabled !== true` 时 `syncNow` 直接跳过，不发任何请求）；用户在统计页显式开启后，才用静默 `wx.login → openid` 归属上传，不获取头像/昵称/手机号。
 - 服务端 `sleep_records` 主键 `(openid, day)`；`/api/records/sync` 幂等 upsert：v2 记录 `day` 由主睡眠 `wakeAt` 重算、v1 记录仍按 `sleepDayOf(bedAt)`，单条脏记录丢弃并返回 `dropped`，不再整批 400；`includeAll` 类型校验在写库前完成。
 - 云备份客户端按每片 60 条分片、覆盖最近 400 天；服务端单次上限 62 条。
@@ -99,14 +102,14 @@ tests/            Node 纯逻辑测试
 
 ## 5. 当前验证基线
 
-- `npm test`：**182 项 / 181 通过 / 0 失败 / 1 skip**（PG 集成用例在未设置 `PG_TEST_URL` 时跳过）。
-- `npm run check`：3 页面 / 21 JSON / 16 WXML / 17 WXSS，主包约 432.7 KB（以最新输出为准）。
+- `npm test`：**192 项 / 191 通过 / 0 失败 / 1 skip**（PG 集成用例在未设置 `PG_TEST_URL` 时跳过）。
+- `npm run check`：3 页面 / 23 JSON / 18 WXML / 19 WXSS，主包约 458.8 KB（以最新输出为准）。
 - 交付包：以 `release-artifacts/` 下最新 `getsleep-<label>.zip` 为准（`npm run pack` 生成，含 `RELEASE-MANIFEST.json` 与逐文件 sha256，同时留 `.sha256` 校验文件）；打包前会强制跑 `npm test` + `npm run check`。
 - 分享归因冒烟（2026-10-19，内存模式）：`app_open` 带 `1007|pages/index/index|share` 上报 → `/api/admin/analytics` 的 `topSources` 聚合出现；`/api/share/qrcode` 无 code 返 400、密钥不可用返 503，均为优雅报错。
 - 微信开发者工具（AppID `wx378b0a7437d60998`）：三页真实编译；热力图滚到最新周；C 态“覆盖今晚”渲染；控制台无 error；实际触发 `/api/records/sync` 返回 20 条并带 `deletedDays/erasedAt`。
 - 本地 PostgreSQL + API（3100）：`/api/ready` 200；PG `syncRecords` 的 day 归一化/墓碑/erasure 事务、`saveUnlock` 单行覆盖均实测通过。
 - 后台浏览器实测：左菜单切换、音频标题保存、配置接口写库、窄屏横向 tabs、无 console error。
-- 未验证：真机锁屏续播、激励视频、真实 COS 上传、海报导出、H5 新结构。
+- 未验证：真机锁屏续播、激励视频、真实 COS 上传、海报导出、H5 新结构；统计页改版的 390×844 截图与真机点击校验（见第 7 节第 19 条）。
 
 ## 6. 部署幂等性
 
@@ -122,7 +125,7 @@ tests/            Node 纯逻辑测试
 2. **真机未验收**：DevTools 已跑通，但锁屏续播、耳机/来电中断、激励视频、真实 COS 上传仍需真机；`sleep.qfmaster.com` 尚未部署，当前 SSL 不可用。
 3. **后台改密码未实现**：当前改 `.env` 的 `ADMIN_PASSWORD` 并重启；不建议开放明文改文件。要做需“DB 存 scrypt 哈希 + 当前密码校验 + 会话失效/审计”，属于安全改造，不能半套（ADR-013）。
 4. **大模型未接入**：当前 `/api/summary` 是模板，稳定、零调用成本、合规；LLM 仅适合可选润色，默认关闭，需超时/禁词/降级。
-5. **午休/多次睡眠**：已支持一天多段（v2 `records[day].sessions[]`，主睡眠取最长一段进热力图/连续天数，`totalDurationMin` 为当天总睡眠）；未做独立的 `nap` 类型字段，跨天段由客户端按“醒来日”拆到各自记录（一段只归一个醒来日）。
+5. **午休/多次睡眠**：已支持一天多段（v2 `records[day].sessions[]`，主睡眠取最长一段用于连续天数与详情拆分，统计页 Hero/趋势/日历统一展示 `totalDurationMin` 总睡眠）；未做独立的 `nap` 类型字段，跨天段由客户端按“醒来日”拆到各自记录（一段只归一个醒来日）。
 6. **H5 仍是旧结构**：`/demo/` 已修空播放条、全过期展示和解锁 TTL 读取，但仍是旧三屏结构；三 tab + audio-dock 待重做。
 7. **单实例**：限流、配置缓存、事件都在进程内；扩容前换共享存储。
 8. **音频后台边界**：定时器已持久化并在 onShow/onEnded 重新校时，但 iOS 完全冻结 JS 时无法保证毫秒级准点；3 分钟音频的锁屏循环仍需真机验证，不能仅凭开发者工具下结论。
@@ -136,6 +139,8 @@ tests/            Node 纯逻辑测试
 16. **2026-10-21 L4 收口**：音频幽灵播放态 / ended 双写、后台配置并发覆盖、存储过滤回写丢历史、计算器重算推后一天、统计页重复全量刷新与热力图强制 seek、时间轮小幅拖动不回中、墓碑无回收、memory/PG 双实现不等价、无进程级异常兜底、音频 loading 无超时、折叠遮罩层级、`--color-primary-soft` 缺失与 Hero 压暗两套数值等 14 项已修复，详见 changelog 与 `docs/09-redesign.md` 的 token/层级表。门禁：`npm test` 147 通过 / 1 skip、`npm run check` 通过、开发者工具 390×844 三页 + 抽屉 + 熄灯遮罩截图复核、打包 `getsleep-L4-20261021.zip`。仍待真机：杀进程重进不出现幽灵播放态、短音源循环只重播一次、时间轮拖动回中、展开迷你条后第一次点 tab 直切页。
 17. **层级实现事实（2026-10-21 实拍校正）**：自定义 tabBar 渲染在**独立 root**，页面级 `z-index` 无法覆盖它；需要隐藏悬浮胶囊时只能调用 `utils/tabbar.hide()`（audio-dock / background-picker 已这么做）。`pages/sleep` 的「晚安」熄灯遮罩是 1.6s 瞬时层，页面 z-index 提到 150 只保证盖住页面内浮层，tabBar 仍可见，属预期。
 18. **睡眠段复审修复（2026-10-21）**：结束/补记/编辑三条保存路径曾因把 `sessions.rangeForDay` 误写成 `stats.rangeForDay` 全部失效（P0），已修并新增 `tests/sleep-page.test.js` 页面级冒烟；同时补跨天重叠检测（`sessions.findOverlap`，页面预检 + `saveSession`/`updateSession` 三处）、把“忘记结束超 24h”的入睡日固定为打卡日并允许改醒来日（`sessions.rangeBetween`）、30 秒时钟拆成轻量 `refreshClock()`、日期上限随自然日刷新、超时提示按 pending 去重、保存/同步反馈统一。服务端 `/records/sync` 的 `includeAll` 校验前置到写库前。服务端仍只校验单条记录内部的段重叠，跨天重叠以客户端为准。详见 changelog。
+
+19. **统计页改版待验收（2026-10-21）**：结论卡（平均睡眠 + 上周对比 + 7–9h 参照）、近 14 天趋势、结构化事实、当月打卡日历已完成；改版后自审修复了刷新签名漏 `todayKey/partialDay/同步状态`、本周 0 条文案误报、进行中第二段不可见、清除数据不重置月份、选中态与详情不同源、`bedSpreadMin` 为 null 拼接等问题。`npm test` 191 项绿、`npm run check` 绿；但本机 `wechatide` MCP 请求经 `127.0.0.1:7891` 代理失败（ECONNREFUSED），未完成开发者工具截图与真机 20 次点击校验。旧 `components/heatmap` 保留但统计页不再引用；服务端 `/api/summary` 保留但统计页不再请求。
 
 ## 8. 快速命令
 

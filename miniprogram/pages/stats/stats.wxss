@@ -19,76 +19,201 @@
   margin-top: 4rpx;
 }
 
-/* 数据带：无框三列，大数字在上、说明在下，列间一根极淡竖线 */
+/* 4 列核心指标：大数字 + 短标签 + 一行变化；点击展开说明 */
 .metrics {
   display: flex;
   align-items: stretch;
+  margin-top: 8rpx;
 }
 
 .metric {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12rpx;
-  padding: 10rpx 0 6rpx;
+  gap: 10rpx;
+  padding: 18rpx 2rpx 16rpx;
+  border-radius: var(--radius-md);
+  transition: background 0.15s ease;
 }
 
 .metric + .metric {
   border-left: 1rpx solid var(--border-moon-subtle);
 }
 
-/* 字阶：18 工具字 / 22 次要信息 / 28 正文 / 30 分区标题 / 48 数据 / 56 页标题 */
-.metric-key {
-  font-size: 20rpx;
-  color: var(--text-muted);
-  letter-spacing: 2rpx;
+.metric.is-active {
+  background: rgba(129, 140, 248, 0.1);
 }
 
 .metric-value {
-  font-family: var(--font-cn-serif);
   font-size: 48rpx;
   line-height: 1.1;
+  font-weight: 600;
+  letter-spacing: 0.5rpx;
   color: var(--text-moon-pure);
   font-variant-numeric: tabular-nums;
-  letter-spacing: 1rpx;
+  white-space: nowrap;
 }
 
-.metric-value.is-small {
-  font-size: 30rpx;
-  padding-top: 12rpx;
+.metric-key {
+  font-size: 20rpx;
+  line-height: 1;
+  letter-spacing: 1rpx;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.metric-sub {
+  font-size: 18rpx;
+  line-height: 1.2;
+  color: var(--color-primary-soft);
+  white-space: nowrap;
+}
+
+.metrics-hint {
+  display: block;
+  margin-top: 10rpx;
+  text-align: center;
+  font-size: 18rpx;
+  letter-spacing: 1rpx;
+  color: var(--text-muted);
+  opacity: 0.75;
+}
+
+.metrics-empty {
+  padding: 24rpx 0 4rpx;
+}
+
+.metrics-empty-title {
+  display: block;
+  font-size: 26rpx;
+  color: var(--text-primary);
+}
+
+.metrics-empty-sub {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 20rpx;
+  color: var(--text-muted);
+}
+
+/* 点指标后的事实说明：3 行以内，口径/对比/极值都在这里 */
+.metric-detail {
+  margin-top: 18rpx;
+  padding: 20rpx 22rpx;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1rpx solid var(--border-moon-subtle);
+}
+
+.md-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12rpx;
+}
+
+.md-title {
+  font-size: 24rpx;
+  color: var(--text-primary);
+}
+
+.md-value {
+  font-size: 24rpx;
+  color: var(--color-primary-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.md-line {
+  display: block;
+  font-size: 22rpx;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+/* 参照陈述：常见 7.5–8 小时；记录不足时第二行给补记引导 */
+.duration-note {
+  margin-top: 18rpx;
+}
+
+.duration-note-text {
+  display: block;
+  font-size: 23rpx;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.duration-note-hint {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 19rpx;
+  line-height: 1.5;
+  color: var(--color-primary-soft);
 }
 
 .week-line {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 10rpx;
-  margin: 28rpx 0 0;
-  font-size: 22rpx;
-  letter-spacing: 1rpx;
-  color: var(--color-accent-moon);
-  opacity: 0.82;
+  gap: 8rpx;
+  margin-top: 10rpx;
+  font-size: 20rpx;
+  color: var(--text-muted);
 }
 
 .week-dot {
   opacity: 0.5;
 }
 
-/* 分区：无框，层级只靠标题与间距；焦点块例外（玻璃卡） */
-.section {
-  margin-top: 56rpx;
+/* 日历周期切换 */
+.span-tabs {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  margin-bottom: 18rpx;
 }
 
-/* 焦点块：本页唯一玻璃质感容器（打卡热力图） */
-.section-hero {
-  padding: 26rpx 24rpx;
-  border-radius: var(--radius-xl);
-  background: var(--glass-card-bg);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
+.span-tab {
+  min-height: 60rpx;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 22rpx;
+  border-radius: var(--radius-pill);
   border: 1rpx solid var(--border-moon-subtle);
-  box-shadow: 0 12rpx 36rpx rgba(0, 0, 0, 0.26);
+  font-size: 20rpx;
+  color: var(--text-muted);
+}
+
+.span-tab.is-on {
+  border-color: var(--border-glow);
+  background: rgba(129, 140, 248, 0.14);
+  color: var(--color-primary-soft);
+}
+
+.cal-tip {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 18rpx;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+/* 空格子补记入口 */
+.dd-action {
+  margin-top: 14rpx;
+  min-height: 72rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  border: 1rpx solid var(--border-glow);
+  font-size: 22rpx;
+  color: var(--color-primary);
+}
+
+/* 分区：无框，层级只靠标题与间距 */
+.section {
+  margin-top: 56rpx;
 }
 
 .section-head {
@@ -114,69 +239,92 @@
   color: var(--text-muted);
 }
 
-/* 固定范围说明：只做标注，不再提供切换（高度刻意压低，不与标题抢层级） */
 .range-tag {
   font-size: 18rpx;
-  line-height: 1;
+  line-height: 1.3;
   letter-spacing: 1rpx;
+  text-align: right;
   color: var(--text-muted);
 }
 
-/* 热力图图例：少 → 多 + “仅入睡”特殊态；点格子后的详情固定显示，不依赖 toast */
-.heat-legend {
+/* 日历图例 */
+.cal-legend {
   display: flex;
   align-items: center;
-  gap: 8rpx;
+  flex-wrap: wrap;
+  gap: 16rpx;
   margin-top: 18rpx;
 }
 
-.heat-legend-label {
-  flex: none;
-  font-size: 18rpx;
-  line-height: 1;
-  color: var(--text-muted);
-}
-
-.heat-legend-cells {
-  display: flex;
-  align-items: center;
-  gap: 4rpx;
-}
-
-.heat-legend-cell {
-  width: 14rpx;
-  height: 14rpx;
-  border-radius: 4rpx;
-  background: var(--heat-0);
-}
-
-.heat-legend-cell.l0 { background: var(--heat-0); }
-.heat-legend-cell.l1 { background: var(--heat-1); }
-.heat-legend-cell.l2 { background: var(--heat-2); }
-.heat-legend-cell.l3 { background: var(--heat-3); }
-.heat-legend-cell.l4 { background: var(--heat-4); }
-.heat-legend-cell.l5 { background: var(--heat-5); }
-
-.heat-legend-partial {
+.cal-legend-item {
   display: flex;
   align-items: center;
   gap: 6rpx;
-  margin-left: 10rpx;
   font-size: 18rpx;
   color: var(--text-muted);
 }
 
-.heat-legend-cell.is-partial {
+.cal-swatch {
+  width: 14rpx;
+  height: 14rpx;
+  border-radius: 4rpx;
+}
+
+.cal-swatch.lv-1 { background: #3F3C9E; }
+.cal-swatch.lv-2 { background: #5B57D6; }
+.cal-swatch.lv-3 { background: #B4BEFF; }
+.cal-swatch.lv-4 { background: #E0E7FF; }
+
+.cal-swatch.is-partial {
   background: transparent;
   border: 1.5rpx solid var(--border-glow);
 }
 
-.heat-detail {
-  min-height: 34rpx;
-  margin-top: 12rpx;
-  font-size: 20rpx;
-  line-height: 1.4;
+/* 点格子后的固定详情卡 */
+.day-detail {
+  margin-top: 18rpx;
+  padding: 18rpx 20rpx;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1rpx solid var(--border-moon-subtle);
+}
+
+.dd-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+}
+
+.dd-title {
+  font-size: 24rpx;
+  color: var(--text-primary);
+}
+
+.dd-tag {
+  flex: none;
+  padding: 2rpx 12rpx;
+  border-radius: var(--radius-pill);
+  border: 1rpx solid var(--border-glow);
+  font-size: 18rpx;
   color: var(--color-primary-soft);
+}
+
+.dd-main {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.dd-sub {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 19rpx;
+  line-height: 1.5;
+  color: var(--text-secondary);
 }
 
 /* 分区底部行：左侧记录数、右侧海报入口 */
@@ -185,10 +333,9 @@
   align-items: center;
   justify-content: space-between;
   gap: 12rpx;
-  margin-top: 16rpx;
+  margin-top: 18rpx;
 }
 
-/* 左侧说明可压缩但绝不换行（空间不足时省略，不把按钮挤成两行） */
 .heat-note {
   flex: 1 1 auto;
   min-width: 0;
@@ -200,14 +347,6 @@
   text-overflow: ellipsis;
 }
 
-.poster-btn:active,
-.sync-btn:active,
-.cloud-del:active,
-.danger-entry:active,
-.fact-retry:active {
-  opacity: 0.68;
-}
-
 .section-actions {
   flex: none;
   display: flex;
@@ -215,7 +354,16 @@
   gap: 16rpx;
 }
 
-/* 淡紫玻璃胶囊：图标 + 文案，低对比度 action，不抢热力图的视觉重心 */
+.poster-btn:active,
+.sync-btn:active,
+.cloud-del:active,
+.danger-entry:active,
+.sync-toggle-hit:active,
+.settings-head:active {
+  opacity: 0.68;
+}
+
+/* 淡紫玻璃胶囊：图标 + 文案，低对比度 action，不抢结论区 */
 .poster-btn {
   position: relative;
   flex: none;
@@ -249,87 +397,79 @@
   color: #C7CDFB;
 }
 
-/* 事实回顾 */
-.fact-text {
-  display: block;
-  font-size: 26rpx;
-  line-height: 1.9;
-  letter-spacing: 0.5rpx;
-  color: var(--text-primary);
+/* 数据与备份：默认收起，只露一行状态 */
+.settings {
+  margin-top: 56rpx;
+  padding-top: 26rpx;
+  border-top: 1rpx solid var(--border-moon-subtle);
 }
 
-.fact-muted {
-  display: block;
-  font-size: 24rpx;
-  text-align: center;
-  color: var(--text-secondary);
-}
-
-.fact-local-row {
+.settings-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16rpx;
-  margin-top: 10rpx;
+  min-height: 88rpx;
 }
 
-.fact-local {
-  font-size: 20rpx;
-  letter-spacing: 0.4rpx;
+.settings-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+  min-width: 0;
+}
+
+.settings-title {
+  font-size: 24rpx;
+  color: var(--text-primary);
+}
+
+.settings-sub {
+  font-size: 19rpx;
+  line-height: 1.4;
   color: var(--text-muted);
 }
 
-.fact-error {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 24rpx;
-}
-
-.fact-retry {
-  min-height: 80rpx;
-  display: inline-flex;
-  align-items: center;
-  padding: 0 24rpx;
-  border-radius: var(--radius-pill);
-  border: 1rpx solid var(--border-glow);
-  font-size: 22rpx;
+.settings-toggle {
+  flex: none;
+  padding: 12rpx 0 12rpx 20rpx;
+  font-size: 20rpx;
   color: var(--color-primary);
 }
 
-.poster-canvas {
-  position: fixed;
-  left: -2000px;
-  top: 0;
-  width: 600px;
-  height: 960px;
+.settings-body {
+  padding-top: 4rpx;
 }
 
-.share-canvas {
-  position: fixed;
-  left: -2200px;
-  top: 0;
-  width: 600px;
-  height: 480px;
-}
-
-/* 云同步：hairline 之下进入操作区，组件只留胶囊按钮 */
+/* 云同步：折叠区内只留胶囊按钮 */
 .sync-line {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 56rpx;
-  padding-top: 32rpx;
-  border-top: 1rpx solid var(--border-moon-subtle);
+  gap: 16rpx;
+  padding-top: 12rpx;
 }
 
 .sync-info {
   display: flex;
   flex-direction: column;
   gap: 6rpx;
+  min-width: 0;
+}
+
+.sync-title {
+  font-size: 22rpx;
+  color: var(--text-primary);
+}
+
+.sync-sub {
+  font-size: 18rpx;
+  line-height: 1.4;
+  color: var(--text-muted);
 }
 
 .sync-ops {
+  flex: none;
   display: flex;
   align-items: center;
   gap: 16rpx;
@@ -376,16 +516,6 @@
   transform: translateX(38rpx);
 }
 
-.sync-title {
-  font-size: 24rpx;
-  color: var(--text-primary);
-}
-
-.sync-sub {
-  font-size: 20rpx;
-  color: var(--text-muted);
-}
-
 .sync-btn {
   min-height: 80rpx;
   display: inline-flex;
@@ -415,7 +545,7 @@
 
 /* 清除数据入口：居中，红色链接标题 + 灰色说明行 */
 .stats-page .danger-entry {
-  margin-top: 36rpx;
+  margin-top: 26rpx;
   padding: 8rpx 0;
   display: flex;
   flex-direction: column;
@@ -435,22 +565,18 @@
   color: var(--text-muted);
 }
 
-/* 最近 7 天规律性：只展示波动，不评分 */
-.regularity-main {
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-  padding: 4rpx 2rpx 2rpx;
+.poster-canvas {
+  position: fixed;
+  left: -2000px;
+  top: 0;
+  width: 600px;
+  height: 960px;
 }
 
-.regularity-label {
-  font-size: 40rpx;
-  font-weight: 300;
-  color: var(--color-primary-soft, #a7a4ff);
-}
-
-.regularity-copy {
-  font-size: 22rpx;
-  line-height: 1.5;
-  color: var(--text-secondary);
+.share-canvas {
+  position: fixed;
+  left: -2200px;
+  top: 0;
+  width: 600px;
+  height: 480px;
 }

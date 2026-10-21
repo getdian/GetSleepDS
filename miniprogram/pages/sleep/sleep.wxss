@@ -957,6 +957,14 @@
   color: var(--color-primary-soft);
 }
 
+.end-hint {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 20rpx;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
 .end-error {
   display: block;
   margin-top: 10rpx;

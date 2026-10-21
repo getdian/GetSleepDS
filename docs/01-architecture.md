@@ -51,7 +51,9 @@ GetSleepDS/
 │   │   ├── top-bar/               # 通栏透明顶栏 + 悬浮灵动岛
 │   │   ├── time-wheel/            # 自绘 12h 循环时间轮（上午/下午）
 │   │   ├── audio-dock/            # 悬浮声音钮 + 迷你播放器 + 底部抽屉
-│   │   ├── heatmap/               # 7 行横向滚动热力图
+│   │   ├── heatmap/               # 旧 7 行横向热力图（统计页已改月历，保留未引用）
+│   │   ├── month-calendar/        # 当月打卡日历（4 档、可切月、选中态）
+│   │   ├── calendar-strip/        # 3/6/12 个月横向滑动日历
 │   │   ├── unlock-sheet/          # 底部解锁面板
 │   │   ├── ad-slot/               # 页面展示位（后台逐槽开关）
 │   │   ├── share-btn/             # 页内转发入口（open-type=share）

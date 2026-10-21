@@ -1,0 +1,102 @@
+.cs {
+  width: 100%;
+  white-space: nowrap;
+}
+
+.cs-track {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 26rpx;
+  padding-bottom: 4rpx;
+}
+
+.cs-month {
+  flex: none;
+  width: 354rpx;
+}
+
+.cs-month-label {
+  display: block;
+  margin-bottom: 8rpx;
+  font-size: 20rpx;
+  line-height: 1;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.cs-week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3rpx;
+  margin-bottom: 5rpx;
+}
+
+.cs-week-cell {
+  text-align: center;
+  font-size: 14rpx;
+  color: var(--text-muted);
+}
+
+.cs-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  grid-auto-rows: 48rpx;
+  gap: 3rpx;
+}
+
+/* 一年视图约 450 格：文字直接放在格子里，省掉一层 text 节点 */
+.cs-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6rpx;
+  background: rgba(255, 255, 255, 0.045);
+  font-size: 16rpx;
+  line-height: 1;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.cs-cell.is-pad {
+  background: transparent;
+}
+
+.lv-1 {
+  background: #3F3C9E;
+  color: #EDEEFF;
+}
+
+.lv-2 {
+  background: #5B57D6;
+  color: #F8FAFC;
+}
+
+.lv-3 {
+  background: #B4BEFF;
+  color: #1E1B4B;
+}
+
+.lv-4 {
+  background: #E0E7FF;
+  color: #1E1B4B;
+}
+
+.cs-cell.is-today {
+  box-shadow: inset 0 0 0 2rpx rgba(255, 255, 255, 0.55);
+}
+
+.cs-cell.is-selected {
+  box-shadow: 0 0 0 2rpx #FDE68A;
+  z-index: 1;
+}
+
+.cs-cell.is-future {
+  background: rgba(148, 163, 184, 0.04);
+  border: 1rpx dashed rgba(148, 163, 184, 0.24);
+  opacity: 0.5;
+}
+
+.cs-cell.is-partial {
+  box-shadow: inset 0 0 0 2rpx var(--border-glow);
+}

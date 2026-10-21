@@ -52,6 +52,7 @@ Page({
     endWakeTime: '',
     endDayText: '',
     endDurationText: '',
+    endHint: '',
     endError: '',
     dim: false,
     notice: '',
@@ -99,6 +100,17 @@ Page({
       const pending = storage.getPending()
       if (pending) this.openEndSheet()
       else this.setData({ notice: '这次入睡已经结束过了' })
+    }
+    // 统计页点空格子补记：带日期跳过来，直接打开补记面板
+    const manualDay = storage.getMeta().manualDay
+    if (manualDay) {
+      storage.patchMeta({ manualDay: '' })
+      if (this.data.endShow) return
+      if (this.data.state === 'sleeping') {
+        wx.showToast({ title: '正在入睡中，结束后可补记', icon: 'none' })
+        return
+      }
+      this.openManualSheet(manualDay)
     }
   },
 
@@ -521,15 +533,39 @@ Page({
     )
   },
 
-  /** 补记一段已经发生的睡眠：不创建 pending、不涉及提醒 */
-  openManualSheet() {
+  /**
+   * 补记一段已经发生的睡眠：不创建 pending、不涉及提醒。
+   * presetDay 由统计页的「空格子补记」带入（醒来日），默认当天。
+   */
+  openManualSheet(presetDay) {
     if (this.data.state === 'sleeping') return
     const now = Date.now()
-    const start = now - 30 * 60 * 1000
     const today = T.dateKey(now)
+    const hasPreset = typeof presetDay === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(presetDay)
+    const day = hasPreset ? presetDay : today
+    const dayTs = T.parseDateKey(day)
+    let bedMinutes
+    let wakeMinutes
+    if (hasPreset) {
+      // 统计页补记：默认一整夜 23:00 → 07:00；当天则把起床压到当前时间之前
+      bedMinutes = 23 * 60
+      wakeMinutes = 7 * 60
+      if (day === today) {
+        const d = new Date(now)
+        const nowMinutes = d.getHours() * 60 + d.getMinutes()
+        wakeMinutes = Math.max(0, Math.min(wakeMinutes, nowMinutes - 10))
+      }
+    } else {
+      // 入睡页手动补记：保留原来的「30 分钟前 → 现在」，适合刚发生的小睡
+      const d = new Date(now)
+      const nowMinutes = d.getHours() * 60 + d.getMinutes()
+      wakeMinutes = nowMinutes
+      bedMinutes = nowMinutes - 30
+      if (bedMinutes < 0) bedMinutes += 24 * 60
+    }
     this._editingDay = ''
     this._editingSessionId = ''
-    this._endBaseDay = T.startOfDay(now)
+    this._endBaseDay = T.startOfDay(dayTs)
     this._endStartDay = 0
     this.hideTabbarForSheet()
     this.setData(
@@ -537,12 +573,12 @@ Page({
         endShow: true,
         endMode: 'manual',
         endStale: false,
-        endDate: today,
-        endDateText: this.dateTextOf(today),
+        endDate: day,
+        endDateText: this.dateTextOf(day),
         endDateMin: T.dateKey(T.addDays(now, -400)),
         endStartDateText: '',
-        endBedTime: F.fmtClockTs(start),
-        endWakeTime: F.fmtClockTs(now),
+        endBedTime: F.fmtClock(bedMinutes),
+        endWakeTime: F.fmtClock(wakeMinutes),
         endError: ''
       },
       () => this.computeEndSheet()
@@ -601,9 +637,22 @@ Page({
     }
     this._endBedAt = range.bedAt
     this._endWakeAt = range.wakeAt
+    // 只给中性出口，不判定“异常”：夜班/白天补觉/中途醒来/长睡都可能出现。
+    // 仅“结束本次入睡”时提示；补记/编辑历史时不打扰。
+    let endHint = ''
+    if (!error && this.data.endMode === 'pending' && range.durationMin > 0) {
+      if (range.durationMin < 4 * 60) {
+        endHint =
+          '这次 ' + F.fmtDuration(range.durationMin) + '。如果是中途醒来，保存后可以再记一段，不影响这次记录。'
+      } else if (range.durationMin > 12 * 60) {
+        endHint =
+          '这次 ' + F.fmtDuration(range.durationMin) + '，超过 12 小时。如果忘记结束，建议先核对醒来时间再保存。'
+      }
+    }
     this.setData({
       endDayText: F.fmtDayCN(T.dateKey(range.wakeAt)),
       endDurationText: range.durationMin > 0 ? F.fmtDuration(range.durationMin) : '—',
+      endHint,
       endError: error
     })
   },
@@ -625,6 +674,7 @@ Page({
       endError: '',
       endMode: 'pending',
       endStale: false,
+      endHint: '',
       endStartDateText: ''
     })
   },
@@ -734,6 +784,7 @@ Page({
       endError: '',
       endMode: 'pending',
       endStale: false,
+      endHint: '',
       endStartDateText: ''
     })
   },
