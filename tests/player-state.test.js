@@ -46,3 +46,18 @@ test('claimEnded 超过去重窗口后可再次接管', () => {
     Date.now = originalNow
   }
 })
+
+test('claimExpiryToast 在窗口内只让一个组件弹提示', () => {
+  const originalNow = Date.now
+  let now = 500000
+  Date.now = () => now
+  try {
+    assert.equal(playerState.claimExpiryToast(2000), true)
+    // 定时到点时 dock 与 now-playing 可能同时可见，第二个必须让出提示
+    assert.equal(playerState.claimExpiryToast(2000), false)
+    now += 2000
+    assert.equal(playerState.claimExpiryToast(2000), true)
+  } finally {
+    Date.now = originalNow
+  }
+})

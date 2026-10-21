@@ -10,7 +10,7 @@
       <view
         wx:for="{{cells}}"
         wx:key="*this"
-        class="es-cell {{index === 6 ? 'is-lit' : ''}}"
+        class="es-cell {{index === 8 ? 'is-lit' : ''}}"
       ></view>
     </view>
   </view>

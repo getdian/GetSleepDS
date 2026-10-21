@@ -90,7 +90,9 @@ function removeRecord(day, deletedAt) {
   const saved = safeSet(KEYS.records, all)
   // 墓碑：阻止云端旧记录在下次同步时被回填；写入失败必须让调用方知道。
   // 同步合并时使用服务端墓碑时间，避免把“现在”写成更新的墓碑而挡住清除后新记录。
-  const tomb = saved ? markDeleted(day, deletedAt) : false
+  // 墓碑写失败时立即重试一次：记录已经从本机删掉，漏墓碑会让云端旧记录在下次同步复活。
+  let tomb = saved ? markDeleted(day, deletedAt) : false
+  if (saved && !tomb) tomb = markDeleted(day, deletedAt)
   return saved && tomb
 }
 

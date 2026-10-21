@@ -195,11 +195,6 @@ Component({
       return this.build24(this.data.selH, this.data.selM, this.data.period)
     },
 
-    /** 页面可随时取当前显示值（不等待 130ms settle） */
-    getValue() {
-      return this.to24()
-    },
-
     /**
      * 计算前强制落定：清掉 settle 定时器，按最近滚动位置吸附并返回 24h 值。
      * 避免页面刚用旧值计算，随后 settle 的 change 又把结果卡翻回正面。

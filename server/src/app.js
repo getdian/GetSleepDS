@@ -37,6 +37,26 @@ function setAdminHeaders(res) {
   res.setHeader('Cache-Control', 'no-store')
 }
 
+// 营销页静态资源；JSON-LD 是内联 script 块，脚本源暂保留 unsafe-inline（后台仍严格 self）
+const SITE_CSP = [
+  "default-src 'self'",
+  "img-src 'self' data: https:",
+  "media-src 'self' https:",
+  "style-src 'self'",
+  "script-src 'self' 'unsafe-inline'",
+  "connect-src 'self' https:",
+  "font-src 'self' data:",
+  "base-uri 'none'",
+  "form-action 'self'",
+  "frame-ancestors 'none'"
+].join('; ')
+
+function setSiteHeaders(res) {
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('Referrer-Policy', 'no-referrer')
+  res.setHeader('Content-Security-Policy', SITE_CSP)
+}
+
 function createErrorHandler(logger) {
   return function errorHandler(err, req, res, next) {
     if (res.headersSent) return next(err)
@@ -168,6 +188,8 @@ function createApp(options) {
   const unlockOpenid = createRateLimiter(limits.windowMs, limits.maxUnlockPerOpenid)
   const summaryIp = createRateLimiter(limits.windowMs, limits.maxSummaryPerIp)
   const loginIp = createRateLimiter(60 * 1000, 5)
+  // 后台上传单文件最大 25MB，补一层独立限流，避免登录态被滥用时打满内存/带宽
+  const uploadIp = createRateLimiter(60 * 1000, 20)
   const eventsIp = createRateLimiter(limits.windowMs, 120)
   const recordsIp = createRateLimiter(60 * 1000, 120)
   const eraseIp = createRateLimiter(60 * 1000, 3)
@@ -188,6 +210,7 @@ function createApp(options) {
       storage: storageSettings,
       analytics,
       limitLogin: loginIp,
+      limitUpload: uploadIp,
       now,
       logger
     })
@@ -226,11 +249,23 @@ function createApp(options) {
 
   // 落地页与 H5 交互演示
   app.get(['/demo', '/demo/'], (req, res) => {
+    setSiteHeaders(res)
     res.sendFile(path.join(SITE_DIR, 'demo.html'))
   })
-  app.use('/', express.static(SITE_DIR, { index: 'index.html', extensions: ['html'] }))
+  app.use(
+    '/',
+    express.static(SITE_DIR, { index: 'index.html', extensions: ['html'], setHeaders: setSiteHeaders })
+  )
 
   app.use((req, res) => {
+    // 页面/静态资源缺失时返回 HTML，避免浏览器控制台把 JSON 当页面内容；API 仍返回信封
+    if (!req.path.startsWith('/api') && req.accepts('html')) {
+      res
+        .status(404)
+        .type('html')
+        .send('<!doctype html><meta charset="utf-8"><title>页面不存在 · 睡点</title><p>页面不存在</p>')
+      return
+    }
     res.status(404).json({ error: { code: 'NOT_FOUND', message: '接口不存在' } })
   })
 

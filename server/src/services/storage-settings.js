@@ -1,5 +1,12 @@
 const { apiError, invalidBody } = require('../lib/errors')
 
+/** 只回显首尾各 4 位；短值直接全遮，避免后台截图/客服共享泄漏 AKID */
+function maskSecretId(value) {
+  if (!value) return ''
+  if (value.length <= 8) return '****'
+  return value.slice(0, 4) + '****' + value.slice(-4)
+}
+
 function text(value, label, max, required) {
   if (value === undefined || value === null) {
     if (required) throw invalidBody(label + '不能为空')
@@ -64,7 +71,8 @@ function createStorageSettings(options) {
       region: value.region || '',
       domain: value.domain || '',
       prefix: value.prefix || 'sleep',
-      secretId: value.secretId || '',
+      secretId: maskSecretId(value.secretId || ''),
+      secretIdConfigured: !!value.secretId,
       hasSecret: !!value.secretKeyEnc
     }
   }
@@ -98,9 +106,15 @@ function createStorageSettings(options) {
       throw invalidBody('存储路径只能包含字母、数字、斜线、下划线和短横线')
     }
 
-    const secretId = text(input.secretId, 'SecretId', 128, false)
+    const incomingSecretId = text(input.secretId, 'SecretId', 128, false)
     const existing = await getRow()
     const existingValue = existing && existing.value ? existing.value : {}
+    const existingSecretId = existingValue.secretId || ''
+    // 前端回显的是脱敏值：留空或原样提交脱敏值都表示“不修改”
+    const keepExistingSecretId =
+      !incomingSecretId ||
+      (!!existingSecretId && incomingSecretId === maskSecretId(existingSecretId))
+    const secretId = keepExistingSecretId ? existingSecretId : incomingSecretId
     const incomingSecret = text(input.secretKey, 'SecretKey', 128, false)
     const secretKeyEnc = incomingSecret ? box.encrypt(incomingSecret) : existingValue.secretKeyEnc || ''
 

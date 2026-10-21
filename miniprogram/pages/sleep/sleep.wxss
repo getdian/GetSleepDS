@@ -545,7 +545,7 @@
 .week-sep {
   font-size: 19rpx;
   color: var(--text-muted);
-  opacity: 0.6;
+  opacity: 0.8;
 }
 
 .sleep-share {

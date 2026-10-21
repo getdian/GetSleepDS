@@ -14,13 +14,13 @@ const { getConfig } = require('../../utils/config')
 
 const TOGGLE_GUARD_MS = 220
 const EXPIRY_TOAST_WINDOW_MS = 2000
-let lastExpiryToastAt = 0
 
 Component({
   data: {
     // visible 同时驱动入场/折叠动效：先渲染隐藏态，下一帧再加 is-in
     visible: false,
     playing: false,
+    loading: false,
     title: '',
     category: '',
     timerText: '',
@@ -35,17 +35,20 @@ Component({
   lifetimes: {
     attached() {
       this._alive = true
-      this._pageVisible = true
+      // 等 pageLifetimes.show 再置 true，避免首帧就弹到别的页面上
+      this._pageVisible = false
       this._audio = null
       this._lastToggleAt = 0
       this._enterTimer = null
       this._collapseTimer = null
+      this._loadingTimer = null
       this._unsubTimer = null
       this._onPlay = () => this.handlePlay()
       this._onPause = () => this.handlePause()
       this._onStop = () => this.handleStop()
       this._onEnded = () => this.handleEnded()
       this._onError = () => this.handleError()
+      this._onCanplay = () => this.handleCanPlay()
       this.setup()
       this.sync(false)
       this._unsubTimer = audioTimer.subscribe(() => {
@@ -63,6 +66,7 @@ Component({
         clearTimeout(this._collapseTimer)
         this._collapseTimer = null
       }
+      this.disarmLoadingGuard()
       if (this._unsubTimer) {
         this._unsubTimer()
         this._unsubTimer = null
@@ -74,6 +78,8 @@ Component({
   pageLifetimes: {
     show() {
       this._pageVisible = true
+      // 切回页面时按墙钟校准定时；到点会立即停止并折叠
+      audioTimer.restore()
       this.setup()
       this.sync(false)
     },
@@ -96,6 +102,7 @@ Component({
       this._audio.onStop(this._onStop)
       this._audio.onEnded(this._onEnded)
       this._audio.onError(this._onError)
+      if (this._audio.onCanplay) this._audio.onCanplay(this._onCanplay)
     },
 
     off() {
@@ -106,6 +113,7 @@ Component({
         this._audio.offStop(this._onStop)
         if (this._audio.offEnded) this._audio.offEnded(this._onEnded)
         if (this._audio.offError) this._audio.offError(this._onError)
+        if (this._audio.offCanplay) this._audio.offCanplay(this._onCanplay)
       } catch (e) {}
       this._audio = null
     },
@@ -115,11 +123,66 @@ Component({
       return !cfg.features || cfg.features.timer !== false
     },
 
+    armLoadingGuard() {
+      this.disarmLoadingGuard()
+      this._loadingTimer = setTimeout(() => {
+        this._loadingTimer = null
+        if (!this._alive || !this.data.loading) return
+        const audio = this._audio
+        const playing = !!(audio && audio.src && !audio.paused)
+        this.setData({ loading: false, playing })
+        if (!playing && this._pageVisible) {
+          wx.showToast({ title: '音频加载超时，请重试', icon: 'none' })
+        }
+      }, 12000)
+    },
+
+    disarmLoadingGuard() {
+      if (this._loadingTimer) {
+        clearTimeout(this._loadingTimer)
+        this._loadingTimer = null
+      }
+    },
+
+    isUnlocked() {
+      const app = getApp()
+      if (app && app.globalData && app.globalData.audioUnlockedSession) return true
+      return storage.getUnlockExpire() > Date.now()
+    },
+
+    isFreeMode() {
+      const unlock = getConfig().unlock || {}
+      return unlock.mode !== 'rewarded' || !unlock.adUnitId
+    },
+
+    canPlay() {
+      return this.isUnlocked() || this.isFreeMode()
+    },
+
+    rejectLocked() {
+      if (this._pageVisible) {
+        wx.showToast({ title: '解锁已到期，请到入睡页重新解锁', icon: 'none' })
+      }
+    },
+
     handlePlay() {
       if (!this._alive) return
+      // 系统侧恢复/锁屏播放也要过权益校验，避免到期后靠通知栏续播。
+      if (!this.canPlay()) {
+        try {
+          this._audio.pause()
+        } catch (e) {}
+        storage.patchMeta({ lastTrackPlaying: false })
+        this.setData({ playing: false, loading: false })
+        this.sync(true)
+        this.rejectLocked()
+        return
+      }
       const app = getApp()
       if (app && app.globalData) app.globalData.audioSession = true
+      this.disarmLoadingGuard()
       storage.patchMeta({ lastTrackPlaying: true })
+      this.setData({ loading: false })
       this.sync(true)
       // 系统侧暂停已冻结倒计时；恢复播放时续剩余，没有运行中的倒计时才按偏好起表。
       if (this.timerEnabled()) {
@@ -129,20 +192,30 @@ Component({
 
     handlePause() {
       if (!this._alive) return
+      this.disarmLoadingGuard()
       // 与 audio-dock 同口径：通知栏/锁屏/耳机暂停也必须冻结倒计时。
       audioTimer.pause()
       storage.patchMeta({ lastTrackPlaying: false })
+      if (this.data.loading) this.setData({ loading: false })
       this.sync(true)
+    },
+
+    handleCanPlay() {
+      if (!this._alive) return
+      this.disarmLoadingGuard()
+      if (this.data.loading) this.setData({ loading: false })
     },
 
     /** 按 meta.lastTrackId 从配置重建播放源：部分基础库在系统 stop 后会清空 src。 */
     rebuildSource() {
+      if (!this.canPlay()) return false
       const meta = storage.getMeta()
       if (!meta.lastTrackId || !this._audio) return false
       const cfg = getConfig()
       const track = (cfg.audio || []).filter((item) => item.id === meta.lastTrackId)[0]
-      if (!track || !track.url) return false
-      const cached = cache.peek(track.url, (cfg.cache && cfg.cache.ttlDays) || 7)
+      // 与 audio-dock.play 同口径：非 https 源不重建，避免进入静默 onError 循环
+      if (!track || !track.url || track.url.indexOf('https://') !== 0) return false
+      const cached = cache.peek(track.url, (cfg.cache && cfg.cache.ttlDays) || 7, track.url)
       this._audio.title = '睡点 · ' + track.title
       this._audio.epname = '环境音'
       this._audio.singer = '睡点'
@@ -155,6 +228,15 @@ Component({
       if (!this._alive) return
       // 同一轮 ended 只允许一个组件重播（audio-dock 也会收到），否则会重复赋 src + play()。
       if (!playerState.claimEnded()) return
+      // 到期后不再自动循环续播；保留入口让用户回入睡页重新解锁。
+      if (!this.canPlay()) {
+        storage.patchMeta({ lastTrackActive: false, lastTrackPlaying: false })
+        const app = getApp()
+        if (app && app.globalData) app.globalData.audioSession = false
+        this.collapse()
+        this.rejectLocked()
+        return
+      }
       // audio-dock 只挂在入睡页；在首页/统计页自然播完时由这里接管循环与终止态，
       // 否则迷你条会停在“正在播放”再遇到 toggle 的静默 return。
       audioTimer.restore()
@@ -168,8 +250,10 @@ Component({
         return
       }
       try {
+        this.armLoadingGuard()
         this._audio.play()
       } catch (e) {
+        this.disarmLoadingGuard()
         storage.patchMeta({ lastTrackActive: false, lastTrackPlaying: false })
         this.collapse()
       }
@@ -280,6 +364,7 @@ Component({
     },
 
     collapse() {
+      this.disarmLoadingGuard()
       // 即使还没真正展示，也要取消待执行的入场/折叠，避免“已停止后又弹出来”
       if (this._enterTimer) {
         clearTimeout(this._enterTimer)
@@ -288,19 +373,20 @@ Component({
       this.clearCollapseTimer()
       if (!this.data.visible) return
       // 只摘掉 is-in，由 WXSS 完成折叠；元素常驻但不可点，避免 wx:if 硬切
-      this.setData({ visible: false, collapsing: false })
+      this.setData({ visible: false, collapsing: false, loading: false })
     },
 
     handleStop() {
       if (!this._alive) return
+      this.disarmLoadingGuard()
+      if (this.data.loading) this.setData({ loading: false })
       const expiredAt = audioTimer.lastExpiredAt()
       if (
         expiredAt &&
         Date.now() - expiredAt < EXPIRY_TOAST_WINDOW_MS &&
         this._pageVisible &&
-        Date.now() - lastExpiryToastAt > EXPIRY_TOAST_WINDOW_MS
+        playerState.claimExpiryToast(EXPIRY_TOAST_WINDOW_MS)
       ) {
-        lastExpiryToastAt = Date.now()
         wx.showToast({ title: '定时结束，已停止播放', icon: 'none' })
       }
       this.sync(true)
@@ -308,6 +394,8 @@ Component({
 
     handleError() {
       if (!this._alive) return
+      this.disarmLoadingGuard()
+      if (this.data.loading) this.setData({ loading: false })
       const audio = this._audio
       // 本地缓存源损坏时，dock 不在场（首页/统计页）也要自行回退远程一次；
       // 否则重建源会反复命中同一个坏文件，用户点一次播放就失败一次。
@@ -316,6 +404,12 @@ Component({
         const cfg = getConfig()
         const track = (cfg.audio || []).filter((item) => item.id === meta.lastTrackId)[0]
         if (track && track.url) {
+          // 同一轮错误只允许一个组件执行“坏缓存失效 + 远程回退”；
+          // 另一个实例（audio-dock）已经处理过时直接同步即可。
+          if (playerState.isFallbacking(track.url)) {
+            this.sync(true)
+            return
+          }
           playerState.markFallback(track.url)
           cache.remove(track.url)
           storage.patchMeta({ lastTrackActive: true, lastTrackPlaying: true })
@@ -362,11 +456,15 @@ Component({
     toggle() {
       const audio = this._audio
       if (!audio) return
-      const app = getApp()
-      if (app && app.globalData) app.globalData.audioSession = true
       const now = Date.now()
       if (now - this._lastToggleAt < TOGGLE_GUARD_MS) return
       this._lastToggleAt = now
+
+      // 暂停/继续都要过权益校验；已到期时允许暂停，但不允许再起播。
+      if (audio.paused && !this.canPlay()) {
+        this.rejectLocked()
+        return
+      }
 
       if (!audio.src) {
         // 系统侧 stop 会清空 src：此前这里静默 return，用户点播放毫无反应。
@@ -380,21 +478,31 @@ Component({
       const next = !!audio.paused
       // 先反馈再调底层：播放中收回音符，暂停时展开播放条
       this.clearCollapseTimer()
-      this.setData({ playing: next, miniExpanded: !next, collapsed: false, collapsing: false })
+      this.setData({
+        playing: next,
+        loading: next,
+        miniExpanded: !next,
+        collapsed: false,
+        collapsing: false
+      })
       storage.patchMeta({ lastTrackPlaying: next })
       try {
         if (next) {
+          const app = getApp()
+          if (app && app.globalData) app.globalData.audioSession = true
           // 与入睡页 dock 一致：暂停中续剩余，没有运行中的倒计时才按偏好重新起表
           if (this.timerEnabled()) {
             audioTimer.arm(Number(storage.getMeta().audioTimerMinutes) || 0)
           }
+          this.armLoadingGuard()
           audio.play()
         } else {
           audio.pause()
           audioTimer.pause()
         }
       } catch (e) {
-        this.setData({ playing: !next })
+        this.disarmLoadingGuard()
+        this.setData({ playing: !next, loading: false })
         storage.patchMeta({ lastTrackPlaying: !next })
         if (this._pageVisible) wx.showToast({ title: '操作失败，请重试', icon: 'none' })
       }

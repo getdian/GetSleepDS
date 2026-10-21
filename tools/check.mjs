@@ -108,6 +108,29 @@ if (!appJson.tabBar || !Array.isArray(appJson.tabBar.list)) {
   })
 }
 
+// 3b. tabBar.custom=true 时，每个 tab 页必须声明并挂载 custom-tab-bar。
+// 原生底栏已被关闭，漏挂载会导致整个底部导航消失（曾实际发生）。
+if (appJson.tabBar && appJson.tabBar.custom === true) {
+  const customBase = path.join(MP, 'custom-tab-bar', 'index')
+  if (!exists(customBase + '.js') || !exists(customBase + '.wxml')) {
+    errors.push('tabBar.custom=true 但缺少 custom-tab-bar/index.{js,wxml}')
+  }
+  const tabPages = Array.isArray(appJson.tabBar.list) ? appJson.tabBar.list : []
+  tabPages.forEach((item) => {
+    const pageBase = path.join(MP, item.pagePath)
+    const jsonPath = pageBase + '.json'
+    const wxmlPath = pageBase + '.wxml'
+    if (!exists(jsonPath) || !exists(wxmlPath)) return
+    // custom-tab-bar 是微信的特殊组件：由 miniprogram/custom-tab-bar 目录自动注册，
+    // 不能写进 usingComponents（会按普通组件解析并报 wx://not-found）。
+    // 这里只校验组件文件和页面 wxml 的挂载。
+    const source = fs.readFileSync(wxmlPath, 'utf8')
+    if (!/<custom-tab-bar[\s/>]/.test(source)) {
+      errors.push(`${item.pagePath}.wxml 未挂载 <custom-tab-bar />`)
+    }
+  })
+}
+
 // 4. 自定义组件引用
 for (const file of walk(MP)) {
   if (!file.endsWith('.json')) continue

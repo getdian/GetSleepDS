@@ -5,7 +5,7 @@
 
 const T = require('./time')
 
-const CYCLE_MIN = 90
+const CYCLE_MIN = T.CYCLE_MIN
 
 function completedList(records) {
   const source = records || {}

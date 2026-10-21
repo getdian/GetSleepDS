@@ -36,6 +36,14 @@ function write(list) {
   }
 }
 
+/** 本地丢弃计数：回答“丢了多少、为何丢”，不参与上报 */
+function bumpDropped(count) {
+  const n = Number(count) || 0
+  if (n <= 0) return
+  const meta = storage.getMeta()
+  storage.patchMeta({ eventDropped: (Number(meta.eventDropped) || 0) + n })
+}
+
 /**
  * 轻量事件：只上报类型与目标（音频 id），不涉及睡眠明细。
  */
@@ -46,8 +54,12 @@ function track(type, target) {
 
   const list = read()
   list.push({ id: makeId(), type, target: target || '', ts: Date.now() })
-  if (list.length > MAX_QUEUE) list.splice(0, list.length - MAX_QUEUE)
-  write(list)
+  const overflow = Math.max(0, list.length - MAX_QUEUE)
+  if (overflow) {
+    list.splice(0, overflow)
+    bumpDropped(overflow)
+  }
+  if (!write(list)) bumpDropped(1)
   schedule(FLUSH_DELAY)
 }
 
@@ -94,7 +106,9 @@ function flush() {
         error && (error.status === 429 || error.status === 408 || error.status === 425)
       if (error && error.status >= 400 && error.status < 500 && !transient) {
         const current = read()
-        write(current.filter((item) => !ids[item.id]))
+        const kept = current.filter((item) => !ids[item.id])
+        // 只有确实从队列移除成功才算丢弃；写失败时保留队列，后续仍会重试
+        if (write(kept)) bumpDropped(batch.length)
       }
       return null
     })

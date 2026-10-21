@@ -223,6 +223,24 @@ test('保存配置后公共接口与解锁有效期立即生效', async () => {
   assert.equal(unlock.body.expireAt, FIXED_NOW + 12 * 60 * 60 * 1000)
 })
 
+test('落地页/演示页带 CSP，非 API 的 404 返回 HTML', async () => {
+  const demo = await fetch(base + '/demo')
+  assert.equal(demo.status, 200)
+  assert.match(demo.headers.get('content-security-policy') || '', /default-src 'self'/)
+
+  const root = await fetch(base + '/')
+  assert.equal(root.status, 200)
+  assert.match(root.headers.get('content-security-policy') || '', /script-src 'self'/)
+
+  const page404 = await fetch(base + '/not-found-page', { headers: { accept: 'text/html' } })
+  assert.equal(page404.status, 404)
+  assert.match(page404.headers.get('content-type') || '', /text\/html/)
+
+  const api404 = await fetch(base + '/api/not-found')
+  assert.equal(api404.status, 404)
+  assert.match(api404.headers.get('content-type') || '', /application\/json/)
+})
+
 test('后台概览返回记录与解锁数量', async () => {
   const res = await call('/api/admin/stats', {}, true)
   assert.equal(res.status, 200)
@@ -545,9 +563,33 @@ test('COS 配置加密保存且不回显 SecretKey', async () => {
   assert.equal(saved.status, 200)
   assert.equal(saved.body.configured, true)
   assert.equal(saved.body.hasSecret, true)
+  assert.equal(saved.body.secretId, '****')
+  assert.equal(saved.body.secretIdConfigured, true)
+  assert.ok(!JSON.stringify(saved.body).includes('AKIDtest'))
   assert.ok(!JSON.stringify(saved.body).includes('super-secret-key'))
 
   const row = await db.getSetting('cos')
   assert.ok(row.value.secretKeyEnc)
   assert.ok(!row.value.secretKeyEnc.includes('super-secret-key'))
+
+  // 前端回填的是脱敏值：原样提交（SecretKey 留空）不能把掩码写库
+  const unchanged = await call(
+    '/api/admin/storage',
+    {
+      method: 'PUT',
+      body: {
+        bucket: 'qfmaster-1322402212',
+        region: 'ap-shanghai',
+        domain: '',
+        prefix: 'sleep',
+        secretId: saved.body.secretId,
+        secretKey: ''
+      }
+    },
+    true
+  )
+  assert.equal(unchanged.status, 200)
+  const rowAfter = await db.getSetting('cos')
+  assert.equal(rowAfter.value.secretId, 'AKIDtest')
+  assert.equal(rowAfter.value.secretKeyEnc, row.value.secretKeyEnc)
 })

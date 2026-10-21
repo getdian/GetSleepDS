@@ -32,7 +32,7 @@
             <view class="np-sbar np-s3"></view>
             <view class="np-sbar np-s4"></view>
           </view>
-          <text class="np-status-text">{{playing ? '正在播放' : '已暂停'}}</text>
+          <text class="np-status-text">{{loading ? '缓冲中…' : (playing ? '正在播放' : '已暂停')}}</text>
           <text wx:if="{{timerText}}" class="np-timer-text">· {{timerText}}</text>
         </view>
       </view>

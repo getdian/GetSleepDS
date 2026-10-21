@@ -16,6 +16,7 @@ const ENDED_CLAIM_MS = 800
 let fallbackUrl = ''
 let fallbackAt = 0
 let endedClaimAt = 0
+let expiryToastAt = 0
 
 /** 抢占本轮 ended 的处理权；窗口内只有一个调用方拿到 true */
 function claimEnded() {
@@ -40,4 +41,13 @@ function isFallbacking(url) {
   return !url || url === fallbackUrl
 }
 
-module.exports = { markFallback, clearFallback, isFallbacking, claimEnded }
+/** 定时到点提示在 dock 与 now-playing 间只允许一个弹出 */
+function claimExpiryToast(windowMs) {
+  const now = Date.now()
+  const win = Number(windowMs) || 2000
+  if (now - expiryToastAt < win) return false
+  expiryToastAt = now
+  return true
+}
+
+module.exports = { markFallback, clearFallback, isFallbacking, claimEnded, claimExpiryToast }

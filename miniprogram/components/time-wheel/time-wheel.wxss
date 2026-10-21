@@ -39,7 +39,8 @@
   color: rgba(145, 170, 220, 0.45);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, "PingFang SC", sans-serif;
   font-variant-numeric: tabular-nums;
-  transition: color 0.2s ease, font-size 0.2s ease;
+  /* 行高固定，字号切换不做过渡，避免选中行出现轻微抖动 */
+  transition: color 0.2s ease;
 }
 
 .tw-item.is-on {

@@ -84,11 +84,17 @@ function createImageUploader() {
 }
 
 function createAdminRoute(options) {
-  const { auth, store, db, storage, analytics, limitLogin, now, logger } = options
+  const { auth, store, db, storage, analytics, limitLogin, limitUpload, now, logger } = options
   const log = logger || console
   const router = express.Router()
   const upload = createUploader()
   const imageUpload = createImageUploader()
+
+  // 上传在 multer 解析文件之前限流，避免 25MB 文件先落内存再被拒
+  function gateUpload(req, res, next) {
+    if (!limitUpload || limitUpload(req.ip || 'unknown')) return next()
+    next(rateLimited())
+  }
 
   router.use('/admin', (req, res, next) => {
     res.set('Cache-Control', 'no-store')
@@ -322,6 +328,7 @@ function createAdminRoute(options) {
   router.post(
     '/admin/audio/upload',
     auth.requireAuth,
+    gateUpload,
     upload.single('file'),
     wrap(async (req, res) => {
       if (!req.file) throw invalidBody('没有收到音频文件')
@@ -369,6 +376,7 @@ function createAdminRoute(options) {
   router.post(
     '/admin/backgrounds/upload',
     auth.requireAuth,
+    gateUpload,
     imageUpload.single('file'),
     wrap(async (req, res) => {
       if (!req.file) throw invalidBody('没有收到图片文件')
@@ -412,6 +420,7 @@ function createAdminRoute(options) {
   router.post(
     '/admin/site/qrcode',
     auth.requireAuth,
+    gateUpload,
     imageUpload.single('file'),
     wrap(async (req, res) => {
       if (!req.file) throw invalidBody('没有收到图片文件')

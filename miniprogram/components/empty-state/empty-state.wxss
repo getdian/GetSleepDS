@@ -107,6 +107,21 @@
   box-shadow:
     0 0 14rpx rgba(199, 210, 254, 0.55),
     0 0 30rpx rgba(99, 102, 241, 0.3);
+  animation: empty-cell-glow 3.2s ease-in-out infinite;
+}
+
+@keyframes empty-cell-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 14rpx rgba(199, 210, 254, 0.55),
+      0 0 30rpx rgba(99, 102, 241, 0.3);
+  }
+  50% {
+    box-shadow:
+      0 0 20rpx rgba(199, 210, 254, 0.8),
+      0 0 40rpx rgba(99, 102, 241, 0.45);
+  }
 }
 
 @keyframes empty-breathe {
@@ -145,4 +160,10 @@
   background: var(--glass-tint);
   font-size: 24rpx;
   color: var(--color-primary);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.empty-btn:active {
+  opacity: 0.72;
+  transform: scale(0.98);
 }

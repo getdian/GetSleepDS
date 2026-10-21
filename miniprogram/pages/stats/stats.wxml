@@ -14,7 +14,7 @@
       title="还没有记录"
       desc="打一次卡，这里就会长出第一格。"
       actionText="去入睡"
-      bind:action="goHome"
+      bind:action="goSleep"
     />
   </block>
 
@@ -163,3 +163,5 @@
 </view>
 
 <view class="np-host"><now-playing /></view>
+
+<custom-tab-bar />

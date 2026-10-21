@@ -108,3 +108,5 @@
 <view class="dim-mask {{dim ? 'is-on' : ''}}" bindtap="onDimTap">
   <text class="dim-text font-poetic">晚安</text>
 </view>
+
+<custom-tab-bar />

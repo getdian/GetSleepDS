@@ -21,21 +21,15 @@
     "list": [
       {
         "pagePath": "pages/index/index",
-        "text": "计算器",
-        "iconPath": "assets/tab-home.png",
-        "selectedIconPath": "assets/tab-home-active.png"
+        "text": "计算器"
       },
       {
         "pagePath": "pages/sleep/sleep",
-        "text": "入睡",
-        "iconPath": "assets/tab-sleep.png",
-        "selectedIconPath": "assets/tab-sleep-active.png"
+        "text": "入睡"
       },
       {
         "pagePath": "pages/stats/stats",
-        "text": "统计",
-        "iconPath": "assets/tab-stats.png",
-        "selectedIconPath": "assets/tab-stats-active.png"
+        "text": "统计"
       }
     ]
   },

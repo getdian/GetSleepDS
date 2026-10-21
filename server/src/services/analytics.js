@@ -149,7 +149,9 @@ function createAnalytics(options) {
         plays: bucket.plays
       })),
       topTracks,
-      topSources
+      topSources,
+      // listEvents 在 memory/PG 两端都硬上限 20000；达到上限时趋势与 Top 榜可能偏低
+      truncated: events.length >= 20000
     }
   }
 

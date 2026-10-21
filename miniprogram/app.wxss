@@ -63,7 +63,8 @@ page {
   --z-sheet-mask: 180;
   --z-sheet: 200;
   --z-unlock: 300;
-  --z-overlay: 9999;
+  /* 跨页播放器：高于底部播放器/页面内容，低于抽屉遮罩与解锁面板 */
+  --z-overlay: 160;
 
   /* 圆角 */
   --radius-sm: 16rpx;

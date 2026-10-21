@@ -1,6 +1,6 @@
 const T = require('./time')
 
-const CYCLE = 90
+const CYCLE = T.CYCLE_MIN
 const CYCLES = [5, 4, 3]
 
 function dayLabel(timestamp, now) {

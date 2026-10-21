@@ -48,6 +48,19 @@ test('topSources 按 app_open 的 target 聚合并取 Top5', async () => {
   assert.equal(overview.today.checkins, 1)
 })
 
+test('事件量达到 2 万条时标记 truncated', async () => {
+  const events = Array.from({ length: 20000 }, (_, i) =>
+    eventAt(0, 'app_open', '1001|pages/index/index', 'o-' + (i % 10))
+  )
+  const analytics = createAnalytics(fakeDeps(events))
+  const overview = await analytics.overview(Date.now())
+  assert.equal(overview.truncated, true)
+
+  const small = createAnalytics(fakeDeps([eventAt(0, 'app_open', '1001|pages/index/index')]))
+  const normal = await small.overview(Date.now())
+  assert.equal(normal.truncated, false)
+})
+
 test('窗口外的事件不进入统计', async () => {
   const events = [
     eventAt(0, 'app_open', '1007|pages/index/index|share'),

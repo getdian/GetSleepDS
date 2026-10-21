@@ -32,7 +32,7 @@
       <view class="mode-row">
         <view class="mode-capsule" bindtap="toggleMode">
           <view class="mode-pill-active">
-            <text class="mode-ico">{{mode === 'wake' ? '☼' : '🌙'}}</text>
+            <view class="mode-ico {{mode === 'wake' ? 'is-sun' : 'is-moon'}}"></view>
             <text class="mode-text">{{mode === 'wake' ? '选择起床时间' : '选择入睡时间'}}</text>
           </view>
           <view class="mode-swap">
@@ -91,7 +91,7 @@
           <view class="calc-face calc-back {{view && view.compact ? 'is-compact' : ''}}">
             <block wx:if="{{view}}">
               <view class="result-head">
-                <text class="result-moon">🌙</text>
+                <view class="result-moon"></view>
                 <text class="result-label">{{view.label}}</text>
                 <view class="result-fall" bindtap="cycleFall">
                   <text>{{fallAsleep}} 分钟入睡</text>
@@ -182,3 +182,5 @@
   bind:category="onBgCategory"
   bind:select="onBgSelect"
 />
+
+<custom-tab-bar />

@@ -8,6 +8,11 @@
     return Array.prototype.slice.call((root || document).querySelectorAll(selector))
   }
 
+  // 同一毫秒内连续新增两项时，纯 Date.now() 会生成重复 ID，服务端保存必报“ID 重复”
+  function uniqueId(prefix) {
+    return prefix + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6)
+  }
+
   const state = {
     config: null,
     meta: { source: 'file', updatedAt: 0, storage: 'memory' },
@@ -358,6 +363,13 @@
 
   async function loadAnalytics() {
     const data = await api('/api/admin/analytics')
+    const note = $('#analytics-note')
+    if (note) {
+      note.hidden = !data.truncated
+      note.textContent = data.truncated
+        ? '事件量已超过 2 万条：以下趋势与 Top 榜按最近 2 万条统计，可能偏低。'
+        : ''
+    }
     const today = data.today || {}
     const week = data.week || {}
     const totals = data.totals || {}
@@ -953,7 +965,8 @@
       msg.textContent = ''
       toast(error.message || '连接失败', true)
     } finally {
-      button.disabled = false
+      // 未配置存储时测试按钮保持禁用，避免恢复成可点后只得到 400
+      button.disabled = !(state.storage && state.storage.configured)
     }
   }
 
@@ -1006,7 +1019,7 @@
         audioList.appendChild(
           buildRow(
             {
-              id: 'track-' + Date.now().toString(36),
+              id: uniqueId('track'),
               title: body.title || '新环境音',
               subtitle: '循环播放 · 支持锁屏',
               category: body.category || '环境音',
@@ -1190,7 +1203,7 @@
         bgList.appendChild(
           buildBgRow(
             {
-              id: 'bg-' + Date.now().toString(36),
+              id: uniqueId('bg'),
               title: name || '新背景',
               category: '夜色',
               url: body.url,
@@ -1335,7 +1348,16 @@
         showLogin()
       }
     } catch (error) {
-      showLogin(error.message === '未登录' ? '' : '无法连接后台，请确认服务已启动')
+      const message = (error && error.message) || ''
+      if (message === '未登录') {
+        showLogin('')
+      } else if (error && error.name === 'TypeError') {
+        // fetch 网络层失败（Failed to fetch / 断网/端口不通）
+        showLogin('无法连接后台，请确认服务已启动')
+      } else {
+        // 503 等业务错误直接透传（如“数据库暂时不可用”），避免误导去重启服务
+        showLogin(message || '无法连接后台，请确认服务已启动')
+      }
     }
   }
 
@@ -1392,7 +1414,7 @@
     }
 
     const item = {
-      id: 'track-' + Date.now().toString(36),
+      id: uniqueId('track'),
       title: '新环境音',
       subtitle: '循环播放 · 支持锁屏',
       category: '环境音',
@@ -1420,7 +1442,7 @@
       return
     }
     const item = {
-      id: 'bg-' + Date.now().toString(36),
+      id: uniqueId('bg'),
       title: '新背景',
       category: '夜色',
       url: '',

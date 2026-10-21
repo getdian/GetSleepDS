@@ -300,14 +300,6 @@
   opacity: 0.55;
 }
 
-.np-x {
-  color: rgba(255, 255, 255, 0.58);
-}
-
-.np-x.np-icon--tap {
-  opacity: 0.4;
-}
-
 /* 暂停图标：两根细竖条（对齐参考图，不用胶囊圆角） */
 .np-ico-pause {
   display: flex;
@@ -333,33 +325,6 @@
   border-bottom: 15rpx solid transparent;
   border-left: 24rpx solid currentColor;
   animation: npIconIn 0.16s var(--ease-gentle);
-}
-
-/* 关闭图标：细 ×，中心对齐、旋转后对角线约 21rpx */
-.np-ico-x {
-  position: relative;
-  width: 30rpx;
-  height: 30rpx;
-  animation: npIconIn 0.16s var(--ease-gentle);
-}
-
-.np-xbar {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 4rpx;
-  height: 32rpx;
-  margin: -16rpx 0 0 -2rpx;
-  border-radius: 2rpx;
-  background: currentColor;
-}
-
-.np-x-a {
-  transform: rotate(45deg);
-}
-
-.np-x-b {
-  transform: rotate(-45deg);
 }
 
 /* 播放/暂停切换时给图标一个轻微的“落定”反馈 */

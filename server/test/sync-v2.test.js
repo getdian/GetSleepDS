@@ -152,3 +152,13 @@ test('后续分片 includeAll=false 时不回传全量 records/deletedDays', asy
   assert.deepEqual(res.body.records, [])
   assert.deepEqual(res.body.deletedDays, [])
 })
+
+test('includeAll 必须是布尔值，字符串不能触发全量回填', async () => {
+  const res = await post('/api/records/sync', {
+    code: 'sync-v2',
+    records: [],
+    includeAll: 'false'
+  })
+  assert.equal(res.status, 400)
+  assert.equal(res.body.error.code, 'INVALID_BODY')
+})

@@ -395,7 +395,7 @@ Page({
       success: (res) => {
         if (!res.confirm) return
         if (!storage.removeRecord(record.day)) {
-          wx.showToast({ title: '撤销未完成，请重试一次', icon: 'none' })
+          wx.showToast({ title: '撤销未完成，请重试（避免云端恢复）', icon: 'none' })
           return
         }
         this.refresh()

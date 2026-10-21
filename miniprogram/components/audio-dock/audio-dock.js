@@ -10,6 +10,7 @@ const playerState = require('../../utils/player-state')
 const tabbar = require('../../utils/tabbar')
 
 const ICONS = ['rain', 'wave', 'fire', 'noise', 'night']
+const TOGGLE_GUARD_MS = 220
 const TONES = {
   自然之声: 'teal',
   白噪音: 'blue',
@@ -76,7 +77,8 @@ Component({
   lifetimes: {
     attached() {
       this._alive = true
-      this._pageVisible = true
+      // 等 pageLifetimes.show 再置 true，避免首帧就弹到别的页面上
+      this._pageVisible = false
       this._audio = null
       this._cfg = getConfig()
       this._sheetTrackId = ''
@@ -114,7 +116,8 @@ Component({
           if (
             expiredAt &&
             Date.now() - expiredAt < 2000 &&
-            this._pageVisible
+            this._pageVisible &&
+            playerState.claimExpiryToast()
           ) {
             wx.showToast({ title: '定时结束，已停止播放', icon: 'none' })
           }
@@ -124,7 +127,8 @@ Component({
         if (this._pageVisible) this.syncPlayerText()
       })
       this._unlockTimer = setInterval(() => {
-        if (this._alive) this.refreshUnlock()
+        // 隐藏页不 setData；回到前台由 pageLifetimes.show 补一次
+        if (this._alive && this._pageVisible) this.refreshUnlock()
       }, 60 * 1000)
 
       const meta = storage.getMeta()
@@ -171,6 +175,8 @@ Component({
   pageLifetimes: {
     show() {
       this._pageVisible = true
+      // 回到前台/切回入睡页时按墙钟再校准一次定时；app.onShow 之外的幂等兜底
+      audioTimer.restore()
       // 统计页“清除数据”会 stop 音频并清空 meta；回到入睡页时同步清掉残留迷你条
       if (storage.getMeta().lastTrackActive === false && this.data.currentId) {
         this.setData({ currentId: '', currentTitle: '', currentCategory: '', playing: false, loading: false, playerSub: '', timerRemainText: '', miniExpanded: false, collapsed: false, collapsing: false })
@@ -179,6 +185,8 @@ Component({
       // 不能沿用隐藏前的 playing，否则会出现“已暂停却显示正在播放、点暂停无效”。
       this.syncFromAudio()
       this.syncPlayerText()
+      // 隐藏期间解锁可能到期；回前台补一次，避免继续显示“已解锁”
+      this.refreshUnlock()
       if (this.data.open) tabbar.hide()
       else tabbar.show()
     },
@@ -255,7 +263,8 @@ Component({
     refreshCache() {
       if (!this._alive) return
       const tracks = this.data.tracks
-      const count = cache.cachedCount(tracks, this._ttlDays)
+      const current = this.findTrack(this.data.currentId)
+      const count = cache.cachedCount(tracks, this._ttlDays, current && current.url)
       const mb = (cache.usedBytes() / 1024 / 1024).toFixed(1)
       this.setData({
         cacheCount: count,
@@ -314,11 +323,18 @@ Component({
           remainText = '本次会话有效 · 重进需重新解锁'
         }
       }
-      this.setData({
-        unlocked,
-        freeMode,
-        unlockRemainText: remainText
-      })
+      // 文案未变时不要每分钟 setData（60s 轮询的常态）
+      const changed =
+        unlocked !== this.data.unlocked ||
+        freeMode !== this.data.freeMode ||
+        remainText !== this.data.unlockRemainText
+      if (changed) {
+        this.setData({
+          unlocked,
+          freeMode,
+          unlockRemainText: remainText
+        })
+      }
       // 到期即停止当前曲目，避免“已过期但仍可续播”的权益漏洞。
       if (expired && this.data.currentId) {
         this.stopPlayback()
@@ -351,6 +367,10 @@ Component({
     finishUnlock(ttlMs) {
       const persist = (expire) => {
         if (!storage.setUnlockExpire(expire)) {
+          // 本会话兜底解锁，并同步给 now-playing，避免首页把这次有效会话当成未解锁
+          this._sessionUnlocked = true
+          const app = getApp()
+          if (app && app.globalData) app.globalData.audioUnlockedSession = true
           wx.showToast({ title: '解锁状态保存失败，请清理存储空间', icon: 'none' })
           return false
         }
@@ -358,7 +378,10 @@ Component({
       }
       return withLogin((code) => api.unlockAudio(code))
         .then((res) => {
-          const expire = res && res.expireAt ? res.expireAt : Date.now() + ttlMs
+          // 服务端时钟偏慢可能返回过去时间：此时按本地 TTL 兜底，避免“已解锁”提示但实际无效
+          const now = Date.now()
+          const serverExpire = Number(res && res.expireAt)
+          const expire = serverExpire > now ? serverExpire : now + ttlMs
           return persist(expire)
         })
         .catch(() => persist(Date.now() + ttlMs))
@@ -448,6 +471,8 @@ Component({
             cache.remove(badUrl)
             this.refreshCache()
             this.setData({ loading: false })
+            // 同一轮错误只允许一个组件执行远程回退；now-playing 已处理过时不要重复赋 src。
+            if (playerState.isFallbacking(badUrl)) return
             // 标记“正在回退”，让同时监听的 now-playing 不要把这次错误当终态。
             playerState.markFallback(badUrl)
             storage.patchMeta({ lastTrackActive: true })
@@ -591,7 +616,7 @@ Component({
     /** 命中缓存才返回本地路径；本会话判坏的 URL 一律走远程 */
     peekCached(url) {
       if (!url || this._badUrls[url]) return ''
-      return cache.peek(url, this._ttlDays)
+      return cache.peek(url, this._ttlDays, url)
     },
 
     play(track, localPath) {
@@ -632,16 +657,33 @@ Component({
       this._audio.singer = '睡点'
       this._audio.src = cached || track.url
 
-      storage.patchMeta({
+      const savedMeta = storage.patchMeta({
         lastTrackId: track.id,
         lastTrackTitle: track.title,
         lastTrackCategory: track.category || '',
         lastTrackActive: true,
         lastTrackPlaying: true
       })
+      // 存储满时播放本身仍可用，但下次进入无法恢复曲目，必须让用户知道
+      if (!savedMeta) wx.showToast({ title: '播放状态保存失败', icon: 'none' })
       events.track('audio_play', track.id)
 
       if (this.data.timerEnabled) audioTimer.arm(this.data.timerMinutes)
+    },
+
+    /** play() 在部分基础库会同步抛错；失败时回到暂停态，别留下“正在播放”的假状态 */
+    safePlay() {
+      if (!this._audio) return false
+      try {
+        this._audio.play()
+        return true
+      } catch (e) {
+        this.disarmLoadingGuard()
+        this.setData({ playing: false, loading: false })
+        storage.patchMeta({ lastTrackPlaying: false })
+        if (this._pageVisible) wx.showToast({ title: '播放失败，请重试', icon: 'none' })
+        return false
+      }
     },
 
     replay() {
@@ -650,7 +692,7 @@ Component({
       if (this._stopRequested || !this.data.currentId) return
       if (!this.isUnlocked() && !this.isFreeMode()) {
         this.stopPlayback()
-        wx.showToast({ title: '解锁已到期，重新解锁后继续', icon: 'none' })
+        if (this._pageVisible) wx.showToast({ title: '解锁已到期，重新解锁后继续', icon: 'none' })
         return
       }
       const track = this.findTrack(this.data.currentId)
@@ -661,10 +703,16 @@ Component({
       this.armLoadingGuard()
       this._audio.title = '睡点 · ' + track.title
       this._audio.src = cached || track.url
+      // 赋值 src 不会在所有基础库上自动起播；与 now-playing.handleEnded 及
+      // togglePlay 正常分支保持同一口径，否则自然播完会静默停住。
+      this.safePlay()
     },
 
     togglePlay() {
       if (!this._audio || !this.data.currentId) return
+      const now = Date.now()
+      if (now - (this._toggleAt || 0) < TOGGLE_GUARD_MS) return
+      this._toggleAt = now
       // 以 BackgroundAudioManager 的真实 paused 为准；不能用 data.playing，
       // 页面隐藏期间系统侧暂停时 data 可能滞后，导致“点暂停没反应”。
       if (!this._audio.paused) {
@@ -673,6 +721,13 @@ Component({
         storage.patchMeta({ lastTrackPlaying: false })
         this._audio.pause()
         audioTimer.pause()
+        return
+      }
+
+      // 解锁到期后允许暂停，但不允许从迷你条直接续播；必须回入睡页重新解锁。
+      if (!this.isUnlocked() && !this.isFreeMode()) {
+        this.stopPlayback()
+        if (this._pageVisible) wx.showToast({ title: '解锁已到期，重新解锁后继续', icon: 'none' })
         return
       }
 
@@ -699,6 +754,9 @@ Component({
           lastTrackPlaying: true
         })
         if (this.data.timerEnabled) audioTimer.arm(this.data.timerMinutes)
+        // 系统侧 stop 后重设 src 不会自动起播：必须显式 play，否则首次点击无声、
+        // 需要再点一次（与同函数末尾的正常恢复分支一致）。
+        this.safePlay()
         return
       }
 
@@ -706,7 +764,7 @@ Component({
       storage.patchMeta({ lastTrackPlaying: true })
       this.clearCollapseTimer()
       this.setData({ playing: true, miniExpanded: false, collapsed: false, collapsing: false })
-      this._audio.play()
+      this.safePlay()
     },
 
     expandMini() {
@@ -878,6 +936,8 @@ Component({
         .then((ok) => {
           if (seq !== this._unlockSeq) return null
           if (!ok) {
+            // 用户没看完广告：后台预热下载也要停掉，避免继续占流量/写缓存
+            if (track && track.url && cache.cancel) cache.cancel(track.url)
             if (this._alive) this.setData({ unlocking: false, prepareText: '' })
             return null
           }
@@ -887,7 +947,7 @@ Component({
           if (finished === null || seq !== this._unlockSeq || !this._alive) return
           // 有效期写入失败时保留“本次会话已解锁”，避免抽屉文案与点击行为互相矛盾。
           if (finished === false) this._sessionUnlocked = true
-          const localPath = cache.peek(track.url, this._ttlDays)
+          const localPath = cache.peek(track.url, this._ttlDays, track.url)
           this.setData({
             sheetShow: false,
             unlocking: false,
@@ -921,9 +981,11 @@ Component({
     /* ---------------- 定时 ---------------- */
     onTimerTap(event) {
       const minutes = Number(event.currentTarget.dataset.value)
+      // 页面隐藏期间系统侧暂停/恢复会让 data.playing 滞后，起表判断必须用真实播放器状态
+      const playing = !!(this._audio && !this._audio.paused)
       if (minutes === this.data.timerMinutes) {
         // 重复点当前项时，若计时已结束，重新启用；不改变偏好
-        if (minutes && this.data.playing && !audioTimer.remaining()) {
+        if (minutes && playing && !audioTimer.remaining()) {
           audioTimer.start(minutes)
           this.syncPlayerText()
           wx.showToast({ title: minutes + ' 分钟后自动关闭', icon: 'none' })
@@ -941,7 +1003,7 @@ Component({
         if (wasOn) wx.showToast({ title: '已关闭定时', icon: 'none' })
         return
       }
-      if (this.data.playing) {
+      if (playing) {
         audioTimer.start(minutes)
         this.syncPlayerText()
         wx.showToast({ title: minutes + ' 分钟后自动关闭', icon: 'none' })

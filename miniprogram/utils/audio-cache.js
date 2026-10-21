@@ -79,8 +79,12 @@ function ensureDir() {
   })
 }
 
-/** 命中缓存返回本地路径，否则返回空字符串 */
-function peek(url, ttlDays) {
+/**
+ * 命中缓存返回本地路径，否则返回空字符串。
+ * keepUrl：正在播放的 URL。TTL 到期时只判空、不删文件，
+ * 否则 refreshCache/applyFilter 这类高频调用会删掉在播文件导致中断。
+ */
+function peek(url, ttlDays, keepUrl) {
   if (!url) return ''
   const meta = readMeta()
   const item = meta[url]
@@ -88,7 +92,10 @@ function peek(url, ttlDays) {
 
   const age = Date.now() - (item.savedAt || 0)
   if (ttlDays && age > ttlDays * DAY_MS) {
-    remove(url)
+    if (!keepUrl || keepUrl !== url) {
+      remove(url)
+      notify()
+    }
     return ''
   }
 
@@ -98,6 +105,8 @@ function peek(url, ttlDays) {
   } catch (e) {
     delete meta[url]
     writeMeta(meta)
+    // 文件已丢：让“已缓存”角标/缓存统计立即刷新，而不是等下一次手动刷新
+    notify()
     return ''
   }
 }
@@ -194,7 +203,8 @@ function download(url, onProgress, ttlDays, onTask) {
 }
 
 function ensure(url, onProgress, ttlDays) {
-  const cached = peek(url, ttlDays)
+  // 即使 TTL 已过也不先删旧文件：rename 会原子覆盖，提前删只会在播时造成中断
+  const cached = peek(url, ttlDays, url)
   if (cached) return Promise.resolve(cached)
 
   const running = inflight.get(url)
@@ -293,8 +303,8 @@ function usedBytes() {
   return Object.keys(meta).reduce((total, url) => total + (meta[url].size || 0), 0)
 }
 
-function cachedCount(tracks, ttlDays) {
-  return (tracks || []).filter((track) => !!peek(track.url, ttlDays)).length
+function cachedCount(tracks, ttlDays, keepUrl) {
+  return (tracks || []).filter((track) => !!peek(track.url, ttlDays, keepUrl)).length
 }
 
 function cleanAll(exceptUrl) {

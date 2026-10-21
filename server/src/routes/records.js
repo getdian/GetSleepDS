@@ -29,27 +29,25 @@ function createRecordsRoute(options) {
       const parsed = validateRecords(req.body && req.body.records, { now: current })
       const deletedDays = validateDeletions(req.body && req.body.deletedDays, { now: current })
 
+      // 没有 syncRecords 的旧/自定义存储无法处理墓碑与 erasure 水位；
+      // 继续用 upsert 降级会静默绕过合规删除（旧设备可把已删记录写回），故 fail-closed。
+      if (!db.syncRecords) {
+        throw apiError('NOT_SUPPORTED', '当前存储不支持增量同步语义', 501)
+      }
       let result = null
       try {
-        result = db.syncRecords
-          ? await db.syncRecords(openid, parsed.records, deletedDays, current)
-          : await (async () => {
-              await db.upsertRecords(openid, parsed.records)
-              return {
-                accepted: parsed.records.length,
-                dropped: 0,
-                records: await db.getRecords(openid),
-                deletedDays: [],
-                erasedAt: 0
-              }
-            })()
+        result = await db.syncRecords(openid, parsed.records, deletedDays, current)
       } catch (e) {
         throw dbUnavailable()
       }
 
       // 分片上传时只有首片需要云端全量回填；后续片省掉 records/deletedDays，
       // 避免 400 条历史 × 7 片 = 7 倍全量下载。
-      const includeAll = !(req.body && req.body.includeAll === false)
+      const rawIncludeAll = req.body && req.body.includeAll
+      if (rawIncludeAll !== undefined && typeof rawIncludeAll !== 'boolean') {
+        throw invalidBody('includeAll 必须是布尔值')
+      }
+      const includeAll = rawIncludeAll !== false
       res.json({
         synced: result.accepted,
         dropped: parsed.dropped + result.dropped,

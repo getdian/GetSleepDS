@@ -1,5 +1,30 @@
 # 睡点 · 关键更新记录
 
+## 2026-10-21 · 复审补丁（迷你条权益 / 弱网 loading）
+
+- `now-playing.toggle()` 不再在权益校验前写 `audioSession`，只在真正起播时标记会话；播放失败回滚时同步清 `loading`，不再停在「缓冲中…」。
+- 入睡页迷你条的播放按钮补解锁校验：到期后允许暂停，但不能从迷你条直接续播，必须回入睡页重新解锁；`replay()` 的到期提示只在当前页可见时弹出。
+- `now-playing` 补 12s 加载兜底，与 dock 同口径；`play()` 同步抛错时回到暂停态并提示，不留下假播放态。
+- `audio-dock` 的 `play()` 统一走 `safePlay()`，异常时清加载态并提示。
+- 验证：`npm test` 153 项 / 152 通过 / 0 失败（1 项 PG skip）；`npm run check` 通过；`node --check` 与 IDE lint 通过。
+
+## 2026-10-21 · 复审修复（权益闭环 / 清除数据竞态 / 音频竞态 / 小屏护栏）
+
+- **P0 权益**：`now-playing` 补 `isUnlocked/isFreeMode`，在 `toggle` 起播、`rebuildSource`、`handleEnded`、系统 `onPlay` 四处前置校验；解锁到期后首页/统计页不能再靠迷你条或系统通知栏续播。dock 的「本会话兜底解锁」通过 `globalData.audioUnlockedSession` 共享，清除数据时同步撤销。
+- **P1 数据**：`eraseThenClear` 统一改为「先关同步 + 置 `cloudPendingErase` 闸门 + `whenIdle()` 等在途同步结束 → 再 erase」，修复清除后云端被在途分片重新写回的隐私缺口；未开云备份的分支同样生效。
+- **P1 视觉**：≤360px 不再隐藏结果页「推荐/偏短/不足」护栏徽标、不再让主推荐行换行；meta 用 `flex:1 + ellipsis` 收缩，避免背面撑高。
+- **P2 音频**：`onError` 回退加 `isFallbacking` 去重；dock `togglePlay` 补 220ms 重入锁；`onTimerTap` 改用真实 `audio.paused`；`now-playing` 补 `loading/onCanplay`、`rebuildSource` 校验 https；两组件 `pageLifetimes.show` 补幂等 `restore()`；定时到点 toast 用 `playerState.claimExpiryToast()` 跨组件去重；解锁 `expireAt` 回退到过去时间时按本地 TTL 兜底。
+- **P2/UX**：`--z-overlay` 9999→160，迷你条不再压住背景选择器/解锁面板；`audio-cache.peek` 失效补 notify；广告跳过时取消后台预热下载；`play` 的 meta 写失败提示；云备份开关写失败保持原状态；事件队列丢弃补 `meta.eventDropped` 计数；`now-link/result-fall` 命中区补到 72rpx。
+- **P3 清理**：90 分钟常量收敛到 `time.js`；`DEFAULT_FALL` 常量；`prefs.wakeTime` 非法值回退；移除 `time-wheel.getValue`、页面 `view.allPassed`、now-playing 关闭图标死规则；`tw-item` 去掉 font-size 过渡；文档口径同步（时段词/1 分钟粒度/睡眠提示非医疗建议）。
+- 验证：`npm test` 153 tests / 152 passed / 1 PG skip；`npm run check` 通过；全部修改文件 `node --check` 通过；IDE lint 0。未真机验证：解锁到期跨页交互、loading 文案、320px 结果面、z-index 浮层层叠、清除数据与在途同步竞态。
+
+## 2026-10-21 · P3 视觉治理 + 后台加固
+
+- **视觉治理**：清理 `audio-dock.wxss` 6 组无 wxml 引用的死样式（旧关闭按钮/解锁条/单曲提示/重复副标题），移除 `ad-slot` 的 `is-settled` 与 `dock-note` 的 `is-playing` 空类；提升“已过”时刻、入睡耗时档位、脚注、背景状态/空态、定时胶囊的可读性；模式胶囊与结果头改用 CSS 日/月图标，不再使用 emoji；删除 custom tabBar 下不再使用的 8 个 tab PNG 与 app.json `iconPath`（主包约 386.3 KB）；`stats.goHome` 更名 `goSleep`；docs/09 同步空态新设计。
+- **后台加固**：三个上传端点接入 20/min 限流（在 multer 解析文件前）；新增环境音/背景图 ID 加随机后缀，修复同一毫秒连续新增导致保存报“ID 重复”；`includeAll` 增加严格布尔校验；COS SecretId 回显脱敏，且“留空/保持脱敏值”不修改原值；测试连接按钮按配置状态恢复；落地页/演示页补 CSP，非 API 的 404 返回 HTML；看板事件达到 2 万条上限时显示截断提示。
+- **保留**：`/api/admin/stats` 前端虽未使用，但被测试覆盖且 `db.adminStats` 被 analytics 复用，保留为运维诊断端点。
+- 验证：`npm test` 152 passed / 0 failed（1 个 PG 集成 skip）；`npm run check` 通过；模拟器复核计算器/结果面/背景选择器/环境声抽屉，console 无 error。
+
 ## 2026-10-21 · L4 收口（深审修复 · 视觉治理 · 交付打包）
 
 - **音频状态机（P1）**：`audio-dock` 冷启动不再采信上个进程残留的 `lastTrackPlaying`——与 `now-playing` 统一按「本进程有 `audioSession` / 播放器有 `src`」判定，无会话时清 meta 与迷你条（修复「显示正在播放但无声、点暂停反而起播」）；`attached` 顺序改为 `audioTimer.restore()` 先于 `syncFromAudio()`。`audio-dock` 与 `now-playing` 的 `onEnded` 用新增 `playerState.claimEnded()`（800ms 窗口）去重，每轮循环只有一个组件重建音源，消除同一 `src` 双写 + 双 `play()`。起播新增 12s 加载兜底（超时提示「加载超时，点音符重试」）。
@@ -11,6 +36,15 @@
 - **视觉治理**：`app.wxss` 新增 `--hero-scrim`（计算器页与 `hero-backdrop` 共用，消除两页压暗值漂移）、`--color-primary-soft`（此前 16 处引用但从未定义，导致入睡页时间轴起点圆点与音频抽屉电平条透明）、`--color-tabbar-surface` 与 z-index 层级表（`--z-hero` … `--z-overlay`）；熄灯遮罩提到 150；audio-dock / now-playing 的绿音符、月金、危险红与 tabbar 表面色收敛为 token。
 - **验证**：`npm test` 148 项 / 147 通过 / 0 失败（1 项 PG 集成 skip），新增 storage 合并 2 条、ended 去重 2 条、配置冲突 2 条；`npm run check` 通过（3 页面 / 21 JSON / 16 WXML / 17 WXSS，396.1 KB）；开发者工具 390×844 三页 + 音频抽屉 + 熄灯遮罩截图复核，console 无 JS 异常；打包 `release-artifacts/getsleep-L4-20261021.zip`（223 文件 / 2.51 MB，含 `RELEASE-MANIFEST.json`）。
 - **真机待验**：播放中杀进程重进不出现幽灵播放态、短音源循环只重播一次、时间轮小幅拖动回中、展开迷你条后第一次点 tab 直接切页。
+
+## 2026-10-21 · 深审复核：自定义 tabBar 挂载 + 音频循环/缓存收口
+
+- **P0 导航**：`app.json` 已设 `tabBar.custom=true`，但三个 tab 页均未声明/挂载 `custom-tab-bar`，原生底栏关闭后底部导航整体缺失。已补三页 `usingComponents` 与 `<custom-tab-bar />`，并在 `tools/check.mjs` 增加守卫（custom=true 时逐页校验声明与挂载），防止再次漏挂。
+- **音频**：`audio-dock.replay()` 与 `togglePlay()` 的 src 重建分支补 `this._audio.play()`，修复系统侧停止/自然播完后“显示播放中但没声音、需点两次”。
+- **缓存**：`audio-cache.peek()` 增加 `keepUrl` 保护，TTL 到期不再删除正在播放的文件；`ensure/cachedCount` 与双端调用点同步传入。
+- **睡眠提示**：`sleep-guide` 文案改为按真实小时数生成，并补“偏长”分支；计算器结果面支持 `guide-long`。
+- **UX/文案**：删除云端副本弹窗明示“含云端解锁状态与统计数据”；后台启动失败区分网络错误与业务错误；空态亮格移到右下角并补微光/CTA 按压反馈；解锁定时器隐藏页不再 setData，回前台补刷新。
+- 验证：`npm test` 148 passed / 0 failed（1 个 PG 集成 skip）；`npm run check` 通过；模拟器 390×844 实测三页 tabBar 渲染/选中/点击切换、统计空态、console 无 error。
 
 ## 2026-10-21 · 落地页改版 + 小程序码后台上传 + GEO
 

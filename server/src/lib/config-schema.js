@@ -184,7 +184,7 @@ function validateConfig(input, base) {
     const icon = ICONS.indexOf(item.icon) >= 0 ? item.icon : 'noise'
 
     let id = readText(item.id, label + ' ID', 32, false)
-    if (!id) id = 'track-' + Date.now().toString(36) + '-' + (index + 1)
+    if (!id) id = 'track-' + Date.now().toString(36) + '-' + (index + 1) + '-' + Math.random().toString(36).slice(2, 6)
     if (!/^[a-zA-Z0-9_-]+$/.test(id)) {
       throw invalidBody(label + ' ID 只能包含字母、数字、下划线和短横线')
     }
@@ -318,7 +318,7 @@ function validateConfig(input, base) {
     const category = readText(item.category, label + '分类', 12, false) || '夜色'
 
     let id = readText(item.id, label + ' ID', 32, false)
-    if (!id) id = 'bg-' + Date.now().toString(36) + '-' + (index + 1)
+    if (!id) id = 'bg-' + Date.now().toString(36) + '-' + (index + 1) + '-' + Math.random().toString(36).slice(2, 6)
     if (!/^[a-zA-Z0-9_-]+$/.test(id)) {
       throw invalidBody(label + ' ID 只能包含字母、数字、下划线和短横线')
     }

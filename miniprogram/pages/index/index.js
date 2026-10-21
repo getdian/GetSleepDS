@@ -10,6 +10,8 @@ const ad = require('../../utils/ad')
 const { getConfig, loadConfig, getConfigStatus } = require('../../utils/config')
 
 const CLOCK_INTERVAL = 60 * 1000
+const DEFAULT_FALL = 15
+const CLOCK_RE = /^([01]\d|2[0-3]):[0-5]\d$/
 
 Page({
   data: {
@@ -18,7 +20,7 @@ Page({
     wakeTime: '07:30',
     wakeContext: '',
     sleepTime: '23:00',
-    fallAsleep: 15,
+    fallAsleep: DEFAULT_FALL,
     fallOptions: [5, 10, 15, 20, 30],
     view: null,
     flipped: false,
@@ -48,14 +50,15 @@ Page({
     const prefs = storage.getPrefs()
     // 入睡默认跟随真实当前时间（时间轮支持 1 分钟粒度），不再固定白天 23:00
     const nowClock = F.fmtClock(T.minutesOf(now))
-    const wakeTime = prefs.wakeTime || '07:30'
+    // 本地偏好可能被写脏（如 99:99），非法时回退默认值，避免算出四天后的日期
+    const wakeTime = CLOCK_RE.test(prefs.wakeTime || '') ? prefs.wakeTime : '07:30'
     this.setData({
       wakeTime,
       // 起床时间补一个“今天/明天”的上下文，避免 07:30 上午不知道指哪天
-      wakeContext: this.wakeContextText(wakeTime, 15, now),
+      wakeContext: this.wakeContextText(wakeTime, DEFAULT_FALL, now),
       sleepTime: nowClock,
       // 入睡耗时以 15 分为默认起点；旧版本存下的 5 分不再作为初值
-      fallAsleep: 15,
+      fallAsleep: DEFAULT_FALL,
       nowText: nowClock
     })
 
@@ -285,7 +288,10 @@ Page({
 
       let note = '三个完整周期都已错过'
       if (main) {
-        if (mainGuide.tone !== 'ok' && mainLate) {
+        if (mainGuide.tone === 'long') {
+          // 时长超过建议上限时“提前上床”反而更糟，直接陈述事实
+          note = mainGuide.note
+        } else if (mainGuide.tone !== 'ok' && mainLate) {
           note =
             (mainGuide.tone === 'low' ? '不足' : '偏短') +
             '且入睡较晚：优先提前上床，保证 7 小时以上'
@@ -324,7 +330,6 @@ Page({
         mainGuideLabel: mainGuide ? mainGuide.label : '',
         mainGuideTone: mainGuide ? mainGuide.tone : '',
         note,
-        allPassed: plan.allPassed,
         compact: !main,
         rows
       }
@@ -363,7 +368,6 @@ Page({
           : (sleepDay === '今天' ? '从 ' + value + ' 上床算起，已含 ' : sleepDay + ' ' + value + ' 上床，已含 ') +
             this.data.fallAsleep +
             ' 分钟入睡',
-        allPassed: false,
         compact: false,
         rows
       }

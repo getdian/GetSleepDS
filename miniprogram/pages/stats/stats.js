@@ -235,15 +235,17 @@ Page({
     this.setData({ heatDetail: text })
   },
 
-  // 自绘开关：状态完全由 data.syncEnabled 驱动，失败/取消时不需要回滚组件状态
+  // 自绘开关：状态由 data.syncEnabled 驱动；写失败时保持原状态，避免 UI 与存储分叉
   onSyncToggle() {
     this.applySyncEnabled(!this.data.syncEnabled)
   },
 
   applySyncEnabled(enabled) {
     if (!enabled) {
+      // 写入失败时保持开关为开启态，避免 UI 与存储不一致、下次 refresh 又弹回
       if (!storage.setSyncEnabled(false)) {
-        wx.showToast({ title: '云备份开关保存失败', icon: 'none' })
+        wx.showToast({ title: '云备份开关保存失败，请重试', icon: 'none' })
+        return
       }
       this.setData({ syncEnabled: false, syncText: '仅存本机 · 未开启云备份' })
       if (this.data.hasCloudCopy) {
@@ -379,7 +381,8 @@ Page({
     if (this._cloudBusy) return
     wx.showModal({
       title: '删除云端副本？',
-      content: '只删除云端备份，本机记录与偏好不受影响。删除后本机数据不会再自动上传。',
+      content:
+        '只删除云端备份（含云端解锁状态与统计数据），本机记录与偏好不受影响。删除后本机数据不会再自动上传。',
       confirmText: '删除云端',
       confirmColor: '#F87171',
       cancelText: '取消',
@@ -437,7 +440,11 @@ Page({
     cache.cleanAll()
     const patch = { syncEpoch: Date.now(), lastTrackActive: false, lastTrackPlaying: false }
     const app = getApp()
-    if (app && app.globalData) app.globalData.audioSession = false
+    if (app && app.globalData) {
+      app.globalData.audioSession = false
+      // 清除全部数据也应撤销“本会话兜底解锁”，否则首页仍可继续播放
+      app.globalData.audioUnlockedSession = false
+    }
     if (hadCloud && !opts.cloudCleared) {
       patch.lastSyncAt = cloudAt
       patch.cloudPendingErase = true
@@ -458,6 +465,13 @@ Page({
     const hadCloud = !!storage.getMeta().lastSyncAt
     wx.showLoading({ title: '清除中', mask: true })
 
+    // 先关同步：否则 erase 往返窗口内，任何在途/新发起的 sync 都可能把记录重新传回云端。
+    if (!storage.setSyncEnabled(false)) {
+      wx.hideLoading()
+      wx.showToast({ title: '云备份开关保存失败，请重试', icon: 'none' })
+      return
+    }
+
     // 未开启云备份：本地是唯一数据源，必须先删掉；云端历史副本尽力而为，失败不阻断
     if (!synced) {
       const cleared = this.clearLocalData()
@@ -466,25 +480,26 @@ Page({
         title: cleared ? '已清除本机数据' : '本机数据未完全清除，请重试',
         icon: 'none'
       })
-      if (hadCloud) {
-        withLogin((code) => api.eraseRecords(code))
-          .then(() => {
-            storage.patchMeta({ lastSyncAt: 0, cloudPendingErase: false })
-            this.refresh(false)
-            wx.showToast({ title: '云端副本已删除', icon: 'none' })
-          })
-          .catch(() => {
-            // lastSyncAt/cloudPendingErase 已保留，统计页会出现“删除云端副本”重试入口
-            this.refresh(false)
-            wx.showToast({ title: '云端副本未删除，可在统计页重试', icon: 'none' })
-          })
-      } else {
-        withLogin((code) => api.eraseRecords(code)).catch(() => {})
-      }
+      // 先等在途同步结束，再删云端，避免它在 erase 之后把记录重新写回。
+      whenIdle()
+        .then(() => withLogin((code) => api.eraseRecords(code)))
+        .then(() => {
+          storage.patchMeta({ lastSyncAt: 0, cloudPendingErase: false })
+          this.refresh(false)
+          if (hadCloud) wx.showToast({ title: '云端副本已删除', icon: 'none' })
+        })
+        .catch(() => {
+          // lastSyncAt/cloudPendingErase 已保留，统计页会出现“删除云端副本”重试入口
+          this.refresh(false)
+          if (hadCloud) wx.showToast({ title: '云端副本未删除，可在统计页重试', icon: 'none' })
+        })
       return
     }
 
-    withLogin((code) => api.eraseRecords(code))
+    // 开启云备份：先置闸门并等在途同步结束，成功后再清本机，避免云端残留。
+    storage.patchMeta({ syncEpoch: Date.now(), cloudPendingErase: true })
+    whenIdle()
+      .then(() => withLogin((code) => api.eraseRecords(code)))
       .then(() => {
         const cleared = this.clearLocalData({ cloudCleared: true })
         wx.hideLoading()
@@ -813,7 +828,7 @@ Page({
     return payload
   },
 
-  goHome() {
+  goSleep() {
     wx.switchTab({ url: '/pages/sleep/sleep' })
   }
 })

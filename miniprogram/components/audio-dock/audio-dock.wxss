@@ -138,8 +138,7 @@
   animation-delay: 0.42s;
 }
 
-.dock-mini-status.is-off .dock-sbar,
-.dock-mini.is-out .dock-sbar {
+.dock-mini-status.is-off .dock-sbar {
   animation-play-state: paused;
 }
 
@@ -191,10 +190,6 @@
   opacity: 0.55;
 }
 
-.dmc-x {
-  color: rgba(255, 255, 255, 0.58);
-}
-
 /* 暂停态图标：两根细竖条（与 now-playing 同几何） */
 .dock-ico-pause {
   display: flex;
@@ -222,26 +217,6 @@
   animation: dockIconIn 0.16s var(--ease-gentle);
 }
 
-/* 关闭图标：细 ×，中心对齐 */
-.dock-ico-x {
-  position: relative;
-  width: 30rpx;
-  height: 30rpx;
-  animation: dockIconIn 0.16s var(--ease-gentle);
-}
-
-.dock-xbar {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 3rpx;
-  height: 30rpx;
-  margin: -15rpx 0 0 -1.5rpx;
-  border-radius: 2rpx;
-  background: currentColor;
-  transform-origin: 50% 50%;
-}
-
 @keyframes dockIconIn {
   from {
     opacity: 0;
@@ -251,14 +226,6 @@
     opacity: 1;
     transform: scale(1);
   }
-}
-
-.dx-a {
-  transform: rotate(45deg);
-}
-
-.dx-b {
-  transform: rotate(-45deg);
 }
 
 /* 遮罩与抽屉 */
@@ -371,14 +338,6 @@
   color: var(--text-moon-pure);
 }
 
-.dock-head-sub {
-  font-size: 20rpx;
-  color: var(--text-muted);
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
 .dock-head-stop {
   flex: none;
   min-height: 72rpx;
@@ -464,50 +423,6 @@
   flex: none;
   font-size: 19rpx;
   color: var(--color-primary-soft);
-}
-
-/* 解锁条 */
-.dock-unlock {
-  margin-top: 14rpx;
-  padding: 16rpx 18rpx;
-  border-radius: var(--radius-md);
-  border: 1rpx solid var(--border-glow);
-  background: var(--glass-tint);
-  display: flex;
-  align-items: center;
-  gap: 14rpx;
-  flex: none;
-}
-
-.dock-unlock-ico {
-  width: 46rpx;
-  height: 46rpx;
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  border: 1rpx solid rgba(167, 164, 255, 0.24);
-  background: rgba(99, 102, 241, 0.14);
-  font-size: 24rpx;
-  color: var(--color-primary-soft);
-}
-
-.dock-unlock-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 3rpx;
-  min-width: 0;
-}
-
-.du-main {
-  font-size: 23rpx;
-  color: var(--text-primary);
-}
-
-.du-sub {
-  font-size: 19rpx;
-  color: var(--text-muted);
 }
 
 /* 搜索 */
@@ -770,52 +685,6 @@
   color: var(--text-muted);
 }
 
-.dock-tip {
-  display: flex;
-  align-items: flex-start;
-  gap: 14rpx;
-  margin-top: 22rpx;
-  padding: 20rpx;
-  border-radius: var(--radius-md);
-  border: 1rpx solid rgba(167, 164, 255, 0.14);
-  background: rgba(255, 255, 255, 0.035);
-}
-
-.dock-tip-orb {
-  width: 54rpx;
-  height: 54rpx;
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  border: 1rpx solid rgba(167, 164, 255, 0.22);
-  background: rgba(99, 102, 241, 0.1);
-  font-family: var(--font-cn-serif);
-  font-size: 28rpx;
-  color: var(--color-primary-soft);
-}
-
-.dock-tip-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 4rpx;
-  min-width: 0;
-}
-
-.dock-tip-title {
-  font-family: var(--font-cn-serif);
-  font-size: 24rpx;
-  letter-spacing: 1rpx;
-  color: var(--text-secondary);
-}
-
-.dock-tip-sub {
-  font-size: 19rpx;
-  line-height: 1.55;
-  color: var(--text-muted);
-}
-
 /* 定时：左图标+文案，右侧等分胶囊分段（参考设计稿） */
 .dock-timer {
   display: flex;
@@ -1071,11 +940,6 @@
   line-height: 1;
   color: var(--color-primary-soft);
   text-shadow: 0 0 18rpx rgba(130, 125, 255, 0.45);
-}
-
-.dock-head-sub {
-  color: var(--text-muted);
-  font-size: 19rpx;
 }
 
 .dock-title {
@@ -1434,9 +1298,9 @@
   border-radius: 999rpx;
   background: transparent !important;
   box-shadow: none !important;
-  font-size: 22rpx;
+  font-size: 23rpx;
   text-align: center;
-  color: rgba(170, 186, 215, 0.55);
+  color: rgba(190, 204, 230, 0.7);
 }
 
 .dock-timer-chip.is-on {
@@ -1466,43 +1330,6 @@
 
 .dock-tail {
   margin-top: 4rpx;
-}
-
-/* 单曲提示：一行柔光文字，不做卡 */
-.dock-tip {
-  display: flex;
-  align-items: flex-start;
-  gap: 12rpx;
-  margin-top: 18rpx;
-  padding: 0 4rpx;
-  border: none;
-  background: transparent;
-}
-
-.dock-tip-orb {
-  width: 34rpx;
-  height: 34rpx;
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: transparent;
-  font-family: var(--font-cn-serif);
-  font-size: 26rpx;
-  color: var(--color-primary-soft);
-}
-
-.dock-tip-title {
-  font-size: 22rpx;
-  letter-spacing: 1rpx;
-  color: var(--text-secondary);
-}
-
-.dock-tip-sub {
-  font-size: 18rpx;
-  line-height: 1.55;
-  color: var(--text-muted);
 }
 
 /* ============================================================
@@ -1625,10 +1452,4 @@
   width: 7rpx;
   height: 32rpx;
   border-radius: 2rpx;
-}
-
-.dock-mini .dock-xbar {
-  width: 4rpx;
-  height: 32rpx;
-  margin: -16rpx 0 0 -2rpx;
 }
