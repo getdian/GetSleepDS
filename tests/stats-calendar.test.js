@@ -144,13 +144,12 @@ test('3 列核心指标：大数字 + 短标签 + 一行变化，说明卡固定
   assert.equal(result.metrics[0].value, '3h39')
   assert.equal(result.metrics[0].sub, '持平')
   assert.equal(result.metrics[2].label, '平均起床')
-  // 只记录 2 天：仍给常见区间陈述，但明确标注样本不足
-  assert.match(result.durationNote, /比常见 7.5–8 小时少 3 小时 51 分/)
-  assert.match(result.durationHint, /按已记录的 2 天算/)
   result.metrics.forEach((item) => {
     assert.equal(item.detail.length, 3)
     assert.ok(item.detail.every((line) => typeof line === 'string' && line.length > 0))
   })
+  // 常见 7.5–8 小时陈述只留在点击后的说明卡里，不再占首屏
+  assert.match(result.metrics[0].detail[1], /比常见 7.5–8 小时少 3 小时 51 分/)
   assert.match(result.metrics[1].detail[2], /按醒来日归档/)
   assert.match(result.metrics[2].detail[2], /不是闹钟/)
   assert.match(result.metrics[0].detail[2], /每天都是|最长/)
@@ -166,25 +165,23 @@ test('指标在 1 天记录时也给全 3 列；上周无记录不编造对比',
   assert.equal(result.metrics[0].value, '3h39')
   assert.equal(result.metrics[0].sub, '')
   assert.match(result.metrics[0].detail[1], /比常见 7.5–8 小时少 3 小时 51 分/)
-  assert.match(result.durationHint, /按已记录的 1 天算/)
   assert.equal(S.metricsOf({}, NOW).has, false)
 })
 
-test('满 3 天后按常见 7.5–8 小时给事实陈述', () => {
+test('满 3 天后按常见 7.5–8 小时给事实陈述（仅说明卡）', () => {
   const inRange = {
     '2026-10-19': record('2026-10-19', local(2026, 10, 18, 23, 0), local(2026, 10, 19, 6, 50)),
     '2026-10-20': record('2026-10-20', local(2026, 10, 19, 23, 0), local(2026, 10, 20, 6, 50)),
     '2026-10-21': record('2026-10-21', local(2026, 10, 20, 23, 0), local(2026, 10, 21, 6, 50))
   }
-  assert.match(S.metricsOf(inRange, NOW).durationNote, /在常见 7.5–8 小时内/)
+  assert.match(S.metricsOf(inRange, NOW).metrics[0].detail[1], /在常见 7.5–8 小时内/)
 
   const short = {
     '2026-10-19': record('2026-10-19', local(2026, 10, 18, 23, 0), local(2026, 10, 19, 5, 0)),
     '2026-10-20': record('2026-10-20', local(2026, 10, 19, 23, 0), local(2026, 10, 20, 5, 0)),
     '2026-10-21': record('2026-10-21', local(2026, 10, 20, 23, 0), local(2026, 10, 21, 5, 0))
   }
-  assert.match(S.metricsOf(short, NOW).durationNote, /比常见 7.5–8 小时少 1 小时 30 分/)
-  assert.equal(S.metricsOf(short, NOW).durationHint, '')
+  assert.match(S.metricsOf(short, NOW).metrics[0].detail[1], /比常见 7.5–8 小时少 1 小时 30 分/)
 })
 
 test('连续多月日历：数量、顺序、精简字段与跨年', () => {

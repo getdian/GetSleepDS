@@ -19,7 +19,7 @@
   margin-top: 4rpx;
 }
 
-/* 4 列核心指标：大数字 + 短标签 + 一行变化；点击展开说明 */
+/* 3 列核心指标：大数字 + 短标签 + 一行变化；点击展开说明 */
 .metrics {
   display: flex;
   align-items: stretch;
@@ -69,16 +69,6 @@
   line-height: 1.2;
   color: var(--color-primary-soft);
   white-space: nowrap;
-}
-
-.metrics-hint {
-  display: block;
-  margin-top: 10rpx;
-  text-align: center;
-  font-size: 18rpx;
-  letter-spacing: 1rpx;
-  color: var(--text-muted);
-  opacity: 0.75;
 }
 
 .metrics-empty {
@@ -133,25 +123,6 @@
 }
 
 /* 参照陈述：常见 7.5–8 小时；记录不足时第二行给补记引导 */
-.duration-note {
-  margin-top: 18rpx;
-}
-
-.duration-note-text {
-  display: block;
-  font-size: 23rpx;
-  line-height: 1.6;
-  color: var(--text-secondary);
-}
-
-.duration-note-hint {
-  display: block;
-  margin-top: 4rpx;
-  font-size: 19rpx;
-  line-height: 1.5;
-  color: var(--color-primary-soft);
-}
-
 .week-line {
   display: flex;
   align-items: center;
@@ -166,36 +137,28 @@
 }
 
 /* 日历周期切换 */
+/* 周期选项：纯文字无边框；当前项更深、更大、更粗 */
 .span-tabs {
   display: flex;
   align-items: center;
-  gap: 10rpx;
-  margin-bottom: 18rpx;
+  gap: 22rpx;
 }
 
 .span-tab {
-  min-height: 60rpx;
+  min-height: 56rpx;
   display: inline-flex;
   align-items: center;
-  padding: 0 22rpx;
-  border-radius: var(--radius-pill);
-  border: 1rpx solid var(--border-moon-subtle);
-  font-size: 20rpx;
+  padding: 6rpx 0;
+  font-size: 22rpx;
+  line-height: 1.2;
   color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .span-tab.is-on {
-  border-color: var(--border-glow);
-  background: rgba(129, 140, 248, 0.14);
-  color: var(--color-primary-soft);
-}
-
-.cal-tip {
-  display: block;
-  margin-top: 12rpx;
-  font-size: 18rpx;
-  line-height: 1.5;
-  color: var(--text-muted);
+  font-size: 26rpx;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 /* 空格子补记入口 */
@@ -236,14 +199,6 @@
   border-radius: var(--radius-pill);
   border: 1rpx solid var(--border-moon-subtle);
   font-size: 20rpx;
-  color: var(--text-muted);
-}
-
-.range-tag {
-  font-size: 18rpx;
-  line-height: 1.3;
-  letter-spacing: 1rpx;
-  text-align: right;
   color: var(--text-muted);
 }
 

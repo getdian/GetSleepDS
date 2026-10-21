@@ -6,19 +6,19 @@
 .cs-track {
   display: inline-flex;
   align-items: flex-start;
-  gap: 26rpx;
+  gap: 20rpx;
   padding-bottom: 4rpx;
 }
 
 .cs-month {
   flex: none;
-  width: 354rpx;
+  width: 304rpx;
 }
 
 .cs-month-label {
   display: block;
-  margin-bottom: 8rpx;
-  font-size: 20rpx;
+  margin-bottom: 6rpx;
+  font-size: 18rpx;
   line-height: 1;
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
@@ -26,22 +26,24 @@
 
 .cs-week {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 3rpx;
-  margin-bottom: 5rpx;
+  grid-template-columns: repeat(7, 40rpx);
+  gap: 4rpx;
+  justify-content: center;
+  margin-bottom: 4rpx;
 }
 
 .cs-week-cell {
   text-align: center;
-  font-size: 14rpx;
+  font-size: 12rpx;
   color: var(--text-muted);
 }
 
 .cs-grid {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  grid-auto-rows: 48rpx;
-  gap: 3rpx;
+  grid-template-columns: repeat(7, 40rpx);
+  grid-auto-rows: 40rpx;
+  gap: 4rpx;
+  justify-content: center;
 }
 
 /* 一年视图约 450 格：文字直接放在格子里，省掉一层 text 节点 */
@@ -50,9 +52,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6rpx;
+  border-radius: 5rpx;
   background: rgba(255, 255, 255, 0.045);
-  font-size: 16rpx;
+  font-size: 14rpx;
   line-height: 1;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
@@ -99,4 +101,16 @@
 
 .cs-cell.is-partial {
   box-shadow: inset 0 0 0 2rpx var(--border-glow);
+}
+
+/* 空格子右下角小点 = 可补记（小格放不下文字） */
+.cs-cell.is-add::after {
+  content: "";
+  position: absolute;
+  right: 3rpx;
+  bottom: 3rpx;
+  width: 6rpx;
+  height: 6rpx;
+  border-radius: 50%;
+  background: var(--color-primary-soft);
 }

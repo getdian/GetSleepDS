@@ -17,11 +17,11 @@
           wx:for="{{item.cells}}"
           wx:for-item="cell"
           wx:key="key"
-          class="cs-cell {{cell.pad ? 'is-pad' : 'lv-' + cell.level}} {{cell.isToday ? 'is-today' : ''}} {{cell.future ? 'is-future' : ''}} {{cell.partial ? 'is-partial' : ''}} {{selectedKey === cell.key ? 'is-selected' : ''}}"
+          class="cs-cell {{cell.pad ? 'is-pad' : 'lv-' + cell.level}} {{cell.isToday ? 'is-today' : ''}} {{cell.future ? 'is-future' : ''}} {{cell.partial ? 'is-partial' : ''}} {{cell.canAdd ? 'is-add' : ''}} {{selectedKey === cell.key ? 'is-selected' : ''}}"
           data-day="{{cell.day}}"
           bindtap="onTap"
           aria-role="button"
-          aria-label="{{cell.pad ? '' : cell.dayNum + ' 日'}}"
+          aria-label="{{cell.pad ? '' : cell.dayNum + ' 日' + (cell.canAdd ? ' 可补记' : '')}}"
         >{{cell.pad ? '' : cell.dayNum}}</view>
       </view>
     </view>

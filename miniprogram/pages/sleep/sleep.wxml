@@ -47,7 +47,7 @@
         点错了？撤销本次入睡
       </view>
       <view wx:if="{{state === 'idle'}}" class="manual-entry" bindtap="openManualSheet">
-        补记一段已经发生的睡眠
+        补记入睡
       </view>
     </view>
   </block>
@@ -59,8 +59,8 @@
       <text class="done-duration-k">当天总睡眠（含午休/间断）</text>
       <view class="done-timeline">
         <view class="done-time">
-          <text class="done-time-k">主睡眠入睡</text>
-          <text class="done-time-v">{{recordView.bed}}</text>
+          <text class="done-time-k">{{recordView.timelineFirstK}}</text>
+          <text class="done-time-v">{{recordView.firstBed}}</text>
         </view>
         <view class="done-rail">
           <view class="done-rail-dot"></view>
@@ -68,31 +68,31 @@
           <view class="done-rail-dot is-end"></view>
         </view>
         <view class="done-time is-right">
-          <text class="done-time-k">主睡眠起床</text>
-          <text class="done-time-v">{{recordView.wake}}</text>
+          <text class="done-time-k">{{recordView.timelineLastK}}</text>
+          <text class="done-time-v">{{recordView.lastWake}}</text>
         </view>
       </view>
       <view wx:if="{{recordView.sessions.length}}" class="done-sessions">
         <view class="done-sessions-head">
           <text class="done-sessions-k">本日睡眠段</text>
-          <text class="done-sessions-hint">时间不准可修改</text>
+          <text class="done-sessions-hint">时间不准可修正</text>
         </view>
         <view wx:for="{{recordView.sessions}}" wx:key="id" class="done-session-row">
           <view class="done-session-main">
             <text class="done-session-time">{{item.bed}} – {{item.wake}}</text>
             <text class="done-session-dur">{{item.duration}}</text>
           </view>
-          <view class="done-session-edit" data-id="{{item.id}}" data-day="{{item.day}}" catchtap="onEditSession">
-            <view class="edit-pen"></view>
-            <text>修改</text>
+          <view class="done-session-ops">
+            <view class="session-op is-edit" data-id="{{item.id}}" data-day="{{item.day}}" catchtap="onEditSession">修改</view>
+            <view class="session-op is-del" data-id="{{item.id}}" data-day="{{item.day}}" catchtap="onDeleteSession">删除</view>
           </view>
         </view>
       </view>
-      <view class="done-actions">
-        <view wx:if="{{canAddSession}}" class="overwrite" bindtap="onAddSession">{{overwriteText}}</view>
-        <view class="manual-add" bindtap="openManualSheet">补记一段已发生的睡眠</view>
-        <view class="undo" bindtap="onUndoTap">记录有误？撤销当天记录</view>
+      <view class="done-cta-row">
+        <view class="cta-mini is-primary" bindtap="onAddSession">继续入睡（开始计时）</view>
+        <view class="cta-mini" bindtap="openManualSheet">补记入睡</view>
       </view>
+      <view class="undo" bindtap="onUndoTap">记录有误？撤销当天记录</view>
     </view>
   </block>
 
@@ -100,27 +100,9 @@
     <ad-slot slot-name="sleep" enabled="{{ads.sleep.enabled}}" unit-id="{{ads.sleep.unitId}}" type="{{ads.sleep.type}}" />
   </view>
 
-  <view class="week-section fade-up" bindtap="goStats">
-    <view class="week-head">
-      <view class="week-head-copy">
-        <text class="week-title">最近 7 天</text>
-        <text class="week-sub">每个点是一晚</text>
-      </view>
-      <text class="week-link">查看统计 ›</text>
-    </view>
-    <view class="week-days">
-      <view wx:for="{{weekDays}}" wx:key="key" class="week-day">
-        <view class="day-track">
-          <view class="day-fill level-{{item.level}} {{item.partial ? 'is-partial' : ''}} {{item.today ? 'is-today' : ''}}"></view>
-        </view>
-        <text class="day-label {{item.today ? 'is-today-label' : ''}}">{{item.weekday}}</text>
-      </view>
-    </view>
-    <view class="week-summary-row">
-      <text class="week-summary">本周 {{weekCount}} 天</text>
-      <text class="week-sep">·</text>
-      <text class="week-summary">连续 {{streak}} 天</text>
-    </view>
+  <view wx:if="{{weekCount > 0 || streak > 0}}" class="stats-strip fade-up" bindtap="goStats">
+    <text class="stats-strip-main">本周 {{weekCount}} 天 · 连续 {{streak}} 天</text>
+    <text class="stats-strip-link">查看统计 ›</text>
   </view>
 
   <view class="sleep-share">

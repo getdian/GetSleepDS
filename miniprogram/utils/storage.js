@@ -161,6 +161,26 @@ function updateSession(day, sessionId, startAt, endAt) {
   return clearDeleted(day) ? next : false
 }
 
+/**
+ * 删除某一天的某一段睡眠。
+ * 删到当天无剩余段时整条移除（写墓碑，防云端旧记录回填）；
+ * 仍有剩余段时重算聚合（总时长/主睡眠随之变化），当天记录保留。
+ */
+function removeSession(day, sessionId) {
+  const all = getRawRecords()
+  const record = all[day]
+  if (!record) return false
+  const source = X.sessionsOf(record)
+  if (!source.some((item) => item.id === sessionId)) return false
+  const list = source.filter((item) => item.id !== sessionId)
+  if (!list.length) return removeRecord(day, Date.now())
+  const next = X.aggregate(day, list, Date.now())
+  if (!next) return false
+  all[day] = next
+  if (!safeSet(KEYS.records, all)) return false
+  return clearDeleted(day) ? next : false
+}
+
 /** 开发工具用：整体替换记录表（调用方负责墓碑等一致性） */
 function replaceRecords(map) {
   return safeSet(KEYS.records, map && typeof map === 'object' ? map : {})
@@ -359,6 +379,7 @@ module.exports = {
   saveRecord,
   saveSession,
   updateSession,
+  removeSession,
   replaceRecords,
   removeRecord,
   getDeleted,

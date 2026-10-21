@@ -40,14 +40,6 @@
       <text class="metrics-empty-sub">打一次卡，这里就会出现 3 个核心数字。</text>
     </view>
 
-    <!-- 以常见 7.5–8 小时做事实参照；记录不足时先提示补记 -->
-    <view wx:if="{{durationNote}}" class="duration-note fade-up">
-      <text class="duration-note-text">{{durationNote}}</text>
-      <text wx:if="{{durationHint}}" class="duration-note-hint">{{durationHint}}</text>
-    </view>
-
-    <text wx:if="{{metrics.length && !metricDetail}}" class="metrics-hint">点数字看说明</text>
-
     <!-- 点指标展开的事实说明：3 行以内，口径与对比都在这里 -->
     <view wx:if="{{metricDetail}}" class="metric-detail fade-up">
       <view class="md-head">
@@ -69,14 +61,13 @@
     <view class="section fade-up">
       <view class="section-head">
         <text class="section-title">打卡日历</text>
-        <text class="range-tag">颜色越亮 = 睡得越久</text>
-      </view>
-
-      <view class="span-tabs">
-        <view class="span-tab {{calendarSpan === 1 ? 'is-on' : ''}}" data-span="1" bindtap="onSpanTap">当月</view>
-        <view class="span-tab {{calendarSpan === 3 ? 'is-on' : ''}}" data-span="3" bindtap="onSpanTap">3 个月</view>
-        <view class="span-tab {{calendarSpan === 6 ? 'is-on' : ''}}" data-span="6" bindtap="onSpanTap">6 个月</view>
-        <view class="span-tab {{calendarSpan === 12 ? 'is-on' : ''}}" data-span="12" bindtap="onSpanTap">1 年</view>
+        <!-- 周期选项：纯文字，无边框；当前项更深、更大、更粗 -->
+        <view class="span-tabs">
+          <text class="span-tab {{calendarSpan === 1 ? 'is-on' : ''}}" data-span="1" bindtap="onSpanTap">当月</text>
+          <text class="span-tab {{calendarSpan === 3 ? 'is-on' : ''}}" data-span="3" bindtap="onSpanTap">3 个月</text>
+          <text class="span-tab {{calendarSpan === 6 ? 'is-on' : ''}}" data-span="6" bindtap="onSpanTap">6 个月</text>
+          <text class="span-tab {{calendarSpan === 12 ? 'is-on' : ''}}" data-span="12" bindtap="onSpanTap">1 年</text>
+        </view>
       </view>
 
       <month-calendar
@@ -118,8 +109,6 @@
           <text>仅入睡</text>
         </view>
       </view>
-
-      <text class="cal-tip">{{calendarTip}}</text>
 
       <view wx:if="{{detail}}" class="day-detail">
         <view class="dd-head">

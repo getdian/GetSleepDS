@@ -210,3 +210,81 @@ test('updateSession 修改同一天的一段并重算总时长', () => {
   assert.equal(next.totalDurationMin, 500)
   assert.equal(next.sessions.filter((item) => item.id === 'nap')[0].durationMin, 20)
 })
+
+test('removeSession 删除其中一段，剩余段与总时长保留', () => {
+  const day = '2026-10-22'
+  store[KEY] = {
+    [day]: {
+      day,
+      dayRule: 'wake-v1',
+      schemaVersion: 2,
+      bedAt: ts(2026, 10, 21, 23, 0),
+      wakeAt: ts(2026, 10, 22, 7, 0),
+      durationMin: 480,
+      nightDurationMin: 480,
+      totalDurationMin: 510,
+      sessions: [
+        { id: 'night', startAt: ts(2026, 10, 21, 23, 0), endAt: ts(2026, 10, 22, 7, 0) },
+        { id: 'nap', startAt: ts(2026, 10, 22, 13, 0), endAt: ts(2026, 10, 22, 13, 30) }
+      ],
+      updatedAt: 1
+    }
+  }
+  store[storage.KEYS.deleted] = {}
+  const next = storage.removeSession(day, 'nap')
+  assert.ok(next)
+  assert.equal(next.sessions.length, 1)
+  assert.equal(next.totalDurationMin, 480)
+  // 主睡眠（最长段）跟着重算：删掉午休后 bedAt/wakeAt 仍是夜间段
+  assert.equal(next.bedAt, ts(2026, 10, 21, 23, 0))
+  assert.equal(next.wakeAt, ts(2026, 10, 22, 7, 0))
+  assert.equal(storage.getRecords()[day].totalDurationMin, 480)
+})
+
+test('removeSession 删除当天唯一一段时整条移除并写墓碑', () => {
+  const day = '2026-10-22'
+  store[KEY] = {
+    [day]: {
+      day,
+      dayRule: 'wake-v1',
+      schemaVersion: 2,
+      bedAt: ts(2026, 10, 21, 23, 0),
+      wakeAt: ts(2026, 10, 22, 7, 0),
+      durationMin: 480,
+      nightDurationMin: 480,
+      totalDurationMin: 480,
+      sessions: [{ id: 'night', startAt: ts(2026, 10, 21, 23, 0), endAt: ts(2026, 10, 22, 7, 0) }],
+      updatedAt: 1
+    }
+  }
+  store[storage.KEYS.deleted] = {}
+  assert.equal(storage.removeSession(day, 'night'), true)
+  assert.equal(store[KEY][day], undefined)
+  // 删空整天 = 撤销当天：必须写墓碑，否则云端旧记录会在下次同步回填
+  assert.ok(store[storage.KEYS.deleted][day])
+})
+
+test('removeSession 对不存在的段/天返回 false，不碰其他记录', () => {
+  const day = '2026-10-22'
+  store[KEY] = {
+    other: { day: 'other', bedAt: 1, wakeAt: 2, updatedAt: 1 },
+    [day]: {
+      day,
+      dayRule: 'wake-v1',
+      schemaVersion: 2,
+      bedAt: ts(2026, 10, 21, 23, 0),
+      wakeAt: ts(2026, 10, 22, 7, 0),
+      durationMin: 480,
+      nightDurationMin: 480,
+      totalDurationMin: 480,
+      sessions: [{ id: 'night', startAt: ts(2026, 10, 21, 23, 0), endAt: ts(2026, 10, 22, 7, 0) }],
+      updatedAt: 1
+    }
+  }
+  store[storage.KEYS.deleted] = {}
+  assert.equal(storage.removeSession(day, 'missing'), false)
+  assert.equal(storage.removeSession('2099-01-01', 'night'), false)
+  assert.ok(store[KEY][day])
+  assert.ok(store[KEY].other)
+  assert.equal(Object.keys(store[storage.KEYS.deleted]).length, 0)
+})

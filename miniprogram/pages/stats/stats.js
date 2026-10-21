@@ -25,8 +25,6 @@ Page({
     metrics: [],
     metricKey: '',
     metricDetail: null,
-    durationNote: '',
-    durationHint: '',
     weekCount: 0,
     streak: 0,
     // 日历周期：1 = 当月，3/6/12 = 横向滑动的连续月
@@ -35,7 +33,6 @@ Page({
     calendarMonths: [],
     calendarTitle: '',
     calendarNote: '',
-    calendarTip: '',
     canNextMonth: false,
     monthOffset: 0,
     detail: null,
@@ -100,10 +97,6 @@ Page({
       const marked = calendarMonths.reduce((sum, month) => sum + month.marked, 0)
       calendarNote = marked ? '近 ' + calendarSpan + ' 个月 ' + marked + ' 天有记录' : '这段时间还没有完整记录'
     }
-    const calendarTip =
-      calendarSpan === 1
-        ? '灰色空格是还没记录的夜晚，点一下可以补记'
-        : '左右滑动查看 · 空格点一下可以补记'
     const meta = storage.getMeta()
     const config = getConfig()
     const syncFeature = !config.features || config.features.sync !== false
@@ -139,8 +132,6 @@ Page({
     const signature = [
       hasData ? 1 : 0,
       metrics.map((item) => item.value + '/' + item.sub + '/' + item.detail.join('|')).join('|'),
-      metricData.durationNote,
-      metricData.durationHint,
       metricData.count,
       metricData.streak,
       calendarSpan,
@@ -159,8 +150,6 @@ Page({
       this.setData({
         hasData,
         metrics,
-        durationNote: metricData.durationNote,
-        durationHint: metricData.durationHint,
         weekCount: metricData.count,
         streak: metricData.streak,
         calendarSpan,
@@ -168,7 +157,6 @@ Page({
         calendarMonths,
         calendarTitle: calendar ? calendar.monthLabel : '',
         calendarNote,
-        calendarTip,
         canNextMonth: monthOffset < 0,
         // 数据或周期变了才清空详情与选中态，避免指向已修改/已切换的记录
         detail: null,

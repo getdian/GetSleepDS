@@ -16,7 +16,6 @@ const MAX_SLEEP_MS = 24 * 60 * 60 * 1000
 // 超过 24h 不静默清除，只标记为“需要校准”；用户可手动结束/编辑
 const STALE_PENDING_MS = MAX_SLEEP_MS
 const CLOCK_INTERVAL = 30 * 1000
-const WEEK_LABEL = ['日', '一', '二', '三', '四', '五', '六']
 
 Page({
   data: {
@@ -56,11 +55,9 @@ Page({
     endError: '',
     dim: false,
     notice: '',
-    weekDays: [],
     weekCount: 0,
     streak: 0,
     canAddSession: false,
-    overwriteText: '再记一段（现在开始计时）',
     footerText: '愿今夜好眠'
   },
 
@@ -102,16 +99,20 @@ Page({
       else this.setData({ notice: '这次入睡已经结束过了' })
     }
     // 统计页点空格子补记：带日期跳过来，直接打开补记面板
+    this.openPendingManual()
+  },
+
+  /** 消费统计页传来的补记日期（meta.manualDay），打开补记面板并预填该日期 */
+  openPendingManual() {
     const manualDay = storage.getMeta().manualDay
-    if (manualDay) {
-      storage.patchMeta({ manualDay: '' })
-      if (this.data.endShow) return
-      if (this.data.state === 'sleeping') {
-        wx.showToast({ title: '正在入睡中，结束后可补记', icon: 'none' })
-        return
-      }
-      this.openManualSheet(manualDay)
+    if (!manualDay) return
+    storage.patchMeta({ manualDay: '' })
+    if (this.data.endShow) return
+    if (this.data.state === 'sleeping') {
+      wx.showToast({ title: '正在入睡中，结束后可补记', icon: 'none' })
+      return
     }
+    this.openManualSheet(manualDay)
   },
 
   /** 计算器/统计页的播放条点击后，sleep 页接管并打开声音抽屉 */
@@ -286,28 +287,11 @@ Page({
       overdue,
       overdueText,
       record,
-      recordView: record
-        ? {
-            bed: F.fmtClockTs(record.bedAt),
-            wake: F.fmtClockTs(record.wakeAt),
-            // 当天总睡眠含午休/间断段；时间轴仍显示主睡眠
-            duration: F.fmtDuration(S.totalDurationOf(record)),
-            total: F.fmtDuration(S.totalDurationOf(record)),
-            mainId: (S.sessionsOf(record)[0] || {}).id || '',
-            sessions: S.sessionsOf(record).map((item) => ({
-              id: item.id,
-              day: record.day,
-              bed: F.fmtClockTs(item.startAt),
-              wake: F.fmtClockTs(item.endAt),
-              duration: F.fmtDuration(item.durationMin)
-            }))
-          }
-        : null,
+      recordView: record ? this.buildRecordView(record) : null,
       recordHint: done ? '' : sleeping ? '' : '只记录时间，不做睡眠评价',
       buttonTitle: button.title,
       buttonSub: button.sub,
       canAddSession,
-      weekDays: this.buildWeekDays(records, now, pending),
       weekCount: weekly.current.count,
       streak: weekly.streak,
       footerText:
@@ -348,23 +332,34 @@ Page({
     return { title: '入睡', sub: '现在 ' + F.fmtClockTs(Date.now()) }
   },
 
-  buildWeekDays(records, now, pending) {
-    const base = T.parseDateKey(T.dateKey(now))
-    const pendingDay = pending ? T.dateKey(now) : ''
-    const days = []
-    for (let i = 6; i >= 0; i -= 1) {
-      const ts = T.addDays(base, -i)
-      const key = T.dateKey(ts)
-      const record = records[key]
-      days.push({
-        key,
-        weekday: WEEK_LABEL[new Date(ts).getDay()],
-        level: record ? S.levelOf(S.durationOf(record)) : 0,
-        partial: !record && key === pendingDay,
-        today: i === 0
-      })
+  /**
+   * 完成态视图：当天总睡眠口径。
+   * 时间线用「首段入睡 → 末段起床」（多段时即总睡眠时间线，与大数字同口径），
+   * 单段时保持「入睡 / 起床」，不引入用户不需要的新概念。
+   */
+  buildRecordView(record) {
+    const sessions = S.sessionsOf(record)
+    const multi = sessions.length > 1
+    return {
+      bed: F.fmtClockTs(record.bedAt),
+      wake: F.fmtClockTs(record.wakeAt),
+      // 当天总睡眠含午休/间断段；时间轴显示总睡眠的首末时刻
+      duration: F.fmtDuration(S.totalDurationOf(record)),
+      total: F.fmtDuration(S.totalDurationOf(record)),
+      mainId: (sessions[0] || {}).id || '',
+      firstBed: F.fmtClockTs(sessions[0].startAt),
+      lastWake: F.fmtClockTs(sessions[sessions.length - 1].endAt),
+      sessionCount: sessions.length,
+      timelineFirstK: multi ? '当天首段入睡' : '入睡',
+      timelineLastK: multi ? '当天末段起床' : '起床',
+      sessions: sessions.map((item) => ({
+        id: item.id,
+        day: record.day,
+        bed: F.fmtClockTs(item.startAt),
+        wake: F.fmtClockTs(item.endAt),
+        duration: F.fmtDuration(item.durationMin)
+      }))
     }
-    return days
   },
 
   /** 超过 24h 的 pending 不再静默清除；同一个 pending 只提示一次，避免 30 秒一闪 */
@@ -829,13 +824,49 @@ Page({
     const record = this.data.record
     if (!record || this.data.state === 'sleeping') return
     wx.showModal({
-      title: '再记一段睡眠',
+      title: '继续入睡？',
       content: '同一天可以记录多段（午休、夜间醒来后再睡）。新的一段会追加，不会覆盖已有记录。',
-      confirmText: '开始记录',
+      confirmText: '开始计时',
       cancelText: '取消',
       success: (res) => {
         if (!res.confirm) return
         if (this.markSleep()) wx.showToast({ title: '已开始记录新的一段', icon: 'none' })
+      }
+    })
+  },
+
+  /** 删除本日某一段：确认后落库；删到当天无剩余段时整天一起撤销（写墓碑） */
+  onDeleteSession(event) {
+    const id = event.currentTarget.dataset.id
+    const day = event.currentTarget.dataset.day
+    const record = this.data.record
+    if (!record || !id || day !== record.day) return
+    const sessions = S.sessionsOf(record)
+    const target = sessions.filter((item) => item.id === id)[0]
+    if (!target) return
+    const only = sessions.length === 1
+    wx.showModal({
+      title: only ? '删除当天唯一一段？' : '删除这段睡眠？',
+      content: only
+        ? '这是当天仅有的睡眠段，删除后当天的记录会一起撤销。'
+        : '将移除 ' +
+          F.fmtClockTs(target.startAt) +
+          ' – ' +
+          F.fmtClockTs(target.endAt) +
+          '（' +
+          F.fmtDuration(target.durationMin) +
+          '），当天总睡眠会相应减少。',
+      confirmText: '删除',
+      confirmColor: '#F87171',
+      success: (res) => {
+        if (!res.confirm) return
+        if (!storage.removeSession(day, id)) {
+          wx.showToast({ title: '删除未完成，请重试一次', icon: 'none' })
+          return
+        }
+        this.refreshAll()
+        wx.showToast({ title: '已删除这段', icon: 'none' })
+        this.syncAfterSave()
       }
     })
   },

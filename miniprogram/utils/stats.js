@@ -280,18 +280,13 @@ const REFERENCE_HIGH_MIN = 8 * 60
 
 function durationNoteOf(cur) {
   const total = cur.avgTotalMin || 0
-  let note
   if (total < REFERENCE_LOW_MIN) {
-    note = '本周平均比常见 7.5–8 小时少 ' + durationText(REFERENCE_LOW_MIN - total)
-  } else if (total > REFERENCE_HIGH_MIN) {
-    note = '本周平均比常见 7.5–8 小时多 ' + durationText(total - REFERENCE_HIGH_MIN)
-  } else {
-    note = '本周平均在常见 7.5–8 小时内'
+    return '本周平均比常见 7.5–8 小时少 ' + durationText(REFERENCE_LOW_MIN - total)
   }
-  // 样本不足时仍给事实陈述，但明确标注“按已记录天数算”，并引导补记
-  const hint =
-    cur.count < 3 ? '按已记录的 ' + cur.count + ' 天算，补记后会更接近真实' : ''
-  return { note, hint }
+  if (total > REFERENCE_HIGH_MIN) {
+    return '本周平均比常见 7.5–8 小时多 ' + durationText(total - REFERENCE_HIGH_MIN)
+  }
+  return '本周平均在常见 7.5–8 小时内'
 }
 
 /**
@@ -302,21 +297,13 @@ function metricsOf(records, now) {
   const w = weekly(records, now)
   const cur = w.current
   if (!cur.count) {
-    return {
-      has: false,
-      count: 0,
-      streak: 0,
-      metrics: [],
-      durationNote: '',
-      durationHint: ''
-    }
+    return { has: false, count: 0, streak: 0, metrics: [] }
   }
 
   const prev = w.previous
   const d = w.delta
   const total = cur.avgTotalMin || 0
   const reference = durationNoteOf(cur)
-
   const clockCompare = (diff) => {
     if (diff === null) return '上周没有记录，暂时无法对比'
     if (diff === 0) return '与上周持平'
@@ -331,7 +318,7 @@ function metricsOf(records, now) {
       sub: d.total === null ? '' : d.total === 0 ? '持平' : (d.total > 0 ? '多 ' : '少 ') + deltaAmount(d.total),
       detail: [
         '本周 ' + cur.count + ' 天平均 ' + durationText(total) + '，含午休与间断段',
-        reference.note,
+        reference,
         cur.longestMin === cur.shortestMin
           ? '每天都是 ' + durationText(cur.longestMin)
           : '最长 ' + durationText(cur.longestMin) + ' · 最短 ' + durationText(cur.shortestMin)
@@ -367,9 +354,7 @@ function metricsOf(records, now) {
     has: true,
     count: cur.count,
     streak: w.streak,
-    metrics,
-    durationNote: reference.note,
-    durationHint: reference.hint
+    metrics
   }
 }
 
@@ -534,6 +519,8 @@ function calendarCells(records, now, monthOffset, partialDay) {
       level: heatLevelOf(total),
       // 进行中的一段：今天即使已有完成记录也要标出来（午休/第二段）
       partial: !!partialDay && day === partialDay,
+      // 空格子可补记：无记录、非未来、且今天没有正在进行的一段
+      canAdd: !total && !(day > todayKey) && !(partialDay && day === partialDay),
       isToday: day === todayKey,
       future: day > todayKey
     })
@@ -583,7 +570,8 @@ function calendarMonths(records, now, spanMonths, partialDay) {
         level: cell.level,
         isToday: cell.isToday,
         future: cell.future,
-        partial: cell.partial
+        partial: cell.partial,
+        canAdd: cell.canAdd
       })),
       marked: cal.marked
     })

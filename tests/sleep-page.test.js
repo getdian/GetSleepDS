@@ -182,3 +182,106 @@ test('编辑自己那一段时不会把自己判成重叠', () => {
   page.computeEndSheet()
   assert.equal(page.data.endError, '')
 })
+
+function ts(year, month, day, hour, minute) {
+  return new Date(year, month - 1, day, hour, minute, 0, 0).getTime()
+}
+
+/** 构造“夜间 + 午休”两段记录，返回醒来日 record */
+function makeTwoSessionRecord() {
+  storage.saveSession({
+    id: 'night',
+    startAt: ts(2026, 10, 21, 23, 0),
+    endAt: ts(2026, 10, 22, 7, 0)
+  })
+  storage.saveSession({
+    id: 'nap',
+    startAt: ts(2026, 10, 22, 13, 0),
+    endAt: ts(2026, 10, 22, 13, 30)
+  })
+  return storage.getRecords()['2026-10-22']
+}
+
+test('完成态时间线用总睡眠口径：首段入睡 → 末段起床', () => {
+  resetStore()
+  const page = makePage()
+  const record = makeTwoSessionRecord()
+  const view = page.buildRecordView(record)
+  assert.equal(view.firstBed, '23:00')
+  assert.equal(view.lastWake, '13:30')
+  assert.equal(view.sessionCount, 2)
+  assert.equal(view.timelineFirstK, '当天首段入睡')
+  assert.equal(view.timelineLastK, '当天末段起床')
+  // 大数字仍是当天总睡眠（含午休），与时间线同口径
+  assert.equal(view.duration, F.fmtDuration(510))
+  assert.equal(view.sessions.length, 2)
+})
+
+test('单段记录时间线保持「入睡 / 起床」，不引入新概念', () => {
+  resetStore()
+  const page = makePage()
+  const saved = storage.saveSession({
+    id: 'solo',
+    startAt: ts(2026, 10, 22, 23, 0),
+    endAt: ts(2026, 10, 23, 7, 0)
+  })
+  const view = page.buildRecordView(saved)
+  assert.equal(view.firstBed, '23:00')
+  assert.equal(view.lastWake, '07:00')
+  assert.equal(view.sessionCount, 1)
+  assert.equal(view.timelineFirstK, '入睡')
+  assert.equal(view.timelineLastK, '起床')
+})
+
+test('onDeleteSession：确认删除单段并刷新，取消则原样保留', () => {
+  resetStore()
+  const page = makePage()
+  const record = makeTwoSessionRecord()
+  page.setData({ state: 'done', record })
+  const originalModal = global.wx.showModal
+  let captured = null
+  global.wx.showModal = (options) => {
+    captured = options
+  }
+  try {
+    // 取消：不动数据
+    page.onDeleteSession({ currentTarget: { dataset: { id: 'nap', day: '2026-10-22' } } })
+    assert.ok(captured, '删除必须弹确认框')
+    captured.success({ confirm: false })
+    assert.equal(storage.getRecords()['2026-10-22'].sessions.length, 2)
+
+    // 确认：删掉午休段，总时长回落到夜间段
+    page.onDeleteSession({ currentTarget: { dataset: { id: 'nap', day: '2026-10-22' } } })
+    assert.equal(captured.confirmColor, '#F87171', '删除确认用危险色')
+    captured.success({ confirm: true })
+    const left = storage.getRecords()['2026-10-22']
+    assert.equal(left.sessions.length, 1)
+    assert.equal(left.totalDurationMin, 480)
+  } finally {
+    global.wx.showModal = originalModal
+  }
+})
+
+test('onDeleteSession：唯一一段的确认文案提示整天撤销', () => {
+  resetStore()
+  const page = makePage()
+  const saved = storage.saveSession({
+    id: 'solo',
+    startAt: ts(2026, 10, 22, 23, 0),
+    endAt: ts(2026, 10, 23, 7, 0)
+  })
+  page.setData({ state: 'done', record: saved })
+  const originalModal = global.wx.showModal
+  let captured = null
+  global.wx.showModal = (options) => {
+    captured = options
+  }
+  try {
+    page.onDeleteSession({ currentTarget: { dataset: { id: 'solo', day: saved.day } } })
+    assert.equal(captured.title, '删除当天唯一一段？')
+    captured.success({ confirm: true })
+    assert.equal(storage.getRecords()[saved.day], undefined)
+  } finally {
+    global.wx.showModal = originalModal
+  }
+})

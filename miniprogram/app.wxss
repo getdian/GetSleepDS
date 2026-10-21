@@ -26,6 +26,9 @@ page {
   --color-accent-moon: #FDE68A;
   --color-calm-teal: #2DD4BF;
 
+  /* 危险/不可逆操作（删除单段、撤销确认），低饱和红，不做大面积底色 */
+  --color-danger: #F87171;
+
   /* 文字阶度 */
   --text-moon-pure: #F8FAFC;
   --text-primary: #E2E8F0;
