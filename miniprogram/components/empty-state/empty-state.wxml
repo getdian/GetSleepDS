@@ -16,7 +16,13 @@
   </view>
   <text class="empty-title">{{title}}</text>
   <text wx:if="{{desc}}" class="empty-desc">{{desc}}</text>
-  <view wx:if="{{actionText}}" class="empty-btn" bindtap="onAction">
+  <view
+    wx:if="{{actionText}}"
+    class="empty-btn"
+    bindtap="onAction"
+    aria-role="button"
+    aria-label="{{actionText}}"
+  >
     <text>{{actionText}}</text>
   </view>
 </view>

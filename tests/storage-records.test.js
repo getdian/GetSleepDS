@@ -40,6 +40,19 @@ test('removeRecord 只删目标睡眠日，其余条目原样保留', () => {
   assert.equal(store[KEY]['2026-10-20'], undefined)
 })
 
+test('removeRecord 的墓碑时间必须晚于记录 updatedAt（防云端回填）', () => {
+  const future = Date.now() + 60 * 60 * 1000
+  store[KEY] = {
+    '2026-10-20': { day: '2026-10-20', bedAt: 1, wakeAt: 2, updatedAt: future }
+  }
+  store[storage.KEYS.deleted] = {}
+  assert.equal(storage.removeRecord('2026-10-20'), true)
+  assert.ok(
+    store[storage.KEYS.deleted]['2026-10-20'] > future,
+    '墓碑早于 updatedAt 时云端按 updated_at <= deleted_at 删不掉，记录会被回填'
+  )
+})
+
 function ts(year, month, day, hour, minute) {
   return new Date(year, month - 1, day, hour, minute, 0, 0).getTime()
 }

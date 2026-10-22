@@ -109,10 +109,10 @@
 /* 空格子：写「补记」，点击直接弹页内补记面板（不再跳入睡页 / 不落到下方详情卡） */
 .mc-add {
   margin-top: 2rpx;
-  font-size: 15rpx;
+  /* 空格补记是主交互入口：不再叠 opacity，字号提到 20rpx（原 15rpx 合成后约 2.9:1） */
+  font-size: 20rpx;
   line-height: 1;
-  color: var(--text-muted);
-  opacity: 0.62;
+  color: var(--text-secondary);
 }
 
 /* 4 档：短睡不再和长睡同色；亮档改用深字保证对比 */

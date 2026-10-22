@@ -98,7 +98,7 @@
 .bp-list {
   flex: 1;
   min-height: 0;
-  height: 52vh;
+  /* flex-basis:0% 会压过 height，原来的 52vh 是死声明；高度由 flex 分配 */
   padding: 12rpx 32rpx 0;
 }
 

@@ -38,6 +38,9 @@ Component({
       // 等 pageLifetimes.show 再置 true，避免首帧就弹到别的页面上
       this._pageVisible = false
       this._audio = null
+      // 最后一次赋给 BackgroundAudioManager 的 src；onError 不带源标识，
+      // 用它判断“这条错误是不是已经切走的旧源迟到的”。
+      this._expectSrc = ''
       this._lastToggleAt = 0
       this._enterTimer = null
       this._collapseTimer = null
@@ -222,6 +225,13 @@ Component({
       playerState.seamlessLoop(this._audio)
     },
 
+    /** 统一设置音源并记录最后一次赋值，供 onError 判断是否为旧源 */
+    setAudioSrc(url) {
+      const next = url || ''
+      this._expectSrc = next
+      if (this._audio) this._audio.src = next
+    },
+
     /** 按 meta.lastTrackId 从配置重建播放源：部分基础库在系统 stop 后会清空 src。 */
     rebuildSource() {
       if (!this.canPlay()) return false
@@ -235,7 +245,7 @@ Component({
       this._audio.title = '睡点 · ' + track.title
       this._audio.epname = '环境音'
       this._audio.singer = '睡点'
-      this._audio.src = cached || track.url
+      this.setAudioSrc(cached || track.url)
       storage.patchMeta({ lastTrackActive: true, lastTrackPlaying: true })
       return true
     },
@@ -410,6 +420,10 @@ Component({
 
     handleError() {
       if (!this._alive) return
+      // 切歌/回退竞态：旧源的错误迟到时不能拿去处理新会话（会误删新曲缓存、清掉迷你条）。
+      if (!playerState.isCurrentSourceError(this._audio && this._audio.src, this._expectSrc)) {
+        return
+      }
       this.disarmLoadingGuard()
       if (this.data.loading) this.setData({ loading: false })
       const audio = this._audio
@@ -429,7 +443,7 @@ Component({
           playerState.markFallback(track.url)
           cache.remove(track.url)
           storage.patchMeta({ lastTrackActive: true, lastTrackPlaying: true })
-          audio.src = track.url
+          this.setAudioSrc(track.url)
           return
         }
       }

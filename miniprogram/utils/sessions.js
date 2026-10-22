@@ -67,15 +67,22 @@ function rangeBetween(startDayTs, bedMinutes, wakeDayTs, wakeMinutes, now) {
   return { bedAt, wakeAt, durationMin, error }
 }
 
-/** 兼容 v1：旧记录没有 sessions，用 bedAt/wakeAt 合成一段 */
+/**
+ * 兼容 v1：旧记录没有 sessions，用 bedAt/wakeAt 合成一段。
+ *
+ * 注意 sessions 存在但为空/全部非法时也要回退 v1 字段：
+ * 同步合并（sync.js 写回 sessionsOf 的结果）或历史脏数据都可能落下 sessions: []，
+ * 此时若不回退，完成态会直接取 sessions[0] 抛错、整页无法渲染。
+ */
 function sessionsOf(record) {
   if (!record) return []
-  if (Array.isArray(record.sessions)) {
-    return record.sessions
-      .map(normalizeSession)
-      .filter(Boolean)
-      .sort((a, b) => a.startAt - b.startAt)
-  }
+  const list = Array.isArray(record.sessions)
+    ? record.sessions
+        .map(normalizeSession)
+        .filter(Boolean)
+        .sort((a, b) => a.startAt - b.startAt)
+    : []
+  if (list.length) return list
   if (Number.isFinite(Number(record.bedAt)) && Number.isFinite(Number(record.wakeAt))) {
     const legacy = normalizeSession({
       id: 'legacy-' + record.wakeAt,

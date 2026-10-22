@@ -5,6 +5,8 @@
     class="tab-item {{item.key === 'sleep' ? 'is-center' : ''}} {{selected === index ? 'is-on' : ''}}"
     data-index="{{index}}"
     bindtap="onTap"
+    hover-class="tab-item--tap"
+    hover-stay-time="80"
     aria-role="tab"
     aria-selected="{{selected === index}}"
     aria-label="{{item.text}}"

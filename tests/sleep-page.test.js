@@ -341,6 +341,79 @@ test('onDeleteSession：确认删除单段并刷新，取消则原样保留', ()
   }
 })
 
+test('编辑：入睡晚于起床时直接拦下，不再静默回退一天', () => {
+  resetStore()
+  const page = makePage()
+  const wakeAt = ts(2026, 10, 22, 13, 30)
+  page.data.endMode = 'edit'
+  page._endBaseDay = T.startOfDay(wakeAt)
+  page.data.endBedTime = '14:00'
+  page.data.endWakeTime = '13:30'
+  page.computeEndSheet()
+  assert.equal(page.data.endError, '入睡时间需早于起床时间，请检查醒来日')
+  // 没有合法区间时必须清掉旧值：否则 onEndConfirm 还能拿上一次的区间落库
+  assert.equal(page._endBedAt, 0)
+  assert.equal(page.data.endDurationText, '—')
+})
+
+test('熄灯：刚睡下点圆环会还原倒计时，不会一直亮屏', () => {
+  resetStore()
+  const page = makePage()
+  storage.setPending({ bedAt: Date.now() - 30 * 1000 })
+  page._pending = null
+  page.setData({ state: 'sleeping', dim: false })
+  page.openEndSheet()
+  assert.equal(page.data.endShow, false, '不足 1 分钟不开面板')
+  assert.ok(page._lightsTimer, '早退分支必须重新排定 30s 熄灯')
+  page.clearLightsTimer()
+})
+
+test('熄灯：声音抽屉关闭后恢复倒计时（打开期间到点会被跳过）', () => {
+  resetStore()
+  const page = makePage()
+  page.setData({ state: 'sleeping', endShow: false })
+  page.onDockSheetClose()
+  assert.ok(page._lightsTimer)
+  page.clearLightsTimer()
+
+  page.setData({ endShow: true })
+  page.onDockSheetClose()
+  assert.equal(page._lightsTimer, null, '结束面板打开时不该排定')
+})
+
+test('结束面板：当天已有 8 段时直接给“最多 8 段”，不再保存失败无出口', () => {
+  resetStore()
+  const page = makePage()
+  const dayTs = T.addDays(T.startOfDay(Date.now()), -1)
+  for (let i = 0; i < 8; i += 1) {
+    const start = dayTs + i * 2 * 60 * 60 * 1000
+    assert.ok(
+      storage.saveSession({ id: 'cap-' + i, startAt: start, endAt: start + 30 * 60 * 1000 })
+    )
+  }
+  page._pending = { id: 'pending-cap', bedAt: dayTs + 15 * 60 * 60 * 1000 }
+  page.data.endMode = 'pending'
+  page.data.endBedTime = '16:00'
+  page.data.endWakeTime = '16:30'
+  page._endStartDay = dayTs
+  page._endBaseDay = dayTs
+  page.computeEndSheet()
+  assert.equal(page.data.endError, '当天最多记录 8 段，请先删除其中一段')
+  assert.equal(page._endBedAt, 0, '预检失败时不能留下可保存的区间')
+})
+
+test('buildRecordView：没有任何可用段的记录返回 null，不抛错', () => {
+  resetStore()
+  const page = makePage()
+  const view = page.buildRecordView({
+    day: '2026-10-20',
+    sessions: [],
+    bedAt: NaN,
+    wakeAt: NaN
+  })
+  assert.equal(view, null)
+})
+
 test('onDeleteSession：唯一一段的确认文案提示整天撤销', () => {
   resetStore()
   const page = makePage()

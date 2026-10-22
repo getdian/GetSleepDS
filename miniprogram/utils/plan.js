@@ -40,22 +40,28 @@ function wakeContextText(now, wakeMinutes, fallMinutes) {
 /**
  * 给定起床时间，倒推 3 个入睡时刻（5/4/3 个周期）。
  * 目标起床时间取“下一次”该时刻；若连 3 个周期都来不及，slots 会标记 passed。
+ * progressNow：只用于“是否已错过 / 还能睡多久”，让结果面的倒计时随真实时间走，
+ * 而 wakeAt 仍以调用方的 now（结果面的锚点）为准，避免推荐时间整日漂移。
  */
-function bedtimesForWake(now, wakeMinutes, fallMinutes) {
+function bedtimesForWake(now, wakeMinutes, fallMinutes, progressNow) {
   const wakeAt = nextWakeAt(now, wakeMinutes, fallMinutes)
+  const progressAt = Number(progressNow) || now
 
   const slots = CYCLES.map((cycles) => {
     const at = wakeAt - (fallMinutes + cycles * CYCLE) * T.MINUTE_MS
     return {
       cycles,
       at,
-      passed: at <= now,
+      passed: at <= progressAt,
       dayLabel: dayLabel(at, now),
       durationMin: cycles * CYCLE
     }
   })
 
-  const availableMin = Math.max(0, Math.floor((wakeAt - now) / T.MINUTE_MS) - fallMinutes)
+  const availableMin = Math.max(
+    0,
+    Math.floor((wakeAt - progressAt) / T.MINUTE_MS) - fallMinutes
+  )
 
   return {
     wakeAt,

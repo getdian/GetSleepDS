@@ -112,6 +112,8 @@ Page({
     this.setData({ nowText: F.fmtClock(T.minutesOf(Date.now())) })
     // 起床时间可能随当前时刻从“今天”翻到“明天”，随分钟刷新
     if (this.data.mode === 'wake') this.refreshWakeContext()
+    // 结果面：可用时长与"已错过的档位"必须随分钟重算，否则停在结果页 10 分钟数字不动
+    if (this.data.flipped) this.calc(true)
   },
 
   /** 起床选择的上下文：今天/明天 + 时段词 + 24h 时间（与结果面一致） */
@@ -228,7 +230,8 @@ Page({
   onFallAsleepTap(event) {
     const minutes = Number(event.currentTarget.dataset.min)
     if (!minutes || minutes === this.data.fallAsleep) return
-    this._anchorAt = 0
+    // 只改“入睡耗时”不换计算锚点：锚点代表这一次计算会话的“现在”，
+    // 清零会让结果面停留跨过 30 分钟宽限后，整组推荐静默推后一天。
     this.setData({ fallAsleep: minutes })
     if (this.data.mode === 'wake') this.refreshWakeContext(this.data.wakeTime, minutes)
     if (this.data.flipped) this.calc(true)
@@ -239,7 +242,7 @@ Page({
     const options = this.data.fallOptions
     const index = options.indexOf(this.data.fallAsleep)
     const minutes = options[(index + 1) % options.length]
-    this._anchorAt = 0
+    // 同上：改耗时不是一次新的计算时刻，锚点必须沿用。
     this.setData({ fallAsleep: minutes })
     if (this.data.mode === 'wake') this.refreshWakeContext(this.data.wakeTime, minutes)
     if (wx.vibrateShort) wx.vibrateShort({ type: 'light' })
@@ -269,7 +272,7 @@ Page({
 
     if (this.data.mode === 'wake') {
       const wakeMinutes = T.parseClock(value)
-      const plan = P.bedtimesForWake(now, wakeMinutes, this.data.fallAsleep)
+      const plan = P.bedtimesForWake(now, wakeMinutes, this.data.fallAsleep, Date.now())
       const main = plan.slots.filter((slot) => !slot.passed)[0] || null
       const mainGuide = main ? G.guidanceOf(main.cycles) : null
       const mainLate = main ? G.isLateNight(main.at) : false
@@ -311,7 +314,8 @@ Page({
       view = {
         label: main ? '推荐入睡时间' : '现在睡',
         mainTime: main ? F.fmtClockTs(main.at) : F.fmtDuration(plan.availableMin),
-        mainDay: main ? F.periodLabel(main.at) : '',
+        // 跨天后必须写“明天 早晨”：只给时段词会让用户把次日时间读成今天。
+        mainDay: main ? this.dayLabelPrefix(main.at, now) + F.periodLabel(main.at) : '',
         mainMeta: main
           ? main.cycles + ' 个周期 · ' + F.fmtDuration(main.durationMin)
           : '距离 ' + value + ' 起床',
@@ -347,12 +351,14 @@ Page({
       view = {
         label: '推荐起床时间',
         mainTime: F.fmtClockTs(main.at),
-        mainDay: F.periodLabel(main.at),
+        mainDay: this.dayLabelPrefix(main.at, now) + F.periodLabel(main.at),
         mainMeta: main.cycles + ' 个周期 · ' + F.fmtDuration(main.durationMin),
         mainGuideLabel: mainGuide.label,
         mainGuideTone: mainGuide.tone,
+        // late 分支只讲后半夜质量，日期前缀仍要保留：凌晨 2 点选 1 点入睡时，
+        // 入睡时刻已被宽限推到明天，吞掉日期会让整组推荐看起来像“今天”。
         note: late
-          ? G.lateNote()
+          ? (sleepDay === '今天' ? '' : sleepDay + ' ' + value + ' 上床；') + G.lateNote()
           : (sleepDay === '今天' ? '从 ' + value + ' 上床算起，已含 ' : sleepDay + ' ' + value + ' 上床，已含 ') +
             this.data.fallAsleep +
             ' 分钟入睡',
@@ -363,6 +369,12 @@ Page({
 
     this.setData({ view, flipped: true })
     if (!silent && wx.vibrateShort) wx.vibrateShort({ type: 'light' })
+  },
+
+  /** 非“今天”时给时段词加日期前缀（“明天 早晨”）；今天不加，避免首屏噪音 */
+  dayLabelPrefix(timestamp, now) {
+    const label = P.dayLabel(timestamp, now)
+    return label && label !== '今天' ? label + ' ' : ''
   },
 
   reset() {
@@ -521,54 +533,59 @@ Page({
     const freeMode = unlock.mode !== 'rewarded' || !unlock.adUnitId
     const activeUnlock = backgrounds.getUnlocked()
     const now = Date.now()
+    const activeValid =
+      !!activeUnlock && backgrounds.isUnlocked(activeUnlock, activeUnlock.id, now)
+    // 已有一张付费背景处于有效期内，切到任何别的背景（包括另一张付费图）都会覆盖掉
+    // 这条解锁记录——必须提前告知，否则剩余时长会被静默作废。
+    const switchingFromPaid = activeValid && activeUnlock.id !== id
 
-    if (isDefault) {
-      if (
-        activeUnlock &&
-        backgrounds.isUnlocked(activeUnlock, activeUnlock.id, now) &&
-        activeUnlock.id !== id
-      ) {
-        const leftHours = Math.max(1, Math.ceil((activeUnlock.expireAt - now) / 3600000))
-        wx.showModal({
-          title: '切换到默认背景？',
-          content:
-            '当前付费背景还剩约 ' + leftHours + ' 小时。切换后会结束本次解锁，再使用需重新' +
-            (freeMode ? '选择' : '观看视频') +
-            '。',
-          confirmText: '切换',
-          cancelText: '保留',
-          success: (res) => {
-            if (res.confirm) this.applyBackground(id)
-          }
-        })
+    const proceed = () => {
+      if (isDefault) {
+        this.applyBackground(id)
         return
       }
-      this.applyBackground(id)
-      return
-    }
-
-    if (backgrounds.isUnlocked(activeUnlock, id, now)) {
-      this.applyBackground(id)
-      return
-    }
-
-    if (freeMode) {
-      this.finishBackgroundUnlock(id)
-      return
-    }
-
-    wx.showModal({
-      title: '解锁这张背景',
-      content: '观看一段视频，解锁后 ' + this.data.bgUnlockHours + ' 小时内可使用。',
-      confirmText: '观看视频',
-      cancelText: '先不用',
-      success: (res) => {
-        if (res.confirm) this.showBackgroundAd(id)
+      if (backgrounds.isUnlocked(activeUnlock, id, now)) {
+        this.applyBackground(id)
+        return
       }
-    })
+      if (freeMode) {
+        this.finishBackgroundUnlock(id)
+        return
+      }
+      wx.showModal({
+        title: '解锁这张背景',
+        content: '观看一段视频，解锁后 ' + this.data.bgUnlockHours + ' 小时内可使用。',
+        confirmText: '观看视频',
+        cancelText: '先不用',
+        success: (res) => {
+          if (res.confirm) this.showBackgroundAd(id)
+        }
+      })
+    }
+
+    if (switchingFromPaid) {
+      const leftHours = Math.max(1, Math.ceil((activeUnlock.expireAt - now) / 3600000))
+      wx.showModal({
+        title: isDefault ? '切换到默认背景？' : '切换背景？',
+        content:
+          '当前付费背景还剩约 ' + leftHours + ' 小时。切换后会结束本次解锁，再使用需重新' +
+          (freeMode ? '选择' : '观看视频') +
+          '。',
+        confirmText: '切换',
+        cancelText: '保留',
+        success: (res) => {
+          if (res.confirm) proceed()
+        }
+      })
+      return
+    }
+
+    proceed()
   },
 
   showBackgroundAd(id) {
+    // 双保险：onBgSelect 已判 bgBusy，但广告回调/其他入口仍可能重入
+    if (this.data.bgBusy) return
     const config = getConfig()
     const unlock = config.unlock || {}
 
@@ -586,6 +603,12 @@ Page({
 
       if (result === 'skipped') {
         wx.showToast({ title: '视频没看完，先不解锁', icon: 'none' })
+        return
+      }
+
+      if (result === 'busy') {
+        // 另一路广告正在播放：不放弃本次解锁，也不白送
+        wx.showToast({ title: '广告正在播放，请稍后再试', icon: 'none' })
         return
       }
 

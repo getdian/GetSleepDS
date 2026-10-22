@@ -1,20 +1,10 @@
-/* 迷你播放器：常驻 DOM，用 class 切换展示/折叠，和跨页 now-playing 同款动效 */
+/* 迷你播放器：常驻 DOM，用 class 切换展示/折叠，和跨页 now-playing 同款动效。
+   定位/尺寸/玻璃底由文件末尾的覆盖块统一提供（单一来源），这里只管动画与布局。 */
 .dock-mini {
   position: fixed;
-  left: 24rpx;
-  right: 24rpx;
-  bottom: 24rpx;
-  z-index: 40;
   display: flex;
   align-items: center;
   gap: 8rpx;
-  padding: 14rpx 8rpx 14rpx 28rpx;
-  border-radius: var(--radius-pill);
-  border: 1rpx solid var(--border-moon-subtle);
-  background: var(--glass-card-active);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
-  box-shadow: var(--shadow-moon);
   opacity: 0;
   transform: translate3d(60rpx, 0, 0) scale(0.92);
   transform-origin: 100% 50%;
@@ -860,20 +850,14 @@
    极简版：去掉抽屉内的卡片/胶囊框，只留图标、字号、颜色层级
    ============================================================ */
 
-/* 右下角大音符：无实底，只有柔光和呼吸环 */
+/* 右下角大音符：无实底，只有柔光和呼吸环。
+   尺寸/安全位/玻璃底由文件末尾的覆盖块统一提供，这里只保留定位与居中。 */
 .dock-fab {
   position: fixed;
-  right: 30rpx;
-  /* 与下方玻璃态覆盖块、now-playing.np-shell 保持同一底部安全位（176rpx + safe-area） */
-  bottom: calc(176rpx + env(safe-area-inset-bottom));
   z-index: var(--z-fab, 40);
-  width: 118rpx;
-  height: 118rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: none;
-  background: transparent;
 }
 
 .dock-fab::before {

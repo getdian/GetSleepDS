@@ -29,8 +29,11 @@ Component({
       }
       // 默认滚到最新月份（最右）
       const target = 'cs-' + list[list.length - 1].key
-      if (target === this._scrollTarget) return
-      this._scrollTarget = target
+      // 去重键必须含周期与月份范围：3→12 个月切换时最后一个月不变，
+      // 只看 target 会提前 return，scroll-view 保留旧 scrollLeft（停在最旧月份）。
+      const signature = list.length + '|' + list[0].key + '|' + list[list.length - 1].key
+      if (signature === this._scrollSignature) return
+      this._scrollSignature = signature
       this.setData({ scrollTarget: '' }, () => {
         setTimeout(() => {
           if (this.data.months && this.data.months.length) {

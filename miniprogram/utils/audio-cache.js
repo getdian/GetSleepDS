@@ -122,6 +122,24 @@ function remove(url) {
   writeMeta(meta)
 }
 
+/**
+ * 缓存文件是否仍在磁盘上（只读：不判 TTL、不删除、不通知）。
+ * 播放报错时用它区分「本地文件坏了」与「网络/解码错误」：
+ * 后者不该删文件——切歌竞态下删的可能已经是新曲的正常缓存。
+ */
+function isUsable(url) {
+  if (!url) return false
+  const meta = readMeta()
+  const item = meta[url]
+  if (!item || !item.path) return false
+  try {
+    wx.getFileSystemManager().accessSync(item.path)
+    return true
+  } catch (e) {
+    return false
+  }
+}
+
 // 同一 URL 的进行中任务。warmup / 解锁预热 / 用户取消后重试都可能撞在一起，
 // 没有这张表时两个 download 会同时 unlink + saveFile 同一路径。
 const inflight = new Map()
@@ -158,10 +176,30 @@ function download(url, onProgress, ttlDays, onTask) {
                     fs.renameSync(tmp, dest)
                   } catch (e) {
                     // 个别文件系统不允许 rename 覆盖已有文件。
+                    // 不能先 unlink(dest)：dest 可能正是 BackgroundAudioManager 正在读的
+                    // 在播文件（TTL 过期后重下/预热撞上播放），删掉会让 seek 或循环重开失败。
+                    // 先改名备份，换入新文件；换入失败时把备份还原。
+                    const backup = dest + '.old-' + Date.now().toString(36)
+                    let moved = false
                     try {
-                      fs.unlinkSync(dest)
+                      fs.renameSync(dest, backup)
+                      moved = true
                     } catch (e2) {}
-                    fs.renameSync(tmp, dest)
+                    try {
+                      fs.renameSync(tmp, dest)
+                    } catch (e3) {
+                      if (moved) {
+                        try {
+                          fs.renameSync(backup, dest)
+                        } catch (e4) {}
+                      }
+                      throw e3
+                    }
+                    if (moved) {
+                      try {
+                        fs.unlinkSync(backup)
+                      } catch (e5) {}
+                    }
                   }
                 } catch (e) {
                   cleanupTmp()
@@ -350,6 +388,7 @@ module.exports = {
   ensure,
   cancel,
   remove,
+  isUsable,
   maybePrune,
   warmup,
   usedBytes,

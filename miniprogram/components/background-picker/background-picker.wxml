@@ -5,7 +5,7 @@
 
   <view class="bp-head" catchtouchmove="noop">
     <text class="bp-title">选择背景</text>
-    <text class="bp-close" bindtap="onClose">×</text>
+    <text class="bp-close" bindtap="onClose" aria-role="button" aria-label="关闭背景选择">×</text>
   </view>
 
   <scroll-view class="bp-cats" scroll-x enhanced show-scrollbar="{{false}}" catchtouchmove="noop">

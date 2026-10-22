@@ -214,15 +214,15 @@
   flex-wrap: wrap;
   gap: 16rpx;
   margin-top: 18rpx;
-  opacity: 0.6;
 }
 
 .cal-legend-item {
   display: flex;
   align-items: center;
   gap: 6rpx;
-  font-size: 18rpx;
-  color: var(--text-muted);
+  /* 去掉外层 opacity（原 0.6 叠 --text-muted 后约 2.7:1），18→20rpx */
+  font-size: 20rpx;
+  color: var(--text-secondary);
 }
 
 .cal-swatch {

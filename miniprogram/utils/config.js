@@ -9,6 +9,9 @@ let inflight = null
 // 失败不抛出是为了主流程可用，但调用方需要能区分“配置确实为空”与“拉取失败”。
 let lastErrorAt = 0
 let lastLoadedAt = 0
+// app.onShow 与页面 onShow 会前后脚各 force 一次；短窗口内复用同一次结果，避免连发两遍
+const FORCE_DEDUPE_MS = 3000
+let lastForceAt = 0
 
 const AD_SLOTS = ['home', 'sleep', 'stats', 'statsFooter']
 
@@ -67,12 +70,18 @@ function loadConfig(force) {
     return Promise.resolve(memory)
   }
 
+  // 刚成功拉过就复用：app.onShow 与页面 onShow 的两次 force 不再连发两遍
+  if (force && memory && Date.now() - lastForceAt < FORCE_DEDUPE_MS) {
+    return Promise.resolve(memory)
+  }
+
   inflight = api
     .fetchConfig()
     .then((data) => {
       storage.setConfigCache(data)
       memory = merge(data)
       lastLoadedAt = Date.now()
+      lastForceAt = lastLoadedAt
       lastErrorAt = 0
       return memory
     })

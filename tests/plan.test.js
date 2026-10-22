@@ -52,6 +52,19 @@ test('选的入睡时间已过去很多时，按次日处理', () => {
   assert.equal(T.minutesOf(plan.slots[0].at), 15 * 60 + 45)
 })
 
+test('结果面进度时钟：倒计时随真实时间走，推荐起床时间不漂移', () => {
+  const anchor = local(2026, 10, 17, 23, 0)
+  const later = local(2026, 10, 18, 0, 30)
+  const plan = P.bedtimesForWake(anchor, 7 * 60 + 30, 15, later)
+
+  // wakeAt 仍按锚点取“下一次 07:30”，不会因为过了午夜就变成今天已过的时间
+  assert.equal(T.dateKey(plan.wakeAt), '2026-10-18')
+  // 23:45 已错过，01:15 / 02:45 还在
+  assert.deepEqual(plan.slots.map((slot) => slot.passed), [true, false, false])
+  // 距离 07:30 还有 420 分钟，扣掉 15 分钟入睡
+  assert.equal(plan.availableMin, 405)
+})
+
 test('起床上下文用 24h + 时段词，避免 12 小时制歧义', () => {
   const evening = local(2026, 10, 17, 20, 0)
   assert.equal(P.wakeContextText(evening, 23 * 60 + 26, 15), '今天 晚上 23:26 起床')

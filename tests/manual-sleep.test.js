@@ -108,6 +108,107 @@ test('区间校验：与已有段重叠被拦（跨天也要查全表）', () =>
   assert.match(result.error, /重叠/)
 })
 
+test('区间校验：与进行中的睡眠重叠被拦（pending 不在 records 里）', () => {
+  const now = NOW
+  const result = M.evaluateManualRange({
+    records: {},
+    // 凌晨 01:00 打卡、现在 10:00 仍在睡
+    pending: { bedAt: local(2026, 10, 22, 1, 0) },
+    dayTs: new Date(2026, 9, 22, 0, 0, 0, 0).getTime(),
+    bedMinutes: 3 * 60,
+    wakeMinutes: 9 * 60,
+    now
+  })
+  assert.equal(result.code, 'pending')
+  assert.match(result.error, /正在进行的睡眠/)
+})
+
+test('区间校验：进行中的段已结束（区间在它之前）时不误拦', () => {
+  const result = M.evaluateManualRange({
+    records: {},
+    pending: { bedAt: local(2026, 10, 22, 1, 0) },
+    dayTs: new Date(2026, 9, 21, 0, 0, 0, 0).getTime(),
+    bedMinutes: 23 * 60,
+    wakeMinutes: 23 * 60 + 30,
+    now: NOW
+  })
+  assert.equal(result.code, '')
+})
+
+test('区间校验：pending 数据非法时忽略，不影响补记', () => {
+  const result = M.evaluateManualRange({
+    records: {},
+    pending: { bedAt: 'bad' },
+    dayTs: new Date(2026, 9, 18, 0, 0, 0, 0).getTime(),
+    bedMinutes: 23 * 60,
+    wakeMinutes: 7 * 60,
+    now: NOW
+  })
+  assert.equal(result.code, '')
+})
+
+test('容量预检：当天已有 8 段时拒绝新增（第 9 段）', () => {
+  const sessions = []
+  for (let i = 0; i < 8; i += 1) {
+    const start = local(2026, 10, 20, 0, 0) + i * 2 * 60 * 60 * 1000
+    sessions.push({ id: 's' + i, startAt: start, endAt: start + 30 * 60 * 1000 })
+  }
+  const records = { '2026-10-20': { day: '2026-10-20', sessions } }
+  assert.equal(M.capacityErrorOf({ records, dayKey: '2026-10-20', durationMin: 30 }), 'toomany')
+  assert.match(M.errorTextOf('toomany'), /最多记录 8 段/)
+})
+
+test('容量预检：当天总时长超 24 小时被拦', () => {
+  const records = {
+    '2026-10-20': {
+      day: '2026-10-20',
+      sessions: [
+        {
+          id: 'long',
+          startAt: local(2026, 10, 20, 0, 0),
+          endAt: local(2026, 10, 20, 23, 0)
+        }
+      ]
+    }
+  }
+  assert.equal(M.capacityErrorOf({ records, dayKey: '2026-10-20', durationMin: 120 }), 'dayfull')
+  assert.match(M.errorTextOf('dayfull'), /不能超过 24 小时/)
+})
+
+test('容量预检：编辑时先扣掉旧段，不误报段数/时长', () => {
+  const records = {
+    '2026-10-20': {
+      day: '2026-10-20',
+      sessions: [
+        { id: 'a', startAt: local(2026, 10, 20, 0, 0), endAt: local(2026, 10, 20, 20, 0) },
+        { id: 'b', startAt: local(2026, 10, 20, 21, 0), endAt: local(2026, 10, 20, 22, 0) }
+      ]
+    }
+  }
+  // 编辑 a 为 2 小时：20 - 20 + 2 + 1 = 3 小时，合法
+  assert.equal(
+    M.capacityErrorOf({ records, dayKey: '2026-10-20', durationMin: 120, excludeId: 'a' }),
+    ''
+  )
+})
+
+test('区间校验：当天段数已满时给可行动文案（不再等到保存失败）', () => {
+  const sessions = []
+  for (let i = 0; i < 8; i += 1) {
+    const start = local(2026, 10, 19, 0, 0) + i * 2 * 60 * 60 * 1000
+    sessions.push({ id: 's' + i, startAt: start, endAt: start + 30 * 60 * 1000 })
+  }
+  const records = { '2026-10-20': { day: '2026-10-20', sessions } }
+  const result = M.evaluateManualRange({
+    records,
+    dayTs: new Date(2026, 9, 20, 0, 0, 0, 0).getTime(),
+    bedMinutes: 23 * 60,
+    wakeMinutes: 23 * 60 + 30,
+    now: NOW
+  })
+  assert.equal(result.code, 'toomany')
+})
+
 test('保存入参：manual 来源、时长四舍五入、id 带时间戳', () => {
   const now = 1792600000000
   const args = M.buildSaveArgs(now - 8 * 3600 * 1000, now, now)

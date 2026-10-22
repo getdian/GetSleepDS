@@ -4,10 +4,21 @@
     <text class="sheet-title">{{title}}</text>
     <text class="sheet-desc">{{desc}}</text>
 
-    <view class="sheet-btn sheet-primary {{loading ? 'sheet-loading' : ''}}" bindtap="onConfirm">
+    <view
+      class="sheet-btn sheet-primary {{loading ? 'sheet-loading' : ''}}"
+      bindtap="onConfirm"
+      aria-role="button"
+      aria-label="{{loading ? '处理中' : confirmText}}"
+      aria-disabled="{{loading}}"
+    >
       <text>{{loading ? '处理中…' : confirmText}}</text>
     </view>
-    <view class="sheet-btn sheet-ghost" bindtap="onCancel">
+    <view
+      class="sheet-btn sheet-ghost"
+      bindtap="onCancel"
+      aria-role="button"
+      aria-label="{{cancelText}}"
+    >
       <text>{{cancelText}}</text>
     </view>
   </view>

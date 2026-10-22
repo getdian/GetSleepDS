@@ -88,6 +88,20 @@ function isFallbacking(url) {
   return !url || url === fallbackUrl
 }
 
+/**
+ * 判断一条 onError 是否可能属于“当前这次播放源”。
+ *
+ * BackgroundAudioManager 的 onError 不带 src，切歌/缓存回退时旧源的错误可能在
+ * 新源已经起播后到达。各组件在每次赋值 src 时记录 `_expectSrc`，事件到达时比对
+ * 播放器上的真实 src：
+ * - 两者都非空且不同 → 说明 src 已被更晚的一次赋值替换，这条错误属于旧源，忽略；
+ * - 任一为空（基础库清空 src，或本进程尚未记录）→ 无法判定，按当前源处理（保守）。
+ */
+function isCurrentSourceError(eventSrc, expectedSrc) {
+  if (!eventSrc || !expectedSrc) return true
+  return eventSrc === expectedSrc
+}
+
 /** 定时到点提示在 dock 与 now-playing 间只允许一个弹出 */
 function claimExpiryToast(windowMs) {
   const now = Date.now()
@@ -104,5 +118,6 @@ module.exports = {
   claimEnded,
   claimLoop,
   seamlessLoop,
-  claimExpiryToast
+  claimExpiryToast,
+  isCurrentSourceError
 }

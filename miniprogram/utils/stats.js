@@ -150,16 +150,20 @@ function streakDays(records, now) {
 }
 
 /**
- * 本周 / 上周同期对比。
- * 注意：周与周的比较用完整上一周，避免周一拿 1 天比 7 天。
+ * 本周 / 上周**同期**对比。
+ * 上一周只取与本周已经过去的天数相同的一段：周一打开时是 1 天比 1 天，
+ * 不能拿本周 1 天去比上周完整 7 天（结论会稳定失真，且与注释原意相反）。
  */
 function weekly(records, now) {
   const list = completedList(records)
   const bounds = weekBounds(now)
   const prevStart = T.addDays(bounds.start, -7)
+  // 本周已过去的时长（毫秒），上一周取同样长度；窗口按 dateKey 对齐到天
+  const elapsed = Math.max(0, Math.min(Number(now) || Date.now(), bounds.end) - bounds.start)
+  const prevEnd = Math.min(prevStart + elapsed, bounds.start)
 
-  const current = digest(inRange(list, bounds.start, bounds.end))
-  const previous = digest(inRange(list, prevStart, bounds.start))
+  const current = digest(inRange(list, bounds.start, bounds.start + elapsed))
+  const previous = digest(inRange(list, prevStart, prevEnd))
 
   const delta = {
     bed:
@@ -306,9 +310,9 @@ function metricsOf(records, now) {
   const total = cur.avgTotalMin || 0
   const reference = durationNoteOf(cur)
   const clockCompare = (diff) => {
-    if (diff === null) return '上周没有记录，暂时无法对比'
-    if (diff === 0) return '与上周持平'
-    return '比上周' + (diff > 0 ? '晚 ' : '早 ') + durationText(Math.abs(diff))
+    if (diff === null) return '上周同期没有记录，暂时无法对比'
+    if (diff === 0) return '与上周同期持平'
+    return '比上周同期' + (diff > 0 ? '晚 ' : '早 ') + durationText(Math.abs(diff))
   }
 
   const metrics = [
@@ -321,8 +325,8 @@ function metricsOf(records, now) {
         d.total === null
           ? ''
           : d.total === 0
-            ? '与上周持平'
-            : '比上周' + (d.total > 0 ? '多 ' : '少 ') + deltaAmount(d.total),
+            ? '与上周同期持平'
+            : '比上周同期' + (d.total > 0 ? '多 ' : '少 ') + deltaAmount(d.total),
       detail: [
         '本周 ' + cur.count + ' 天平均 ' + durationText(total) + '，含午休与间断段',
         reference,
@@ -339,8 +343,8 @@ function metricsOf(records, now) {
         d.bed === null
           ? ''
           : d.bed === 0
-            ? '与上周持平'
-            : '比上周' + (d.bed > 0 ? '晚 ' : '早 ') + deltaAmount(d.bed),
+            ? '与上周同期持平'
+            : '比上周同期' + (d.bed > 0 ? '晚 ' : '早 ') + deltaAmount(d.bed),
       detail: [
         '本周 ' + cur.count + ' 天平均 ' + clockText(cur.avgBedMin) + ' 入睡',
         clockCompare(d.bed),
@@ -357,8 +361,8 @@ function metricsOf(records, now) {
         d.wake === null
           ? ''
           : d.wake === 0
-            ? '与上周持平'
-            : '比上周' + (d.wake > 0 ? '晚 ' : '早 ') + deltaAmount(d.wake),
+            ? '与上周同期持平'
+            : '比上周同期' + (d.wake > 0 ? '晚 ' : '早 ') + deltaAmount(d.wake),
       detail: [
         '本周 ' + cur.count + ' 天平均 ' + clockText(cur.avgWakeMin) + ' 起床（主睡眠）',
         clockCompare(d.wake),
@@ -430,6 +434,8 @@ function localFact(records, now) {
  */
 function heatmapCells(records, now, days, partialDay, endOffsetDays) {
   const span = days || 120
+  // 记录按“醒来日”归档（utils/sleep-x 的 sessionDay），与日历格同口径；
+  // 不要改成 sleepDayOf：那会把“今天”标到昨晚的格子上。
   const todayKey = T.dateKey(T.startOfDay(now))
   // endOffsetDays > 0 时渲染未来板位（月对齐图板的"往后 3 周"）
   const end = T.addDays(T.startOfDay(now), endOffsetDays || 0)

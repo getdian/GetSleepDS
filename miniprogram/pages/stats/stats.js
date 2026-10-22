@@ -143,7 +143,7 @@ Page({
       ? '云端副本尚未删除，请先删除'
       : syncEnabled
         ? meta.lastSyncPartial
-          ? '上次同步有 ' + (Number(meta.lastSyncDropped) || 0) + ' 条记录云端未写入'
+          ? '上次同步有 ' + (Number(meta.lastSyncDropped) || 0) + ' 条未写入云端（时间重叠或超出范围）'
           : meta.lastSyncAt
             ? '上次同步 ' + F.fmtClockTs(meta.lastSyncAt)
             : '已开启，尚未同步'
@@ -160,8 +160,11 @@ Page({
       metrics.map((item) => item.value + '/' + item.sub + '/' + item.detail.join('|')).join('|'),
       metricData.count,
       metricData.streak,
+      // 月份偏移必须进签名：空月之间格子数与色阶序列完全相同，
+      // 缺了它切月会被去重跳过（标题/格子/canNextMonth 都不更新，且 monthOffset 已变 → 双向卡死）。
+      monthOffset,
       calendarSpan,
-      calendar ? calendar.cells.map((cell) => cell.level).join('') : '',
+      calendar ? calendar.monthKey + ':' + calendar.cells.map((cell) => cell.level).join('') : '',
       calendarMonths.map((month) => month.cells.map((cell) => cell.level).join('')).join('|'),
       // 跨天、进行中的会话、云端副本状态都会改变界面，必须进签名，否则不会刷新
       todayKey,
@@ -278,6 +281,9 @@ Page({
     const now = Date.now()
     const result = MS.evaluateManualRange({
       records: storage.getRecords(),
+      // 进行中的一段不在 records 里，必须单独传：否则补记与它相交也能保存，
+      // 之后结束计时会被这段新补记挡住（互为死结）。
+      pending: storage.getPending(),
       dayTs: this._manualBaseDay || T.startOfDay(now),
       bedMinutes: T.parseClock(this.data.manualBedTime),
       wakeMinutes: T.parseClock(this.data.manualWakeTime),
@@ -340,7 +346,7 @@ Page({
       .then((res) => {
         if (!res || res.skipped === 'stale') return
         if (res.synced === 0 && res.dropped > 0) {
-          wx.showToast({ title: '记录已存本机，云端校验未通过', icon: 'none' })
+          wx.showToast({ title: '记录已存本机；云端未接受（时间重叠或超出范围）', icon: 'none' })
         }
       })
       .catch(() => {

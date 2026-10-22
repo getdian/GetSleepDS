@@ -92,7 +92,8 @@ function init(unitId) {
  */
 function show() {
   if (!ad) return Promise.resolve('unavailable')
-  if (pending) return Promise.resolve('error')
+  // 已有广告在播：这是"忙"，不是"加载失败"，调用方不能按失败降级放行（会白嫖解锁）
+  if (pending) return Promise.resolve('busy')
 
   return new Promise((resolve) => {
     pending = resolve

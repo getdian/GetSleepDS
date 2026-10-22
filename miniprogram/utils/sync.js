@@ -14,6 +14,8 @@ const MAX_SLEEP_MS = 24 * 60 * 60 * 1000
 const DAY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/
 
 let inflight = null
+// 未来墓碑只可能是设备时钟错误；同一会话只提示一次，避免每次同步都弹
+let warnedFutureTombstone = false
 
 function isValidDay(day) {
   const match = DAY_PATTERN.exec(String(day || ''))
@@ -27,6 +29,31 @@ function isValidDay(day) {
     parsed.getUTCMonth() === month - 1 &&
     parsed.getUTCDate() === date
   )
+}
+
+/**
+ * 墓碑只可能指向过去/今天。设备时钟错乱会造出未来日期，
+ * 服务端会拒绝（+1 天时区容差），这里先过滤并明确告知，避免"删了但云端没删"的错觉。
+ */
+function validTombstones(list, now) {
+  const maxDay = T.dateKey(T.addDays(now, 1))
+  const kept = []
+  let skipped = 0
+  ;(list || []).forEach(function (item) {
+    if (!item || !isValidDay(item.day)) return
+    if (item.day > maxDay) {
+      skipped += 1
+      return
+    }
+    kept.push(item)
+  })
+  if (skipped && !warnedFutureTombstone) {
+    warnedFutureTombstone = true
+    if (typeof wx !== 'undefined' && wx.showToast) {
+      wx.showToast({ title: '删除日期异常（请检查手机时间），已跳过', icon: 'none' })
+    }
+  }
+  return kept
 }
 
 function collect(now, spanDays) {
@@ -184,8 +211,9 @@ function doSync(force) {
     return Promise.resolve({ skipped: 'throttled' })
   }
 
-  const records = collect(Date.now(), SPAN_DAYS)
-  const deletedDays = storage.getDeletedList()
+  const now = Date.now()
+  const records = collect(now, SPAN_DAYS)
+  const deletedDays = validTombstones(storage.getDeletedList(), now)
   const epoch = meta.syncEpoch || 0
   const batches = chunk(records, CHUNK_SIZE)
   // 本地为空也要请求一次，否则换机后拿不到云端记录 / 删除水位

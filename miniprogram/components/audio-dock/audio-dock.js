@@ -87,6 +87,9 @@ Component({
       this._stopRequested = false
       this._playingFromCache = false
       this._currentTrack = null
+      // 最后一次赋给 BackgroundAudioManager 的 src；onError 不带源标识，
+      // 用它判断“这条错误是不是已经切走的旧源迟到的”。
+      this._expectSrc = ''
       // 本会话已判定损坏的缓存 URL：即使文件删除失败也不再命中，避免每轮循环重演“报错→回退”
       this._badUrls = {}
       this._wasUnlocked = false
@@ -352,6 +355,10 @@ Component({
           wx.showToast({ title: '视频没看完，先不解锁', icon: 'none' })
           return false
         }
+        if (result === 'busy') {
+          wx.showToast({ title: '广告正在播放，请稍后再试', icon: 'none' })
+          return false
+        }
         if (result === 'error' || result === 'unavailable') {
           if (unlock.onAdError === 'deny') {
             wx.showToast({ title: '广告暂不可用，稍后再试', icon: 'none' })
@@ -464,14 +471,21 @@ Component({
         },
         error: () => {
           if (!this._alive) return
+          // 切歌/缓存回退竞态：旧源的 onError 可能在新源已经起播后到达，
+          // 处理它会把新曲的缓存删掉、甚至把新会话清成空态。
+          if (!playerState.isCurrentSourceError(this._audio && this._audio.src, this._expectSrc)) {
+            return
+          }
           this.disarmLoadingGuard()
           if (this._playingFromCache && this._currentTrack) {
             this._playingFromCache = false
             const badUrl = this._currentTrack.url
-            // 本地文件损坏后必须失效，否则每次 ended→replay 都会再次命中同一个坏文件，
-            // 形成“每轮循环静默卡顿一次”的循环；删除失败时用会话黑名单兜底。
+            // 只有磁盘文件确实不可用才删文件：网络/解码错误时文件本身是好的，
+            // 删掉会误伤（切歌竞态下删的还可能是新曲的正常缓存）。
+            if (!cache.isUsable(badUrl)) cache.remove(badUrl)
+            // 会话内一律不再命中：文件还在也说明这条源播不出来；
+            // 用户主动重播（play）时会清掉黑名单，重新验证一次。
             this._badUrls[badUrl] = true
-            cache.remove(badUrl)
             this.refreshCache()
             this.setData({ loading: false })
             // 同一轮错误只允许一个组件执行远程回退；now-playing 已处理过时不要重复赋 src。
@@ -479,7 +493,7 @@ Component({
             // 标记“正在回退”，让同时监听的 now-playing 不要把这次错误当终态。
             playerState.markFallback(badUrl)
             storage.patchMeta({ lastTrackActive: true })
-            this._audio.src = this._currentTrack.url
+            this.setAudioSrc(this._currentTrack.url)
             return
           }
           // 终态失败：结束本次会话，和 now-playing 的错误态保持同一口径，
@@ -626,6 +640,16 @@ Component({
       return cache.peek(url, this._ttlDays, url)
     },
 
+    /**
+     * 统一设置音源并记录“最后一次赋值的 src”。
+     * 必须走这里：切歌/缓存回退/重建源三处若直接赋 src，onError 就无从判断旧源。
+     */
+    setAudioSrc(url) {
+      const next = url || ''
+      this._expectSrc = next
+      if (this._audio) this._audio.src = next
+    },
+
     play(track, localPath) {
       if (!track.url || track.url.indexOf('https://') !== 0) {
         wx.showToast({ title: '音频地址未配置', icon: 'none' })
@@ -643,6 +667,8 @@ Component({
       const cached = localPath || this.peekCached(track.url)
       this._currentTrack = track
       this._playingFromCache = !!cached
+      // 用户主动点播即视为重试：清掉本会话的黑名单，避免重新下载成功后仍走远程
+      if (this._badUrls[track.url]) delete this._badUrls[track.url]
       this.clearCollapseTimer()
 
       this.setData({
@@ -662,7 +688,7 @@ Component({
       this._audio.title = '睡点 · ' + track.title
       this._audio.epname = '环境音'
       this._audio.singer = '睡点'
-      this._audio.src = cached || track.url
+      this.setAudioSrc(cached || track.url)
 
       const savedMeta = storage.patchMeta({
         lastTrackId: track.id,
@@ -709,7 +735,7 @@ Component({
       this.setData({ loading: true })
       this.armLoadingGuard()
       this._audio.title = '睡点 · ' + track.title
-      this._audio.src = cached || track.url
+      this.setAudioSrc(cached || track.url)
       // 赋值 src 不会在所有基础库上自动起播；与 now-playing.handleEnded 及
       // togglePlay 正常分支保持同一口径，否则自然播完会静默停住。
       this.safePlay()
@@ -752,7 +778,7 @@ Component({
         this._audio.title = '睡点 · ' + track.title
         this._audio.epname = '环境音'
         this._audio.singer = '睡点'
-        this._audio.src = cached || track.url
+        this.setAudioSrc(cached || track.url)
         storage.patchMeta({
           lastTrackId: track.id,
           lastTrackTitle: track.title,
@@ -832,6 +858,9 @@ Component({
       this.clearCollapseTimer()
       tabbar.show()
       this.setData({ open: false, miniExpanded: !this.data.playing, collapsed: false, collapsing: false })
+      // 入睡页据此恢复“30s 无操作熄灯”：抽屉打开期间到点的熄灯会被跳过，
+      // 若不在关闭时重排，睡前会一直亮屏（组件与页面是唯一的一组宿主关系）。
+      this.triggerEvent('sheetclose')
     },
 
     onKeywordInput(event) {

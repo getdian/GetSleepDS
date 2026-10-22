@@ -43,6 +43,25 @@ test('本周均值与连续天数', () => {
   assert.equal(weekly.streak, 3)
 })
 
+test('上周对比取同期：周一不拿本周 1 天比上周 7 天', () => {
+  const now = local(2026, 10, 19, 10, 0) // 周一 10:00
+  const records = {
+    '2026-10-19': record('2026-10-19', local(2026, 10, 18, 23, 0), local(2026, 10, 19, 7, 0)),
+    '2026-10-12': record('2026-10-12', local(2026, 10, 11, 23, 0), local(2026, 10, 12, 7, 0)),
+    '2026-10-13': record('2026-10-13', local(2026, 10, 12, 23, 0), local(2026, 10, 13, 7, 0)),
+    '2026-10-14': record('2026-10-14', local(2026, 10, 13, 23, 0), local(2026, 10, 14, 7, 0)),
+    '2026-10-15': record('2026-10-15', local(2026, 10, 14, 23, 0), local(2026, 10, 15, 7, 0)),
+    '2026-10-16': record('2026-10-16', local(2026, 10, 15, 23, 0), local(2026, 10, 16, 7, 0))
+  }
+  const w = S.weekly(records, now)
+  assert.equal(w.current.count, 1)
+  assert.equal(w.previous.count, 1, '上一周只取同期（周一），不是完整 7 天')
+
+  const metrics = S.metricsOf(records, now).metrics
+  assert.match(metrics[0].sub, /上周同期/)
+  assert.match(metrics[1].detail[1], /上周同期/)
+})
+
 test('本地事实回顾：满 3 条生成模板文案，不出现建议类词', () => {
   const fact = S.localFact(RECORDS, NOW)
   assert.equal(fact.available, true)

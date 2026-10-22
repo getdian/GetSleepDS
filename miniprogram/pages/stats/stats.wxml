@@ -80,6 +80,7 @@
       />
       <calendar-strip
         wx:else
+        id="cal-strip"
         months="{{calendarMonths}}"
         selected-key="{{selectedKey}}"
         bind:daytap="onStripTap"

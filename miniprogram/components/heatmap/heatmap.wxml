@@ -37,6 +37,9 @@
             class="hm-cell {{item.pad ? 'hm-pad' : 'hm-l' + item.level}} {{item.partial ? 'hm-partial' : ''}} {{item.isToday ? 'hm-today' : ''}} {{item.future ? 'hm-future' : ''}}"
             data-index="{{index}}"
             bindtap="onCellTap"
+            aria-role="button"
+            aria-label="{{item.pad ? '占位' : item.day + ' ' + (item.durationMin ? item.durationMin + ' 分钟' : (item.future ? '未来' : '未打卡'))}}"
+            aria-disabled="{{item.pad}}"
           ></view>
         </view>
       </view>

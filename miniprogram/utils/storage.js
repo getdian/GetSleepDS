@@ -112,9 +112,15 @@ function saveSession(session) {
   const record = X.aggregate(day, list, Date.now())
   if (!record) return false
   all[day] = record
-  legacyKeys.forEach((key) => delete all[key])
+  // 被合并的 v1 记录也要写墓碑；时间必须晚于它自己的 updatedAt，
+  // 否则云端“updated_at <= deleted_at”条件不成立，旧记录会被回填。
+  const legacyTimes = {}
+  legacyKeys.forEach((key) => {
+    legacyTimes[key] = tombstoneTime(all[key], Date.now())
+    delete all[key]
+  })
   if (!safeSet(KEYS.records, all)) return false
-  legacyKeys.forEach((key) => markDeleted(key, Date.now()))
+  legacyKeys.forEach((key) => markDeleted(key, legacyTimes[key]))
   return clearDeleted(day) ? record : false
 }
 
@@ -148,10 +154,12 @@ function updateSession(day, sessionId, startAt, endAt) {
     if (X.totalDurationOf(merged) > 24 * 60) return false
     const next = X.aggregate(nextDay, merged, Date.now())
     if (!next) return false
+    // 迁移后旧 day 的墓碑必须晚于原记录，否则云端旧行删不掉、下次同步又迁回来
+    const tombAt = tombstoneTime(record, Date.now())
     all[nextDay] = next
     delete all[day]
     if (!safeSet(KEYS.records, all)) return false
-    markDeleted(day, Date.now())
+    markDeleted(day, tombAt)
     return clearDeleted(nextDay) ? next : false
   }
   const next = X.aggregate(day, list, Date.now())
@@ -186,15 +194,27 @@ function replaceRecords(map) {
   return safeSet(KEYS.records, map && typeof map === 'object' ? map : {})
 }
 
+/**
+ * 墓碑时间：必须晚于被删记录自身的 updatedAt。
+ * 云端删除条件是 `updated_at <= deleted_at`，跨设备删除或设备时钟偏慢时
+ * 直接用本机 Date.now() 可能删不掉，下次同步会把“已删除”的记录回填。
+ */
+function tombstoneTime(record, nowTs) {
+  const updatedAt = Number(record && record.updatedAt) || 0
+  return Math.max(Number(nowTs) || Date.now(), Date.now(), updatedAt + 1)
+}
+
 function removeRecord(day, deletedAt) {
   const all = getRawRecords()
+  const current = all[day]
+  const tombAt = tombstoneTime(current, deletedAt)
   delete all[day]
   const saved = safeSet(KEYS.records, all)
   // 墓碑：阻止云端旧记录在下次同步时被回填；写入失败必须让调用方知道。
   // 同步合并时使用服务端墓碑时间，避免把“现在”写成更新的墓碑而挡住清除后新记录。
   // 墓碑写失败时立即重试一次：记录已经从本机删掉，漏墓碑会让云端旧记录在下次同步复活。
-  let tomb = saved ? markDeleted(day, deletedAt) : false
-  if (saved && !tomb) tomb = markDeleted(day, deletedAt)
+  let tomb = saved ? markDeleted(day, tombAt) : false
+  if (saved && !tomb) tomb = markDeleted(day, tombAt)
   return saved && tomb
 }
 

@@ -137,7 +137,12 @@ Page({
         return
       }
       tries -= 1
-      if (tries > 0) setTimeout(tryOpen, 120)
+      if (tries > 0) {
+        setTimeout(tryOpen, 120)
+        return
+      }
+      // 抽屉组件始终没挂上：不能静默吞掉这次点击
+      wx.showToast({ title: '声音面板打开失败，请再点一次', icon: 'none' })
     }
     setTimeout(tryOpen, 180)
   },
@@ -264,6 +269,7 @@ Page({
         ? this.dateTextOf(this.data.endDate)
         : this.data.endDateText
 
+    const recordView = record ? this.buildRecordView(record) : null
     this.setData({
       dateText: F.fmtDateCN(now),
       greeting: F.greeting(now),
@@ -299,8 +305,15 @@ Page({
       overdue,
       overdueText,
       record,
-      recordView: record ? this.buildRecordView(record) : null,
-      recordHint: done ? '' : sleeping ? '' : '只记录时间，不做睡眠评价',
+      recordView,
+      // 记录存在但没有任何可用段：给出可行动出口，而不是空白完成态
+      recordHint: done
+        ? recordView
+          ? ''
+          : '这条记录缺少可用的睡眠段，可撤销后重新记录'
+        : sleeping
+          ? ''
+          : '只记录时间，不做睡眠评价',
       buttonTitle: button.title,
       buttonSub: button.sub,
       canAddSession,
@@ -358,10 +371,17 @@ Page({
    */
   buildRecordView(record) {
     const sessions = S.sessionsOf(record)
+    // 没有任何可用段（bedAt/wakeAt 也非法）时不要把异常记录渲染成“0 分钟完成态”，
+    // 交给 refreshAll 的 recordHint 引导用户撤销重记。
+    if (!sessions.length) return null
     const multi = sessions.length > 1
     return {
-      bed: F.fmtClockTs(record.bedAt),
-      wake: F.fmtClockTs(record.wakeAt),
+      bed: F.fmtClockTs(Number.isFinite(Number(record.bedAt)) ? record.bedAt : sessions[0].startAt),
+      wake: F.fmtClockTs(
+        Number.isFinite(Number(record.wakeAt))
+          ? record.wakeAt
+          : sessions[sessions.length - 1].endAt
+      ),
       // 当天总睡眠含午休/间断段；时间轴显示总睡眠的首末时刻
       duration: F.fmtDuration(S.totalDurationOf(record)),
       total: F.fmtDuration(S.totalDurationOf(record)),
@@ -507,6 +527,14 @@ Page({
     this.clearLightsTimer()
   },
 
+  /**
+   * 声音抽屉关闭：抽屉打开期间到点的熄灯会被 enterLightsOut 跳过（回调里定时器已置空），
+   * 关闭后必须重新起 30s 倒计时，否则睡前会一直亮屏。
+   */
+  onDockSheetClose() {
+    if (this.data.state === 'sleeping' && !this.data.endShow) this.scheduleLightsOut()
+  },
+
   /** 唤醒：恢复正常亮度并隐藏熄灯层；不改变计时状态 */
   wakeUp() {
     this.clearLightsTimer()
@@ -565,6 +593,9 @@ Page({
     const now = Date.now()
     if (now - pending.bedAt < 60 * 1000) {
       wx.showToast({ title: '刚睡下，再等等', icon: 'none' })
+      // 点圆环会先 clearLightsTimer（面板期间不熄灯），这里必须把倒计时还回去，
+      // 否则页面会一直亮到用户下一次触碰，违反“唤醒后 30s 无操作回熄灯”。
+      this.scheduleLightsOut()
       return
     }
     this._pending = pending
@@ -662,6 +693,19 @@ Page({
     const wakeBase = this._endBaseDay || T.startOfDay(now)
     const bedMinutes = T.parseClock(this.data.endBedTime)
     const wakeMinutes = T.parseClock(this.data.endWakeTime)
+    // 编辑既有段时面板没有日期选择器：入睡 >= 起床不能交给 rangeForDay 的“回退一天”，
+    // 否则把一段午休（13:00–13:30）的入睡改成 14:00 会静默变成 23.5 小时的跨天段。
+    if (this.data.endMode === 'edit' && bedMinutes >= wakeMinutes) {
+      this._endBedAt = 0
+      this._endWakeAt = 0
+      this.setData({
+        endDayText: '—',
+        endDurationText: '—',
+        endHint: '',
+        endError: MS.errorTextOf('order')
+      })
+      return
+    }
     // pending 的入睡日是打卡那一刻，精确到天；补记/编辑仍按“醒来日 + 跨午夜回退一天”
     const range =
       this.data.endMode === 'pending' && this._endStartDay
@@ -669,6 +713,7 @@ Page({
         : X.rangeForDay(wakeBase, bedMinutes, wakeMinutes, now)
     // 错误文案与统计页补记共用 manual-sleep 模块，禁止各自写 if 链
     let error = MS.errorTextOf(range.error)
+    const records = storage.getRecords()
     // 补记/结束/编辑都要先挡重叠，避免存不进去才报“写入失败”。
     // 必须按时间区间查全表：只看醒来日会漏掉前一天那段（跨天双计）。
     if (!error) {
@@ -678,12 +723,24 @@ Page({
           : this.data.endMode === 'pending' && this._pending
             ? this._pending.id
             : ''
-      if (X.findOverlap(storage.getRecords(), range.bedAt, range.wakeAt, { id: excludeId })) {
+      if (X.findOverlap(records, range.bedAt, range.wakeAt, { id: excludeId })) {
         error = MS.errorTextOf('overlap')
       }
     }
-    this._endBedAt = range.bedAt
-    this._endWakeAt = range.wakeAt
+    // 段数/当天总时长上限：saveSession 对超限是静默 false，必须提前给出可行动原因。
+    // 结束 pending / 补记都是“新增一段”，只有编辑才排除旧段。
+    if (!error) {
+      const capacity = MS.capacityErrorOf({
+        records,
+        dayKey: T.dateKey(range.wakeAt),
+        durationMin: range.durationMin,
+        excludeId: this.data.endMode === 'edit' ? this._editingSessionId : ''
+      })
+      if (capacity) error = MS.errorTextOf(capacity)
+    }
+    // 有错误时不保留可保存区间：避免某条路径只看 endError 被清掉后误落库
+    this._endBedAt = error ? 0 : range.bedAt
+    this._endWakeAt = error ? 0 : range.wakeAt
     // 只给中性出口，不判定“异常”：夜班/白天补觉/中途醒来/长睡都可能出现。
     // 仅“结束本次入睡”时提示；补记/编辑历史时不打扰。
     let endHint = ''
@@ -852,7 +909,13 @@ Page({
   reportSyncResult(res) {
     if (!res || res.skipped === 'stale') return
     if (res.synced === 0 && res.dropped > 0) {
-      wx.showToast({ title: '记录已存本机，云端校验未通过', icon: 'none' })
+      // 服务端拒收只有两类原因：时间区间重叠、或时间戳超出 400 天/未来 1 天窗口
+      wx.showToast({ title: '记录已存本机；云端未接受（时间重叠或超出范围）', icon: 'none' })
+      return
+    }
+    // 本机合并写盘失败：用户以为“已同步”，实际云端记录没落到本机
+    if (res.writeFailed) {
+      wx.showToast({ title: '本机落盘未完成，稍后可重试同步', icon: 'none' })
     }
   },
 

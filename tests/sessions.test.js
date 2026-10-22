@@ -23,6 +23,28 @@ test('旧记录没有 sessions 时按 bedAt/wakeAt 合成一段', () => {
   assert.equal(list[0].durationMin, 8 * 60)
 })
 
+test('sessions 为空数组时回退 v1 字段（避免完成态取 sessions[0] 抛错）', () => {
+  const start = at(2026, 10, 20, 23, 0)
+  const end = at(2026, 10, 21, 7, 0)
+  const list = X.sessionsOf({ day: '2026-10-21', sessions: [], bedAt: start, wakeAt: end })
+  assert.equal(list.length, 1)
+  assert.equal(list[0].startAt, start)
+  assert.equal(list[0].endAt, end)
+})
+
+test('sessions 全是非法段时同样回退 v1 字段', () => {
+  const start = at(2026, 10, 20, 23, 0)
+  const end = at(2026, 10, 21, 7, 0)
+  const list = X.sessionsOf({
+    day: '2026-10-21',
+    sessions: [{ startAt: 'bad', endAt: 'bad' }],
+    bedAt: start,
+    wakeAt: end
+  })
+  assert.equal(list.length, 1)
+  assert.equal(list[0].startAt, start)
+})
+
 test('一天多段聚合：主睡眠取最长，总睡眠求和', () => {
   const nightStart = at(2026, 10, 20, 23, 0)
   const nightEnd = at(2026, 10, 21, 6, 30)

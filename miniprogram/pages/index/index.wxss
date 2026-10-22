@@ -386,14 +386,15 @@
   transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
 }
 
-/* 垂直扩 14rpx：视觉只有 44rpx 高的小标签，实际可点 72rpx */
+/* 垂直扩 22rpx：视觉 44rpx 的小标签，实际可点 88rpx（≈44px，达最小触控高度）。
+   只纵向扩，水平方向与相邻档位仅隔 8rpx，横向扩会互相抢点击。 */
 .fall-chip::after {
   content: "";
   position: absolute;
   left: 0;
   right: 0;
-  top: -14rpx;
-  bottom: -14rpx;
+  top: -22rpx;
+  bottom: -22rpx;
 }
 
 .fall-chip--tap {

@@ -16,6 +16,10 @@ const X = require('./sessions')
 /** 日历可翻 / 补记可选的统一回溯范围（月）。统计页的月份翻页复用同一常量 */
 const MONTH_LOOKBACK = 24
 
+/** 一天最多的睡眠段数 / 当天总时长上限：与 storage.saveSession 的落库限制保持一致 */
+const MAX_SESSIONS_PER_DAY = 8
+const MAX_DAY_MINUTES = 24 * 60
+
 /** 补记日期选择器的最早可选日：MONTH_LOOKBACK 个月前的 1 号 */
 function minDayKey(now) {
   const d = new Date(Number(now) || Date.now())
@@ -60,12 +64,17 @@ function errorTextOf(code) {
   if (code === 'order') return '入睡时间需早于起床时间，请检查醒来日'
   if (code === 'long') return '单段睡眠不能超过 24 小时'
   if (code === 'overlap') return '与已有睡眠段重叠，请调整时间'
+  if (code === 'pending') return '与你正在进行的睡眠重叠，请先结束计时或调整时间'
+  if (code === 'toomany') return '当天最多记录 8 段，请先删除其中一段'
+  if (code === 'dayfull') return '当天总睡眠不能超过 24 小时，请调整时间'
   return ''
 }
 
 /**
- * 补记面板的完整校验：时间区间 + 跨天重叠。
+ * 补记面板的完整校验：时间区间 + 跨天重叠 + 进行中的睡眠。
  * records 由调用方传入（页面持有 storage.getRecords()），保持本模块可单测。
+ * pending 不在 records 里（它是独立的 storage key），不一起比对会出现
+ * “补记一段与正在计时的那段相交、保存成功，之后结束计时反被这段挡住”的死结。
  */
 function evaluateManualRange(options) {
   const opts = options || {}
@@ -74,6 +83,16 @@ function evaluateManualRange(options) {
   if (!code && X.findOverlap(opts.records || {}, range.bedAt, range.wakeAt)) {
     code = 'overlap'
   }
+  if (!code && pendingOverlaps(opts.pending, range, opts.now)) {
+    code = 'pending'
+  }
+  if (!code) {
+    code = capacityErrorOf({
+      records: opts.records,
+      dayKey: T.dateKey(range.wakeAt),
+      durationMin: range.durationMin
+    })
+  }
   return {
     bedAt: range.bedAt,
     wakeAt: range.wakeAt,
@@ -81,6 +100,37 @@ function evaluateManualRange(options) {
     code,
     error: errorTextOf(code)
   }
+}
+
+/**
+ * 保存前的容量预检：当天段数上限 + 当天总时长上限。
+ *
+ * storage.saveSession 对超限是静默返回 false，页面只能提示“写入失败/请重试”，
+ * 用户没有任何可行动出口。提前给出原因，避免在结束面板里反复重试。
+ * excludeId 用于编辑：先扣掉旧段再判断。
+ */
+function capacityErrorOf(options) {
+  const opts = options || {}
+  const records = opts.records || {}
+  const dayKey = opts.dayKey || ''
+  const record = dayKey ? records[dayKey] : null
+  const list = X.sessionsOf(record)
+  const excludeId = opts.excludeId ? String(opts.excludeId) : ''
+  const kept = excludeId ? list.filter((item) => item.id !== excludeId) : list
+  const durationMin = Math.max(0, Number(opts.durationMin) || 0)
+  if (!excludeId && kept.length >= MAX_SESSIONS_PER_DAY) return 'toomany'
+  if (X.totalDurationOf(kept) + durationMin > MAX_DAY_MINUTES) return 'dayfull'
+  return ''
+}
+
+/** 进行中的那段按「打卡时刻 → 现在」估算，只用于重叠判断，不落库 */
+function pendingOverlaps(pending, range, now) {
+  if (!pending || typeof pending !== 'object') return false
+  const startAt = Number(pending.bedAt)
+  if (!Number.isFinite(startAt)) return false
+  const endAt = Number(now) || Date.now()
+  if (endAt <= startAt) return false
+  return X.overlaps({ startAt, endAt }, { startAt: range.bedAt, endAt: range.wakeAt })
 }
 
 /** storage.saveSession 的补记入参（id 带时间戳，source 固定 manual） */
@@ -98,9 +148,12 @@ function buildSaveArgs(bedAt, wakeAt, now) {
 
 module.exports = {
   MONTH_LOOKBACK,
+  MAX_SESSIONS_PER_DAY,
+  MAX_DAY_MINUTES,
   minDayKey,
   defaultTimesFor,
   errorTextOf,
   evaluateManualRange,
+  capacityErrorOf,
   buildSaveArgs
 }

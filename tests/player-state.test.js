@@ -62,6 +62,17 @@ test('claimExpiryToast 在窗口内只让一个组件弹提示', () => {
   }
 })
 
+test('isCurrentSourceError 只忽略“已经切走”的旧源错误', () => {
+  // 正常：事件到达时 src 仍是最后一次赋的值
+  assert.equal(playerState.isCurrentSourceError('https://a.mp3', 'https://a.mp3'), true)
+  // 切歌后旧源错误迟到：必须忽略，否则会误删新曲缓存、误杀新会话
+  assert.equal(playerState.isCurrentSourceError('https://b.mp3', 'https://a.mp3'), false)
+  // 基础库清空 src / 本进程未记录：无法判定，按当前源保守处理
+  assert.equal(playerState.isCurrentSourceError('', 'https://a.mp3'), true)
+  assert.equal(playerState.isCurrentSourceError('https://a.mp3', ''), true)
+  assert.equal(playerState.isCurrentSourceError('', ''), true)
+})
+
 /** 伪造 BackgroundAudioManager：只需 paused/duration/currentTime/seek/play */
 function fakeAudio(overrides) {
   return Object.assign(

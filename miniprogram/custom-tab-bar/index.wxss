@@ -35,6 +35,17 @@
   transition: color 0.18s ease;
 }
 
+/* hover-class：点击瞬间给一层极轻的玻璃高光，避免只有选中态变色 */
+.tab-item--tap .tab-content {
+  opacity: 0.72;
+  transform: scale(0.96);
+}
+
+.tab-item--tap {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 999rpx;
+}
+
 .tab-content {
   position: relative;
   z-index: 2;

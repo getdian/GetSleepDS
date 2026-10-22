@@ -112,7 +112,7 @@
   <text class="sleep-quote font-poetic fade-up">{{footerText}}</text>
 </view>
 
-<audio-dock id="dock" />
+<audio-dock id="dock" bind:sheetclose="onDockSheetClose" />
 
 <view wx:if="{{endShow}}" class="end-mask" catchtap="onEndCancel" catchtouchmove="noop">
   <view
