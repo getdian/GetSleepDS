@@ -13,17 +13,41 @@
 const T = require('./time')
 const X = require('./sessions')
 
-/** 日历可翻 / 补记可选的统一回溯范围（月）。统计页的月份翻页复用同一常量 */
+/** 日历可翻看的历史范围（月）。统计页的月份翻页复用同一常量 */
 const MONTH_LOOKBACK = 24
+
+/**
+ * 可补记窗口（天）：必须与 utils/sync.js 的 SPAN_DAYS 一致。
+ * 同步只上传最近 400 天（服务端 validate.inWindow 同边界），窗口外的补记
+ * 会变成"只存本机、永远不上云、换机即丢"的静默丢失——所以补记下限对齐它，
+ * 而不是对齐日历的 24 个月可翻范围。改动任一侧必须同步另一侧。
+ */
+const EDIT_WINDOW_DAYS = 400
 
 /** 一天最多的睡眠段数 / 当天总时长上限：与 storage.saveSession 的落库限制保持一致 */
 const MAX_SESSIONS_PER_DAY = 8
 const MAX_DAY_MINUTES = 24 * 60
 
-/** 补记日期选择器的最早可选日：MONTH_LOOKBACK 个月前的 1 号 */
+/**
+ * 补记日期选择器的最早可选日（醒来日下限）。
+ * 取 now-399 天：醒来日再早一天时，跨午夜补记的 bedAt 就会越出同步窗口
+ * （最坏 bedAt = 醒来日前一天 00:00，now - bedAt = 401 天 > 400 天）。
+ */
 function minDayKey(now) {
-  const d = new Date(Number(now) || Date.now())
-  return T.dateKey(new Date(d.getFullYear(), d.getMonth() - MONTH_LOOKBACK, 1).getTime())
+  const ts = Number(now) || Date.now()
+  return T.dateKey(T.addDays(T.startOfDay(ts), -(EDIT_WINDOW_DAYS - 1)))
+}
+
+/**
+ * 空格子的补记入口按窗口收口：canAdd 为 true 但早于 minDay 的格子改为 false。
+ * 直接修改传入的 cells（页面在 setData 前调用），返回同一引用便于链式。
+ */
+function limitCanAdd(cells, minDay) {
+  const list = Array.isArray(cells) ? cells : []
+  list.forEach((cell) => {
+    if (cell && cell.canAdd && cell.day && cell.day < minDay) cell.canAdd = false
+  })
+  return list
 }
 
 /**
@@ -149,9 +173,11 @@ function buildSaveArgs(bedAt, wakeAt, now) {
 
 module.exports = {
   MONTH_LOOKBACK,
+  EDIT_WINDOW_DAYS,
   MAX_SESSIONS_PER_DAY,
   MAX_DAY_MINUTES,
   minDayKey,
+  limitCanAdd,
   defaultTimesFor,
   errorTextOf,
   evaluateManualRange,

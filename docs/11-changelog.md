@@ -1,5 +1,14 @@
 # 睡点 · 关键更新记录
 
+## 2026-10-22 · 文案中性化：睡眠提示不再预设夜间
+
+- **原则**：描述**睡眠事件本身**（入睡/起床/这一段）的文案一律中性，不写「今晚/明早/夜色/晚安/昨晚/早睡」——白天补觉、午休、跨时区使用时同样成立；只有描述**此刻**的问候（早安/页脚）按设备本地时区时段切换（新增 `format.daypartOf`：morning 5–11 / day 11–18 / evening 18–23 / late 23–5）。
+- **入睡页**：sleeping 标题「夜色正浓」→「这一觉开始了」，副标「明早醒来…」→「醒来后记得回来记录起床。」；done 标题非早晨时段「今晚的记录完成了」→「这一觉记下了」，副标「…已经记下」→「…都已保存」；页脚深夜「晚安，明天见。」→「夜深了，明天见。」（深夜刚醒不再出现“晚安”）、sleeping「夜色正安」→「放轻松，慢慢睡。」、idle「愿今夜好眠」→「愿这一觉安稳」；orb「今晚」→「等待入睡」；eyebrow「TONIGHT」→「SLEEP LOG」；熄灯层「晚安」→「已入睡」；分享「分享今晚的睡眠」→「分享这一段睡眠」，转发标题「我昨晚 X 睡…一起早睡」→「我 X 入睡、X 起床，一起好好睡」。
+- **计算器页**：hero「今晚，几点睡？」→「想几点入睡？」（与「想几点起？」对称），分享标题同步。
+- **环境音解锁文案**（fallback/种子配置/config-schema/H5 demo）：「解锁今晚的环境声音」→「解锁环境声音」；`AUTO_UNLOCK_DESC` 模板兼容历史两种旧形态（带/不带「今晚的」、带/不带空格），读取路径自动把旧默认文案迁移到新口径并跟随 ttlHours，运营自定义文案不动。
+- **落地页**：hero「今晚，几点睡？」→「想几点入睡？」、「今晚推荐」→「推荐入睡」、「今晚的上床时刻」→「推荐的上床时刻」、「今晚就试试」→「现在就试试」；demo 打卡 toast「晚安」→「已记录入睡」。
+- 验证：`npm test` 264 项 / 263 通过 / 1 PG skip（新增 `daypartOf` 边界 9 断言、入睡页三态文案中性 2 条、服务端旧文案迁移 1 条）；`npm run check` 通过。模拟器 390×844 实测：idle「等待入睡/SLEEP LOG/记录入睡这一刻…」、熄灯层「已入睡」、sleeping「这一觉开始了/醒来后记得回来记录起床。」，console 无 error。
+
 ## 2026-10-22 · L4 阶段 C：部署护栏 · openid 限流 · 固定 +8 归档 · 音频错误可观测
 
 > 定位：发版前的工程护栏与跨时区正确性。C4（换号归属）/C5（音频签名）/C6（订阅召回）需要产品与运营输入，未在本轮改动。
@@ -79,7 +88,7 @@
   - `errorTextOf(code)`：future/short/order/long + overlap 五类文案唯一出口；
   - `evaluateManualRange({records, dayTs, bedMinutes, wakeMinutes, now})`：`rangeForDay` + 跨天 `findOverlap` + 文案；
   - `buildSaveArgs(bedAt, wakeAt, now)`：`saveSession` 入参（source=manual、id 带时间戳）；
-  - `minDayKey(now)` + `MONTH_LOOKBACK=24`：补记日期下限与统计页月份翻页共用同一回溯范围（修「能翻到 24 个月前但补记只能选 400 天」的越界）。
+  - `minDayKey(now)` + `EDIT_WINDOW_DAYS=400`：可补记下限对齐**云同步窗口**（`utils/sync.js` 的 `SPAN_DAYS`，服务端同界）——同步只上传最近 400 天，窗口外的补记会变成"只存本机、永远不上云、换机即丢"的静默丢失；新增 `limitCanAdd(cells, minDay)` 把日历空格的补记入口按窗口收口（日历仍可翻 24 个月看历史，窗口外空格点击给说明「超出可补记范围」）。改动任一侧必须同步另一侧，`sync-chunk.test.js` 有跨模块一致性守卫。
   - 两页改为调用：入睡页 `openManualSheet` 默认值、`computeEndSheet` 错误文案、`saveManualSession` 入参；统计页同。新增 `tests/manual-sleep.test.js` 9 条（默认值三态/跨午夜/五类文案/区间与重叠/入参/回溯范围）。
 - **修复既有埋点缺陷（P1）**：`manual_sleep` 不在服务端事件白名单 `TYPES`，入睡页每次补记都会让整批事件被 400 拒绝、客户端按永久脏数据**整批丢弃**（含同批 app_open/checkin）。已加入白名单并在 `server/test/admin.test.js` 锁定可接受；统计页补记也补上 `events.track('manual_sleep')`，两页口径一致。
 - **弹层样式单源**：新增 `miniprogram/styles/sheet.wxss`（`.end-*` 全套），入睡页与统计页 `@import` 引入并删除各自副本（净减约 260 行重复样式）；统计页面板类名由 `manual-*` 统一为 `end-*`。

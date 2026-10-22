@@ -77,6 +77,36 @@ test('部分字段保存不会重置 unlock/features/cache/copy', () => {
   assert.equal(partial.copy.unlockTitle, '自定义标题')
 })
 
+test('解锁说明旧默认文案读取时迁移为中端口径，自定义文案不动', () => {
+  const base = normalizeConfig({ audio: FILE_AUDIO, unlock: {}, features: {}, copy: {} })
+  const withDesc = (desc) =>
+    normalizeConfig(
+      {
+        version: 4,
+        audio: FILE_AUDIO,
+        unlock: Object.assign({}, base.unlock, { ttlHours: 12 }),
+        copy: Object.assign({}, base.copy, { unlockDesc: desc })
+      },
+      base
+    )
+
+  // 种子配置里的旧文案（写死 24 小时、含“今晚的”）
+  assert.equal(
+    withDesc('观看视频，解锁今晚的环境声音（24小时内有效）').copy.unlockDesc,
+    '观看视频，解锁环境声音（12 小时内有效）'
+  )
+  // 旧生成逻辑产生的带空格形态同样迁移
+  assert.equal(
+    withDesc('观看视频，解锁今晚的环境声音（24 小时内有效）').copy.unlockDesc,
+    '观看视频，解锁环境声音（12 小时内有效）'
+  )
+  // 运营自定义文案原样保留（哪怕它自己写了“今晚”）
+  assert.equal(
+    withDesc('看一段视频，今晚都能听').copy.unlockDesc,
+    '看一段视频，今晚都能听'
+  )
+})
+
 test('旧配置缺少 site 时按默认值补齐，落地页有兜底口径', () => {
   const base = normalizeConfig({ audio: FILE_AUDIO, unlock: {}, features: {}, copy: {} })
   assert.equal(base.site.mpQrCodeUrl, '')

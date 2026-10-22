@@ -232,7 +232,7 @@
       state.pending = now
       writeJson(PENDING_KEY, now)
       renderHome()
-      toast('晚安')
+      toast('已记录入睡')
       return
     }
 

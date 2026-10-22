@@ -112,8 +112,8 @@ tests/            Node 纯逻辑测试
 
 ## 5. 当前验证基线
 
-- `npm test`：**254 项 / 253 通过 / 0 失败 / 1 skip**（客户端 176 + 服务端 78；PG 集成用例在未设置 `PG_TEST_URL` 时跳过；2026-10-22 两轮新增 26 条：P1 轮 11 条 + A/B 轮 15 条——容量预检 4、空 sessions 回退 3、墓碑时钟 1、缓存替换 1、同期对比 1、背景切换确认 1、页面级兜底 4）。
-- `npm run check`：3 页面 / 23 JSON / 18 WXML / 20 WXSS，主包约 495.6 KB（以最新输出为准）。
+- `npm test`：**264 项 / 263 通过 / 0 失败 / 1 skip**（客户端 186 + 服务端 78；PG 集成用例在未设置 `PG_TEST_URL` 时跳过；2026-10-22 文案中性化轮新增 10 条：`daypartOf` 边界、入睡页三态文案中性、解锁说明旧文案迁移）。
+- `npm run check`：3 页面 / 23 JSON / 18 WXML / 20 WXSS，主包约 499.3 KB（以最新输出为准）。
 - **验收清单（2026-10-22 建）**：全部待验收项已合并至 [docs/13-acceptance-checklist.md](docs/13-acceptance-checklist.md)，分三区——本机已验收（CLI 模拟器 390×844 实测，含入睡页 10-22 改版与统计页 10-21 改版全状态截图、console 无 error）/ 待真机（音频锁屏、中断、定时、手势手感）/ 待外部输入（部署、AppSecret、COS 防盗链、流量主）。续作新增"未验收"项一律先落该表再写代码。
 - 交付包：以 `release-artifacts/` 下最新 `getsleep-<label>.zip` 为准（`npm run pack` 生成，含 `RELEASE-MANIFEST.json` 与逐文件 sha256，同时留 `.sha256` 校验文件）；打包前会强制跑 `npm test` + `npm run check`。
 - 分享归因冒烟（2026-10-19，内存模式）：`app_open` 带 `1007|pages/index/index|share` 上报 → `/api/admin/analytics` 的 `topSources` 聚合出现；`/api/share/qrcode` 无 code 返 400、密钥不可用返 503，均为优雅报错。
@@ -156,7 +156,7 @@ tests/            Node 纯逻辑测试
 19. **入睡页改版待真机验收（2026-10-22，机验已完成 2026-10-22）**：总睡眠时间线口径、段列表删除（确认弹窗/唯一段整天撤销/墓碑）、CTA 同行小按钮已完成；「睡眠轨迹圆盘」经两轮反馈（先弱化、后判定与入睡圆环信息重复）**已整体移除**，原位只留一行「本周 X 天 · 连续 Y 天 · 查看统计 ›」。`npm test` 203 项 / `npm run check` 通过；**CLI 模拟器 390×844 已实测**（A 态 0 数据统计行不渲染、B 态 overdue 结束面板、C 态同行 CTA/段列表/统计行、删除确认弹窗唯一段文案、取消后记录保留），console 无 error。剩余仅真机手感项（删除弹窗/CTA 布局按压力度），见 docs/13 第 2 区。
 20. **睡前熄灯（2026-10-22，机验已完成）**：打卡后进入持久熄灯（毛玻璃 0.84 + blur20rpx，降级深底接近关灯），只留熄灭态入睡时间 + 「晚安」+「轻触任意处唤醒」；tabBar 同步 `tabbar.hide()`；熄灯态 orb 不可点（任何点触=唤醒），唤醒后 30s 无操作自动回熄灯（`LIGHTS_OUT_DELAY`，页面根 `bindtouchstart` 重置）；结束面板/声音抽屉打开、done/idle、onHide 均不熄灯。`npm test` 224 项绿（新增熄灯 7 条）。**模拟器 390×844 已实测**：打卡即熄灯、点触唤醒（仍睡梦中、tabBar 恢复）、34s 自动回熄灯且「已睡」时钟更新、console 无 error；截图 `docs/assets/sleep-lights-out.png`。真机仅剩毛玻璃观感与 Android 降级确认。
 21. **统计页改版待验收（2026-10-21，机验已完成 2026-10-22）**：结论卡（平均睡眠 + 上周对比 + 7–9h 参照）、近 14 天趋势、结构化事实、当月打卡日历已完成；改版后自审修复了刷新签名漏 `todayKey/partialDay/同步状态`、本周 0 条文案误报、进行中第二段不可见、清除数据不重置月份、选中态与详情不同源、`bedSpreadMin` 为 null 拼接等问题。`npm test` 191 项绿、`npm run check` 绿；**CLI 模拟器已实测**（空态、3 列指标、指标展开说明卡含常见 7.5–8 小时陈述、打卡日历数据格/空白天补记入口、周期切换、折叠备份区），此前 MCP 代理失败是工具链问题、CLI 通道不受影响。剩余仅真机点击项（20 次连续点格），见 docs/13 第 2 区。旧 `components/heatmap` 保留但统计页不再引用；服务端 `/api/summary` 保留但统计页不再请求。
-22. **补记编排单源（2026-10-22 评审整改）**：统计页补记与入睡页「补记一段睡眠」此前是两套复制实现；已抽 `utils/manual-sleep.js`（默认时间/错误文案/区间校验/保存入参/回溯范围）与 `styles/sheet.wxss`（弹层样式），两页只保留 UI 与页面编排。同时修复 `manual_sleep` 不在服务端事件白名单导致整批事件被丢弃的既有缺陷。口径：统计页允许「正在入睡中」补记历史日（多段模型合法），入睡页仍只在 idle/done 提供入口；补记日期下限与日历翻页共用 24 个月。详见 changelog 2026-10-22「L4 评审整改」。
+22. **补记编排单源（2026-10-22 评审整改）**：统计页补记与入睡页「补记一段睡眠」此前是两套复制实现；已抽 `utils/manual-sleep.js`（默认时间/错误文案/区间校验/容量与进行中预检/保存入参/可补记窗口）与 `styles/sheet.wxss`（弹层样式），两页只保留 UI 与页面编排。同时修复 `manual_sleep` 不在服务端事件白名单导致整批事件被丢弃的既有缺陷。口径：统计页允许「正在入睡中」补记历史日（多段模型合法，面板校验会挡与进行中段相交的区间），入睡页仍只在 idle/done 提供入口；**可补记下限对齐云同步窗口（400 天，`EDIT_WINDOW_DAYS` = `SPAN_DAYS`，测试锁死）**——窗口外的补记只存本机、换机即丢，日历仍可翻 24 个月看历史但窗口外空格不提供补记。详见 changelog 2026-10-22「L4 评审整改」。
 
 23. **L4 Code Review P1 修复（2026-10-22）**：①统计页 refresh 签名补 `monthOffset + monthKey`（空月切月被去重吞掉 → 标题/格子/canNextMonth 不更新且 `monthOffset` 已变，双向卡死）；②熄灯闭环——`openEndSheet` 的「刚睡下」早退分支补 `scheduleLightsOut()`，声音抽屉关闭新增 `sheetclose` 事件由入睡页重排倒计时（抽屉打开期间到点的熄灯会被跳过）；③编辑既有段时禁止 `rangeForDay` 的「回退一天」（入睡 ≥ 起床直接报 order，避免午休被静默改成 23.5h）；④补记校验新增 `pending`（进行中的段不在 records 里，相交会与结束计时互锁）；⑤计算器结果面改「入睡耗时」不再清 `_anchorAt`，并在主推荐前渲染「明天」（late 分支也保留日期前缀）；⑥`eraseUserData/eraseCloudData`（memory + PG）补删 `sleep_reminders`——清除全部数据后不再收到订阅推送、openid 不再留存；⑦音频 `onError` 增加 `_expectSrc` 归属校验 + 缓存文件可用性判断（`cache.isUsable`，文件正常时只本会话拉黑、不删磁盘），避免切歌竞态误删新曲缓存。已知限制：BAM 的 onError 不带 src，「已切走旧源的迟到错误」只能按 src 弱判据收敛。验证：239 项绿、check 绿；模拟器实测空月切月、凌晨跨日文案、熄灯早退 30s 回熄灯，console 无 error（截图 `docs/assets/l4-p1-*.png`）。
 

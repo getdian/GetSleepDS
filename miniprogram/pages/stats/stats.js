@@ -113,6 +113,11 @@ Page({
       calendarSpan === 1 ? S.calendarCells(records, now, monthOffset, partialDay) : null
     const calendarMonths =
       calendarSpan > 1 ? S.calendarMonths(records, now, calendarSpan, partialDay) : []
+    // 日历可翻 24 个月，但可补记只到云同步窗口（400 天）：
+    // 窗口外的补记会"只存本机、永远不上云"，所以空格子不提供补记入口
+    const minEditableDay = MS.minDayKey(now)
+    if (calendar) MS.limitCanAdd(calendar.cells, minEditableDay)
+    calendarMonths.forEach((month) => MS.limitCanAdd(month.cells, minEditableDay))
     let calendarNote = ''
     if (calendarSpan === 1) {
       // 底注说明的是"这个月"，不写月份主语会被读成整段历史的记录数
@@ -232,8 +237,8 @@ Page({
   },
 
   /**
-   * 点格子的统一分流：无记录的过去日直接弹页内补记面板；
-   * 有记录 / 进行中 / 未来日走详情卡（选中态由页面统一持有）。
+   * 点格子的统一分流：补记窗口内（400 天）的无记录过去日直接弹页内补记面板；
+   * 窗口外的空日 / 有记录 / 进行中 / 未来日走详情卡（选中态由页面统一持有）。
    */
   openDay(day) {
     const now = Date.now()
@@ -241,7 +246,8 @@ Page({
     const record = (this._records || {})[day]
     const pending = storage.getPending()
     const pendingDay = pending ? todayKey : ''
-    if (!record && day <= todayKey && !(pendingDay && day === pendingDay)) {
+    const editable = day >= MS.minDayKey(now)
+    if (!record && editable && day <= todayKey && !(pendingDay && day === pendingDay)) {
       // 弹面板时清掉选中态与详情，避免“描边还在、详情不对应”
       this.setData({ selectedKey: '', detail: null })
       this.openManualSheet(day)
@@ -289,10 +295,13 @@ Page({
       wakeMinutes: T.parseClock(this.data.manualWakeTime),
       now
     })
-    this._manualBedAt = result.bedAt
-    this._manualWakeAt = result.wakeAt
+    // 有错误时不保留可保存区间（与入睡页 computeEndSheet 同一防御）：
+    // 避免某条路径只看 manualError 被清掉后误落库
+    this._manualBedAt = result.error ? 0 : result.bedAt
+    this._manualWakeAt = result.error ? 0 : result.wakeAt
     this.setData({
-      manualDayText: F.fmtDayCN(T.dateKey(result.wakeAt)),
+      // 「归入」必须与记录实际落日同口径（北京时间归档），设备时区不同也不能漂
+      manualDayText: F.fmtDayCN(T.calendarDayKey(result.wakeAt)),
       manualDurationText: result.durationMin > 0 ? F.fmtDuration(result.durationMin) : '—',
       manualError: result.error
     })
@@ -391,7 +400,10 @@ Page({
           title,
           tag: '未记录',
           main: '这天还没有记录',
-          sub: '点击格子可直接补记'
+          sub:
+            day < MS.minDayKey(now)
+              ? '超出可补记范围：云备份只保留最近 400 天'
+              : '点击格子可直接补记'
         }
       })
       return

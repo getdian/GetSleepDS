@@ -23,6 +23,13 @@ global.wx = {
 const storage = require('../miniprogram/utils/storage')
 const api = require('../miniprogram/utils/api')
 const sync = require('../miniprogram/utils/sync')
+const manualSleep = require('../miniprogram/utils/manual-sleep')
+
+// 补记可编辑窗口必须与云同步窗口一致：窗口外的补记永远上不了云（静默丢数据）。
+// 任一侧单独调整都会让另一侧失真，这里用测试锁死。
+test('补记可编辑窗口与云同步窗口一致', () => {
+  assert.equal(manualSleep.EDIT_WINDOW_DAYS, sync.SPAN_DAYS)
+})
 
 function makeRecords(count) {
   const now = Date.now()

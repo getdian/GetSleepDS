@@ -293,4 +293,4 @@ function whenIdle() {
   )
 }
 
-module.exports = { syncNow, whenIdle, collect, chunk, mergeServerRecords }
+module.exports = { syncNow, whenIdle, collect, chunk, mergeServerRecords, SPAN_DAYS }

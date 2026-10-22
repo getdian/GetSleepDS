@@ -13,11 +13,27 @@ function local(year, month, day, hour, minute) {
 
 const NOW = local(2026, 10, 22, 10, 0)
 
-test('回溯范围：24 个月前那个月的 1 号', () => {
+test('可补记下限：与云同步窗口（400 天）对齐，而不是日历可翻的 24 个月', () => {
   assert.equal(M.MONTH_LOOKBACK, 24)
-  assert.equal(M.minDayKey(NOW), '2024-10-01')
+  assert.equal(M.EDIT_WINDOW_DAYS, 400)
+  // NOW = 2026-10-22：下限 = now - 399 天（保证跨午夜补记的 bedAt 也在窗口内）
+  assert.equal(M.minDayKey(NOW), '2025-09-18')
   // 1 月往前跨年
-  assert.equal(M.minDayKey(local(2026, 1, 15, 9, 0)), '2024-01-01')
+  assert.equal(M.minDayKey(local(2026, 1, 15, 9, 0)), '2024-12-12')
+})
+
+test('limitCanAdd：窗口外的空格子不再提供补记入口', () => {
+  const cells = [
+    { day: '2026-10-20', canAdd: true },
+    { day: '2025-01-01', canAdd: true },
+    { day: '2026-10-21', canAdd: false },
+    { day: '', canAdd: true }
+  ]
+  M.limitCanAdd(cells, '2025-09-18')
+  assert.equal(cells[0].canAdd, true)
+  assert.equal(cells[1].canAdd, false, '窗口外必须收掉补记')
+  assert.equal(cells[2].canAdd, false, '原本就不可补记的不受影响')
+  assert.equal(cells[3].canAdd, true, '无 day 的占位格不动')
 })
 
 test('默认时间：过去日期是整夜 23:00 → 07:00', () => {

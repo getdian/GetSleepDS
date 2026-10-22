@@ -235,6 +235,61 @@ test('单段记录时间线保持「入睡 / 起床」，不引入新概念', ()
   assert.equal(view.timelineLastK, '起床')
 })
 
+/* ---------------- 文案中性（不预设夜间） ---------------- */
+
+test('文案中性：睡梦中/空闲态都不出现「夜色/明早/今晚/今夜」', () => {
+  resetStore()
+  const page = makePage()
+  page.selectComponent = () => null
+
+  // 睡梦中（b 态）
+  storage.setPending({
+    bedAt: Date.now() - 10 * 60 * 1000,
+    expectedWakeAt: 0,
+    id: 'neutral-1'
+  })
+  page.refreshAll()
+  assert.equal(page.data.state, 'sleeping')
+  assert.equal(page.data.heroTitle, '这一觉开始了')
+  assert.equal(page.data.heroSub, '醒来后记得回来记录起床。')
+  assert.match(page.data.orbMeta, /^已睡 /)
+  const sleepingText =
+    page.data.heroTitle + page.data.heroSub + page.data.footerText + page.data.orbMeta
+  assert.ok(!/夜色|明早|今晚|今夜/.test(sleepingText), '睡梦中文案不能预设夜间：' + sleepingText)
+
+  // 空闲态（a 态）
+  storage.clearPending()
+  page.refreshAll()
+  assert.equal(page.data.state, 'idle')
+  assert.equal(page.data.orbMeta, '等待入睡')
+  assert.equal(page.data.heroSub, '记录入睡这一刻，醒来后再记起床。')
+  assert.equal(page.data.footerText, '愿这一觉安稳')
+  const idleText = page.data.heroTitle + page.data.heroSub + page.data.footerText + page.data.orbMeta
+  assert.ok(!/夜色|明早|今晚|今夜/.test(idleText), '空闲文案不能预设夜间：' + idleText)
+})
+
+test('文案中性：完成态不写「今晚」，页脚深夜不再说「晚安」', () => {
+  resetStore()
+  const page = makePage()
+  page.selectComponent = () => null
+  const saved = storage.saveSession({
+    id: 'neutral-done',
+    startAt: ts(2026, 10, 21, 23, 0),
+    endAt: ts(2026, 10, 22, 7, 0)
+  })
+  page.refreshAll()
+  assert.equal(page.data.state, 'done')
+  // 标题只按“此刻”分早安/其他，不假设这一觉发生在夜里
+  assert.ok(!/今晚/.test(page.data.heroTitle))
+  assert.equal(page.data.heroSub, '入睡与起床时间都已保存。')
+  assert.ok(!/晚安/.test(page.data.footerText))
+  // 分享文案：白天补觉分享也成立
+  const share = page.onShareAppMessage()
+  assert.ok(!/昨晚|早睡/.test(share.title), share.title)
+  assert.match(share.title, /入睡/)
+  assert.ok(saved)
+})
+
 /* ---------------- 熄灯（睡前模式） ---------------- */
 
 test('熄灯：打卡后进入熄灯态，且不会自动亮起', () => {
