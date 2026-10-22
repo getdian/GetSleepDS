@@ -4,7 +4,18 @@ const { validateRecords, validateDeletions } = require('../lib/validate')
 const { apiError, rateLimited, dbUnavailable, invalidBody, featureOff } = require('../lib/errors')
 
 function createRecordsRoute(options) {
-  const { config, db, codeToOpenid, limitIp, limitErase, limitEraseOpenid, now, store, logger } = options
+  const {
+    config,
+    db,
+    codeToOpenid,
+    limitIp,
+    limitSyncOpenid,
+    limitErase,
+    limitEraseOpenid,
+    now,
+    store,
+    logger
+  } = options
   const log = logger || console
   const eraseLimit = limitErase || limitIp
   const router = express.Router()
@@ -36,6 +47,8 @@ function createRecordsRoute(options) {
       const parsed = validateRecords(req.body && req.body.records, { now: current })
       const deletedDays = validateDeletions(req.body && req.body.deletedDays, { now: current })
       const openid = await codeToOpenid(code, config.wx)
+      // openid 维度限流：反代漏配 TRUST_PROXY 时 IP 桶全站共用，这里是第二道闸
+      if (limitSyncOpenid && !limitSyncOpenid(openid)) throw rateLimited()
 
       // 没有 syncRecords 的旧/自定义存储无法处理墓碑与 erasure 水位；
       // 继续用 upsert 降级会静默绕过合规删除（旧设备可把已删记录写回），故 fail-closed。

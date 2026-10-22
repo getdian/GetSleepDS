@@ -45,6 +45,13 @@ test('sessions 全是非法段时同样回退 v1 字段', () => {
   assert.equal(list[0].startAt, start)
 })
 
+test('sessionDay 按北京时间归档，不受设备时区影响', () => {
+  // 北京时间 2026-10-22 01:00（UTC 2026-10-21 17:00）结束的一段
+  const end = Date.UTC(2026, 9, 21, 17, 0)
+  const day = X.sessionDay({ startAt: end - 8 * 60 * 60 * 1000, endAt: end })
+  assert.equal(day, '2026-10-22')
+})
+
 test('一天多段聚合：主睡眠取最长，总睡眠求和', () => {
   const nightStart = at(2026, 10, 20, 23, 0)
   const nightEnd = at(2026, 10, 21, 6, 30)

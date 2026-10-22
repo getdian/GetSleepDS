@@ -9,6 +9,9 @@ const MINUTE_MS = 60 * 1000
 const CYCLE_MIN = 90
 // 睡眠日以"入睡时间往前推 12 小时"的日期为准
 const SLEEP_DAY_SHIFT_MS = 12 * HOUR_MS
+// 归档日固定按北京时间（与服务端 server/src/lib/time.js 同源）：产品只面向国内，
+// 设备出境/改时区时本地 dateKey 会与云端 day 分叉，同一段睡眠被算成两天。
+const BEIJING_OFFSET_MS = 8 * HOUR_MS
 
 function pad2(value) {
   return value < 10 ? '0' + value : String(value)
@@ -31,9 +34,19 @@ function parseDateKey(key) {
   return d.getTime()
 }
 
-/** 一条睡眠记录归属的日期 */
+/**
+ * 北京时间日历日（YYYY-MM-DD），用于睡眠归档与同步比对。
+ * 与 dateKey 的区别：dateKey 跟随设备本地时区（用于“今天/昨天”等 UI 文案），
+ * 本函数固定 +8（服务端 calendarDayOf 同口径），只用于记录归属。
+ */
+function calendarDayKey(timestamp) {
+  const d = new Date(Number(timestamp) + BEIJING_OFFSET_MS)
+  return d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1) + '-' + pad2(d.getUTCDate())
+}
+
+/** 一条睡眠记录归属的日期（北京时间入睡日，兼容 v1） */
 function sleepDayOf(timestamp) {
-  return dateKey(timestamp - SLEEP_DAY_SHIFT_MS)
+  return calendarDayKey(Number(timestamp) - SLEEP_DAY_SHIFT_MS)
 }
 
 function startOfDay(timestamp) {
@@ -142,6 +155,7 @@ module.exports = {
   wrapMinutes,
   dateKey,
   parseDateKey,
+  calendarDayKey,
   sleepDayOf,
   startOfDay,
   addDays,

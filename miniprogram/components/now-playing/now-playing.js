@@ -10,6 +10,7 @@ const storage = require('../../utils/storage')
 const audioTimer = require('../../utils/audio-timer')
 const playerState = require('../../utils/player-state')
 const cache = require('../../utils/audio-cache')
+const events = require('../../utils/events')
 const { getConfig } = require('../../utils/config')
 
 const TOGGLE_GUARD_MS = 220
@@ -50,7 +51,7 @@ Component({
       this._onPause = () => this.handlePause()
       this._onStop = () => this.handleStop()
       this._onEnded = () => this.handleEnded()
-      this._onError = () => this.handleError()
+      this._onError = (err) => this.handleError(err)
       this._onCanplay = () => this.handleCanPlay()
       this._onTimeUpdate = () => this.handleTimeUpdate()
       this.setup()
@@ -418,11 +419,21 @@ Component({
       this.sync(true)
     },
 
-    handleError() {
+    handleError(err) {
       if (!this._alive) return
       // 切歌/回退竞态：旧源的错误迟到时不能拿去处理新会话（会误删新曲缓存、清掉迷你条）。
       if (!playerState.isCurrentSourceError(this._audio && this._audio.src, this._expectSrc)) {
         return
+      }
+      // 与 audio-dock 同口径：错误码进事件队列，1s 内只报一条
+      const now = Date.now()
+      if (now - (this._lastErrorAt || 0) > 1000) {
+        this._lastErrorAt = now
+        const code = (err && (err.errCode || err.code)) || 'unknown'
+        events.track(
+          'audio_error',
+          (storage.getMeta().lastTrackId || 'unknown') + '|' + code
+        )
       }
       this.disarmLoadingGuard()
       if (this.data.loading) this.setData({ loading: false })

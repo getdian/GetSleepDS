@@ -15,8 +15,8 @@
 <view class="page calc-page">
   <view class="calc-hero">
     <!-- Hero 文案跟随计算方向：选起床时间→问入睡点；选入睡时间→问起床点。
-         入睡模式不写「明早」：白天小睡时结果可能落在当天，陈述必须始终成立。 -->
-    <text class="hero-title">{{mode === 'wake' ? '今晚，几点睡？' : '想几点起？'}}</text>
+         两个方向都不写「今晚/明早」：白天小睡时结果可能落在当天，陈述必须始终成立。 -->
+    <text class="hero-title">{{mode === 'wake' ? '想几点入睡？' : '想几点起？'}}</text>
     <text class="hero-sub">{{mode === 'wake' ? '选一个时间，找到适合你的睡点。' : '选一个时间，找到你的起床时间。'}}</text>
   </view>
 

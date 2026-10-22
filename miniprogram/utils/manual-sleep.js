@@ -89,7 +89,8 @@ function evaluateManualRange(options) {
   if (!code) {
     code = capacityErrorOf({
       records: opts.records,
-      dayKey: T.dateKey(range.wakeAt),
+      // 归档日固定北京时间：与 storage.saveSession 写入的 day 同口径
+      dayKey: T.calendarDayKey(range.wakeAt),
       durationMin: range.durationMin
     })
   }

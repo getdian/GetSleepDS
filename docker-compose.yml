@@ -25,6 +25,9 @@ services:
       PORT: 3000
       DB_MODE: postgres
       DATABASE_URL: postgres://${POSTGRES_USER:-sleep}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-sleep}
+      # 仓库方案固定为 1Panel/Nginx 反代；显式给定默认值，避免升级后
+      # 生产强校验（TRUST_PROXY 必填）把已有部署挡在启动前。直连部署请设 0。
+      TRUST_PROXY: ${TRUST_PROXY:-1}
     env_file:
       - .env
     ports:

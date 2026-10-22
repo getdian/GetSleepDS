@@ -194,6 +194,9 @@ function createApp(options) {
   const uploadIp = createRateLimiter(60 * 1000, 20)
   const eventsIp = createRateLimiter(limits.windowMs, 120)
   const recordsIp = createRateLimiter(60 * 1000, 120)
+  // 反代漏配 TRUST_PROXY 时 IP 桶会全站共用；按 openid 再补一层，
+  // 400 天用户一次完整同步 7 片，30/min 足够、也能挡住脚本刷。
+  const recordsSyncOpenid = createRateLimiter(60 * 1000, 30)
   const eraseIp = createRateLimiter(60 * 1000, 3)
   const shareIp = createRateLimiter(60 * 1000, 3)
   // 反代下 req.ip 可能全员相同，按 openid 再补一层维度，避免互相挤占。
@@ -239,6 +242,7 @@ function createApp(options) {
       db,
       codeToOpenid,
       limitIp: recordsIp,
+      limitSyncOpenid: recordsSyncOpenid,
       limitErase: eraseIp,
       limitEraseOpenid: eraseOpenid,
       now,

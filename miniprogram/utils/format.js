@@ -23,6 +23,20 @@ function periodLabel(timestamp) {
   return '晚上'
 }
 
+/**
+ * 文案分支用的四段时段（设备本地时区，不写死任何“夜间”假设）：
+ * morning 5–11 / day 11–18 / evening 18–23 / late 23–5。
+ * 只用于“此刻”的问候与页脚；描述睡眠本身（入睡/起床/这一段）的文案必须中性，
+ * 不能按此刻时段改写，否则白天小睡会被说成“今晚”。
+ */
+function daypartOf(timestamp) {
+  const hour = new Date(timestamp).getHours()
+  if (hour >= 5 && hour < 11) return 'morning'
+  if (hour >= 11 && hour < 18) return 'day'
+  if (hour >= 18 && hour < 23) return 'evening'
+  return 'late'
+}
+
 function fmtDuration(minutes) {
   const total = Math.max(0, Math.round(minutes))
   if (total < 60) return total + ' 分钟'
@@ -70,6 +84,7 @@ module.exports = {
   fmtClock,
   fmtClockTs,
   periodLabel,
+  daypartOf,
   fmtDuration,
   fmtHours,
   fmtHoursShort,

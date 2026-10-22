@@ -47,7 +47,7 @@ module.exports = {
   },
   copy: {
     unlockTitle: '解锁环境音',
-    unlockDesc: '观看视频，解锁今晚的环境声音（24小时内有效）',
+    unlockDesc: '观看视频，解锁环境声音（24 小时内有效）',
     unlockConfirm: '观看视频',
     unlockCancel: '先不用'
   }

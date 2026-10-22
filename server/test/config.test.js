@@ -155,13 +155,43 @@ test('生产环境配置齐全时可以启动', () => {
     WX_APPID: 'wx-test',
     WX_SECRET: 'secret',
     ADMIN_PASSWORD: 'strong-password',
-    CONFIG_SECRET: 'stable-config-secret'
+    CONFIG_SECRET: 'stable-config-secret',
+    TRUST_PROXY: '1'
   })
 
   assert.equal(config.admin.password, 'strong-password')
   assert.equal(config.security.ready, true)
+  assert.equal(config.trustProxy, 1)
   assert.equal(config.app.cache.maxMB, 80)
   // 文件配置的 site 段必须进 app：漏传会让空库首次部署丢失落地页小程序码
   assert.ok(config.app.site, 'app.site 缺失')
   assert.equal(typeof config.app.site.mpQrNote, 'string')
+})
+
+test('生产环境未设置 TRUST_PROXY 时拒绝启动（限流桶会全站共用）', () => {
+  assert.throws(
+    () =>
+      loadConfig({
+        NODE_ENV: 'production',
+        DB_MODE: 'postgres',
+        DATABASE_URL: 'postgres://user:pass@db:5432/sleep',
+        WX_APPID: 'wx-test',
+        WX_SECRET: 'secret',
+        ADMIN_PASSWORD: 'strong-password'
+      }),
+    /TRUST_PROXY/
+  )
+})
+
+test('生产环境显式 TRUST_PROXY=0（直连部署）允许启动', () => {
+  const config = loadConfig({
+    NODE_ENV: 'production',
+    DB_MODE: 'postgres',
+    DATABASE_URL: 'postgres://user:pass@db:5432/sleep',
+    WX_APPID: 'wx-test',
+    WX_SECRET: 'secret',
+    ADMIN_PASSWORD: 'strong-password',
+    TRUST_PROXY: '0'
+  })
+  assert.equal(config.trustProxy, 0)
 })

@@ -160,3 +160,13 @@ test('未知接口返回 404', async () => {
   const res = await fetch(base + '/api/nope')
   assert.equal(res.status, 404)
 })
+
+test('audio_error 在事件白名单内，target 保留 trackId|错误码', async () => {
+  const res = await post('/api/events', {
+    code: 'dev-code',
+    // 前面的 erase 用例写了 erasure 水位，事件时间必须晚于它才会被接受
+    events: [{ type: 'audio_error', target: 'sleep-10001|10003', ts: FIXED_NOW + 60 * 1000 }]
+  })
+  assert.equal(res.status, 200)
+  assert.equal(res.body.accepted, 1)
+})

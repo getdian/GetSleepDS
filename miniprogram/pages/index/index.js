@@ -687,7 +687,7 @@ Page({
     return {
       title: time
         ? '按 90 分钟周期，' + time + (this.data.mode === 'wake' ? ' 入睡刚刚好' : ' 起床刚好')
-        : '今晚，几点睡？算算你的睡眠周期',
+        : '想几点入睡？算算你的睡眠周期',
       path: '/pages/index/index?from=share'
     }
   },
@@ -695,7 +695,7 @@ Page({
   // 朋友圈打开是"单页模式"（无 tabBar、本地存储不可用），只开放纯计算的计算器页
   onShareTimeline() {
     return {
-      title: '今晚，几点睡？算算你的睡眠周期',
+      title: '想几点入睡？算算你的睡眠周期',
       query: 'from=timeline'
     }
   }

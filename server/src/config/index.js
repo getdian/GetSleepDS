@@ -90,12 +90,18 @@ function loadConfig(env) {
   }
 
   const trustProxy = intEnv(source.TRUST_PROXY, 0, 'TRUST_PROXY', 0, 10)
+  if (isProd && source.TRUST_PROXY === undefined) {
+    // 仓库部署方案是 1Panel/nginx 反代，且 docker-compose 未在 environment 写死该项。
+    // 未设置时 req.ip 恒为代理地址，全站共用同一限流桶（sync 120/min、erase 3/min…），
+    // 属于“平时无感、被打时才发现”的配置缺口，生产直接拒绝启动。
+    // 明确写 TRUST_PROXY=0 表示直连部署，允许放行（保留告警）。
+    throw new Error(
+      '生产环境必须显式设置 TRUST_PROXY（反代部署填 1；确认无代理的直连部署填 0）'
+    )
+  }
   if (isProd && trustProxy === 0) {
-    // 仓库部署方案是 1Panel/nginx 反代；不信任代理时 req.ip 恒为代理地址，
-    // 所有用户会共用同一个限流桶（erase 3/min、qrcode 3/min、登录 5/min）。
-    // 不阻断启动（避免已有部署因漏配置直接不可用），但必须显式告警。
     console.warn(
-      '[config] TRUST_PROXY=0 且当前为生产环境：若前面有反向代理，所有用户会共用同一限流桶，请在 .env 设置 TRUST_PROXY=1'
+      '[config] TRUST_PROXY=0 且当前为生产环境：若前面有反向代理，所有用户会共用同一限流桶，请确认这是直连部署'
     )
   }
 

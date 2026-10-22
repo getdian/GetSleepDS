@@ -155,7 +155,8 @@ function mergeServerRecords(serverRecords, options) {
     // 设备时区与服务端固定 +8 不一致时，服务端 day 为准：
     // 删除本地按旧口径算出的另一个 key，避免同一夜出现两条记录。
     const isWakeRule = item.dayRule === 'wake-v1'
-    const localDay = isWakeRule ? T.dateKey(item.wakeAt) : T.sleepDayOf(item.bedAt)
+    // 与服务端同口径（固定 +8）：本地 dateKey 会随设备时区分叉，导致误判“同一天两条”
+    const localDay = isWakeRule ? T.calendarDayKey(item.wakeAt) : T.sleepDayOf(item.bedAt)
     if (localDay && localDay !== item.day && local[localDay]) {
       dropLocal(local, deleted, localDay, stamp)
       changed += 1

@@ -12,8 +12,9 @@ const MAX_BACKGROUNDS = 20
 const DEFAULT_BACKGROUND_UNLOCK_HOURS = 24
 // 落地页展示：小程序码（后台可上传/清除）与二维码下方的引导文案
 const DEFAULT_SITE = { mpQrCodeUrl: '', mpQrNote: '微信搜索「睡点」' }
-// 解锁说明的自动生成模板：命中即视为"未自定义"，随 ttlHours 重新生成
-const AUTO_UNLOCK_DESC = /^观看视频，解锁今晚的环境声音（\d+\s*小时内有效）$/
+// 解锁说明的自动生成模板：命中即视为"未自定义"，随 ttlHours 重新生成。
+// 兼容历史默认文案里的“今晚的”：环境音任何时段都能听，新文案不再预设夜间。
+const AUTO_UNLOCK_DESC = /^观看视频，解锁(?:今晚的)?环境声音（\d+\s*小时内有效）$/
 
 function isObject(value) {
   return !!value && typeof value === 'object' && !Array.isArray(value)
@@ -129,10 +130,10 @@ function normalizeConfig(input, base) {
 
   const unlock = Object.assign({}, fallback.unlock || {}, isObject(source.unlock) ? source.unlock : {})
   const copy = Object.assign({}, fallback.copy || {}, isObject(source.copy) ? source.copy : {})
-  // 旧版本把“24 小时”写死在默认文案里；运营改 ttlHours 后会出现抽屉两套数字。
-  // 只精确迁移这一条历史默认文案，不动用户自定义文案。
-  if (copy.unlockDesc === '观看视频，解锁今晚的环境声音（24小时内有效）') {
-    copy.unlockDesc = '观看视频，解锁今晚的环境声音（' + (Number(unlock.ttlHours) || 24) + ' 小时内有效）'
+  // 自动生成的说明文案统一重写：跟随 ttlHours（旧版写死 24 小时会出现抽屉两套数字），
+  // 同时把历史“今晚的”旧词迁移掉；命中模板视为未自定义，用户自定义文案不动。
+  if (typeof copy.unlockDesc === 'string' && AUTO_UNLOCK_DESC.test(copy.unlockDesc)) {
+    copy.unlockDesc = '观看视频，解锁环境声音（' + (Number(unlock.ttlHours) || 24) + ' 小时内有效）'
   }
 
   return {
@@ -400,7 +401,8 @@ function validateConfig(input, base) {
     unlockDesc:
       readText(copyInput.unlockDesc, '解锁说明', 60, false) ||
       // 未自定义时跟随可配置的 ttlHours；写死 24 小时会和抽屉里的“解锁 N 小时”互相矛盾。
-      '观看视频，解锁今晚的环境声音（' + ttlHours + ' 小时内有效）',
+      // 文案不写“今晚”：环境音任何时段都能听。
+      '观看视频，解锁环境声音（' + ttlHours + ' 小时内有效）',
     unlockConfirm: readText(copyInput.unlockConfirm, '确认按钮', 10, false) || '观看视频',
     unlockCancel: readText(copyInput.unlockCancel, '取消按钮', 10, false) || '先不用'
   }

@@ -469,12 +469,20 @@ Component({
           }
           this.replay()
         },
-        error: () => {
+        error: (err) => {
           if (!this._alive) return
           // 切歌/缓存回退竞态：旧源的 onError 可能在新源已经起播后到达，
           // 处理它会把新曲的缓存删掉、甚至把新会话清成空态。
           if (!playerState.isCurrentSourceError(this._audio && this._audio.src, this._expectSrc)) {
             return
+          }
+          // 错误码此前被丢弃，线上无法判断是网络、解码还是文件损坏；
+          // 同一轮可能触发多次，1s 内只上报一条（target = trackId|code，服务端 64 字符内）。
+          const now = Date.now()
+          if (now - (this._lastErrorAt || 0) > 1000) {
+            this._lastErrorAt = now
+            const code = (err && (err.errCode || err.code)) || 'unknown'
+            events.track('audio_error', (this.data.currentId || 'unknown') + '|' + code)
           }
           this.disarmLoadingGuard()
           if (this._playingFromCache && this._currentTrack) {

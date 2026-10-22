@@ -30,10 +30,10 @@ Page({
     stateText: '未记录',
     nowText: '--:--',
     heroTitle: '我准备睡了',
-    heroSub: '记录这一刻，明早回来告诉我几点醒。',
+    heroSub: '记录入睡这一刻，醒来后再记起床。',
     orbKicker: '当前时间',
     orbTime: '--:--',
-    orbMeta: '今晚',
+    orbMeta: '等待入睡',
     orbCaption: '轻触圆环，记录入睡',
     buttonTitle: '入睡',
     buttonSub: '',
@@ -62,7 +62,7 @@ Page({
     weekCount: 0,
     streak: 0,
     canAddSession: false,
-    footerText: '愿今夜好眠'
+    footerText: '愿这一觉安稳'
   },
 
   onLoad(options) {
@@ -252,7 +252,7 @@ Page({
     const weekly = S.weekly(records, now)
     // 多段记录：完成态始终可以再记一段，不再覆盖旧记录
     const canAddSession = state === 'done'
-    const hour = new Date(now).getHours()
+    const daypart = F.daypartOf(now)
     const nowText = F.fmtClockTs(now)
     const sleeping = state === 'sleeping'
     const done = state === 'done'
@@ -278,24 +278,26 @@ Page({
       state,
       stateText: state === 'idle' ? '未记录' : sleeping ? '睡梦中' : '已完成',
       nowText,
+      // 睡眠事件本身用中性陈述：白天补觉/午休时不会被说成“今晚/明早”。
+      // 只有“早安”这类描述此刻的问候按时段（设备本地时区）切换。
       heroTitle: done
-        ? hour >= 5 && hour < 12
+        ? daypart === 'morning'
           ? '早安，睡得好吗'
-          : '今晚的记录完成了'
+          : '这一觉记下了'
         : sleeping
-          ? '夜色正浓'
+          ? '这一觉开始了'
           : '我准备睡了',
       heroSub: done
-        ? '入睡与起床时间已经记下。'
+        ? '入睡与起床时间都已保存。'
         : sleeping
-          ? '明早醒来，记得回来记录起床。'
-          : '记录这一刻，明早回来告诉我几点醒。',
+          ? '醒来后记得回来记录起床。'
+          : '记录入睡这一刻，醒来后再记起床。',
       orbKicker: sleeping ? '入睡时间' : '当前时间',
       orbTime: sleeping && pending ? F.fmtClockTs(pending.bedAt) : nowText,
       orbMeta:
         sleeping && pending
           ? '已睡 ' + F.fmtDuration(Math.round((now - pending.bedAt) / 60000))
-          : '今晚',
+          : '等待入睡',
       orbCaption: sleeping
         ? overdue
           ? '已超过预计起床，轻触结束并校准'
@@ -319,16 +321,17 @@ Page({
       canAddSession,
       weekCount: weekly.current.count,
       streak: weekly.streak,
+      // 页脚只描述“此刻”，不假设用户此刻要睡：深夜刚醒时不再出现“晚安”
       footerText:
         state === 'done'
-          ? new Date(now).getHours() >= 5 && new Date(now).getHours() < 12
+          ? daypart === 'morning'
             ? '早安，新的一天。'
-            : new Date(now).getHours() >= 18 || new Date(now).getHours() < 5
-              ? '晚安，明天见。'
+            : daypart === 'late'
+              ? '夜深了，明天见。'
               : '今天也辛苦了。'
           : state === 'sleeping'
-            ? '夜色正安'
-            : '愿今夜好眠'
+            ? '放轻松，慢慢睡。'
+            : '愿这一觉安稳'
     })
     // 熄灯态随状态收敛：只有睡梦中允许熄灯；完成/空闲时唤醒并停表，
     // 睡梦中且当前亮屏则重新起 30s 倒计时（markSleep 之后这里不会覆盖熄灯）
@@ -732,7 +735,8 @@ Page({
     if (!error) {
       const capacity = MS.capacityErrorOf({
         records,
-        dayKey: T.dateKey(range.wakeAt),
+        // 归档日固定北京时间（与 storage.saveSession 写入的 day 同口径）
+        dayKey: T.calendarDayKey(range.wakeAt),
         durationMin: range.durationMin,
         excludeId: this.data.endMode === 'edit' ? this._editingSessionId : ''
       })
@@ -754,7 +758,7 @@ Page({
       }
     }
     this.setData({
-      endDayText: F.fmtDayCN(T.dateKey(range.wakeAt)),
+      endDayText: F.fmtDayCN(T.calendarDayKey(range.wakeAt)),
       endDurationText: range.durationMin > 0 ? F.fmtDuration(range.durationMin) : '—',
       endHint,
       endError: error
@@ -823,7 +827,7 @@ Page({
     if (this._editingSessionId) {
       const editingRecord = this.data.record
       const legacy = !editingRecord || editingRecord.dayRule !== 'wake-v1'
-      if (!legacy && T.dateKey(this._endWakeAt) !== this._editingDay) {
+      if (!legacy && T.calendarDayKey(this._endWakeAt) !== this._editingDay) {
         this.setData({ endError: '编辑后醒来日会变化，请撤销后重新记录' })
         return
       }
@@ -927,7 +931,7 @@ Page({
       this.setData({ endError: '补记失败：时间可能与已有段重叠，或当天段数/总时长已满' })
       return
     }
-    const day = T.dateKey(this._endWakeAt)
+    const day = T.calendarDayKey(this._endWakeAt)
     this.finishSave({ toast: '已补记 ' + F.fmtDayCN(day), event: 'manual_sleep' })
   },
 
@@ -1053,10 +1057,11 @@ Page({
 
   onShareAppMessage() {
     const view = this.data.recordView
+    // 不写“昨晚/早睡”：白天补觉分享时也要成立
     return {
       title: view
-        ? '我昨晚 ' + view.bed + ' 睡、' + view.wake + ' 起，一起早睡'
-        : '我在「睡点」打卡睡觉，一起早睡',
+        ? '我 ' + view.bed + ' 入睡、' + view.wake + ' 起床，一起好好睡'
+        : '我在「睡点」记录睡眠，一起好好睡',
       path: '/pages/sleep/sleep?from=share'
     }
   }

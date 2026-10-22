@@ -333,7 +333,7 @@ Page({
       this.setData({ manualError: '补记失败：时间可能与已有段重叠，或当天段数/总时长已满' })
       return
     }
-    const day = T.dateKey(this._manualWakeAt)
+    const day = T.calendarDayKey(this._manualWakeAt)
     tabbar.show()
     this.setData({ manualShow: false, manualError: '' })
     this._signature = ''

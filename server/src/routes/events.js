@@ -4,7 +4,16 @@ const { invalidBody, payloadTooLarge, rateLimited, dbUnavailable, featureOff } =
 
 // manual_sleep：入睡页/统计页补记成功时上报。缺它会让整批事件被 400 拒绝，
 // 客户端按"永久脏数据"丢弃整批（含同批的 app_open/checkin），属于静默丢数。
-const TYPES = ['app_open', 'checkin', 'audio_play', 'audio_unlock', 'ad_show', 'ad_error', 'manual_sleep']
+const TYPES = [
+  'app_open',
+  'checkin',
+  'audio_play',
+  'audio_unlock',
+  'audio_error',
+  'ad_show',
+  'ad_error',
+  'manual_sleep'
+]
 const MAX_EVENTS = 20
 const MAX_AGE = 7 * 24 * 60 * 60 * 1000
 

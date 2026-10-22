@@ -5,7 +5,7 @@
 <view class="page sleep-page" bindtouchstart="onPageTouch">
   <view class="sleep-hero fade-up">
     <view class="sleep-hero-meta">
-      <text class="sleep-eyebrow">TONIGHT</text>
+      <text class="sleep-eyebrow">SLEEP LOG</text>
       <text class="sleep-date">{{dateText}}</text>
     </view>
     <text class="sleep-title">{{heroTitle}}</text>
@@ -106,7 +106,7 @@
   </view>
 
   <view class="sleep-share">
-    <share-btn text="分享今晚的睡眠" variant="link" />
+    <share-btn text="分享这一段睡眠" variant="link" />
   </view>
 
   <text class="sleep-quote font-poetic fade-up">{{footerText}}</text>
@@ -177,7 +177,7 @@
 </view>
 
 <view class="dim-mask {{dim ? 'is-on' : ''}}" catchtap="onDimTap" catchtouchmove="noop">
-  <text class="dim-kicker">晚安</text>
+  <text class="dim-kicker">已入睡</text>
   <view class="dim-orb">
     <text class="dim-orb-kicker">入睡时间</text>
     <text class="dim-orb-time">{{orbTime}}</text>

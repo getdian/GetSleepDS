@@ -97,7 +97,9 @@ function sessionsOf(record) {
 
 function sessionDay(session) {
   const endAt = Number(session && session.endAt)
-  return Number.isFinite(endAt) ? T.dateKey(endAt) : ''
+  // 归档日固定北京时间：与服务端 calendarDayOf(primary.endAt) 同口径，
+  // 否则设备时区变化后本地归到 A 日、云端重算成 B 日，同步会互相写墓碑。
+  return Number.isFinite(endAt) ? T.calendarDayKey(endAt) : ''
 }
 
 function primaryOf(list) {

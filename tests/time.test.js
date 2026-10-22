@@ -51,6 +51,17 @@ test('任意分钟/小时初始位置都留有上下滚动余量', () => {
   }
 })
 
+test('归档日固定北京时间：UTC 时间戳换算不随设备时区变', () => {
+  // 北京时间 2026-10-22 01:30 / 23:59 / 次日 00:00
+  assert.equal(T.calendarDayKey(Date.UTC(2026, 9, 21, 17, 30)), '2026-10-22')
+  assert.equal(T.calendarDayKey(Date.UTC(2026, 9, 22, 15, 59)), '2026-10-22')
+  assert.equal(T.calendarDayKey(Date.UTC(2026, 9, 22, 16, 0)), '2026-10-23')
+  // 睡眠日（v1 兼容）= 入睡时刻往前推 12 小时：北京时间 10-22 01:00 入睡 → 10-21
+  assert.equal(T.sleepDayOf(Date.UTC(2026, 9, 21, 17, 0)), '2026-10-21')
+  // 北京时间 10-22 20:00 入睡 → 10-22
+  assert.equal(T.sleepDayOf(Date.UTC(2026, 9, 22, 12, 0)), '2026-10-22')
+})
+
 test('跨午夜的平均时间用圆均值', () => {
   assert.equal(T.circularMeanMinutes([23 * 60 + 50, 10]), 0)
   assert.equal(T.circularMeanMinutes([23 * 60 + 50, 23 * 60 + 55, 20]), 2)
