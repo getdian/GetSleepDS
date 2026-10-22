@@ -14,6 +14,9 @@
     img.hidden = true
     img.removeAttribute('src')
     empty.hidden = false
+    // 没有码时画面上没有二维码，继续写“微信扫一扫”会让用户对着虚线框找码；
+    // 改成与页脚一致的“微信搜索”，避免两套引导打架。
+    empty.textContent = '微信搜索「睡点」'
   }
 
   fetch('/api/config')
@@ -26,15 +29,18 @@
     .then(function (config) {
       var site = (config && config.site) || {}
       var url = typeof site.mpQrCodeUrl === 'string' ? site.mpQrCodeUrl.trim() : ''
+      var customNote = typeof site.mpQrNote === 'string' ? site.mpQrNote.trim() : ''
 
-      if (note && site.mpQrNote) {
-        note.textContent = site.mpQrNote
+      if (note && customNote) {
+        note.textContent = customNote
       }
 
       if (!url) {
         showPlaceholder()
+        if (note && !customNote) note.textContent = '微信搜索「睡点」'
         return
       }
+      if (note && !customNote) note.textContent = '微信扫码 · 打开「睡点」'
 
       img.onload = function () {
         img.hidden = false

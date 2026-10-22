@@ -1,5 +1,9 @@
 const { sendSubscribeMessage } = require('./wx')
 
+// 允许的最大迟到：超过这个窗口的任务只标记 expired、不调用微信接口。
+// 停机/后台关闭期间 pending 会累积，恢复后不能把几小时前的“结束入睡”补发出去。
+const MAX_LATE_MS = 15 * 60 * 1000
+
 function formatClock(timestamp) {
   // 产品只面向国内，固定按北京时间展示模板里的时间
   return new Date(timestamp + 8 * 60 * 60 * 1000).toISOString().slice(11, 16)
@@ -45,11 +49,27 @@ function createReminderService(options) {
     running = true
     try {
       const reminder = await resolveReminder()
+      const current = now()
+      // 清理必须独立于 enabled：关闭期间 pending 行会持续累积，
+      // 恢复后不能把历史任务当成“刚到期”一次性补发。
+      if (db.cleanupReminders) {
+        await db.cleanupReminders(current - 7 * 24 * 60 * 60 * 1000)
+      }
       // 运营在后台关闭后，已排队但未发送的任务也不再推：避免“关了还收到”
       if (!reminder.enabled || !reminder.templateId) return
-      const due = await db.dueReminders(now(), 50)
+      const due = await db.dueReminders(current, 50)
       for (let i = 0; i < due.length; i += 1) {
         const item = due[i]
+        // 迟到太久的提醒不再发送：停机/关闭期间累积的旧任务会在起床数小时/数天后
+        // 弹出“结束入睡”，既误导用户又白白消耗一次性订阅。标记 expired 让 due 查询不再命中。
+        if (current - Number(item.fireAt) > MAX_LATE_MS) {
+          try {
+            await db.markReminder(item.openid, item.sessionId, 'expired', current)
+          } catch (e) {
+            logger.error('[reminder] expire failed', item.sessionId, e && e.message)
+          }
+          continue
+        }
         try {
           await sendSubscribeMessage(wx, {
             openid: item.openid,
@@ -61,16 +81,13 @@ function createReminderService(options) {
               time2: { value: formatClock(item.fireAt) }
             }
           })
-          await db.markReminder(item.openid, item.sessionId, 'sent', now())
+          await db.markReminder(item.openid, item.sessionId, 'sent', current)
         } catch (error) {
           // 43101=用户未订阅/已取消；其余失败标记为 failed，避免无限重试
           const status = error && Number(error.errcode) === 43101 ? 'cancelled' : 'failed'
-          await db.markReminder(item.openid, item.sessionId, status, now())
+          await db.markReminder(item.openid, item.sessionId, status, current)
           logger.error('[reminder] send failed', item.sessionId, error && error.errcode)
         }
-      }
-      if (db.cleanupReminders) {
-        await db.cleanupReminders(now() - 7 * 24 * 60 * 60 * 1000)
       }
     } catch (error) {
       logger.error('[reminder] tick failed', error && error.message)

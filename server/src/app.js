@@ -111,7 +111,9 @@ function createApp(options) {
   const app = express()
   app.disable('x-powered-by')
   app.set('trust proxy', config.trustProxy || 0)
-  app.use(express.json({ limit: '64kb' }))
+  // 60 条 × 多段 + 400 条 deletedDays 的合法同步请求可达 70–90KB；
+  // 64KB 会让这类用户每次同步首片都 413（且客户端重试生成同一片），永久不可用。
+  app.use(express.json({ limit: '256kb' }))
 
   app.use((req, res, next) => {
     const start = Date.now()

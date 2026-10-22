@@ -99,6 +99,42 @@ test('提醒创建/取消路由要求模板配置并写库', async () => {
   await new Promise((resolve) => server.close(resolve))
 })
 
+test('过期超过 15 分钟的提醒不补发，标记 expired', async () => {
+  const db = createMemoryDb()
+  const now = Date.now()
+  await db.saveReminder('openid-stale', {
+    sessionId: 'sleep-stale',
+    fireAt: now - 2 * 60 * 60 * 1000,
+    templateId: 'tmpl-test',
+    page: 'pages/sleep/sleep?end=1'
+  })
+  const calls = []
+  const fetchImpl = async (url) => {
+    calls.push(url)
+    if (url.indexOf('stable_token') >= 0) {
+      return { json: async () => ({ access_token: 'token-test', expires_in: 7200 }) }
+    }
+    return { json: async () => ({ errcode: 0 }) }
+  }
+  const service = createReminderService({
+    db,
+    wx: { appid: 'appid-test', secret: 'secret-test', fetchImpl },
+    templateId: 'tmpl-test',
+    now: () => now
+  })
+  try {
+    await service.tick()
+    assert.equal(
+      calls.filter((url) => url.indexOf('subscribe/send') >= 0).length,
+      0,
+      '迟到 2 小时的提醒不应调用微信接口'
+    )
+    assert.equal((await db.dueReminders(now + 1000, 10)).length, 0, '处理后不应再命中 due')
+  } finally {
+    service.stop()
+  }
+})
+
 test('后台配置的模板 ID 优先于环境变量，关闭后立即拒绝创建', async () => {
   const config = loadConfig({
     NODE_ENV: 'test',

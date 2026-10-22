@@ -611,20 +611,18 @@
 @media (max-width: 900px) {
   .hero {
     grid-template-columns: 1fr;
-    padding-top: 48px;
-    gap: 36px;
-  }
-
-  .phone-wrap {
-    order: -1;
+    /* 移动端首屏必须先看到主张与 CTA：此前 .phone-wrap{order:-1} 把 580px 的
+       静态手机放到最前，H1/扫码/试用按钮全被推到折叠线以下。 */
+    padding-top: 32px;
+    gap: 28px;
   }
 
   .phone {
-    width: 280px;
+    width: 260px;
   }
 
   .screen {
-    height: 580px;
+    height: 520px;
   }
 
   .feature-grid {
