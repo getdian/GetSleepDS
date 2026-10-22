@@ -6,6 +6,7 @@ const multer = require('multer')
 const { wrap } = require('../lib/http')
 const { rateLimited, invalidBody, apiError, dbUnavailable } = require('../lib/errors')
 const { orphanKeys } = require('../lib/cos-keys')
+const { makeCredential, MIN_PASSWORD_LENGTH, MAX_PASSWORD_LENGTH } = require('../services/admin-auth')
 const cos = require('../services/cos')
 
 const AUDIO_TYPES = {
@@ -93,6 +94,7 @@ function createAdminRoute(options) {
     storage,
     analytics,
     limitLogin,
+    limitPassword,
     limitUpload,
     now,
     logger
@@ -169,6 +171,77 @@ function createAdminRoute(options) {
   router.get('/admin/session', (req, res) => {
     res.json({ authenticated: auth.isAuthenticated(req) })
   })
+
+  /**
+   * 安全信息：密码来源（db=已落库；env=首次引导）与上次修改时间。
+   * 只读，不返回任何哈希/盐。
+   */
+  router.get('/admin/security', auth.requireAuth, (req, res) => {
+    res.json({
+      source: typeof auth.credentialSource === 'function' ? auth.credentialSource() : 'env',
+      updatedAt: typeof auth.credentialUpdatedAt === 'function' ? auth.credentialUpdatedAt() : 0,
+      version: typeof auth.credentialVersion === 'function' ? auth.credentialVersion() : 0,
+      // 内存模式改密不持久：重启后回退 env。前端据此给出提示
+      persistent: db.mode !== 'memory'
+    })
+  })
+
+  /**
+   * 修改后台密码（ADR-013 闭环）。
+   * - 数据库凭据优先于 env：一旦落库，env 密码不再可用，避免轮换后留下后门；
+   * - 凭据 version +1，令牌签名随之变化 → 已签发的 Cookie 全部失效（免重启）；
+   * - 审计只记动作与来源，不落明文/哈希。
+   */
+  router.post(
+    '/admin/password',
+    auth.requireAuth,
+    wrap(async (req, res) => {
+      // 独立配额：改密失败重试不应挤占登录额度（反代下 IP 桶可能全站共用）
+      const allowPassword = limitPassword || limitLogin
+      if (!allowPassword(req.ip || 'unknown')) throw rateLimited()
+
+      const current = req.body && req.body.currentPassword
+      const next = req.body && req.body.newPassword
+      if (typeof current !== 'string' || !current) throw invalidBody('请输入当前密码')
+      if (typeof next !== 'string' || next.length < MIN_PASSWORD_LENGTH) {
+        throw invalidBody('新密码至少 ' + MIN_PASSWORD_LENGTH + ' 位')
+      }
+      if (next.length > MAX_PASSWORD_LENGTH) {
+        throw invalidBody('新密码不能超过 ' + MAX_PASSWORD_LENGTH + ' 位')
+      }
+      if (next === current) throw invalidBody('新密码不能与当前密码相同')
+      if (!auth.checkPassword(current)) {
+        throw apiError('UNAUTHORIZED', '当前密码不正确', 401)
+      }
+
+      const from = typeof auth.credentialSource === 'function' ? auth.credentialSource() : 'env'
+      const baseVersion = typeof auth.credentialVersion === 'function' ? auth.credentialVersion() : 0
+      const nextCredential = makeCredential(next, baseVersion + 1, Date.now())
+      try {
+        await db.saveSetting('admin_credentials', nextCredential)
+      } catch (e) {
+        if (e && e.status) throw e
+        throw dbUnavailable()
+      }
+
+      auth.setCredentials(nextCredential)
+      // 强制重新登录：旧 Cookie 已因版本变化失效，这里顺手清掉
+      auth.clearCookie(res)
+
+      if (typeof db.logAdminAction === 'function') {
+        try {
+          await db.logAdminAction('admin_password_change', '-', {
+            from: from === 'db' ? 'database' : 'env',
+            at: Date.now()
+          })
+        } catch (e) {
+          logger.error('[audit] admin_password_change failed:', e.message)
+        }
+      }
+
+      res.json({ ok: true, relogin: true })
+    })
+  )
 
   router.get(
     '/admin/config',

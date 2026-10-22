@@ -454,6 +454,9 @@ test('事件上报与看板聚合', async () => {
   assert.equal(board.body.ads.bySlot.length, 2)
   assert.equal(board.body.today.checkins, 1)
   assert.equal(board.body.today.plays, 1)
+  // 补记是独立指标：只打卡不补记 vs 高补记率决定产品动作，必须有出口
+  assert.equal(board.body.today.manualSleeps, 1)
+  assert.equal(board.body.week.manualSleeps, 1)
   assert.equal(board.body.trend.length, 14)
   assert.equal(board.body.topTracks[0].id, 'rain')
   assert.equal(board.body.topTracks[0].title, '雨声')
@@ -642,7 +645,7 @@ test('订阅消息模板可在后台配置并下发，环境面板不回显密�
   assert.equal(env.status, 200)
   assert.equal(typeof env.body.appidConfigured, 'boolean')
   assert.equal(typeof env.body.secretConfigured, 'boolean')
-  // 只读面板只给“是否就绪”，任何密钥值都不能出现在响应里
+  // 只读面板只给"是否就绪"，任何密钥值都不能出现在响应里
   assert.equal(env.body.appid, undefined)
   assert.equal(env.body.secret, undefined)
 })
@@ -660,4 +663,107 @@ test('订阅消息模板 ID / 跳转路径非法时拒绝保存', async () => {
   })
   const rejectedPage = await call('/api/admin/config', { method: 'PUT', body: badPage }, true)
   assert.equal(rejectedPage.status, 400)
+})
+
+test('改密闭环：错旧密拒绝、弱密码拒绝、改后旧会话失效、新密码可登、审计留痕', async () => {
+  // 1) 初始来源是 env（内存模式：改密不持久）
+  const initial = await call('/api/admin/security', {}, true)
+  assert.equal(initial.status, 200)
+  assert.equal(initial.body.source, 'env')
+  assert.equal(initial.body.persistent, false)
+
+  // 2) 当前密码错误 → 401（不是 429/400，前端据此提示“当前密码不正确”）
+  const wrong = await call(
+    '/api/admin/password',
+    { method: 'POST', body: { currentPassword: 'not-the-password', newPassword: 'another-pass-1' } },
+    true
+  )
+  assert.equal(wrong.status, 401)
+  assert.match(wrong.body.error.message, /当前密码不正确/)
+
+  // 3) 新密码过短 → 400
+  const weak = await call(
+    '/api/admin/password',
+    { method: 'POST', body: { currentPassword: PASSWORD, newPassword: '1234567' } },
+    true
+  )
+  assert.equal(weak.status, 400)
+
+  // 4) 正常修改
+  const changed = await call(
+    '/api/admin/password',
+    { method: 'POST', body: { currentPassword: PASSWORD, newPassword: 'brand-new-pass-9' } },
+    true
+  )
+  assert.equal(changed.status, 200)
+  assert.equal(changed.body.relogin, true)
+
+  // 5) 旧 Cookie 立即失效（令牌版本变化，无需重启）
+  const stale = await call('/api/admin/session', {}, true)
+  assert.equal(stale.status, 200)
+  assert.equal(stale.body.authenticated, false)
+
+  // 6) 旧密码（env）不能再登录：库内凭据优先，避免轮换后 env 成后门
+  const oldLogin = await call('/api/admin/login', { method: 'POST', body: { password: PASSWORD } })
+  assert.equal(oldLogin.status, 401)
+
+  // 7) 新密码可登录，且来源变为 db
+  const relogin = await fetch(base + '/api/admin/login', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ password: 'brand-new-pass-9' })
+  })
+  assert.equal(relogin.status, 200)
+  cookie = cookieFrom(relogin)
+  const after = await call('/api/admin/security', {}, true)
+  assert.equal(after.body.source, 'db')
+  assert.ok(after.body.updatedAt > 0)
+
+  // 8) 审计有 admin_password_change，且不含任何密码材料
+  const audit = await call('/api/admin/audit?limit=50', {}, true)
+  assert.equal(audit.status, 200)
+  const row = (audit.body.items || []).filter((item) => item.action === 'admin_password_change')[0]
+  assert.ok(row, '必须留下改密审计')
+  const dump = JSON.stringify(row)
+  assert.equal(/brand-new-pass-9|scrypt|salt/.test(dump), false)
+})
+
+test('改密持久化：用库内凭据重建 app 后新密码可登、env 密码不可用', async () => {
+  const stored = await db.getSetting('admin_credentials')
+  assert.ok(stored && stored.value && stored.value.hash, '改密必须落库（含 salt/hash）')
+
+  const config = loadConfig({
+    NODE_ENV: 'test',
+    ALLOW_DEV_LOGIN: '1',
+    DB_MODE: 'memory',
+    ADMIN_PASSWORD: PASSWORD
+  })
+  // 模拟重启：index.js 读库后把 stored.value 传给 createApp
+  const app2 = createApp({
+    config,
+    db,
+    adminCredentials: stored.value,
+    logger: { log() {}, error() {} },
+    now: () => FIXED_NOW
+  })
+  const server2 = app2.listen(0)
+  await new Promise((resolve) => server2.once('listening', resolve))
+  const base2 = 'http://127.0.0.1:' + server2.address().port
+  try {
+    const ok = await fetch(base2 + '/api/admin/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ password: 'brand-new-pass-9' })
+    })
+    assert.equal(ok.status, 200)
+
+    const envLogin = await fetch(base2 + '/api/admin/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ password: PASSWORD })
+    })
+    assert.equal(envLogin.status, 401, 'env 密码在落库后必须失效')
+  } finally {
+    await new Promise((resolve) => server2.close(resolve))
+  }
 })

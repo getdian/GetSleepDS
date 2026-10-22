@@ -143,6 +143,7 @@
     landing: { title: '落地页', sub: '落地页展示的小程序码与引导文案', badge: '内容' },
     users: { title: '用户数据', sub: '按 openid 查询与删除云端记录', badge: '客服 / 合规' },
     audit: { title: '操作日志', sub: '配置保存、删除用户与上传的留痕', badge: '审计' },
+    security: { title: '安全', sub: '后台密码与登录会话', badge: '安全' },
     storage: { title: '存储与上传', sub: 'COS 凭证、加密保存与连通性测试', badge: '安全' },
     advanced: { title: '配置 JSON', sub: '只读检查当前下发的完整配置', badge: '只读' }
   }
@@ -189,6 +190,10 @@
     if (name === 'mini') {
       // 环境状态来自 .env，只读；进面板时拉一次，避免把密钥回显到页面
       loadEnvStatus().catch(function () {})
+    }
+    if (name === 'security') {
+      // 密码来源与上次修改时间只读展示，进面板时拉一次
+      loadSecurity().catch(function () {})
     }
   }
 
@@ -388,6 +393,8 @@
     $('#stat-opens-sub').textContent = '本周 ' + (week.opens || 0)
     $('#stat-checkins').textContent = today.checkins || 0
     $('#stat-checkins-sub').textContent = '本周 ' + (week.checkins || 0)
+    $('#stat-manual').textContent = today.manualSleeps || 0
+    $('#stat-manual-sub').textContent = '本周 ' + (week.manualSleeps || 0)
     $('#stat-plays').textContent = today.plays || 0
     $('#stat-plays-sub').textContent = '本周 ' + (week.plays || 0)
     $('#stat-users').textContent = totals.users || 0
@@ -944,7 +951,8 @@
     admin_delete_user_data: '删除用户云端数据',
     admin_audio_upload: '上传环境音',
     admin_background_upload: '上传背景图',
-    admin_site_qrcode_upload: '上传小程序码'
+    admin_site_qrcode_upload: '上传小程序码',
+    admin_password_change: '修改后台密码'
   }
 
   function auditDetailText(item) {
@@ -1014,6 +1022,82 @@
       failed.className = 'empty-line'
       failed.textContent = '加载失败：' + (error.message || '请稍后重试')
       box.appendChild(failed)
+    }
+  }
+
+  /* ---------- 安全：后台密码 ---------- */
+
+  async function loadSecurity() {
+    const badge = $('#security-source')
+    const note = $('#security-note')
+    if (!badge || !note) return
+    const data = await api('/api/admin/security')
+    const fromDb = data.source === 'db'
+    badge.textContent = fromDb ? '数据库' : '环境变量'
+    if (!data.persistent) {
+      note.textContent = '当前是内存模式：改密只在本进程内生效，重启后会回退到 .env 的密码。'
+      return
+    }
+    note.textContent = fromDb
+      ? '上次修改：' + (data.updatedAt ? new Date(data.updatedAt).toLocaleString() : '未知')
+      : '当前使用 .env 的 ADMIN_PASSWORD（首次引导）。修改一次后改由数据库保存，环境变量密码不再可用。'
+  }
+
+  function setPwStatus(text, isError) {
+    const status = $('#pw-status')
+    if (!status) return
+    status.hidden = !text
+    status.textContent = text || ''
+    status.classList.toggle('warning', !!isError)
+  }
+
+  async function changePassword() {
+    const current = $('#pw-current').value
+    const next = $('#pw-new').value
+    const confirm = $('#pw-confirm').value
+    const button = $('#pw-submit')
+
+    if (!current) return setPwStatus('请输入当前密码', true)
+    if (!next || next.length < 8) return setPwStatus('新密码至少 8 位', true)
+    if (next.length > 64) return setPwStatus('新密码不能超过 64 位', true)
+    if (next !== confirm) return setPwStatus('两次输入的新密码不一致', true)
+    if (next === current) return setPwStatus('新密码不能与当前密码相同', true)
+
+    button.disabled = true
+    setPwStatus('')
+    try {
+      // 不走 api()：那边的 401 会直接弹登录框；这里 401 表示“当前密码不正确”，要就地提示
+      const res = await fetch('/api/admin/password', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ currentPassword: current, newPassword: next })
+      })
+      let data = null
+      try {
+        data = await res.json()
+      } catch (e) {
+        data = null
+      }
+      if (!res.ok) {
+        const message =
+          data && data.error && data.error.message
+            ? data.error.message
+            : '修改失败（' + res.status + '）'
+        setPwStatus(message, true)
+        return
+      }
+      $('#pw-current').value = ''
+      $('#pw-new').value = ''
+      $('#pw-confirm').value = ''
+      setPwStatus('密码已修改，所有会话已失效，正在返回登录…')
+      setTimeout(function () {
+        window.location.reload()
+      }, 900)
+    } catch (error) {
+      setPwStatus('修改失败：' + (error.message || '网络异常'), true)
+    } finally {
+      button.disabled = false
     }
   }
 
@@ -1761,6 +1845,9 @@
 
   $('#audit-refresh').addEventListener('click', function () {
     loadAudit().catch(function () {})
+  })
+  $('#pw-submit').addEventListener('click', function () {
+    changePassword().catch(function () {})
   })
   $('#storage-save').addEventListener('click', saveStorage)
   $('#storage-test').addEventListener('click', testStorage)

@@ -44,7 +44,7 @@ miniprogram/            小程序（原生 WXML/WXSS/JS，无第三方 UI 库）
   config/env.js         ← API 域名（开发/体验/正式自动切换）
   config/fallback.js    ← 服务端不可达时的兜底配置
   utils/                时间、统计、存储、请求、广告、展示位、背景图、同步、缓存、事件、跨页定时器、多段睡眠/补记编排
-  components/           ambient / top-bar / time-wheel / audio-dock / heatmap / unlock-sheet / ad-slot / share-btn / now-playing / background-picker / empty-state
+  components/           ambient / top-bar / time-wheel / audio-dock / month-calendar / calendar-strip / unlock-sheet / ad-slot / share-btn / now-playing / background-picker / hero-backdrop / empty-state
   pages/                index（计算器）/ sleep（入睡）/ stats（统计）
   assets/               tabBar 与音频图标
 server/                 Express API（config / unlock / summary / sync / events / admin）
@@ -99,7 +99,7 @@ http://127.0.0.1:3100/admin
 
 ![后台管理](docs/assets/admin.png)
 
-- 密码就是 `ADMIN_PASSWORD`；没设置时，服务端启动日志会打印本次临时密码。
+- 首次登录用 `.env` 的 `ADMIN_PASSWORD`（没设置时启动日志会打印本次临时密码）；登录后可在「安全」面板网页改密，改密后旧会话立即失效，env 密码不再可用。
 - 能改：环境音（名称/分类/地址/图标/顺序/增删/上传）、广告位与解锁有效期、功能开关、缓存上限与有效期、解锁文案、落地页小程序码（「落地页」面板上传，展示在落地页首页）。
 - 能看：今日/本周打开、打卡、播放、用户数，14 天趋势，播放 Top 5。
 - “存储与上传”里填 COS 的 Bucket / Region / SecretId / SecretKey，可直接上传音频；SecretKey 加密入库、不回显。
@@ -167,7 +167,8 @@ npm run pack -- -Label 20261019-l4
 | 落地页小程序码 / 二维码文案 | **后台 `/admin` → 落地页**（上传走 COS，保存后落地页立即生效） |
 | 备案号 / 页脚主体信息 | 直接改 `server/public/site/index.html`（备案号必须保留并链接官方查询） |
 | COS 凭证与音频/背景图上传 | 后台 `/admin` → 存储与上传（SecretKey 加密入库） |
-| 后台登录密码 / 加密密钥 | `.env` 的 `ADMIN_PASSWORD`、`CONFIG_SECRET` |
+| 后台登录密码 | 首次用 `.env` 的 `ADMIN_PASSWORD` 引导；登录后在后台「安全」面板改密（scrypt 入库，旧会话立即失效） |
+| 加密密钥 | `.env` 的 `CONFIG_SECRET` |
 | 数据库、微信密钥、限流阈值 | `.env`（参考 `.env.example`） |
 | 颜色、圆角、字号 | `miniprogram/app.wxss` 与各页面 `wxss` |
 
@@ -201,7 +202,7 @@ npm run check   # JSON / WXML 标签 / WXSS 括号 / 页面四件套 / 组件引
 - 服务端 AppSecret 未写入仓库，必须自己填到 `.env`；不填时只能以 `ALLOW_DEV_LOGIN=1` 做本地联调。
 - 内存模式下后台保存的配置重启会丢（页面会提示“内存（重启丢失）”），正式环境请用 PostgreSQL。
 - 若 COS 开了防盗链，必须放行 `servicewechat.com`，否则小程序内音频会 403；H5 演示还需放行站点域名（演示页失败会回退本地测试音）。
-- 后台退出只清 Cookie，已签发会话 7 天内仍有效；需要强制下线时更换 `ADMIN_SECRET` 并重启。
+- 后台退出只清 Cookie，已签发会话 7 天内仍有效；需要强制下线时在「安全」面板改一次密码（令牌版本变化会让所有旧会话立即失效），或更换 `ADMIN_PASSWORD`/`ADMIN_SECRET` 并重启。
 - 单实例：限流、配置缓存、事件队列都在进程内，扩容前需要改造。
 - 后台上传走服务器中转，3M 带宽下 5MB 文件约十几秒；后续可改 COS 预签名直传。
 - H5 是演示：广告是倒计时模拟、数据只存 localStorage、回顾句本地生成；**H5 仍是改版前的结构，只同步了色板**，小程序以 `pages/` 为准。
@@ -242,6 +243,6 @@ npm run check   # JSON / WXML 标签 / WXSS 括号 / 页面四件套 / 组件引
 2. 在 COS 防盗链放行 `servicewechat.com`，配置 `downloadFile` 白名单，真机跑通“播放 → 锁屏 → 解锁 → 定时关闭”。
 3. 在后台补齐到 4–6 条环境音，确认分类、搜索与收藏。
 4. 按 [上线清单](docs/03-launch-checklist.md) 提审。
-5. 下一轮产品项：午休/多次睡眠独立记录、后台改密码（DB 哈希 + 会话失效）、H5 对齐新版。
+5. 下一轮产品项：午休/多次睡眠独立记录、H5 对齐新版。
 
 

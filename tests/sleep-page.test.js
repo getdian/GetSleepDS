@@ -185,6 +185,28 @@ test('编辑自己那一段时不会把自己判成重叠', () => {
   assert.equal(page.data.endError, '')
 })
 
+test('编辑同日段时入睡晚于起床被拦（防止午休静默变跨天段）', () => {
+  resetStore()
+  const page = makePage()
+  const today = T.startOfDay(Date.now())
+  const saved = storage.saveSession({
+    id: 'nap-edit',
+    startAt: today + 13 * 60 * 60 * 1000,
+    endAt: today + 13.5 * 60 * 60 * 1000
+  })
+  assert.ok(saved)
+  page.data.endMode = 'edit'
+  page._editingSessionId = saved.sessions[0].id
+  page._endBaseDay = T.startOfDay(saved.sessions[0].endAt)
+  page.data.endBedTime = '14:00'
+  page.data.endWakeTime = '13:30'
+  page.computeEndSheet()
+  assert.equal(page.data.endError, '入睡时间需早于起床时间，请检查醒来日')
+  // 出错时不能留下可保存区间
+  assert.equal(page._endBedAt, 0)
+  assert.equal(page._endWakeAt, 0)
+})
+
 function ts(year, month, day, hour, minute) {
   return new Date(year, month - 1, day, hour, minute, 0, 0).getTime()
 }

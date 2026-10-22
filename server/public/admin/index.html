@@ -81,6 +81,9 @@
               <button type="button" class="side-item" data-panel="audit">
                 <span class="side-ico">⌾</span><span>操作日志</span>
               </button>
+              <button type="button" class="side-item" data-panel="security">
+                <span class="side-ico">◈</span><span>安全</span>
+              </button>
               <button type="button" class="side-item" data-panel="storage">
                 <span class="side-ico">☁</span><span>存储与上传</span>
               </button>
@@ -116,6 +119,11 @@
           <span>今日打卡</span>
           <strong id="stat-checkins">–</strong>
           <small id="stat-checkins-sub">本周 –</small>
+        </div>
+        <div class="stat">
+          <span>今日补记</span>
+          <strong id="stat-manual">–</strong>
+          <small id="stat-manual-sub">本周 –</small>
         </div>
         <div class="stat">
           <span>今日播放</span>
@@ -446,6 +454,26 @@
           </div>
         </div>
         <ol id="audit-list" class="audit-list"><li class="empty-line">加载中…</li></ol>
+      </section>
+
+      <section class="panel admin-panel" data-panel="security" hidden>
+        <div class="panel-head">
+          <div>
+            <h2>后台密码</h2>
+            <p class="hint">修改后所有已登录会话立即失效，需要用新密码重新登录。密码只保存 scrypt 哈希与随机盐，不落明文；首次修改前使用 .env 的 ADMIN_PASSWORD 引导，落库后环境变量密码不再可用。</p>
+          </div>
+          <span id="security-source" class="badge">环境变量</span>
+        </div>
+        <p id="security-note" class="hint"></p>
+        <div class="grid">
+          <label class="field"><span>当前密码</span><input id="pw-current" type="password" autocomplete="current-password" maxlength="64"></label>
+          <label class="field"><span>新密码（至少 8 位）</span><input id="pw-new" type="password" autocomplete="new-password" maxlength="64"></label>
+          <label class="field"><span>确认新密码</span><input id="pw-confirm" type="password" autocomplete="new-password" maxlength="64"></label>
+        </div>
+        <p id="pw-status" class="hint" hidden></p>
+        <div class="row-actions">
+          <button type="button" id="pw-submit" class="primary">修改密码</button>
+        </div>
       </section>
 
       <section class="panel admin-panel" data-panel="storage" hidden>

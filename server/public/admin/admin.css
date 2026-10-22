@@ -157,7 +157,9 @@ h1 {
 /* 统计 */
 .stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  /* auto-fit：概览 5 张卡（打开/打卡/补记/播放/用户）在窄屏自动换行，
+     不再写死 4 列导致第 5 张单独占一行 */
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 12px;
   margin-bottom: 16px;
 }

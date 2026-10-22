@@ -101,7 +101,8 @@ function createApp(options) {
 
   const store =
     options.configStore || createConfigStore({ db, fileConfig: config.app, logger })
-  const auth = createAdminAuth(config.admin)
+  // 后台密码：数据库凭据（改密后）优先，未落库时回退 env（首次引导）
+  const auth = createAdminAuth(Object.assign({}, config.admin, { credentials: options.adminCredentials }))
   const secretBox = options.secretBox || createSecretBox(config.security.key)
   const storageSettings =
     options.storageSettings ||
@@ -192,6 +193,8 @@ function createApp(options) {
   const unlockOpenid = createRateLimiter(limits.windowMs, limits.maxUnlockPerOpenid)
   const summaryIp = createRateLimiter(limits.windowMs, limits.maxSummaryPerIp)
   const loginIp = createRateLimiter(60 * 1000, 5)
+  // 改密独立配额：与登录分开计数，避免改密失败重试把登录额度用光
+  const passwordIp = createRateLimiter(60 * 1000, 5)
   // 后台上传单文件最大 25MB，补一层独立限流，避免登录态被滥用时打满内存/带宽
   const uploadIp = createRateLimiter(60 * 1000, 20)
   const eventsIp = createRateLimiter(limits.windowMs, 120)
@@ -218,6 +221,7 @@ function createApp(options) {
       storage: storageSettings,
       analytics,
       limitLogin: loginIp,
+      limitPassword: passwordIp,
       limitUpload: uploadIp,
       now,
       logger

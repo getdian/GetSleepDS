@@ -737,23 +737,52 @@ Page({
     }, 60)
   },
 
+  /**
+   * 当前正在编辑的那一段（找不到返回 null）。
+   * 先查页面持有的 record，再回退扫存储——refreshAll 后 data.record 可能已被替换，
+   * 只认 data.record 会让编辑态误判成“同段”。只在时间变更时调用，扫表开销可接受。
+   */
+  editingSessionOf() {
+    const id = this._editingSessionId
+    if (!id) return null
+    const current = this.data.record
+    if (current) {
+      const hit = S.sessionsOf(current).filter((item) => item.id === id)[0]
+      if (hit) return hit
+    }
+    const records = storage.getRecords() || {}
+    const days = Object.keys(records)
+    for (let i = 0; i < days.length; i += 1) {
+      const hit = S.sessionsOf(records[days[i]]).filter((item) => item.id === id)[0]
+      if (hit) return hit
+    }
+    return null
+  },
+
   computeEndSheet() {
     const now = Date.now()
     const wakeBase = this._endBaseDay || T.startOfDay(now)
     const bedMinutes = T.parseClock(this.data.endBedTime)
     const wakeMinutes = T.parseClock(this.data.endWakeTime)
-    // 编辑既有段时面板没有日期选择器：入睡 >= 起床不能交给 rangeForDay 的“回退一天”，
-    // 否则把一段午休（13:00–13:30）的入睡改成 14:00 会静默变成 23.5 小时的跨天段。
+    // 编辑既有段时面板没有日期选择器：同日段"入睡 >= 起床"会被 rangeForDay 的
+    // “回退一天”静默解释成跨天段（30 分钟午休变 23.5 小时）。
+    // 但原本就跨午夜的段（23:30→00:30）必须放行——回退一天正是它的正确语义；
+    // 一律禁止会让这类段完全无法编辑（曾导致测试在凌晨时段随机失败）。
     if (this.data.endMode === 'edit' && bedMinutes >= wakeMinutes) {
-      this._endBedAt = 0
-      this._endWakeAt = 0
-      this.setData({
-        endDayText: '—',
-        endDurationText: '—',
-        endHint: '',
-        endError: MS.errorTextOf('order')
-      })
-      return
+      const editing = this.editingSessionOf()
+      const crossesMidnight =
+        editing && T.calendarDayKey(editing.startAt) !== T.calendarDayKey(editing.endAt)
+      if (!crossesMidnight) {
+        this._endBedAt = 0
+        this._endWakeAt = 0
+        this.setData({
+          endDayText: '—',
+          endDurationText: '—',
+          endHint: '',
+          endError: MS.errorTextOf('order')
+        })
+        return
+      }
     }
     // pending 的入睡日是打卡那一刻，精确到天；补记/编辑仍按“醒来日 + 跨午夜回退一天”
     const range =

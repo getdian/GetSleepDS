@@ -7,7 +7,17 @@ function dayKey(timestamp) {
 }
 
 function emptyBucket(day) {
-  return { day, opens: new Set(), checkins: 0, plays: 0, unlocks: 0, adShows: 0, adErrors: 0 }
+  return {
+    day,
+    opens: new Set(),
+    checkins: 0,
+    plays: 0,
+    unlocks: 0,
+    adShows: 0,
+    adErrors: 0,
+    // 补记次数：只打卡不补记 vs 高补记率，是判断“打卡闭环是否成立”的关键信号
+    manualSleeps: 0
+  }
 }
 
 /**
@@ -43,6 +53,7 @@ function createAnalytics(options) {
     let weekUnlocks = 0
     let weekAdShows = 0
     let weekAdErrors = 0
+    let weekManualSleeps = 0
     const top = new Map()
     const sources = new Map()
     const adSlots = new Map()
@@ -66,6 +77,7 @@ function createAnalytics(options) {
         top.set(key, (top.get(key) || 0) + 1)
       }
       if (event.type === 'audio_unlock') bucket.unlocks += 1
+      if (event.type === 'manual_sleep') bucket.manualSleeps += 1
 
       if (event.type === 'ad_show' || event.type === 'ad_error') {
         const key = event.target || 'unknown'
@@ -87,6 +99,7 @@ function createAnalytics(options) {
         if (event.type === 'audio_unlock') weekUnlocks += 1
         if (event.type === 'ad_show') weekAdShows += 1
         if (event.type === 'ad_error') weekAdErrors += 1
+        if (event.type === 'manual_sleep') weekManualSleeps += 1
       }
     })
 
@@ -122,7 +135,8 @@ function createAnalytics(options) {
         plays: todayBucket.plays,
         unlocks: todayBucket.unlocks,
         adShows: todayBucket.adShows,
-        adErrors: todayBucket.adErrors
+        adErrors: todayBucket.adErrors,
+        manualSleeps: todayBucket.manualSleeps
       },
       week: {
         opens: weekOpens.size,
@@ -130,7 +144,8 @@ function createAnalytics(options) {
         plays: weekPlays,
         unlocks: weekUnlocks,
         adShows: weekAdShows,
-        adErrors: weekAdErrors
+        adErrors: weekAdErrors,
+        manualSleeps: weekManualSleeps
       },
       ads: {
         todayShows: todayBucket.adShows,
