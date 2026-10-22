@@ -666,7 +666,9 @@
         ctaUrl: $('#web-cta').value.trim(),
         adsenseClient: $('#web-adsense').value.trim(),
         analyticsId: $('#web-analytics').value.trim(),
-        disclaimer: $('#web-disclaimer').value.trim()
+        disclaimer: $('#web-disclaimer').value.trim(),
+        proUrl: $('#web-pro-url').value.trim(),
+        freeLimit: Number($('#web-free-limit').value)
       },
       reminder: {
         enabled: $('#reminder-enabled').checked,
@@ -756,6 +758,8 @@
     $('#web-adsense').value = web.adsenseClient || ''
     $('#web-analytics').value = web.analyticsId || ''
     $('#web-disclaimer').value = web.disclaimer || ''
+    $('#web-pro-url').value = web.proUrl || ''
+    $('#web-free-limit').value = Number.isInteger(web.freeLimit) ? web.freeLimit : 5
 
     renderAudio(config.audio)
     renderBackgrounds(config.backgrounds || [], config.defaultBackgroundId || '')
@@ -786,6 +790,12 @@
     }
     if (web.adsenseClient && !/^ca-pub-\d{10,20}$/.test(web.adsenseClient)) {
       return 'AdSense 客户端 ID 形如 ca-pub-1234567890123456'
+    }
+    if (web.proUrl && !/^https:\/\//i.test(web.proUrl)) {
+      return '订阅购买链接必须以 https:// 开头'
+    }
+    if (web.freeLimit !== undefined && (!Number.isInteger(web.freeLimit) || web.freeLimit < 0 || web.freeLimit > 100)) {
+      return '免费保存条数需为 0–100 的整数'
     }
 
     const reminderTemplate = payload.reminder && payload.reminder.templateId

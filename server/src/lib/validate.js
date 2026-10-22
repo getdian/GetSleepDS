@@ -1,5 +1,12 @@
 const { invalidBody, payloadTooLarge } = require('./errors')
-const { sleepDayOf, calendarDayOf } = require('./time')
+const { sleepDayOf, dayKeyOf, calendarDayOf } = require('./time')
+
+// 记录级时区（分钟，东为正）：UTC-8 = -480，UTC+9 = 540。非法值回退 null（按北京口径）。
+function tzOf(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n < -720 || n > 840) return null
+  return Math.round(n)
+}
 
 const DAY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/
 const MAX_RECORDS = 62
@@ -90,6 +97,8 @@ function validateRecords(input, options) {
     }
 
     const rawUpdatedAt = Number(item.updatedAt)
+    // 记录自带时区（国际站）；缺省或非法时按北京口径，保证小程序/旧客户端行为不变。
+    const tz = tzOf(item.tzOffsetMin)
     const isV2 = Number(item.schemaVersion) === 2 && Array.isArray(item.sessions)
 
     if (isV2) {
@@ -104,9 +113,10 @@ function validateRecords(input, options) {
         if (current.durationMin === best.durationMin && current.endAt > best.endAt) return current
         return best
       }, null)
-      const day = calendarDayOf(primary.endAt)
+      const day = tz === null ? calendarDayOf(primary.endAt) : dayKeyOf(primary.endAt, tz)
+      const dayOf = (ts) => (tz === null ? calendarDayOf(ts) : dayKeyOf(ts, tz))
       // 一条记录只装同一天醒来的段；跨天段由客户端拆到各自醒来日
-      if (sessions.some((session) => calendarDayOf(session.endAt) !== day)) {
+      if (sessions.some((session) => dayOf(session.endAt) !== day)) {
         dropped += 1
         continue
       }
@@ -153,7 +163,7 @@ function validateRecords(input, options) {
 
     normalized.push({
       // 旧记录保持“入睡日”口径，避免历史统计被重排
-      day: sleepDayOf(bedAt),
+      day: tz === null ? sleepDayOf(bedAt) : dayKeyOf(bedAt, tz),
       dayRule: 'bed-v1',
       schemaVersion: 1,
       bedAt,

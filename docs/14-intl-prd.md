@@ -132,11 +132,11 @@
 
 | 阶段 | 内容 | 产出 |
 |---|---|---|
-| 0 | 可行性取证（已完成） | 本文件 §7 决策 |
-| 1 | core 复用 + 静态站 + 10 页 + 度量 | `web/dist` 可部署 |
-| 2 | 账号 + 同步 | 跨设备可用 |
-| 3 | 订阅 + 付费墙 | 首笔收入 |
-| 4 | 广告 + affiliate | 兜底收入 |
+| 0 | 可行性取证 | ✅ 已完成（本文件 §7 决策） |
+| 1 | core 复用 + 静态站 11 页 | ✅ 已完成：`npm run build:web` + `node tools/verify-web.mjs` 通过 |
+| 2 | 匿名身份 + 同步 | ✅ 代码完成：`deviceToken` → `d_<sha256>` subject，复用墓碑/水位；端到端 curl 已验 |
+| 3 | 订阅 + 付费墙 | 🟡 骨架完成：`freeLimit` + `proUrl` 配置驱动，后台可改；**真实收款需 Paddle 账号** |
+| 4 | 广告 + affiliate | 🟡 骨架完成：AdSense 槽位与脚本按 `adsenseClient` 条件注入；**需 AdSense 账号过审** |
 
 ## 12. 风险
 

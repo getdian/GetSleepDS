@@ -16,6 +16,14 @@ function sleepDayOf(timestamp) {
   return new Date(timestamp - SLEEP_DAY_SHIFT_MS).toISOString().slice(0, 10)
 }
 
+/** 指定时区（分钟，东为正）的日历日；不传时区时等价于 calendarDayOf */
+function dayKeyOf(timestamp, tzOffsetMin) {
+  // 兼容历史调用：addDaysKey 传的是 Date 对象，直接取其 UTC 日期
+  if (timestamp instanceof Date) return timestamp.toISOString().slice(0, 10)
+  const offset = Number.isFinite(Number(tzOffsetMin)) ? Number(tzOffsetMin) : 480
+  return new Date(Number(timestamp) + offset * 60 * 1000).toISOString().slice(0, 10)
+}
+
 /** 北京时间日历日（用于“本周”这类自然周边界，不等同于睡眠日） */
 function calendarDayOf(timestamp) {
   return new Date(timestamp + BEIJING_OFFSET_MS).toISOString().slice(0, 10)
@@ -62,10 +70,6 @@ function parseDayKey(key) {
   return new Date(Date.UTC(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2])))
 }
 
-function dayKeyOf(date) {
-  return date.toISOString().slice(0, 10)
-}
-
 function addDaysKey(key, days) {
   const d = parseDayKey(key)
   d.setUTCDate(d.getUTCDate() + days)
@@ -86,6 +90,7 @@ module.exports = {
   DAY_MS,
   pad2,
   sleepDayOf,
+  dayKeyOf,
   calendarDayOf,
   minutesOf,
   formatClock,

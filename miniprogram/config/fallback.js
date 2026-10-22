@@ -55,7 +55,9 @@ module.exports = {
     adsenseClient: '',
     analyticsId: '',
     locales: ['en', 'es'],
-    disclaimer: 'SleepCycle is a planning tool, not medical advice.'
+    disclaimer: 'SleepCycle is a planning tool, not medical advice.',
+    freeLimit: 5,
+    proUrl: ''
   },
   copy: {
     unlockTitle: '解锁环境音',

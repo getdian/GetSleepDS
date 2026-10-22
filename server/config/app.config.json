@@ -37,7 +37,9 @@
     "adsenseClient": "",
     "analyticsId": "",
     "locales": ["en", "es"],
-    "disclaimer": "SleepCycle is a planning tool, not medical advice. If you have a sleep disorder, talk to a clinician."
+    "disclaimer": "SleepCycle is a planning tool, not medical advice. If you have a sleep disorder, talk to a clinician.",
+    "freeLimit": 5,
+    "proUrl": ""
   },
   "reminder": {
     "enabled": true,

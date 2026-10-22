@@ -174,6 +174,12 @@ function renderPage(page) {
         <p class="hint" id="result-head"></p>
         <ol class="slots" id="slots"></ol>
 
+        <div class="paywall" id="paywall" hidden>
+          <p class="paywall-title">${esc(t.proTitle)}</p>
+          <p class="paywall-body">${esc(t.proBody)}</p>
+          <a class="paywall-cta" id="pro-link" href="#" rel="noopener">${esc(t.proCta)}</a>
+        </div>
+
         <div class="actions">
           <button type="button" id="save" class="primary">${esc(t.save)}</button>
           <button type="button" id="share">${esc(t.share)}</button>
@@ -193,6 +199,17 @@ function renderPage(page) {
         <button type="button" id="clear">${esc(t.clearAll)}</button>
       </section>
 
+      <section class="cloud">
+        <h2>${esc(t.cloudTitle)}</h2>
+        <label class="switch"><input type="checkbox" id="cloud-enable" /><span>${esc(t.cloudEnable)}</span></label>
+        <p class="hint">${esc(t.cloudHint)}</p>
+        <div class="actions">
+          <button type="button" id="cloud-sync">${esc(t.cloudSync)}</button>
+          <button type="button" id="cloud-erase">${esc(t.erase)}</button>
+        </div>
+        <p class="status" id="cloud-status" role="status"></p>
+      </section>
+
       <p class="note">${esc(t.note)}</p>
       <p class="disclaimer"><strong>${esc(t.disclaimerLabel)}:</strong> ${esc(site.disclaimer)}</p>
     </main>
@@ -210,9 +227,13 @@ function renderPage(page) {
       mode: page.mode,
       domain: site.domain
     })}; window.__I18N__ = ${JSON.stringify(t)}; window.__SITE__ = ${JSON.stringify({
+      apiBase: site.apiBase || '',
       analyticsId: site.analyticsId || '',
-      adsenseClient: site.adsenseClient || ''
+      adsenseClient: site.adsenseClient || '',
+      freeLimit: site.freeLimit,
+      proUrl: site.proUrl || ''
     })};</script>
+    ${site.adsenseClient ? `<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${esc(site.adsenseClient)}" crossorigin="anonymous"></script>` : ''}
     <script src="${prefix}assets/core.js"></script>
     <script src="${prefix}assets/app.js"></script>
   </body>
@@ -252,6 +273,7 @@ ${urls.map((u) => `  <url><loc>${u}</loc></url>`).join('\n')}
   fs.writeFileSync(
     path.join(OUT, '404.html'),
     `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Not found</title>
+<meta name="robots" content="noindex">
 <link rel="stylesheet" href="/assets/app.css"></head>
 <body><main><h1>Page not found</h1><p><a href="/">Back to the sleep calculator</a></p></main></body></html>`
   )
@@ -263,7 +285,7 @@ ${urls.map((u) => `  <url><loc>${u}</loc></url>`).join('\n')}
   Referrer-Policy: no-referrer
   X-Frame-Options: DENY
   Permissions-Policy: camera=(), microphone=(), geolocation=()
-  Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self' https:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'self'; img-src 'self' data: https:; style-src 'self'; script-src 'self' 'unsafe-inline' https://pagead2.googlesyndication.com https://*.google.com; connect-src 'self' https:; frame-src https://googleads.g.doubleclick.net https://tpc.googlesyndication.com; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
 
 /assets/*
   Cache-Control: public, max-age=31536000, immutable

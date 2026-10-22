@@ -1,5 +1,16 @@
 # 睡点 · 关键更新记录
 
+## 2026-10-23 · 国际站阶段 2–4：匿名同步 · 付费墙 · 广告位
+
+> 承接阶段 1。原则不变：**不复制算法**，Web 只消费 `miniprogram/utils` 的纯函数。
+
+- **匿名身份（阶段 2 硬门槛）**：`/api/records/sync` 与 `/records/erase` 新增 `deviceToken` 通道——客户端生成 32 字节随机串，服务端只存 `d_` + `sha256` 前 40 位（库泄露也拿不到原 token）。小程序 `code → openid` 通道保持不变，两条通道共用同一套 LWW / 墓碑 / erasure 水位；限流维度仍是 subject。
+- **记录级时区落库**：`validateRecords` 接受 `tzOffsetMin`（clamp −720..840），`day` 按记录自身时区计算；缺省/非法值回退北京口径。**未加 DB 列**——`day` 已在写入时算好，等需要追溯再加（加法迁移）。
+- **付费墙（阶段 3 骨架）**：`web.freeLimit`（0=不限）+ `web.proUrl`；超出免费额度且配置了购买链接时，保存按钮禁用并展示升级卡。无 `proUrl` 时不限制（避免没有支付通道就锁死用户）。
+- **广告位（阶段 4 骨架）**：`adsenseClient` 非空时才注入 AdSense 脚本与槽位，并在 `_headers` 放开对应 CSP；默认关闭，零请求。
+- **自检工具**：`tools/verify-web.mjs` 起临时静态服务，逐页校验 200 / lang / title 唯一 / canonical / hreflang / JSON-LD / 资源可达，当前 `pages=11 OK`。
+- **验证**：`npm test` **315 项 / 314 通过 / 0 失败 / 1 skip**（新增 `server/test/validate-tz.test.js` 3 条）；`npm run check` 通过；`build:web` + `verify-web` 通过；内存模式实测 `deviceToken` 同步 `synced=1 dropped=0 day=2026-10-22`、云删除 `deleted=1`、CORS 与缓存头正确。
+
 ## 2026-10-23 · 国际站阶段 1：core 复用 + 时区模型 + 静态站 + 后台可视化
 
 > 来源：商业化讨论（小程序广告依赖单一平台，出海 H5 做 SEO + 订阅）。PRD 见 `docs/14-intl-prd.md`。

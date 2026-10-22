@@ -21,7 +21,10 @@ const DEFAULT_WEB = {
   adsenseClient: '',
   analyticsId: '',
   locales: ['en', 'es'],
-  disclaimer: 'SleepCycle is a planning tool, not medical advice.'
+  disclaimer: 'SleepCycle is a planning tool, not medical advice.',
+  // 免费额度（0 = 不限）与订阅购买链接；两者配合形成付费墙。
+  freeLimit: 5,
+  proUrl: ''
 }
 const WEB_LOCALES = ['en', 'es', 'pt', 'id', 'de', 'fr', 'ja']
 // 订阅消息：模板 ID 由运营在微信公众平台申请后填到这里（后台可视化，无需重启）。
@@ -442,6 +445,15 @@ function validateConfig(input, base) {
   if (webAdsenseClient && !/^ca-pub-\d{10,20}$/.test(webAdsenseClient)) {
     throw invalidBody('AdSense 客户端 ID 形如 ca-pub-1234567890123456')
   }
+  const webProUrl = readText(webInput.proUrl, '订阅购买链接', 300, false)
+  if (webProUrl && !/^https:\/\//i.test(webProUrl)) {
+    throw invalidBody('订阅购买链接必须以 https:// 开头')
+  }
+  const rawFreeLimit = Number(webInput.freeLimit)
+  const webFreeLimit =
+    Number.isInteger(rawFreeLimit) && rawFreeLimit >= 0 && rawFreeLimit <= 100
+      ? rawFreeLimit
+      : DEFAULT_WEB.freeLimit
   const webLocalesInput = Array.isArray(webInput.locales) ? webInput.locales : DEFAULT_WEB.locales
   const webLocales = webLocalesInput.filter((item) => WEB_LOCALES.indexOf(item) >= 0).slice(0, 4)
   const web = {
@@ -452,7 +464,9 @@ function validateConfig(input, base) {
     adsenseClient: webAdsenseClient,
     analyticsId: readText(webInput.analyticsId, '分析 ID', 40, false),
     locales: webLocales.length ? webLocales : ['en'],
-    disclaimer: readText(webInput.disclaimer, '免责声明', 300, false) || DEFAULT_WEB.disclaimer
+    disclaimer: readText(webInput.disclaimer, '免责声明', 300, false) || DEFAULT_WEB.disclaimer,
+    freeLimit: webFreeLimit,
+    proUrl: webProUrl
   }
 
   const copyInput = Object.assign(

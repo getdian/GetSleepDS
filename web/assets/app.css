@@ -222,6 +222,48 @@ button.primary { background: var(--accent); color: var(--accent-ink); border-col
   cursor: pointer;
 }
 
+.paywall {
+  margin-top: 16px;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(253, 230, 138, 0.4);
+  background: rgba(253, 230, 138, 0.08);
+}
+
+.paywall-title { margin: 0 0 6px; font-weight: 700; }
+.paywall-body { margin: 0 0 12px; color: var(--muted); font-size: 14px; }
+
+.paywall-cta {
+  display: inline-block;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-weight: 700;
+}
+
+button[disabled] { opacity: 0.45; cursor: not-allowed; }
+
+.cloud { margin-top: 32px; }
+
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.switch input { width: 18px; height: 18px; accent-color: var(--accent); }
+
+.ads {
+  margin: 32px 0;
+  min-height: 60px;
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+}
+
 .note { color: var(--muted); font-size: 13px; margin-top: 26px; }
 .disclaimer {
   font-size: 12px;

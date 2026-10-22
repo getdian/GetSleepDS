@@ -1,5 +1,6 @@
 {
   "domain": "https://sleepintl.example.com",
+  "apiBase": "https://sleep.qfmaster.com",
   "defaultLocale": "en",
   "locales": ["en", "es"],
   "brand": "SleepCycle",

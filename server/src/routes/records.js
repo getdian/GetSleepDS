@@ -1,3 +1,4 @@
+const crypto = require('crypto')
 const express = require('express')
 const { wrap } = require('../lib/http')
 const { validateRecords, validateDeletions } = require('../lib/validate')
@@ -20,6 +21,23 @@ function createRecordsRoute(options) {
   const eraseLimit = limitErase || limitIp
   const router = express.Router()
 
+  const DEVICE_TOKEN_RE = /^[A-Za-z0-9_-]{32,128}$/
+
+  /**
+   * 身份解析：小程序走 wx.login code → openid；国际站走匿名 deviceToken。
+   * device 身份只存 sha256 前缀（`d_` + 40 hex），数据库泄露也拿不到原始 token。
+   * 两条通道共用同一套墓碑/水位/LWW 逻辑，subject 就是那一行的 openid。
+   */
+  async function subjectOf(body) {
+    const code = body && body.code
+    if (code) return codeToOpenid(code, config.wx)
+    const token = body && body.deviceToken
+    if (typeof token === 'string' && DEVICE_TOKEN_RE.test(token)) {
+      return 'd_' + crypto.createHash('sha256').update(token).digest('hex').slice(0, 40)
+    }
+    throw invalidBody('缺少 code 或 deviceToken')
+  }
+
   router.post(
     '/records/sync',
     wrap(async (req, res) => {
@@ -33,9 +51,6 @@ function createRecordsRoute(options) {
         if (features.sync === false) throw featureOff('云同步未开放')
       }
 
-      const code = req.body && req.body.code
-      if (!code) throw invalidBody('缺少 code')
-
       // 参数校验必须全部前置：includeAll 非法时若已写库再返回 400，
       // 客户端会按失败重试，造成重复上传与误导性错误码；也避免为坏请求换取 openid。
       const rawIncludeAll = req.body && req.body.includeAll
@@ -46,8 +61,8 @@ function createRecordsRoute(options) {
       const current = now()
       const parsed = validateRecords(req.body && req.body.records, { now: current })
       const deletedDays = validateDeletions(req.body && req.body.deletedDays, { now: current })
-      const openid = await codeToOpenid(code, config.wx)
-      // openid 维度限流：反代漏配 TRUST_PROXY 时 IP 桶全站共用，这里是第二道闸
+      const openid = await subjectOf(req.body)
+      // subject 维度限流：反代漏配 TRUST_PROXY 时 IP 桶全站共用，这里是第二道闸
       if (limitSyncOpenid && !limitSyncOpenid(openid)) throw rateLimited()
 
       // 没有 syncRecords 的旧/自定义存储无法处理墓碑与 erasure 水位；
@@ -82,16 +97,13 @@ function createRecordsRoute(options) {
     wrap(async (req, res) => {
       if (!eraseLimit(req.ip || 'unknown')) throw rateLimited()
 
-      const code = req.body && req.body.code
-      if (!code) throw invalidBody('缺少 code')
-
       const rawCloudOnly = req.body && req.body.cloudOnly
       if (rawCloudOnly !== undefined && typeof rawCloudOnly !== 'boolean') {
         throw invalidBody('cloudOnly 必须是布尔值')
       }
       const cloudOnly = rawCloudOnly === true
-      const openid = await codeToOpenid(code, config.wx)
-      // 反代后 req.ip 可能是同一个代理地址；再按 openid 做一层维度限流。
+      const openid = await subjectOf(req.body)
+      // 反代后 req.ip 可能是同一个代理地址；再按 subject 做一层维度限流。
       if (limitEraseOpenid && !limitEraseOpenid(openid)) throw rateLimited()
       const current = now()
       let result = null

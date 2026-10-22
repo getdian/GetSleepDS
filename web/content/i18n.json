@@ -26,7 +26,20 @@
     "savedList": "Saved nights",
     "clearAll": "Clear",
     "note": "Cycles are about 90 minutes. Most adults need 5 per night.",
-    "disclaimerLabel": "Disclaimer"
+    "disclaimerLabel": "Disclaimer",
+    "cloudTitle": "Sync across devices (optional)",
+    "cloudEnable": "Enable cloud sync",
+    "cloudHint": "Anonymous: a random device key stays on this device. No email, no password.",
+    "cloudSync": "Sync now",
+    "cloudSyncing": "Syncing…",
+    "cloudSynced": "Synced",
+    "cloudError": "Sync failed; will retry on next save",
+    "erase": "Delete cloud copy",
+    "erased": "Cloud copy deleted",
+    "proTitle": "All free slots are used",
+    "proBody": "Unlock unlimited saved nights, cross-device sync and reminders.",
+    "proCta": "See plans",
+    "proLimitNote": "{used} of {limit} free slots used"
   },
   "es": {
     "htmlLang": "es",
@@ -55,6 +68,19 @@
     "savedList": "Noches guardadas",
     "clearAll": "Borrar",
     "note": "Los ciclos duran unos 90 minutos. La mayoría de adultos necesita 5 por noche.",
-    "disclaimerLabel": "Aviso"
+    "disclaimerLabel": "Aviso",
+    "cloudTitle": "Sincronizar entre dispositivos (opcional)",
+    "cloudEnable": "Activar sincronización",
+    "cloudHint": "Anónimo: una clave aleatoria se guarda en este dispositivo. Sin correo ni contraseña.",
+    "cloudSync": "Sincronizar ahora",
+    "cloudSyncing": "Sincronizando…",
+    "cloudSynced": "Sincronizado",
+    "cloudError": "Error al sincronizar; se reintentará al guardar",
+    "erase": "Borrar copia en la nube",
+    "erased": "Copia en la nube borrada",
+    "proTitle": "Has usado todos los espacios gratis",
+    "proBody": "Desbloquea noches ilimitadas, sincronización y recordatorios.",
+    "proCta": "Ver planes",
+    "proLimitNote": "{used} de {limit} espacios gratis usados"
   }
 }
