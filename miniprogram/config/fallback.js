@@ -42,8 +42,9 @@ module.exports = {
     ttlDays: 7
   },
   reminder: {
+    enabled: true,
     templateId: '',
-    page: '/pages/sleep/sleep?end=1'
+    page: 'pages/sleep/sleep?end=1'
   },
   copy: {
     unlockTitle: '解锁环境音',

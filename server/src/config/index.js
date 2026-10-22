@@ -115,8 +115,12 @@ function loadConfig(env) {
       appid,
       secret,
       allowDevLogin: !isProd && allowDevLogin,
-      // 订阅消息模板由运营在微信后台申请后通过环境变量注入；为空时客户端只提供日历兜底
-      reminderTemplateId: source.WX_REMINDER_TEMPLATE_ID || ''
+      // 订阅消息模板：后台可视化配置优先（store 实时读取），这里只保留 env / 文件兜底，
+      // 兼容仅有环境变量的历史部署；为空时客户端只提供日历兜底。
+      reminderTemplateId:
+        source.WX_REMINDER_TEMPLATE_ID ||
+        (file.reminder && file.reminder.templateId) ||
+        ''
     },
     unlockTtlHours: ttlHours,
     admin,
@@ -136,6 +140,8 @@ function loadConfig(env) {
       backgroundUnlockHours: file.backgroundUnlockHours,
       // 落地页小程序码：漏传会让文件配置在空库/首次部署时被 normalizeConfig 静默丢弃
       site: file.site,
+      // 订阅消息：漏传会让后台“小程序与订阅消息”面板在空库首次部署时读不到默认值
+      reminder: file.reminder,
       features: file.features,
       cache: file.cache,
       copy: file.copy,

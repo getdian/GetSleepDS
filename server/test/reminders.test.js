@@ -98,3 +98,62 @@ test('提醒创建/取消路由要求模板配置并写库', async () => {
   app.locals.reminderService.stop()
   await new Promise((resolve) => server.close(resolve))
 })
+
+test('后台配置的模板 ID 优先于环境变量，关闭后立即拒绝创建', async () => {
+  const config = loadConfig({
+    NODE_ENV: 'test',
+    ALLOW_DEV_LOGIN: '1',
+    DB_MODE: 'memory',
+    ADMIN_PASSWORD: 'test-admin-pass'
+  })
+  // 启动时没有 env 模板：旧实现会因此永不启动调度器、路由也永远 503
+  assert.equal(config.wx.reminderTemplateId, '')
+
+  const db = createMemoryDb()
+  let current = {
+    config: Object.assign({}, config.app, {
+      reminder: { enabled: true, templateId: 'tmpl-admin', page: 'pages/sleep/sleep?end=1' }
+    })
+  }
+  const configStore = {
+    get: async () => current,
+    set: async (next) => {
+      current = next
+      return next
+    }
+  }
+  const app = createApp({
+    config,
+    db,
+    configStore,
+    logger: { log() {}, error() {} },
+    now: () => Date.now()
+  })
+  const server = app.listen(0)
+  await new Promise((resolve) => server.once('listening', resolve))
+  const base = 'http://127.0.0.1:' + server.address().port
+  const fireAt = Date.now() + 10 * 60 * 1000
+  try {
+    const created = await fetch(base + '/api/reminders', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ code: 'admin-code', action: 'create', sessionId: 'sleep-a', fireAt })
+    })
+    assert.equal(created.status, 200, '后台填了模板后应立即可用')
+
+    current = {
+      config: Object.assign({}, current.config, {
+        reminder: { enabled: false, templateId: 'tmpl-admin', page: 'pages/sleep/sleep?end=1' }
+      })
+    }
+    const disabled = await fetch(base + '/api/reminders', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ code: 'admin-code', action: 'create', sessionId: 'sleep-b', fireAt })
+    })
+    assert.equal(disabled.status, 503, '后台关闭后不应再创建新提醒')
+  } finally {
+    app.locals.reminderService.stop()
+    await new Promise((resolve) => server.close(resolve))
+  }
+})

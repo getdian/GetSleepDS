@@ -66,6 +66,9 @@
               <button type="button" class="side-item" data-panel="features">
                 <span class="side-ico">◌</span><span>功能与缓存</span>
               </button>
+              <button type="button" class="side-item" data-panel="mini">
+                <span class="side-ico">✉</span><span>小程序与提醒</span>
+              </button>
               <button type="button" class="side-item" data-panel="copy">
                 <span class="side-ico">✎</span><span>解锁文案</span>
               </button>
@@ -315,6 +318,48 @@
             </label>
           </div>
           <p class="hint">预加载只在 Wi-Fi 下进行；观看广告时会同步下载并缓存该条音频。</p>
+        </section>
+
+        <section class="panel admin-panel" data-panel="mini" hidden>
+          <div class="panel-head">
+            <div>
+              <h2>小程序与订阅消息</h2>
+              <p class="hint">「结束入睡」到点提醒使用的订阅消息模板。保存后立即生效，不需要重启容器。</p>
+            </div>
+            <span class="badge">通知</span>
+          </div>
+          <div class="switches">
+            <label class="switch"><input type="checkbox" id="reminder-enabled"><span>启用到点提醒</span></label>
+          </div>
+          <div class="grid">
+            <label class="field field-wide">
+              <span>订阅消息模板 ID</span>
+              <input id="reminder-template" maxlength="64" placeholder="43 位，如 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+            </label>
+            <label class="field field-wide">
+              <span>点击提醒的跳转路径</span>
+              <input id="reminder-page" maxlength="128" placeholder="pages/sleep/sleep?end=1">
+            </label>
+          </div>
+          <p class="hint">模板 ID 为空时，小程序里点「到点提醒我结束」会回退为“加入手机日历”。</p>
+
+          <div class="panel-head"><h3>去哪里拿模板 ID</h3></div>
+          <ol class="hint-list">
+            <li>用小程序管理员扫码登录 <strong>微信公众平台</strong>（mp.weixin.qq.com）。</li>
+            <li>左侧 <strong>功能 → 订阅消息</strong> → 「公共模板库」搜索“睡眠 / 提醒 / 打卡”，选用一个含 <code>提醒事项</code>（thing1）与 <code>提醒时间</code>（time2）两个字段的模板；「我的模板」里已有则直接用。</li>
+            <li>进入模板详情，复制 <strong>模板 ID</strong>（43 位字母/数字/下划线/短横线），粘贴到上面。</li>
+            <li>模板字段必须与发送的 <code>thing1</code>、<code>time2</code> 对得上，否则微信返回 47003；字段名以模板详情里的「关键词」为准。</li>
+            <li>本产品使用一次性订阅：用户每点一次「到点提醒我结束」授权一次，只能收到一条，符合平台规则。</li>
+          </ol>
+
+          <div class="panel-head"><h3>运行环境（只读）</h3></div>
+          <div class="grid">
+            <label class="field"><span>AppID（.env: WX_APPID）</span><input id="env-appid" readonly></label>
+            <label class="field"><span>AppSecret（.env: WX_SECRET）</span><input id="env-secret" readonly></label>
+            <label class="field"><span>反向代理（.env: TRUST_PROXY）</span><input id="env-trust" readonly></label>
+            <label class="field"><span>数据库（.env: DB_MODE）</span><input id="env-db" readonly></label>
+          </div>
+          <p class="hint">AppID / AppSecret 属于密钥，只能在服务器 <code>.env</code> 配置并重启容器；后台只显示是否就绪，不保存、不回显。AppID 与 AppSecret 在公众平台「开发 → 开发管理 → 开发设置」查看（Secret 只显示一次，重置后旧值立即失效）。</p>
         </section>
 
         <section class="panel admin-panel" data-panel="copy" hidden>

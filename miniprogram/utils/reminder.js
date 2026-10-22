@@ -11,7 +11,10 @@ const { getConfig } = require('./config')
 
 function templateId() {
   const config = getConfig()
-  return (config.reminder && config.reminder.templateId) || ''
+  const reminder = config.reminder || {}
+  // 后台显式关闭后，客户端不再弹订阅授权，直接走“加入手机日历”兜底
+  if (reminder.enabled === false) return ''
+  return reminder.templateId || ''
 }
 
 function requestOptIn() {

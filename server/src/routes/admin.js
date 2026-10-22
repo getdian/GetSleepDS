@@ -85,7 +85,18 @@ function createImageUploader() {
 }
 
 function createAdminRoute(options) {
-  const { auth, store, db, storage, analytics, limitLogin, limitUpload, now, logger } = options
+  const {
+    auth,
+    store,
+    db,
+    config,
+    storage,
+    analytics,
+    limitLogin,
+    limitUpload,
+    now,
+    logger
+  } = options
   const log = logger || console
   const router = express.Router()
   const upload = createUploader()
@@ -353,6 +364,24 @@ function createAdminRoute(options) {
         deletedUnlocks: result.unlocks,
         deletedEvents: result.events,
         erasedAt: result.erasedAt
+      })
+    })
+  )
+
+  // 只读环境状态：告诉运营“哪些配置在 .env、是否已就绪”，不返回任何密钥值。
+  // 密钥仍只存在服务器环境变量里，后台不接收、不落库。
+  router.get(
+    '/admin/env',
+    auth.requireAuth,
+    wrap(async (req, res) => {
+      const wx = (config && config.wx) || {}
+      res.json({
+        nodeEnv: (config && config.nodeEnv) || 'development',
+        dbMode: (config && config.dbMode) || '',
+        trustProxy: Number(config && config.trustProxy) || 0,
+        appidConfigured: !!wx.appid,
+        secretConfigured: !!wx.secret,
+        reminderTemplateId: wx.reminderTemplateId || ''
       })
     })
   )

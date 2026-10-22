@@ -27,7 +27,7 @@
 | 落地页 `/` + H5 交互演示 `/demo/` | ✅ 浏览器实测（H5 仍为旧版结构，色板已同步） |
 | 落地页备案 | ✅ 页脚展示工信部/公安备案号并链接官方查询；公开页不展示主体公司名称 |
 | 视觉 token / 层级表 | ✅ 2026-10-21 统一在 `app.wxss`（`--hero-scrim`、`--color-primary-soft`、`--z-*`） |
-| 275 个自动化测试 | ✅ 274 通过 + 1 个 PG 集成用例（需 `PG_TEST_URL`） |
+| 281 个自动化测试 | ✅ 280 通过 + 1 个 PG 集成用例（需 `PG_TEST_URL`） |
 | AppID / 首条 COS 音频 | ✅ `wx378b0a7437d60998`；`https://img.qfmaster.com/sleep/sleep-10001.mp3` 可访问 |
 | 微信开发者工具渲染 | ✅ 三页已编译、截图、无 console error |
 | 真机音频 / 广告 / 锁屏 | ⚠️ 未验证，需要外部账号与真机 |
@@ -124,7 +124,7 @@ H5 读取同一份 `/api/config`，后台改音频或文案会同步反映；演
 
 ```bash
 cp .env.example .env      # 填 POSTGRES_PASSWORD、WX_APPID、WX_SECRET、ADMIN_PASSWORD、CONFIG_SECRET、TRUST_PROXY=1
-# 结束入睡提醒：在微信后台申请一次性订阅消息模板后填 WX_REMINDER_TEMPLATE_ID；
+# 结束入睡提醒：模板 ID 在后台「小程序与提醒」配置（保存即生效，无需改 .env）；
 # 模板字段需为 thing1（事项）+ time2（时间），未配置时只提供手机日历兜底
 docker compose up -d --build
 curl http://127.0.0.1:3000/api/ready
@@ -145,7 +145,7 @@ npm run dev:geek
 # 只检查环境
 powershell -File deploy/dev.ps1 -Check
 
-# 打包：先跑 275 测试 + 静态检查，再生成 zip/SHA256
+# 打包：先跑 281 测试 + 静态检查，再生成 zip/SHA256
 npm run pack -- -Label 20261019-l4
 ```
 
@@ -161,6 +161,7 @@ npm run pack -- -Label 20261019-l4
 |---|---|
 | API 域名 | `miniprogram/config/env.js`（开发/体验/正式自动切换，通常不用改） |
 | 音频列表 / 解锁广告位 / 功能开关 / 缓存 / 解锁文案 | **后台 `/admin`**（写 `app_config` 表）；`server/config/app.config.json` 仅作种子与兜底 |
+| 结束入睡提醒的订阅消息模板 ID / 跳转页 | **后台 `/admin` →「小程序与提醒」**（保存即生效；`.env` 的 `WX_REMINDER_TEMPLATE_ID` 仅兼容兜底） |
 | 页面展示位开关 / 广告位 ID / 类型 | **后台 `/admin` → 广告与解锁 → 页面展示位**（4 槽独立开关，默认关闭） |
 | 首页背景图 / 默认图 / 解锁时长 / 上传 | **后台 `/admin` → 背景图**（多图、分类、默认图、COS 上传；用户更换需看广告解锁） |
 | 落地页小程序码 / 二维码文案 | **后台 `/admin` → 落地页**（上传走 COS，保存后落地页立即生效） |
@@ -175,14 +176,14 @@ npm run pack -- -Label 20261019-l4
 ## 验证
 
 ```bash
-npm test        # 275 项：时间/统计/日历/热力图/墓碑、多段睡眠与补记编排、容量预检、跨时区归档、分片同步与 openid 限流、API、后台鉴权/审计/事件/COS 配置、启动来源归一化、看板聚合、小程序码、展示位校验、云端副本删除、背景图与解锁、播放器回退/缓存并发/循环、熄灯状态机、计算器文案口径、页面级冒烟；PG 集成用例需 PG_TEST_URL
+npm test        # 281 项：时间/统计/日历/热力图/墓碑、多段睡眠与补记编排、容量预检、跨时区归档、分片同步与 openid 限流、API、后台鉴权/审计/事件/COS 配置、启动来源归一化、看板聚合、小程序码、展示位校验、云端副本删除、背景图与解锁、播放器回退/缓存并发/循环、熄灯状态机、计算器文案口径与补觉档、90 分钟说明层、页面级冒烟；PG 集成用例需 PG_TEST_URL
 npm run check   # JSON / WXML 标签 / WXSS 括号 / 页面四件套 / 组件引用 / CSP inline 检查
 ```
 
 当前基线（2026-10-22，详见 [验收清单](docs/13-acceptance-checklist.md)）：
 
-- `npm test`：274 passed / 0 failed + 1 个 PG 集成用例（未设置 `PG_TEST_URL` 时跳过）
-- `npm run check`：通过（3 页面 / 23 JSON / 18 WXML / 20 WXSS），主包约 503.7 KB
+- `npm test`：280 passed / 0 failed + 1 个 PG 集成用例（未设置 `PG_TEST_URL` 时跳过）
+- `npm run check`：通过（3 页面 / 23 JSON / 18 WXML / 20 WXSS），主包约 509.8 KB
 - 生产配置：`TRUST_PROXY` 必须显式设置（反代 `1` / 直连 `0`），未设置会拒绝启动；`docker-compose.yml` 已用 `TRUST_PROXY:-1` 兜底
 - 后端内存模式冒烟：`/api/health`、`/api/config`、`/api/summary`、`/api/audio/unlock`、`/api/records/erase` 均符合预期
 - **PostgreSQL 16 容器端到端**：自动建表、解锁写入 24 小时、`sync` 幂等、空记录同步能取回 3 条（换机回填）、`summary` 正常返回、后台配置重启后仍在

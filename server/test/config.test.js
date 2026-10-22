@@ -198,6 +198,43 @@ test('生产环境配置齐全时可以启动', () => {
   assert.equal(typeof config.app.site.mpQrNote, 'string')
 })
 
+test('订阅消息配置：默认开启、模板 ID 可后台填写、非法值被拒', () => {
+  const base = normalizeConfig({ audio: FILE_AUDIO, unlock: {}, features: {}, copy: {} })
+  assert.equal(base.reminder.enabled, true)
+  assert.equal(base.reminder.templateId, '')
+  assert.equal(base.reminder.page, 'pages/sleep/sleep?end=1')
+
+  const ok = validateConfig(
+    Object.assign({}, base, {
+      reminder: {
+        enabled: true,
+        templateId: 'abc_DEF-1234567890',
+        page: 'pages/sleep/sleep?end=1'
+      }
+    }),
+    base
+  )
+  assert.equal(ok.reminder.templateId, 'abc_DEF-1234567890')
+  assert.equal(ok.reminder.enabled, true)
+
+  assert.throws(
+    () =>
+      validateConfig(
+        Object.assign({}, base, { reminder: { templateId: 'bad id!' } }),
+        base
+      ),
+    /模板 ID/
+  )
+  assert.throws(
+    () =>
+      validateConfig(
+        Object.assign({}, base, { reminder: { page: 'http://example.com' } }),
+        base
+      ),
+    /跳转路径/
+  )
+})
+
 test('生产环境未设置 TRUST_PROXY 时拒绝启动（限流桶会全站共用）', () => {
   assert.throws(
     () =>

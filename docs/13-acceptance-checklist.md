@@ -118,6 +118,29 @@
 - [x] 「当前 HH:MM」提示与 `nowText` 死状态已删除。
 - [x] console 无 error。
 
+### 1.12 计算器「充足/补觉」附加档（2026-10-22，CLI 模拟器 390×844 实测）
+
+- [x] 起床模式：主推荐 23:45（5 个周期）不变，列表 01:15 偏短 / 02:45 不足 / **22:15〔补觉〕6 个周期 · 充足**（虚线分隔、薄荷色），截图 `docs/assets/l4-calc-wake-recovery.png`。
+- [x] 入睡模式（23:00 上床）：主推荐 06:45，列表 05:15 / 03:45 / **08:15〔补觉〕6 个周期 · 充足**，截图 `docs/assets/l4-calc-sleep-recovery.png`。
+- [x] 补觉档不抢主推荐：主推荐仍取 5/4/3 中第一个未过期的档位（`tests/plan.test.js`、`tests/index-page.test.js` 锁定）。
+- [x] 上床时刻已过时不渲染补觉行（`tests/index-page.test.js` 23:00 用例；模拟器无法改系统时间，该分支以单测为准）。
+- [x] console 无 error。
+
+### 1.13 计算器「为什么是 90 分钟」说明层（2026-10-22，CLI 模拟器 390×844 实测）
+
+- [x] 脚注整行可点：「按 90 分钟周期计算，仅作时间参考　为什么是 90 分钟？›」，点击打开底部说明层（截图 `docs/assets/l4-calc-note.png`、`docs/assets/l4-calc-why-sheet.png`）。
+- [x] 内容为事实陈述：一轮常见 70–120 分钟、平均约 90 分钟；8 小时 = 5.33 个周期且注明“8 小时本身没问题”；5 个周期 = 7.5 小时；结尾「不构成医疗建议」。
+- [x] 打开时 tabBar 隐藏（独立 root，页面 z-index 压不住），关闭 / 点遮罩 / 页面 onHide 均恢复；实测 `tabHidden: true → false`，`whyOpen` 复位。
+- [x] console 无 error。
+
+### 1.10 订阅消息后台可视化配置（2026-10-22，本机 API 闭环）
+
+- [x] 后台新增「小程序与提醒」面板：启用开关、模板 ID、跳转路径、获取步骤、只读运行环境（HTML 结构 + `node --check` 通过）。
+- [x] 真实实例（内存模式 3199）走通：登录 → 保存模板 → `/api/config` 下发 `{enabled:true,templateId,page}` → `/api/admin/env` 返回 `appidConfigured/secretConfigured/trustProxy/dbMode`，响应中不含任何密钥值。
+- [x] 单测：模板 ID 非法 / 跳转路径非法被拒；后台配置优先于 env；后台关闭后 `/api/reminders` 立即 503。
+- [ ] 待真机：微信订阅授权弹窗、到点送达、点击直达结束面板（需真实模板 ID 与 AppSecret）。
+- [ ] 待浏览器：后台面板视觉过目（本机无 Playwright/agent-browser，已完成 API 与静态结构验证）。
+
 ## 2. 待真机验收（代码就绪，模拟器不可替代）
 
 > 按风险排序。每项都曾在 changelog 标注"未真机验证"；本机 CLI 已把可截图的全部截完，剩余必须真机。

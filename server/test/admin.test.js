@@ -622,3 +622,42 @@ test('审计可读：保存配置后能在 /api/admin/audit 查到', async () =>
   )
   assert.ok(audit.body.items.every((item) => typeof item.createdAt === 'number'))
 })
+
+test('订阅消息模板可在后台配置并下发，环境面板不回显密钥', async () => {
+  const current = await call('/api/admin/config', {}, true)
+  assert.equal(current.status, 200)
+  const payload = Object.assign({}, current.body.config, {
+    reminder: { enabled: true, templateId: 'tmpl-admin-1234567890', page: 'pages/sleep/sleep?end=1' }
+  })
+  const saved = await call('/api/admin/config', { method: 'PUT', body: payload }, true)
+  assert.equal(saved.status, 200)
+  assert.equal(saved.body.config.reminder.templateId, 'tmpl-admin-1234567890')
+
+  const publicConfig = await call('/api/config')
+  assert.equal(publicConfig.body.reminder.templateId, 'tmpl-admin-1234567890')
+  assert.equal(publicConfig.body.reminder.enabled, true)
+  assert.equal(publicConfig.body.reminder.page, 'pages/sleep/sleep?end=1')
+
+  const env = await call('/api/admin/env', {}, true)
+  assert.equal(env.status, 200)
+  assert.equal(typeof env.body.appidConfigured, 'boolean')
+  assert.equal(typeof env.body.secretConfigured, 'boolean')
+  // 只读面板只给“是否就绪”，任何密钥值都不能出现在响应里
+  assert.equal(env.body.appid, undefined)
+  assert.equal(env.body.secret, undefined)
+})
+
+test('订阅消息模板 ID / 跳转路径非法时拒绝保存', async () => {
+  const current = await call('/api/admin/config', {}, true)
+  const badTemplate = Object.assign({}, current.body.config, {
+    reminder: { enabled: true, templateId: 'bad id!', page: 'pages/sleep/sleep?end=1' }
+  })
+  const rejected = await call('/api/admin/config', { method: 'PUT', body: badTemplate }, true)
+  assert.equal(rejected.status, 400)
+
+  const badPage = Object.assign({}, current.body.config, {
+    reminder: { enabled: true, templateId: 'tmpl-admin-1234567890', page: 'javascript:alert(1)' }
+  })
+  const rejectedPage = await call('/api/admin/config', { method: 'PUT', body: badPage }, true)
+  assert.equal(rejectedPage.status, 400)
+})

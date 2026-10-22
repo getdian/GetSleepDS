@@ -138,6 +138,7 @@
     backgrounds: { title: '背景图', sub: '首页 Hero 背景、默认图与广告解锁', badge: '内容' },
     unlock: { title: '广告与解锁', sub: '激励视频、页面展示位与失败降级', badge: '变现' },
     features: { title: '功能与缓存', sub: '开关、预加载、容量与有效期', badge: '运行' },
+    mini: { title: '小程序与提醒', sub: '订阅消息模板、跳转路径与运行环境', badge: '通知' },
     copy: { title: '解锁文案', sub: '抽屉里的标题、说明与按钮', badge: '文案' },
     landing: { title: '落地页', sub: '落地页展示的小程序码与引导文案', badge: '内容' },
     users: { title: '用户数据', sub: '按 openid 查询与删除云端记录', badge: '客服 / 合规' },
@@ -184,6 +185,10 @@
     if (name === 'audit') {
       // 审计只写不读时无法对账：进面板即拉一次，失败给出可见错误
       loadAudit().catch(function () {})
+    }
+    if (name === 'mini') {
+      // 环境状态来自 .env，只读；进面板时拉一次，避免把密钥回显到页面
+      loadEnvStatus().catch(function () {})
     }
   }
 
@@ -644,8 +649,25 @@
       site: {
         mpQrCodeUrl: $('#site-qr-url').value.trim(),
         mpQrNote: $('#site-qr-note').value.trim()
+      },
+      reminder: {
+        enabled: $('#reminder-enabled').checked,
+        templateId: $('#reminder-template').value.trim(),
+        page: $('#reminder-page').value.trim()
       }
     }
+  }
+
+  /** 只读环境状态：AppID/Secret 是否就绪、反向代理层数、存储模式（不返回密钥值） */
+  function loadEnvStatus() {
+    return api('/api/admin/env').then(function (data) {
+      $('#env-appid').value = data.appidConfigured ? '已配置' : '未配置'
+      $('#env-secret').value = data.secretConfigured ? '已配置' : '未配置'
+      $('#env-trust').value = data.trustProxy
+        ? '已开启（' + data.trustProxy + ' 层）'
+        : '未设置（直连）'
+      $('#env-db').value = data.dbMode === 'postgres' ? 'PostgreSQL' : '内存（仅开发）'
+    })
   }
 
   function updateJson() {
@@ -701,6 +723,11 @@
     $('#copy-confirm').value = config.copy.unlockConfirm || ''
     $('#copy-cancel').value = config.copy.unlockCancel || ''
 
+    const reminder = config.reminder || {}
+    $('#reminder-enabled').checked = reminder.enabled !== false
+    $('#reminder-template').value = reminder.templateId || ''
+    $('#reminder-page').value = reminder.page || 'pages/sleep/sleep?end=1'
+
     renderSite(config.site)
 
     renderAudio(config.audio)
@@ -725,6 +752,14 @@
     }
     if (!Number.isInteger(payload.cache.ttlDays) || payload.cache.ttlDays < 1 || payload.cache.ttlDays > 30) {
       return '缓存有效期需为 1–30 天'
+    }
+    const reminderTemplate = payload.reminder && payload.reminder.templateId
+    if (reminderTemplate && !/^[A-Za-z0-9_-]{10,64}$/.test(reminderTemplate)) {
+      return '订阅消息模板 ID 格式不正确（微信后台复制，通常 43 位）'
+    }
+    const reminderPage = payload.reminder && payload.reminder.page
+    if (reminderPage && !/^pages\/[A-Za-z0-9_/-]+(\?[^\s]*)?$/.test(reminderPage)) {
+      return '提醒跳转路径需形如 pages/sleep/sleep?end=1'
     }
     const adSlots = ['home', 'sleep', 'stats', 'statsFooter']
     for (let i = 0; i < adSlots.length; i += 1) {

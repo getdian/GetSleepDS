@@ -212,6 +212,7 @@ function createApp(options) {
       auth,
       store,
       db,
+      config,
       storage: storageSettings,
       analytics,
       limitLogin: loginIp,
@@ -252,7 +253,7 @@ function createApp(options) {
   )
   app.use(
     '/api',
-    createRemindersRoute({ config, db, codeToOpenid, limitIp: recordsIp, now })
+    createRemindersRoute({ config, db, codeToOpenid, limitIp: recordsIp, now, store })
   )
   app.use(
     '/api',
@@ -283,12 +284,28 @@ function createApp(options) {
 
   app.use(createErrorHandler(logger))
 
-  // 订阅消息调度器：未配置模板 ID 时完全不启动，不影响本地/测试环境
+  // 订阅消息调度器：模板 ID 每轮从后台配置读取（保存即生效），
+  // env/文件只作兜底；未配置时 tick 直接返回，不再“启动时判空就永不启动”。
   const reminderService = createReminderService({
     db,
     wx: config.wx,
+    getReminder: async () => {
+      if (!store) return (config.app && config.app.reminder) || null
+      try {
+        const loaded = await store.get()
+        return (
+          (loaded && loaded.config && loaded.config.reminder) ||
+          (config.app && config.app.reminder) ||
+          null
+        )
+      } catch (e) {
+        return (config.app && config.app.reminder) || null
+      }
+    },
     templateId: (config.wx && config.wx.reminderTemplateId) || '',
-    page: 'pages/sleep/sleep?end=1',
+    page:
+      (config.app && config.app.reminder && config.app.reminder.page) ||
+      'pages/sleep/sleep?end=1',
     logger,
     now
   })

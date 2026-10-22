@@ -2,11 +2,34 @@ const express = require('express')
 const { wrap } = require('../lib/http')
 const { invalidBody, rateLimited, apiError } = require('../lib/errors')
 
+const DEFAULT_PAGE = 'pages/sleep/sleep?end=1'
+
 function createRemindersRoute(options) {
-  const { config, db, codeToOpenid, limitIp, now } = options
+  const { config, db, codeToOpenid, limitIp, now, store } = options
   const router = express.Router()
-  const templateId = (config.wx && config.wx.reminderTemplateId) || ''
-  const page = 'pages/sleep/sleep?end=1'
+
+  /**
+   * 每次请求读取“当前生效配置”。
+   * 订阅消息模板 ID 已迁到后台可视化配置；如果像以前那样在路由创建时读一次闭包，
+   * 运营保存后必须重启容器才生效，后台的“保存并生效”会变成假承诺。
+   */
+  async function currentReminder() {
+    let appConfig = null
+    if (store) {
+      try {
+        const loaded = await store.get()
+        appConfig = loaded && loaded.config
+      } catch (e) {}
+    }
+    const reminder =
+      (appConfig && appConfig.reminder) || (config.app && config.app.reminder) || {}
+    return {
+      enabled: reminder.enabled !== false,
+      // env 兜底：兼容只有 WX_REMINDER_TEMPLATE_ID 的历史部署
+      templateId: reminder.templateId || (config.wx && config.wx.reminderTemplateId) || '',
+      page: reminder.page || DEFAULT_PAGE
+    }
+  }
 
   router.post(
     '/reminders',
@@ -27,20 +50,24 @@ function createRemindersRoute(options) {
         return
       }
       if (action !== 'create') throw invalidBody('action 只能是 create/cancel')
-      if (!templateId) throw apiError('REMINDER_NOT_CONFIGURED', '结束提醒暂未开放', 503)
+
+      const reminderConfig = await currentReminder()
+      if (!reminderConfig.enabled || !reminderConfig.templateId) {
+        throw apiError('REMINDER_NOT_CONFIGURED', '结束提醒暂未开放', 503)
+      }
 
       const fireAt = Number(body.fireAt)
-      const current = now()
+      const currentTs = now()
       if (!Number.isFinite(fireAt)) throw invalidBody('fireAt 不合法')
       // 只接受未来 1 分钟到 48 小时的提醒，避免历史/恶意时间
-      if (fireAt < current + 60 * 1000 || fireAt > current + 48 * 60 * 60 * 1000) {
+      if (fireAt < currentTs + 60 * 1000 || fireAt > currentTs + 48 * 60 * 60 * 1000) {
         throw invalidBody('提醒时间需在 1 分钟到 48 小时内')
       }
       await db.saveReminder(openid, {
         sessionId,
         fireAt,
-        templateId,
-        page
+        templateId: reminderConfig.templateId,
+        page: reminderConfig.page
       })
       res.json({ ok: true, fireAt })
     })
@@ -49,4 +76,4 @@ function createRemindersRoute(options) {
   return router
 }
 
-module.exports = { createRemindersRoute }
+module.exports = { createRemindersRoute, DEFAULT_PAGE }

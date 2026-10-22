@@ -12,6 +12,15 @@ const MAX_BACKGROUNDS = 20
 const DEFAULT_BACKGROUND_UNLOCK_HOURS = 24
 // 落地页展示：小程序码（后台可上传/清除）与二维码下方的引导文案
 const DEFAULT_SITE = { mpQrCodeUrl: '', mpQrNote: '微信搜索「睡点」' }
+// 订阅消息：模板 ID 由运营在微信公众平台申请后填到这里（后台可视化，无需重启）。
+// enabled 默认 true 表示“没关门”，真正的可用性取决于 templateId 是否填写；
+// 只有运营显式取消勾选才停止下发与创建新提醒。
+const DEFAULT_REMINDER = {
+  enabled: true,
+  templateId: '',
+  page: 'pages/sleep/sleep?end=1'
+}
+const REMINDER_PAGE_RE = /^pages\/[A-Za-z0-9_/-]+(\?[^\s]*)?$/
 // 解锁说明的自动生成模板：命中即视为"未自定义"，随 ttlHours 重新生成。
 // 兼容历史默认文案里的“今晚的”：环境音任何时段都能听，新文案不再预设夜间。
 const AUTO_UNLOCK_DESC = /^观看视频，解锁(?:今晚的)?环境声音（\d+\s*小时内有效）$/
@@ -77,6 +86,26 @@ function normalizeSite(input, fallback) {
         : typeof base.mpQrNote === 'string' && base.mpQrNote
           ? base.mpQrNote
           : DEFAULT_SITE.mpQrNote
+  }
+}
+
+function normalizeReminder(input, fallback) {
+  const source = isObject(input) ? input : {}
+  const base = isObject(fallback) ? fallback : DEFAULT_REMINDER
+  return {
+    enabled: source.enabled === undefined ? base.enabled !== false : source.enabled !== false,
+    templateId:
+      typeof source.templateId === 'string'
+        ? source.templateId
+        : typeof base.templateId === 'string'
+          ? base.templateId
+          : '',
+    page:
+      typeof source.page === 'string' && source.page
+        ? source.page
+        : typeof base.page === 'string' && base.page
+          ? base.page
+          : DEFAULT_REMINDER.page
   }
 }
 
@@ -148,6 +177,7 @@ function normalizeConfig(input, base) {
       Number(fallback.backgroundUnlockHours) ||
       DEFAULT_BACKGROUND_UNLOCK_HOURS,
     site: normalizeSite(source.site, fallback.site),
+    reminder: normalizeReminder(source.reminder, fallback.reminder),
     features: Object.assign({}, DEFAULT_FEATURES, fallback.features || {}, isObject(source.features) ? source.features : {}),
     cache: Object.assign({}, DEFAULT_CACHE, fallback.cache || {}, isObject(source.cache) ? source.cache : {}),
     copy
@@ -407,6 +437,25 @@ function validateConfig(input, base) {
     unlockCancel: readText(copyInput.unlockCancel, '取消按钮', 10, false) || '先不用'
   }
 
+  const reminderInput = Object.assign(
+    {},
+    isObject(baseConfig.reminder) ? baseConfig.reminder : {},
+    isObject(input.reminder) ? input.reminder : {}
+  )
+  const reminderTemplateId = readText(reminderInput.templateId, '订阅消息模板 ID', 64, false)
+  if (reminderTemplateId && !/^[A-Za-z0-9_-]{10,64}$/.test(reminderTemplateId)) {
+    throw invalidBody('订阅消息模板 ID 格式不正确（微信后台复制，通常 43 位字母/数字/下划线/短横线）')
+  }
+  const reminderPage =
+    readText(reminderInput.page, '提醒跳转路径', 128, false) || DEFAULT_REMINDER.page
+  if (!REMINDER_PAGE_RE.test(reminderPage)) {
+    throw invalidBody('提醒跳转路径需形如 pages/sleep/sleep?end=1')
+  }
+  if (reminderInput.enabled !== false && !reminderTemplateId && baseConfig.reminder && baseConfig.reminder.templateId) {
+    // 显式清空模板 ID 等价于关闭，不留在“开启但不可用”的中间态
+    reminderInput.enabled = false
+  }
+
   return {
     audio,
     unlock: {
@@ -420,6 +469,11 @@ function validateConfig(input, base) {
     defaultBackgroundId,
     backgroundUnlockHours,
     site,
+    reminder: {
+      enabled: reminderInput.enabled !== false,
+      templateId: reminderTemplateId,
+      page: reminderPage
+    },
     features,
     cache: { maxMB, ttlDays },
     copy
