@@ -1,0 +1,8 @@
+---
+description: 跨工具 agent 入口：先读 AGENTS.md 建立事实基线再动手
+alwaysApply: true
+---
+
+本仓库的跨工具约定写在根目录 [AGENTS.md](../../AGENTS.md)：新会话先读它，再按其阅读顺序建立事实基线。
+
+本文件只做指针，不重复规则，避免两份说明漂移。

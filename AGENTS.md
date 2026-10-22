@@ -60,7 +60,13 @@ npm run check     # 3 页面 / 22 JSON / 17 WXML / 19 WXSS，主包约 535.5 KB
 | 运营后台 | `server/public/admin/admin.js`（`PANEL_META` / `collect` / `render` / `validatePayload`） |
 | 部署 / 备份还原 | `docs/10-operations.md` §3.0 与 §3.8、`deploy/1panel-up.sh`、`deploy/backup.sh` |
 
-## 6. 与 `CLAUDE.md` 的关系
+## 6. 各工具的文件名（都只指向本文件）
 
-`CLAUDE.md` 是指向本文件的薄壳（Claude Code 只认这个文件名）。**规则只维护本文件**，
-改这里不需要同步内容到 `CLAUDE.md`。
+| 工具 | 读取的文件 |
+|---|---|
+| Codex / Gemini CLI / 多数新工具 | `AGENTS.md`（本文件） |
+| Claude Code | `CLAUDE.md`（薄壳） |
+| VS Code Copilot | `.github/copilot-instructions.md`（指针） |
+| Cursor | `.cursor/rules/agents.mdc`（指针，`alwaysApply`） |
+
+**规则只维护本文件**；其余文件只做指针，不复制内容，改这里不需要同步它们。
