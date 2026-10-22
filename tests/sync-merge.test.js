@@ -54,6 +54,18 @@ test('erasure 水位只删除旧记录，不删除清除后新记录', () => {
   assert.equal(storage.getRecords()['2026-10-18'].updatedAt, 400)
 })
 
+test('erasure 合并遇到本地脏条目（null/字符串）不抛错', () => {
+  storage.clearAll()
+  global.wx.setStorageSync(storage.KEYS.records, {
+    '2026-10-01': null,
+    '2026-10-02': 'bad-row',
+    '2026-10-03': record('2026-10-03', 100)
+  })
+  assert.doesNotThrow(() => mergeServerRecords([], { erasedAt: 300 }))
+  // 合法的那条按水位删除，脏条目被忽略而不是中断整次合并
+  assert.equal(storage.getRecords()['2026-10-03'], undefined)
+})
+
 test('本机没有对应记录时，云端墓碑也会落盘', () => {
   storage.clearAll()
   mergeServerRecords([], {

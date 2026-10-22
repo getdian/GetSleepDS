@@ -121,7 +121,10 @@ function mergeServerRecords(serverRecords, options) {
 
   if (erasedAt) {
     Object.keys(local).forEach((day) => {
-      const stamp = local[day].updatedAt || 0
+      const item = local[day]
+      // 原始表可能混入 null/字符串（历史脏数据、外部工具写入）：
+      // 直接取 .updatedAt 会抛 TypeError，让整次同步永久失败。
+      const stamp = (item && typeof item === 'object' && Number(item.updatedAt)) || 0
       if (stamp <= erasedAt) {
         dropLocal(local, deleted, day, erasedAt)
         changed += 1
@@ -242,7 +245,12 @@ function doSync(force) {
         deletedDays: body.deletedDays,
         erasedAt: body.erasedAt
       }
-      restored += mergeServerRecords(body.records, mergeOptions)
+      try {
+        restored += mergeServerRecords(body.records, mergeOptions)
+      } catch (e) {
+        // 单条脏数据不能把整次同步打成永久失败：标记 partial，下一轮还会重试
+        mergeOptions.failed = true
+      }
       if (mergeOptions.failed) writeFailed = true
       synced += body.synced || 0
       dropped += body.dropped || 0
