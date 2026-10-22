@@ -2,10 +2,6 @@
   <view class="empty-scene" aria-hidden="true">
     <view class="es-halo"></view>
     <view class="es-moon"></view>
-    <view class="es-star es-star-a"></view>
-    <view class="es-star es-star-b"></view>
-    <view class="es-star es-star-c"></view>
-    <view class="es-star es-star-d"></view>
     <view class="es-grid">
       <view
         wx:for="{{cells}}"

@@ -27,7 +27,8 @@
 .end-sheet {
   width: 100%;
   padding: 30rpx 32rpx calc(30rpx + env(safe-area-inset-bottom));
-  border-radius: 32rpx 32rpx 0 0;
+  /* 底部弹层统一参数：36rpx 圆角 / 0.98 深底 / 0.62 + blur 8 遮罩 */
+  border-radius: 36rpx 36rpx 0 0;
   border-top: 1rpx solid rgba(255, 255, 255, 0.1);
   background: rgba(16, 22, 40, 0.98);
   box-shadow: 0 -18rpx 60rpx rgba(0, 0, 0, 0.45);
@@ -193,8 +194,8 @@
 }
 
 .end-btn.primary {
-  background: linear-gradient(135deg, #8b87ff, #6f6ae8);
-  color: #fff;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
   font-weight: 600;
 }
 

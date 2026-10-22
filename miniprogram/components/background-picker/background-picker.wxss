@@ -5,7 +5,10 @@
   right: 0;
   bottom: 0;
   z-index: var(--z-sheet-mask, 180);
-  background: rgba(4, 7, 16, 0.62);
+  /* 与 styles/sheet.wxss、unlock-sheet 同一套遮罩：0.62 + blur 8 */
+  background: rgba(4, 7, 15, 0.62);
+  -webkit-backdrop-filter: blur(8rpx);
+  backdrop-filter: blur(8rpx);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.28s ease;
@@ -27,8 +30,9 @@
   flex-direction: column;
   padding: 16rpx 0 calc(env(safe-area-inset-bottom) + 20rpx);
   border-radius: 36rpx 36rpx 0 0;
-  border-top: 1rpx solid rgba(255, 255, 255, 0.07);
-  background: #0D1428;
+  border-top: 1rpx solid rgba(255, 255, 255, 0.1);
+  /* 底部弹层统一参数：36rpx 圆角 / 0.98 深底（原 #0D1428 硬编码） */
+  background: rgba(16, 22, 40, 0.98);
   transform: translateY(102%);
   transition: transform 0.32s cubic-bezier(0.22, 0.61, 0.36, 1);
 }
@@ -38,8 +42,9 @@
 }
 
 .bp-grip {
-  width: 72rpx;
-  height: 6rpx;
+  /* 与 unlock-sheet 的 .sheet-bar 同一尺寸 */
+  width: 64rpx;
+  height: 5rpx;
   margin: 0 auto 8rpx;
   border-radius: 999rpx;
   background: rgba(255, 255, 255, 0.16);

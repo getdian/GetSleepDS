@@ -5,7 +5,8 @@
   position: relative;
   z-index: var(--z-page, 1);
   padding-top: 8rpx;
-  padding-bottom: 190rpx;
+  /* 与 app.wxss .page 同口径：让出 tabBar 后再叠安全区 */
+  padding-bottom: calc(190rpx + env(safe-area-inset-bottom));
 }
 
 /* Hero：与计算器页同一套大标题 + 轻说明 */
@@ -394,8 +395,8 @@
 }
 
 .cta-mini.is-primary {
-  background: linear-gradient(135deg, #8b87ff, #6f6ae8);
-  color: #FFFFFF;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
   box-shadow: 0 8rpx 24rpx rgba(109, 104, 255, 0.28);
 }
 

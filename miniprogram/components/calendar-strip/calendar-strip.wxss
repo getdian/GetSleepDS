@@ -34,7 +34,8 @@
 
 .cs-week-cell {
   text-align: center;
-  font-size: 12rpx;
+  /* 12rpx 在真机只能靠轮廓猜；14rpx 仍能压进 40rpx 格 */
+  font-size: 14rpx;
   color: var(--text-muted);
 }
 
@@ -54,7 +55,8 @@
   justify-content: center;
   border-radius: 5rpx;
   background: rgba(255, 255, 255, 0.045);
-  font-size: 14rpx;
+  /* 40rpx 格内两位日号可读的最小字号 */
+  font-size: 16rpx;
   line-height: 1;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;

@@ -63,6 +63,11 @@ page {
   /* 跨页播放器：高于底部播放器/页面内容，低于抽屉遮罩与解锁面板 */
   --z-overlay: 160;
 
+  /* 主操作按钮：计算器 / 入睡页 / 结束面板 / 解锁面板共用一套（亮底深字） */
+  --btn-primary-bg: linear-gradient(135deg, #8E98FF 0%, #707DEB 100%);
+  --btn-primary-fg: #141B45;
+  --btn-primary-shadow: 0 14rpx 36rpx rgba(118, 131, 251, 0.35);
+
   /* 圆角 */
   --radius-md: 24rpx;
   --radius-xl: 48rpx;
@@ -112,7 +117,8 @@ picker-view {
 .page {
   position: relative;
   z-index: var(--z-page, 1);
-  padding: 32rpx 32rpx 200rpx;
+  /* 底部同时让出 tabBar 与安全区：iPhone 14 上原先只剩约 7rpx */
+  padding: 32rpx 32rpx calc(200rpx + env(safe-area-inset-bottom));
 }
 
 /* 玻璃卡片 */

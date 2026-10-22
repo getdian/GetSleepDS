@@ -426,12 +426,12 @@
   gap: 12rpx;
   height: 104rpx;
   border-radius: 999rpx;
-  background: linear-gradient(135deg, #8E98FF 0%, #707DEB 100%);
-  color: #141B45;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
   font-size: 31rpx;
   font-weight: 600;
   letter-spacing: 2rpx;
-  box-shadow: 0 14rpx 36rpx rgba(118, 131, 251, 0.35);
+  box-shadow: var(--btn-primary-shadow);
   transition: transform 0.16s ease, opacity 0.16s ease;
 }
 

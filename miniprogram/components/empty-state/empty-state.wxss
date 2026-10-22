@@ -42,45 +42,7 @@
     drop-shadow(0 14rpx 26rpx rgba(0, 0, 0, 0.38));
 }
 
-/* 四颗疏星：大小与透明度错落，避免均匀排布的“装饰感” */
-.es-star {
-  position: absolute;
-  border-radius: 50%;
-  background: #E4E9FF;
-  box-shadow: 0 0 10rpx rgba(199, 210, 254, 0.75);
-}
-
-.es-star-a {
-  left: 18rpx;
-  top: 60rpx;
-  width: 7rpx;
-  height: 7rpx;
-  opacity: 0.85;
-}
-
-.es-star-b {
-  right: 20rpx;
-  top: 18rpx;
-  width: 5rpx;
-  height: 5rpx;
-  opacity: 0.62;
-}
-
-.es-star-c {
-  right: 46rpx;
-  top: 92rpx;
-  width: 4rpx;
-  height: 4rpx;
-  opacity: 0.45;
-}
-
-.es-star-d {
-  left: 48rpx;
-  bottom: 4rpx;
-  width: 5rpx;
-  height: 5rpx;
-  opacity: 0.34;
-}
+/* 空态与全局“深空 + 呼吸月晕、无星点”基线一致：不再画四颗装饰星 */
 
 /* 3×3 迷你格：右下角第一格亮起，呼应“打一次卡，这里就会长出一格” */
 .es-grid {
