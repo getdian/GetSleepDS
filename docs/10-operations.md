@@ -105,12 +105,55 @@ release-artifacts/stage-<label>/RELEASE-MANIFEST.json
 
 ## 3. 1Panel 部署
 
-### 3.1 上传与解压
+> **先读现场，再下命令。** 仓库里的 `docker-compose.yml` 只是模板（`HOST_PORT` 默认 3000），线上真实值在服务器 `.env` 里。任何部署动作前先跑：
+>
+> ```bash
+> cd /opt/1panel/www/sites/sleepDS/index   # 生产实际目录（2026-10-23 实测）
+> pwd && ls .env docker-compose.yml
+> grep -E '^HOST_PORT=' .env                # 本机为 3004
+> docker compose ps
+> ```
 
-1. 1Panel → 文件 → `/opt` → 新建 `getsleep`。
-2. 上传 `getsleep-<label>.zip` 到 `/opt/getsleep`。
-3. 右键解压到当前目录。
-4. 确认目录内有 `docker-compose.yml`、`server/`、`.env.example`、`deploy/1panel-up.sh`。
+### 3.0 生产现场事实（2026-10-23 实测，勿按“首次部署”假设）
+
+| 项 | 实际值 |
+|---|---|
+| 源码 / Docker 运行目录 | `/opt/1panel/www/sites/sleepDS/index` |
+| 监听端口 | `HOST_PORT=3004` → `127.0.0.1:3004 → 容器 3000` |
+| 反向代理 | `https://sleep.qfmaster.com` → `http://127.0.0.1:3004` |
+| Compose 项目名 | `index`（**与 `/opt/1panel/www/sites/fde/index`、`/opt/1panel/www/sites/mmreen/index` 同名**） |
+| 同项目容器 | `index-api-1`、`index-db-1`，另有 `fde-system`、`mmreen-web-prod` |
+| 数据库 | `postgres:16-alpine`，卷 `index_pgdata` |
+
+**三条红线（违反会波及另外两个站点）**
+
+1. 禁止 `docker compose down`、禁止 `up --remove-orphans` —— Compose 按项目名操作，会连带停掉 fde / mmreen。
+2. 禁止给 compose 加 `name:` 或改项目名 —— 命名卷会从 `index_pgdata` 换成新名字，等于连到空库。
+3. 禁止整包 `unzip` 覆盖到根目录 —— 会覆盖服务器上的 `docker-compose.yml`（生产版本）与 `.env`。
+
+### 3.1 上传与覆盖代码
+
+1. 上传 `getsleep-<label>.zip` 到 `/opt/1panel/www/sites/sleepDS/index`。
+2. 解压到临时目录，再按目录覆盖（跳过 compose 与 `.env`）：
+
+```bash
+cd /opt/1panel/www/sites/sleepDS/index
+sha256sum getsleep-<label>.zip            # 与发版时记录的值比对
+rm -rf /tmp/getsleep-release && mkdir -p /tmp/getsleep-release
+unzip -oq getsleep-<label>.zip -d /tmp/getsleep-release
+cp -a /tmp/getsleep-release/server/. ./server/
+cp -a /tmp/getsleep-release/deploy/. ./deploy/
+cp -a /tmp/getsleep-release/miniprogram/. ./miniprogram/
+cp -a /tmp/getsleep-release/tests/. ./tests/
+cp -a /tmp/getsleep-release/tools/. ./tools/ 2>/dev/null || true
+```
+
+3. 覆盖后确认版本标记（以 2026-10-23 轮为例，可用包内 `RELEASE-MANIFEST.json` 的 head 反查）：
+
+```bash
+grep -c "signKey" server/src/services/admin-auth.js   # 2
+grep -c "np-ico-stop" miniprogram/components/now-playing/now-playing.wxss  # 1
+```
 
 ### 3.2 创建 `.env`
 
@@ -125,8 +168,8 @@ CONFIG_SECRET=<固定随机串，设置后不要换>
 TRUST_PROXY=1
 # 生产必填：1Panel/Nginx 反代填 1；确认无代理的直连部署填 0。
 # 未设置时生产环境会拒绝启动（避免全站共用同一个限流桶）。
-# 可选：如果服务器 3000 已被占用或多站点统一编排（如 3001~3003 已用），可指定 3004
-# HOST_PORT=3004
+# 本机生产值（2026-10-23 实测）：3004；不设则默认 3000
+HOST_PORT=3004
 ```
 
 不需要 `DOMAIN`（1Panel 管证书）。不要把 `.env` 提交、截图或发给别人。
@@ -161,26 +204,26 @@ TRUST_PROXY=1
 
 **验证**：后台保存后，`curl -s https://<域名>/api/config | jq .reminder` 应返回 `{"enabled":true,"templateId":"…","page":"pages/sleep/sleep?end=1"}`；重开小程序，在入睡页点「到点提醒我结束」应弹出微信订阅授权，而不是“订阅提醒暂未配置”。
 
-### 3.3 启动
+### 3.3 启动 / 迭代部署
 
 ```bash
-cd /opt/getsleep
-bash deploy/1panel-up.sh
+cd /opt/1panel/www/sites/sleepDS/index
+docker compose up -d --build --no-deps api
 ```
 
-脚本会：
+只点名单服务 api：`--no-deps` 不会动 db，也不会碰同项目名下另外两个站点的容器。
 
-- 校验 `.env` 必填项；
-- 读取 `HOST_PORT`（默认 3000）；
-- `docker compose up -d --build`；
-- 轮询 `http://127.0.0.1:${HOST_PORT}/api/ready`；
-- 打印容器状态和下一步 1Panel 配置。
+`deploy/1panel-up.sh` 内部是 `docker compose up -d --build`（全项目口径）。多站点同机时优先用上面这条；脚本仍可用于校验 `.env` 必填项与等待 `/api/ready`。
+
+出现 `Found orphan containers ([fde-system mmreen-web-prod])` 属正常提示，**不要**据此加 `--remove-orphans`。
+
+判定成功：构建日志里 `COPY . .` 不是 `CACHED`；`docker compose ps` 中 `index-api-1` 的 `CREATED` 变成 `seconds ago`，而另两个站点的创建时间不变。
 
 ### 3.4 1Panel 反向代理 + HTTPS
 
 1. 1Panel → 网站 → 创建网站 → **反向代理**。
 2. 域名：`sleep.qfmaster.com`
-3. 代理地址：`http://127.0.0.1:3000`（若在 `.env` 中设置了 `HOST_PORT=3004`，这里就填 `http://127.0.0.1:3004`）。
+3. 代理地址：`http://127.0.0.1:3004`（必须与 `.env` 的 `HOST_PORT` 一致）。
 4. 申请 Let's Encrypt 证书，开启“强制 HTTPS”。
 5. 网站“配置文件”里加：
 
@@ -192,7 +235,7 @@ client_max_body_size 30m;
 
 > compose 已把 API 绑在 `127.0.0.1:${HOST_PORT}`，只允许本机反代。不要额外对公网放行该端口。
 >
-> 常见误区：1Panel 创建网站填写的“代号”主目录（如 `/opt/1panel/www/sites/sleepDS`）是 OpenResty 站点的配置目录；项目源码及 Docker 运行目录请放在独立的 `/opt/getsleep`，不要解压覆盖到站点主目录。
+> 现场事实：本机源码就放在 1Panel 站点目录下（`/opt/1panel/www/sites/sleepDS/index`），与同机 fde、mmreen 两个站点共用 Compose 项目名 `index`。因此：只重建 api、不覆盖 `docker-compose.yml`、不执行 `docker compose down`。
 
 ### 3.5 微信公众平台
 
@@ -218,20 +261,84 @@ curl -fsS https://sleep.qfmaster.com/api/ready
 
 返回 `{"ok":true,"db":"ok"}`；再打开 `/admin` 登录。真机验证音频、锁屏、广告、海报。
 
-### 3.8 升级与回滚
+### 3.8 升级、备份与还原
+
+#### 升级（先备份，再覆盖代码，只重建 api）
 
 ```bash
-cd /opt/getsleep
-# 保留 .env、backups/
-unzip -o getsleep-<new>.zip
-bash deploy/1panel-up.sh
+cd /opt/1panel/www/sites/sleepDS/index
+sh deploy/backup.sh                       # 见下「备份产物」
+sha256sum getsleep-<label>.zip            # 与发版值比对
+rm -rf /tmp/getsleep-release && mkdir -p /tmp/getsleep-release
+unzip -oq getsleep-<label>.zip -d /tmp/getsleep-release
+cp -a /tmp/getsleep-release/server/. ./server/
+cp -a /tmp/getsleep-release/deploy/. ./deploy/
+cp -a /tmp/getsleep-release/miniprogram/. ./miniprogram/
+docker compose up -d --build --no-deps api
+curl -fsS http://127.0.0.1:3004/api/ready
 ```
 
-回滚：切回上一版代码目录/镜像后 `docker compose up -d`，数据库 volume 不动。升级前：
+#### 备份产物（建议再同步一份到本地/对象存储）
+
+| 类型 | 服务器路径 | 生成方式 |
+|---|---|---|
+| 数据库 | `backups/sleep-<时间戳>.sql.gz`、`backups/manual-<时间戳>.sql.gz` | `sh deploy/backup.sh` 或手工 `pg_dump` |
+| 生产 compose | `/root/sleepDS-compose-<时间戳>.yml` | `cp docker-compose.yml /root/...` |
+| 密钥 | `/root/sleepDS-env-<时间戳>.bak`（`chmod 600`） | `cp .env /root/...` |
+| 源码 | `/root/sleepDS-src-<时间戳>.tgz` | `tar czf ... --exclude=backups --exclude=node_modules .` |
+| 发版包 | `release-artifacts/getsleep-<label>.zip` + `.sha256` | 本地 `npm run pack` |
+
+`backup.sh` 不可用时手工 dump：
 
 ```bash
-sh deploy/backup.sh
+DB_USER=$(grep -E '^POSTGRES_USER=' .env | cut -d= -f2-); DB_USER=${DB_USER:-sleep}
+DB_NAME=$(grep -E '^POSTGRES_DB=' .env | cut -d= -f2-);   DB_NAME=${DB_NAME:-sleep}
+STAMP=$(date +%Y%m%d-%H%M%S)
+docker compose exec -T db pg_dump -U "$DB_USER" "$DB_NAME" > backups/manual-$STAMP.sql
+grep -c 'PostgreSQL database dump complete' backups/manual-$STAMP.sql   # 必须为 1
+gzip -c backups/manual-$STAMP.sql > backups/manual-$STAMP.sql.gz
 ```
+
+#### 还原
+
+**代码回滚**（不动数据库）
+
+```bash
+cd /opt/1panel/www/sites/sleepDS/index
+tar xzf /root/sleepDS-src-<时间戳>.tgz
+docker compose up -d --build --no-deps api
+```
+
+**compose 被覆盖**
+
+```bash
+cp /root/sleepDS-compose-<时间戳>.yml docker-compose.yml
+docker compose config --services      # 本机应只有 db / api
+```
+
+**数据库还原**（会丢弃当前数据，二次确认后再执行）
+
+```bash
+docker compose stop api
+docker compose exec -T db psql -U sleep -d sleep \
+  -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'
+gunzip -c backups/sleep-<时间戳>.sql.gz | docker compose exec -T db psql -U sleep -d sleep
+docker compose start api
+curl -fsS http://127.0.0.1:3004/api/ready
+```
+
+> 新版 `pg_dump` 会在文件首尾写 `\restrict` / `\unrestrict` 元命令，必须用**同版本或更新**的 `psql` 导入（直接用容器内的 psql 即可），本地老客户端会报语法错误。
+
+#### 部署后必查
+
+```bash
+docker compose ps                                   # api seconds ago；另两个站点创建时间不变
+curl -fsS http://127.0.0.1:3004/api/ready
+curl -fsS https://sleep.qfmaster.com/api/ready
+docker compose logs --tail=200 api | grep -iE "error|failed" || echo "no error"
+```
+
+后台 `/admin` 需重新登录：改密签名密钥改为按库凭据派生后，旧 Cookie 必然失效（预期行为）。
 
 新增表通过启动 DDL `CREATE TABLE IF NOT EXISTS` 自动补建；以后加列必须用 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`。
 

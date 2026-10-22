@@ -1,7 +1,9 @@
 /* 外层只负责定位与“是否可点”：常驻 DOM，靠 class 走入场/折叠，避免 wx:if 硬切 */
 .np-shell {
   position: fixed;
-  left: 0;
+  /* 只锚右边、不写 left:0：left:0 会让外壳铺满整行，
+     左侧留白就把「点播放条外部折叠」的点击吞掉（入睡页 dock 只锚右，所以能折）。
+     宽度由内容撑开（播放条 480rpx / 音符 108rpx）。 */
   right: 0;
   /* 与入睡页 dock 共用同一套底部安全位：避开 tabBar 并拉开间距，又不压住计算器主按钮 */
   bottom: calc(176rpx + env(safe-area-inset-bottom));
@@ -42,9 +44,10 @@
   display: flex;
   align-items: center;
   gap: 8rpx;
-  /* 展开条比通栏窄，右缘直接吸附屏幕边 */
-  width: 100%;
-  max-width: 480rpx;
+  /* 展开条比通栏窄，右缘直接吸附屏幕边；
+     外壳改为按内容撑宽后，这里必须给确定宽度（百分比在 shrink-to-fit 父级里不可靠） */
+  width: 480rpx;
+  max-width: calc(100vw - 24rpx);
   min-height: 88rpx;
   margin-left: auto;
   padding: 14rpx 18rpx 14rpx 48rpx;
