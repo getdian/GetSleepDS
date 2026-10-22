@@ -85,6 +85,15 @@
 - [x] console 无 error。
 - [ ] 待真机：安全区实际数值（iPhone 底部 34pt）、blur 在低端 Android 的降级观感、年视图 16rpx 日号在 OLED 小屏的可读性。
 
+### 1.9 L4 阶段 C（2026-10-22，工程护栏，单测 + 本机）
+
+- [x] 生产环境未设置 `TRUST_PROXY` 启动失败；显式 `0`（直连）与 `1`（反代）均可启动（`server/test/config.test.js`）。
+- [x] `/records/sync` 同一 openid 第 31 次返回 429（`server/test/records-sync-limit.test.js`）。
+- [x] 归档日固定北京时间：`calendarDayKey` 的 UTC 边界（23:59/00:00）与 `sessionDay` 跨时区用例（`tests/time.test.js`、`tests/sessions.test.js`）。
+- [x] `audio_error` 事件被服务端接受，target 保留 `trackId|code`（`server/test/api.test.js`）。
+- [x] 模拟器三页无回归、console 无 error。
+- [ ] 待真机/部署：`docker compose` 实际启动参数（`TRUST_PROXY` 默认 1）、出境设备实测（改系统时区后记录不再重复）。
+
 ## 2. 待真机验收（代码就绪，模拟器不可替代）
 
 > 按风险排序。每项都曾在 changelog 标注"未真机验证"；本机 CLI 已把可截图的全部截完，剩余必须真机。

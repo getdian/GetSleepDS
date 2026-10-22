@@ -1,5 +1,15 @@
 # 睡点 · 关键更新记录
 
+## 2026-10-22 · L4 阶段 C：部署护栏 · openid 限流 · 固定 +8 归档 · 音频错误可观测
+
+> 定位：发版前的工程护栏与跨时区正确性。C4（换号归属）/C5（音频签名）/C6（订阅召回）需要产品与运营输入，未在本轮改动。
+
+- **生产 TRUST_PROXY 强校验（C1）**：此前只在生产 `console.warn`。现在**显式未设置即拒绝启动**（`TRUST_PROXY` 缺省会让 `req.ip` 恒为代理地址，全站共用 120/min 的 sync 桶）；显式 `TRUST_PROXY=0` 表示确认直连，允许启动并保留告警。`docker-compose.yml` 的 api 环境补 `TRUST_PROXY: ${TRUST_PROXY:-1}`，已有 1Panel 部署升级后不会被挡在启动前；`docs/10` 的 `.env` 模板本就有 `TRUST_PROXY=1`。
+- **/records/sync 增加 openid 维度限流（C1）**：IP 桶 120/min 之外，按 openid 30/min（400 天用户一次完整同步 7 片，余量充足）。顺序在 `codeToOpenid` 之后、写库之前；坏请求只消耗 IP 桶。
+- **归档日固定北京时间（C2）**：新增 `time.calendarDayKey(ts)`（固定 +8，与服务端 `calendarDayOf` 同源）。`sessions.sessionDay`、`sync` 合并的 `localDay`、`sleepDayOf`（v1 入睡日）、容量预检的 dayKey、补记/结束面板的日期文案与编辑校验全部改用它。修的是：设备出境/改时区后本地 `dateKey` 与云端 day 分叉，同一段睡眠被算成两天，同步时互相写墓碑并回填。`dateKey` 仍跟随设备本地时区，只用于“今天/昨天”等 UI 文案（时间显示本来就是本地时间）。
+- **音频错误可观测（C3）**：`audio_error` 加入服务端事件白名单；`audio-dock` / `now-playing` 的 `onError` 上报 `target = trackId|errCode`（1s 内去重）。此前 errCode 被直接丢弃，线上无法区分网络/解码/坏缓存。
+- 验证：`npm test` **260 项 / 259 通过 / 1 skip**（新增：TRUST_PROXY 三态、sync 第 31 次 429、calendarDayKey 固定 +8、sessionDay 跨时区、audio_error 白名单）；`npm run check` 通过（主包约 498.4 KB）；模拟器三页无回归、console 无 error。
+
 ## 2026-10-22 · L4 视觉批次：主按钮/弹层单一来源 · 底部安全区 · 空态去星点 · 年视图可读性
 
 > 定位：上一轮刻意延后的观感统一。原则是“参数单源、视觉可验收”，不做结构重写。

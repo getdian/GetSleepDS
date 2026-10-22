@@ -175,14 +175,15 @@ npm run pack -- -Label 20261019-l4
 ## 验证
 
 ```bash
-npm test        # 254 项：时间/统计/日历/热力图/墓碑、多段睡眠与补记编排、容量预检、分片同步、API、后台鉴权/审计/事件/COS 配置、启动来源归一化、看板聚合、小程序码、展示位校验、云端副本删除、背景图与解锁、播放器回退/缓存并发/循环、熄灯状态机、页面级冒烟；PG 集成用例需 PG_TEST_URL
+npm test        # 260 项：时间/统计/日历/热力图/墓碑、多段睡眠与补记编排、容量预检、跨时区归档、分片同步与 openid 限流、API、后台鉴权/审计/事件/COS 配置、启动来源归一化、看板聚合、小程序码、展示位校验、云端副本删除、背景图与解锁、播放器回退/缓存并发/循环、熄灯状态机、页面级冒烟；PG 集成用例需 PG_TEST_URL
 npm run check   # JSON / WXML 标签 / WXSS 括号 / 页面四件套 / 组件引用 / CSP inline 检查
 ```
 
 当前基线（2026-10-22，详见 [验收清单](docs/13-acceptance-checklist.md)）：
 
-- `npm test`：253 passed / 0 failed + 1 个 PG 集成用例（未设置 `PG_TEST_URL` 时跳过）
-- `npm run check`：通过（3 页面 / 23 JSON / 18 WXML / 20 WXSS），主包约 496.1 KB
+- `npm test`：259 passed / 0 failed + 1 个 PG 集成用例（未设置 `PG_TEST_URL` 时跳过）
+- `npm run check`：通过（3 页面 / 23 JSON / 18 WXML / 20 WXSS），主包约 498.4 KB
+- 生产配置：`TRUST_PROXY` 必须显式设置（反代 `1` / 直连 `0`），未设置会拒绝启动；`docker-compose.yml` 已用 `TRUST_PROXY:-1` 兜底
 - 后端内存模式冒烟：`/api/health`、`/api/config`、`/api/summary`、`/api/audio/unlock`、`/api/records/erase` 均符合预期
 - **PostgreSQL 16 容器端到端**：自动建表、解锁写入 24 小时、`sync` 幂等、空记录同步能取回 3 条（换机回填）、`summary` 正常返回、后台配置重启后仍在
 - **后台浏览器实测**：登录、保存（写库并立即改变 `/api/config` 与解锁 TTL）、环境音增删、COS 音频试听、存储面板、操作日志、落地页小程序码、无未捕获 JS 错误

@@ -164,6 +164,8 @@ tests/            Node 纯逻辑测试
 
 25. **L4 视觉批次（2026-10-22）**：①主按钮一套化——`app.wxss` 新增 `--btn-primary-bg/-fg/-shadow`，计算器/入睡页同行 CTA/结束面板/解锁面板四处引用（亮底深字），消掉 3 套紫与 2 种文字色；②底部弹层统一参数（36rpx 圆角、`rgba(16,22,40,.98)` 深底、64×5 抓手、`.62 + blur 8` 遮罩），三处对齐并在注释互相指向（组件样式隔离，不复用类名）；③`.page` 200rpx 与入睡页 190rpx 补 `env(safe-area-inset-bottom)`；④空态删除四颗装饰星（回归“无星点”基线）；⑤年视图日号 14→16rpx、星期 12→14rpx；⑥**刻意不做**三页标题统一（Hero 72 vs 页面标题 56 属层级差异，统一会挤压统计首屏）。验证：254 项绿、check 绿（496.1KB）、五张模拟器截图 `docs/assets/l4-v-*.png`、console 无 error。
 
+26. **L4 阶段 C（2026-10-22，工程护栏）**：①生产环境 `TRUST_PROXY` 未显式设置时拒绝启动（显式 `0` 允许直连并保留告警），`docker-compose.yml` 给 api 补 `TRUST_PROXY:-1` 兜底，避免已有 1Panel 部署升级即挂；②`/records/sync` 增加 openid 维度 30/min 限流（IP 桶全站共用时的第二道闸）；③归档日统一固定北京时间——`time.calendarDayKey(ts)` + `sessions.sessionDay` + `sync` 的 `localDay` + 容量预检/面板文案/编辑校验，修设备时区变化导致本地 day 与云端 day 分叉（重复记录 + 墓碑互写）；`dateKey` 仍本地，仅用于“今天/昨天”文案；④`audio_error` 进事件白名单，target=`trackId|errCode`（1s 去重），线上可区分网络/解码/坏缓存。验证：260 项绿、check 绿（498.4KB）。未做：C4 换号归属（待 ADR-025 拍板）、C5 音频签名（需 COS 私读）、C6 订阅召回（需模板）。
+
 ## 8. 快速命令
 
 ```bash
