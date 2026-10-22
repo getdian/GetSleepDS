@@ -14,10 +14,11 @@
 
 <view class="page calc-page">
   <view class="calc-hero">
-    <!-- Hero 文案跟随计算方向：选起床时间→问入睡点；选入睡时间→问起床点。
+    <!-- Hero 与卡顶胶囊同侧：标题问「你要选的那个时间」（输入），副标说明会算出什么（输出）。
+         此前标题问结果、胶囊问输入，用户会把该选的时间读反。
          两个方向都不写「今晚/明早」：白天小睡时结果可能落在当天，陈述必须始终成立。 -->
-    <text class="hero-title">{{mode === 'wake' ? '想几点入睡？' : '想几点起？'}}</text>
-    <text class="hero-sub">{{mode === 'wake' ? '选一个时间，找到适合你的睡点。' : '选一个时间，找到你的起床时间。'}}</text>
+    <text class="hero-title">{{mode === 'wake' ? '想几点起？' : '想几点睡？'}}</text>
+    <text class="hero-sub">{{mode === 'wake' ? '选一个起床时间，找到适合你的睡点。' : '选一个入睡时间，找到适合你的起床时间。'}}</text>
   </view>
 
   <!-- 玻璃卡外壳：静态不翻转，作为视觉锚点 -->
@@ -50,8 +51,8 @@
             </view>
 
             <view class="now-row">
-              <text wx:if="{{mode === 'wake'}}" class="now-hint">{{wakeContext}}</text>
-              <text wx:else class="now-hint">当前 {{nowText}}</text>
+              <!-- 两种模式都陈述“选中的这个时刻指哪一天”：今天/明天 + 时段 + 24h 时间 -->
+              <text class="now-hint">{{mode === 'wake' ? wakeContext : sleepContext}}</text>
               <text class="now-link {{mode === 'sleep' ? '' : 'is-hidden'}}" bindtap="onNowTap">用现在的时间</text>
             </view>
 
@@ -86,7 +87,8 @@
           <view class="calc-face calc-back {{view && view.compact ? 'is-compact' : ''}}">
             <block wx:if="{{view}}">
               <view class="result-head">
-                <view class="result-moon"></view>
+                <!-- 结果指向入睡点用月牙，指向起床时间用太阳 -->
+                <view class="result-ico {{mode === 'wake' ? 'is-moon' : 'is-sun'}}"></view>
                 <text class="result-label">{{view.label}}</text>
                 <view class="result-fall" bindtap="cycleFall">
                   <text>{{fallAsleep}} 分钟入睡</text>
@@ -142,7 +144,7 @@
 
               <view class="result-actions">
                 <view class="result-reset" bindtap="reset">↻ 重新选择</view>
-                <view class="result-switch" bindtap="toggleMode">{{mode === 'wake' ? '换成我想几点睡' : '换成我想几点醒'}} ⇄</view>
+                <view class="result-switch" bindtap="toggleMode">{{mode === 'wake' ? '换成我想几点睡' : '换成我想几点起'}} ⇄</view>
               </view>
 
               <view class="result-share">

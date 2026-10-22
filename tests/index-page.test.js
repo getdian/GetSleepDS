@@ -109,6 +109,24 @@ test('切换付费背景前提示剩余时长，确认后才覆盖解锁', () =>
   }
 })
 
+test('入睡模式时间轮下写「今天 晚上 22:30 入睡」，不再显示当前时间', () => {
+  const originalNow = Date.now
+  const at = new Date(2026, 9, 22, 15, 31, 0, 0).getTime()
+  Date.now = () => at
+  try {
+    const page = makePage()
+    page.setData({ mode: 'sleep' })
+    page.onTimeChange({ detail: { value: '22:30' } })
+    assert.equal(page.data.sleepContext, '今天 晚上 22:30 入睡')
+    assert.equal(page.data.nowText, undefined, 'nowText 已移除，提示不能再漂回“当前时刻”')
+
+    page.onTimeChange({ detail: { value: '08:00' } })
+    assert.equal(page.data.sleepContext, '明天 早晨 08:00 入睡', '已过 30 分钟宽限按次日，与结果面一致')
+  } finally {
+    Date.now = originalNow
+  }
+})
+
 test('凌晨跨日：推荐写成「明天 早晨」，note 保留日期前缀', () => {
   const originalNow = Date.now
   Date.now = () => NOW

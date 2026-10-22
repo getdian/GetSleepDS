@@ -456,13 +456,37 @@
   margin-bottom: 18rpx;
 }
 
-.result-moon {
+.result-ico {
+  position: relative;
   flex: none;
   width: 24rpx;
   height: 24rpx;
+}
+
+/* 月牙：inset shadow 形成干净缺口（与卡顶胶囊 is-moon 同一套画法） */
+.result-ico.is-moon {
   border-radius: 50%;
   box-shadow: inset 7rpx 3rpx 0 0 #F3E7C8;
   transform: rotate(-16deg);
+}
+
+/* 太阳：实心核 + 8 个光点（同卡顶胶囊 is-sun，按 24rpx 视觉尺寸放大） */
+.result-ico.is-sun {
+  width: 14rpx;
+  height: 14rpx;
+  margin: 5rpx;
+  border-radius: 50%;
+  background: #FFE7A3;
+  box-shadow:
+    0 0 0 3rpx rgba(255, 231, 163, 0.24),
+    0 -11rpx 0 -5rpx #FFE7A3,
+    0 11rpx 0 -5rpx #FFE7A3,
+    -11rpx 0 0 -5rpx #FFE7A3,
+    11rpx 0 0 -5rpx #FFE7A3,
+    -8rpx -8rpx 0 -5rpx #FFE7A3,
+    8rpx 8rpx 0 -5rpx #FFE7A3,
+    -8rpx 8rpx 0 -5rpx #FFE7A3,
+    8rpx -8rpx 0 -5rpx #FFE7A3;
 }
 
 .result-label {

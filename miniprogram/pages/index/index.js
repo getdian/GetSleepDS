@@ -20,11 +20,11 @@ Page({
     wakeTime: '07:30',
     wakeContext: '',
     sleepTime: '23:00',
+    sleepContext: '',
     fallAsleep: DEFAULT_FALL,
     fallOptions: [5, 10, 15, 20, 30],
     view: null,
     flipped: false,
-    nowText: '',
     background: null,
     bgError: false,
     backgrounds: [],
@@ -57,9 +57,10 @@ Page({
       // 起床时间补一个“今天/明天”的上下文，避免 07:30 上午不知道指哪天
       wakeContext: this.wakeContextText(wakeTime, DEFAULT_FALL, now),
       sleepTime: nowClock,
+      // 入睡时间同样补“今天/明天 + 时段”的上下文，替代原来的“当前 HH:MM”
+      sleepContext: this.sleepContextText(nowClock, now),
       // 入睡耗时以 15 分为默认起点；旧版本存下的 5 分不再作为初值
-      fallAsleep: DEFAULT_FALL,
-      nowText: nowClock
+      fallAsleep: DEFAULT_FALL
     })
 
     this.loadBackgrounds()
@@ -81,7 +82,9 @@ Page({
     this.refreshNow()
     // 未手动调过入睡时间时，回到前台让默认值重新跟随当前时间
     if (this.data.mode === 'sleep' && !this._sleepTouched && !this.data.flipped) {
-      this.setData({ sleepTime: F.fmtClock(T.minutesOf(Date.now())) })
+      const now = Date.now()
+      const value = F.fmtClock(T.minutesOf(now))
+      this.setData({ sleepTime: value, sleepContext: this.sleepContextText(value, now) })
     }
     this.startClock()
     adSlots.apply(this)
@@ -108,10 +111,9 @@ Page({
   },
 
   refreshNow() {
-    // 展示真实时分；5 分钟粒度只用于时间轮和“用现在的时间”落点
-    this.setData({ nowText: F.fmtClock(T.minutesOf(Date.now())) })
-    // 起床时间可能随当前时刻从“今天”翻到“明天”，随分钟刷新
+    // 上下文（今天/明天 + 时段词）随当前时刻翻页：两种模式各刷各的
     if (this.data.mode === 'wake') this.refreshWakeContext()
+    else this.refreshSleepContext()
     // 结果面：可用时长与"已错过的档位"必须随分钟重算，否则停在结果页 10 分钟数字不动
     if (this.data.flipped) this.calc(true)
   },
@@ -127,6 +129,18 @@ Page({
     const fall = fallMinutes === undefined ? this.data.fallAsleep : fallMinutes
     const text = this.wakeContextText(value, fall, Date.now())
     if (text !== this.data.wakeContext) this.setData({ wakeContext: text })
+  },
+
+  /** 入睡选择的上下文：今天/明天 + 时段词 + 24h 时间（与结果面同口径） */
+  sleepContextText(sleepValue, now) {
+    const sleepMinutes = typeof sleepValue === 'number' ? sleepValue : T.parseClock(sleepValue)
+    return P.sleepContextText(now, sleepMinutes)
+  },
+
+  refreshSleepContext(sleepValue) {
+    const value = sleepValue === undefined ? this.data.sleepTime : sleepValue
+    const text = this.sleepContextText(value, Date.now())
+    if (text !== this.data.sleepContext) this.setData({ sleepContext: text })
   },
 
   startClock() {
@@ -177,6 +191,8 @@ Page({
     if (key === 'wakeTime') {
       this.savePrefs({ wakeTime: value })
       this.refreshWakeContext(T.parseClock(value), this.data.fallAsleep)
+    } else {
+      this.refreshSleepContext(value)
     }
   },
 
@@ -196,10 +212,9 @@ Page({
         patch.sleepTime = seed
         this._sleepTouched = true
       } else if (!this._sleepTouched) {
-        const value = F.fmtClock(T.minutesOf(Date.now()))
-        patch.sleepTime = value
-        patch.nowText = value
+        patch.sleepTime = F.fmtClock(T.minutesOf(Date.now()))
       }
+      patch.sleepContext = this.sleepContextText(patch.sleepTime || this.data.sleepTime, Date.now())
     }
     if (next === 'wake') {
       if (seed) patch.wakeTime = seed
@@ -219,7 +234,7 @@ Page({
     this._anchorAt = 0
     this.setData({
       sleepTime: value,
-      nowText: value,
+      sleepContext: this.sleepContextText(value, now),
       mode: 'sleep',
       flipped: false,
       view: null
@@ -687,7 +702,7 @@ Page({
     return {
       title: time
         ? '按 90 分钟周期，' + time + (this.data.mode === 'wake' ? ' 入睡刚刚好' : ' 起床刚好')
-        : '想几点入睡？算算你的睡眠周期',
+        : '按 90 分钟睡眠周期，算出你的入睡点',
       path: '/pages/index/index?from=share'
     }
   },
@@ -695,7 +710,7 @@ Page({
   // 朋友圈打开是"单页模式"（无 tabBar、本地存储不可用），只开放纯计算的计算器页
   onShareTimeline() {
     return {
-      title: '想几点入睡？算算你的睡眠周期',
+      title: '按 90 分钟睡眠周期，算出你的入睡点',
       query: 'from=timeline'
     }
   }

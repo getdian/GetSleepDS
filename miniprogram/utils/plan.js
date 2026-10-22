@@ -38,6 +38,22 @@ function wakeContextText(now, wakeMinutes, fallMinutes) {
 }
 
 /**
+ * 入睡选择的上下文：今天/明天 + 时段词 + 24 小时制。
+ * 与 wakeTimesForSleep 共用 sleepAtOf，翻日规则（超 30 分钟宽限按次日）与结果面完全一致。
+ */
+function sleepContextText(now, sleepMinutes) {
+  const sleepAt = sleepAtOf(now, sleepMinutes)
+  return (
+    dayLabel(sleepAt, now) +
+    ' ' +
+    F.periodLabel(sleepAt) +
+    ' ' +
+    F.fmtClock(sleepMinutes) +
+    ' 入睡'
+  )
+}
+
+/**
  * 给定起床时间，倒推 3 个入睡时刻（5/4/3 个周期）。
  * 目标起床时间取“下一次”该时刻；若连 3 个周期都来不及，slots 会标记 passed。
  * progressNow：只用于“是否已错过 / 还能睡多久”，让结果面的倒计时随真实时间走，
@@ -74,12 +90,17 @@ function bedtimesForWake(now, wakeMinutes, fallMinutes, progressNow) {
 }
 
 /**
- * 给定上床时间，计算 5/4/3 个周期后的起床时间。
- * 选中的时间若已过去超过 30 分钟，按次日处理。
+ * 选中的入睡时刻：取当天该时刻；已过去超过 30 分钟按次日处理。
+ * 时间轮下的上下文与结果面共用此函数，避免“提示写今天、结果算明天”。
  */
+function sleepAtOf(now, sleepMinutes) {
+  const sleepAt = T.clockTs(T.startOfDay(now), sleepMinutes)
+  return sleepAt < now - 30 * T.MINUTE_MS ? sleepAt + T.DAY_MS : sleepAt
+}
+
+/** 给定上床时间，计算 5/4/3 个周期后的起床时间。 */
 function wakeTimesForSleep(now, sleepMinutes, fallMinutes) {
-  let sleepAt = T.clockTs(T.startOfDay(now), sleepMinutes)
-  if (sleepAt < now - 30 * T.MINUTE_MS) sleepAt += T.DAY_MS
+  const sleepAt = sleepAtOf(now, sleepMinutes)
 
   const slots = CYCLES.map((cycles) => {
     const at = sleepAt + (fallMinutes + cycles * CYCLE) * T.MINUTE_MS
@@ -107,6 +128,8 @@ module.exports = {
   dayLabel,
   nextWakeAt,
   wakeContextText,
+  sleepContextText,
+  sleepAtOf,
   bedtimesForWake,
   wakeTimesForSleep
 }

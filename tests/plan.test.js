@@ -75,6 +75,26 @@ test('起床上下文用 24h + 时段词，避免 12 小时制歧义', () => {
   assert.equal(P.wakeContextText(morning, 7 * 60 + 30, 15), '今天 早晨 07:30 起床')
 })
 
+test('入睡上下文用 24h + 时段词，并与 30 分钟宽限同口径', () => {
+  const afternoon = local(2026, 10, 18, 15, 31)
+  assert.equal(P.sleepContextText(afternoon, 22 * 60 + 30), '今天 晚上 22:30 入睡')
+  // 08:00 已过去超过 30 分钟 → 次日
+  assert.equal(P.sleepContextText(afternoon, 8 * 60), '明天 早晨 08:00 入睡')
+
+  // 宽限内仍算今天，过了宽限才翻日
+  assert.equal(P.sleepContextText(local(2026, 10, 18, 8, 20), 8 * 60), '今天 早晨 08:00 入睡')
+  assert.equal(P.sleepContextText(local(2026, 10, 18, 8, 31), 8 * 60), '明天 早晨 08:00 入睡')
+})
+
+test('入睡上下文的翻日与 wakeTimesForSleep 完全一致', () => {
+  const now = local(2026, 10, 18, 15, 31)
+  ;[0, 8 * 60, 22 * 60 + 30, 23 * 60 + 59].forEach((minutes) => {
+    const plan = P.wakeTimesForSleep(now, minutes, 15)
+    assert.equal(P.sleepAtOf(now, minutes), plan.sleepAt)
+    assert.equal(P.dayLabel(plan.sleepAt, now), P.sleepContextText(now, minutes).split(' ')[0])
+  })
+})
+
 test('nextWakeAt 只有留出入睡耗时后仍来得及才算今天', () => {
   const evening = local(2026, 10, 17, 21, 50)
   assert.equal(P.dayLabel(P.nextWakeAt(evening, 7 * 60 + 30, 15), evening), '明天')
