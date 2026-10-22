@@ -222,6 +222,22 @@ Component({
 
     handleTimeUpdate() {
       if (!this._alive) return
+      // 无缝回环绕过 onEnded，而首页/统计页没有 audio-dock 的 60s 到期扫描；
+      // 低频复检一次权益，避免到期后一直循环播放。
+      const now = Date.now()
+      if (now - (this._entitlementAt || 0) > 15000) {
+        this._entitlementAt = now
+        if (this._audio && !this._audio.paused && !this.canPlay()) {
+          try {
+            this._audio.pause()
+          } catch (e) {}
+          storage.patchMeta({ lastTrackPlaying: false })
+          this.setData({ playing: false, loading: false })
+          this.sync(true)
+          this.rejectLocked()
+          return
+        }
+      }
       // 曲末前无缝回环：不进 ended、不换 src，保住微信悬浮音符（见 player-state.seamlessLoop）
       playerState.seamlessLoop(this._audio)
     },

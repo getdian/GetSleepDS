@@ -78,3 +78,9 @@ test('落地页手机演示与应用计算器同口径', () => {
   assert.ok(SITE.indexOf('<strong>想几点起？</strong>') >= 0)
   assert.ok(SITE.indexOf('设定起床点，倒推你的入睡点') >= 0)
 })
+
+test('结果面 compact 也走 dense：712rpx 舞台不能把紧凑态排除在压缩之外', () => {
+  const back = lineWith(WXML, 'calc-face calc-back', 'calc-back')
+  assert.ok(back.indexOf("view.rows.length >= 3 ? 'is-dense'") >= 0, back)
+  assert.equal(back.indexOf('!view.compact'), -1, 'compact 不能被排除在 dense 之外')
+})

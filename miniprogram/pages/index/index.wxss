@@ -774,6 +774,7 @@
 }
 
 .result-go {
+  position: relative;
   margin-top: 12rpx;
   display: flex;
   align-items: center;
@@ -786,6 +787,16 @@
   color: var(--c-primary-soft);
   font-size: 26rpx;
   font-weight: 500;
+}
+
+/* dense 下视觉高度 72rpx；用伪元素把命中区补回约 88rpx，不再靠缩小热区换高度 */
+.result-go::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -8rpx;
+  bottom: -8rpx;
 }
 
 .result-go:active {
@@ -859,6 +870,57 @@
   margin-top: 8rpx;
 }
 
+/* 4 行结果（3 档推荐 + 补觉）或 compact 时压缩纵向节奏：
+   不压缩时内容会超过 712rpx 舞台，分享行溢出到卡片外、与脚注重叠。
+   compact 现在也命中 dense（见 wxml），下面再保留它自己的主卡内距和 meta 行。 */
+.calc-back.is-dense .result-head {
+  margin-bottom: 10rpx;
+}
+
+.calc-back.is-dense .result-main {
+  padding: 16rpx 22rpx;
+  margin-bottom: 10rpx;
+}
+
+.calc-back.is-dense .result-row {
+  padding: 9rpx 8rpx;
+}
+
+.calc-back.is-dense .result-extra {
+  margin-top: 6rpx;
+}
+
+.calc-back.is-dense .result-go {
+  height: 72rpx;
+  margin-top: 6rpx;
+}
+
+.calc-back.is-dense .result-actions {
+  min-height: 76rpx;
+  padding-top: 4rpx;
+}
+
+.calc-back.is-dense .result-share {
+  margin-top: 0;
+}
+
+/* 跨日 note 可能两行；dense 下再收一点行高，避免把分享行顶出卡片 */
+.calc-back.is-dense .result-note {
+  font-size: 21rpx;
+  line-height: 1.45;
+}
+
+.calc-back.is-compact.is-dense .result-main {
+  padding: 16rpx 20rpx;
+  margin-bottom: 10rpx;
+}
+
+.calc-back.is-compact.is-dense .result-meta {
+  margin-top: 4rpx;
+  font-size: 21rpx;
+  line-height: 1.35;
+}
+
 /* 360 及以下窄屏：只缩 hero 字号；主推荐徽标必须保留（时长护栏），
    主卡一行保持 nowrap，由 meta 自身省略，避免徽标被隐藏或换行撑高背面。 */
 @media (max-width: 360px) {
@@ -879,9 +941,10 @@
   z-index: var(--z-player-host, 120);
 }
 
-/* 脚注：整行是「为什么是 90 分钟」的入口 */
+/* 脚注：整行是「为什么是 90 分钟」的入口。
+   与结果面「分享给朋友」/正面主按钮拉开呼吸距离：原 24rpx 在 4 行结果时几乎贴在一起。 */
 .calc-note {
-  margin-top: 24rpx;
+  margin-top: 48rpx;
   padding: 0 18rpx;
   text-align: center;
   font-size: 21rpx;

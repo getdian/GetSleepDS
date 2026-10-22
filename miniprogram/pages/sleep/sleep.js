@@ -104,9 +104,10 @@ Page({
     }
     // 统计页点空格子补记：带日期跳过来，直接打开补记面板
     this.openPendingManual()
-    // 熄灯是睡眠中的状态：熄着就继续保持（tabBar 也要再次隐藏），
-    // 没熄则重新起 30s 倒计时（用户刚回到页面，不该突然变黑）
-    if (this.data.dim) tabbar.hide()
+    // 熄灯/结束/补记/编辑面板期间 tabBar 都必须隐藏：tabBar 是独立 root，
+    // 页面 z-index 压不住。之前只判 dim，面板开着回前台会被 audio-dock 的
+    // pageLifetimes.show 重新翻出来（与生命周期先后无关）。
+    if (this.data.dim || this.data.endShow) tabbar.hide()
     else this.scheduleLightsOut()
   },
 
@@ -378,6 +379,45 @@ Page({
     // 交给 refreshAll 的 recordHint 引导用户撤销重记。
     if (!sessions.length) return null
     const multi = sessions.length > 1
+    const firstAt = sessions[0].startAt
+    const lastAt = sessions[sessions.length - 1].endAt
+    const spanMs = Math.max(1, lastAt - firstAt)
+    const asleepMs = sessions.reduce((sum, item) => sum + Math.max(0, item.endAt - item.startAt), 0)
+    // 分段轴：按「首段入睡 → 末段起床」的比例给每段落位，间断处留空。
+    // 一条直线会把“3 段共 26 分钟”读成“连续 30 分钟”，与大数字自相矛盾。
+    const timeline = sessions.map((item, index) => {
+      const leftPct = Math.min(100, Math.max(0, ((item.startAt - firstAt) / spanMs) * 100))
+      const widthPct = Math.min(
+        100 - leftPct,
+        Math.max(0.8, ((item.endAt - item.startAt) / spanMs) * 100)
+      )
+      return {
+        key: index,
+        left: Math.round(leftPct * 10) / 10,
+        width: Math.round(widthPct * 10) / 10
+      }
+    })
+    const gapMin = Math.max(0, Math.round((spanMs - asleepMs) / 60000))
+    // 只数“真的隔开”的间隔：补记/编辑允许首尾相接（end == 下一段 start），
+    // 按段数减一会把相接的两段也算成一次醒来。三种间隔分开计数后，
+    // 「中间醒了 N 次」的 N 才是实际醒来的次数。
+    let gapCount = 0
+    for (let i = 1; i < sessions.length; i += 1) {
+      if (sessions[i].startAt > sessions[i - 1].endAt) gapCount += 1
+    }
+    // 段间说明：短间隔（< 一个睡眠周期）说“中间醒了 N 次”，长间隔（午休/分次睡）说“相隔”，
+    // 避免「清醒 6 小时」这种把午休间隔说成睡中醒来、或「清醒 4 分钟」看不出指哪段的表达。
+    let segmentsText = ''
+    if (multi) {
+      if (gapMin <= 0) {
+        segmentsText = sessions.length + ' 段'
+      } else if (gapMin < 90) {
+        segmentsText =
+          sessions.length + ' 段 · 中间醒了 ' + gapCount + ' 次（' + F.fmtDuration(gapMin) + '）'
+      } else {
+        segmentsText = sessions.length + ' 段 · 相隔 ' + F.fmtDuration(gapMin)
+      }
+    }
     return {
       bed: F.fmtClockTs(Number.isFinite(Number(record.bedAt)) ? record.bedAt : sessions[0].startAt),
       wake: F.fmtClockTs(
@@ -392,6 +432,9 @@ Page({
       firstBed: F.fmtClockTs(sessions[0].startAt),
       lastWake: F.fmtClockTs(sessions[sessions.length - 1].endAt),
       sessionCount: sessions.length,
+      timeline,
+      // 段数与段间说明：解释“首末跨度”和“总睡眠”为什么对不上
+      segmentsText,
       timelineFirstK: multi ? '当天首段入睡' : '入睡',
       timelineLastK: multi ? '当天末段起床' : '起床',
       sessions: sessions.map((item) => ({
@@ -536,6 +579,9 @@ Page({
    */
   onDockSheetClose() {
     if (this.data.state === 'sleeping' && !this.data.endShow) this.scheduleLightsOut()
+    // 抽屉可以在熄灯态被程序化打开（跨页播放条 → openPendingAudio）；
+    // 关闭时 audio-dock 会无条件 tabbar.show()，这里必须把熄灯态的 tabBar 再藏回去。
+    if (this.data.dim) tabbar.hide()
   },
 
   /** 唤醒：恢复正常亮度并隐藏熄灯层；不改变计时状态 */
@@ -1057,10 +1103,11 @@ Page({
 
   onShareAppMessage() {
     const view = this.data.recordView
-    // 不写“昨晚/早睡”：白天补觉分享时也要成立
+    // 不写“昨晚/早睡”：白天补觉分享时也要成立。
+    // 多段记录用首段入睡/末段起床，与页面时间线同口径；主段首尾会漏掉午休。
     return {
       title: view
-        ? '我 ' + view.bed + ' 入睡、' + view.wake + ' 起床，一起好好睡'
+        ? '我 ' + view.firstBed + ' 入睡、' + view.lastWake + ' 起床，一起好好睡'
         : '我在「睡点」记录睡眠，一起好好睡',
       path: '/pages/sleep/sleep?from=share'
     }

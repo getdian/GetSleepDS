@@ -2,12 +2,19 @@
   <view class="mc-head">
     <text class="mc-title">{{title}}</text>
     <view class="mc-nav">
-      <view class="mc-nav-btn" bindtap="onPrev" aria-role="button" aria-label="上个月">‹</view>
+      <view
+        class="mc-nav-btn {{canPrev ? '' : 'is-off'}}"
+        bindtap="onPrev"
+        aria-role="button"
+        aria-label="上个月"
+        aria-disabled="{{!canPrev}}"
+      >‹</view>
       <view
         class="mc-nav-btn {{canNext ? '' : 'is-off'}}"
         bindtap="onNext"
         aria-role="button"
         aria-label="下个月"
+        aria-disabled="{{!canNext}}"
       >›</view>
     </view>
   </view>

@@ -96,6 +96,53 @@ function chunk(list, size) {
   return out
 }
 
+// 服务端 body 上限 256KB，但反向代理/网关常按更小值截断；客户端自留 40KB 预算。
+// 墓碑只随首片发送（最多 400 条，约 24KB），首片必须先把这部分从预算里扣掉，
+// 否则“60 条 + 多段 + 400 墓碑”会稳定超过 64KB 并永久 413。
+const CHUNK_BYTES = 40 * 1024
+
+function recordBytes(record) {
+  try {
+    return JSON.stringify(record).length + 1
+  } catch (e) {
+    return 1024
+  }
+}
+
+/**
+ * 按「条数 + 序列化字节」双重上限分片。
+ * 单条记录最多 8 段，长度可控；逐条累加比整批 JSON.stringify 一次更省内存。
+ */
+function chunkRecords(list, deletedDays) {
+  const source = Array.isArray(list) ? list : []
+  const tombstones = Array.isArray(deletedDays) ? deletedDays : []
+  let deletedBytes = 0
+  try {
+    deletedBytes = JSON.stringify(tombstones).length
+  } catch (e) {
+    deletedBytes = 16 * 1024
+  }
+  let budget = Math.max(8 * 1024, CHUNK_BYTES - deletedBytes)
+  const out = []
+  let current = []
+  let bytes = 0
+  source.forEach((record) => {
+    const size = recordBytes(record)
+    if (current.length && (current.length >= CHUNK_SIZE || bytes + size > budget)) {
+      out.push(current)
+      current = []
+      bytes = 0
+      budget = CHUNK_BYTES
+    }
+    current.push(record)
+    bytes += size
+  })
+  if (current.length) out.push(current)
+  // 本地为空也要发一次：换机后要靠它拿云端记录/删除水位。
+  if (!out.length) out.push([])
+  return out
+}
+
 /** 只改内存：删除记录并留下墓碑，最终一次性落盘。 */
 function dropLocal(local, deleted, day, stamp) {
   delete local[day]
@@ -219,7 +266,7 @@ function doSync(force) {
   const records = collect(now, SPAN_DAYS)
   const deletedDays = validTombstones(storage.getDeletedList(), now)
   const epoch = meta.syncEpoch || 0
-  const batches = chunk(records, CHUNK_SIZE)
+  const batches = chunkRecords(records, deletedDays)
   // 本地为空也要请求一次，否则换机后拿不到云端记录 / 删除水位
   if (!batches.length) batches.push([])
 
@@ -301,4 +348,12 @@ function whenIdle() {
   )
 }
 
-module.exports = { syncNow, whenIdle, collect, chunk, mergeServerRecords, SPAN_DAYS }
+module.exports = {
+  syncNow,
+  whenIdle,
+  collect,
+  chunk,
+  chunkRecords,
+  mergeServerRecords,
+  SPAN_DAYS
+}

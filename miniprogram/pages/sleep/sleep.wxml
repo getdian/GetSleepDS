@@ -55,38 +55,51 @@
   <block wx:else>
     <view class="done-section fade-up">
       <text class="done-kicker">{{greeting}} · SLEEP LOG</text>
-      <text class="done-duration">{{recordView.duration}}</text>
-      <text class="done-duration-k">当天总睡眠（含午休/间断）</text>
-      <view class="done-timeline">
-        <view class="done-time">
-          <text class="done-time-k">{{recordView.timelineFirstK}}</text>
-          <text class="done-time-v">{{recordView.firstBed}}</text>
-        </view>
-        <view class="done-rail">
-          <view class="done-rail-dot"></view>
-          <view class="done-rail-line"></view>
-          <view class="done-rail-dot is-end"></view>
-        </view>
-        <view class="done-time is-right">
-          <text class="done-time-k">{{recordView.timelineLastK}}</text>
-          <text class="done-time-v">{{recordView.lastWake}}</text>
-        </view>
-      </view>
-      <view wx:if="{{recordView.sessions.length}}" class="done-sessions">
-        <view class="done-sessions-head">
-          <text class="done-sessions-k">本日睡眠段</text>
-          <text class="done-sessions-hint">时间不准可修正</text>
-        </view>
-        <view wx:for="{{recordView.sessions}}" wx:key="id" class="done-session-row">
-          <view class="done-session-main">
-            <text class="done-session-time">{{item.bed}} – {{item.wake}}</text>
-            <text class="done-session-dur">{{item.duration}}</text>
+      <block wx:if="{{recordView}}">
+        <text class="done-duration">{{recordView.duration}}</text>
+        <text class="done-duration-k">当天总睡眠（含午休/间断）</text>
+        <view class="done-timeline">
+          <view class="done-time">
+            <text class="done-time-k">{{recordView.timelineFirstK}}</text>
+            <text class="done-time-v">{{recordView.firstBed}}</text>
           </view>
-          <view class="done-session-ops">
-            <view class="session-op is-edit" data-id="{{item.id}}" data-day="{{item.day}}" catchtap="onEditSession">修改</view>
-            <view class="session-op is-del" data-id="{{item.id}}" data-day="{{item.day}}" catchtap="onDeleteSession">删除</view>
+          <view class="done-rail">
+            <view class="done-rail-dot"></view>
+            <view class="done-rail-track">
+              <view
+                wx:for="{{recordView.timeline}}"
+                wx:key="key"
+                class="done-rail-seg"
+                style="left: {{item.left}}%; width: {{item.width}}%"
+              ></view>
+            </view>
+            <view class="done-rail-dot is-end"></view>
+          </view>
+          <view class="done-time is-right">
+            <text class="done-time-k">{{recordView.timelineLastK}}</text>
+            <text class="done-time-v">{{recordView.lastWake}}</text>
           </view>
         </view>
+        <text wx:if="{{recordView.segmentsText}}" class="done-segments-text">{{recordView.segmentsText}}</text>
+        <view wx:if="{{recordView.sessionCount > 0}}" class="done-sessions">
+          <view class="done-sessions-head">
+            <text class="done-sessions-k">本日睡眠段</text>
+            <text class="done-sessions-hint">时间不准可修正</text>
+          </view>
+          <view wx:for="{{recordView.sessions}}" wx:key="id" class="done-session-row">
+            <view class="done-session-main">
+              <text class="done-session-time">{{item.bed}} – {{item.wake}}</text>
+              <text class="done-session-dur">{{item.duration}}</text>
+            </view>
+            <view class="done-session-ops">
+              <view class="session-op is-edit" data-id="{{item.id}}" data-day="{{item.day}}" catchtap="onEditSession">修改</view>
+              <view class="session-op is-del" data-id="{{item.id}}" data-day="{{item.day}}" catchtap="onDeleteSession">删除</view>
+            </view>
+          </view>
+        </view>
+      </block>
+      <view wx:else class="done-empty">
+        <text class="done-empty-text">{{recordHint || '这条记录缺少可用的睡眠段，可撤销后重新记录'}}</text>
       </view>
       <view class="done-cta-row">
         <view class="cta-mini is-primary" bindtap="onAddSession">继续入睡（开始计时）</view>

@@ -196,3 +196,26 @@ test('凌晨跨日：推荐写成「明天 早晨」，note 保留日期前缀',
     Date.now = originalNow
   }
 })
+
+test('结果面锚点超过 30 分钟：重算必须回到当前时刻，不能跨夜沿用旧锚点', () => {
+  const originalNow = Date.now
+  const night = new Date(2026, 9, 22, 23, 0, 0, 0).getTime()
+  let now = night
+  Date.now = () => now
+  try {
+    const page = makePage()
+    page.setData({ mode: 'sleep', sleepTime: '22:30', fallAsleep: 15, flipped: true })
+    page._anchorAt = night
+    page.calc(true)
+    assert.equal(page._anchorAt, night, '30 分钟内保留锚点，改耗时不整体漂移')
+
+    // 次日 09:00：旧锚点会把“今天 06:45”继续算成“明天”
+    now = new Date(2026, 9, 23, 9, 0, 0, 0).getTime()
+    page.calc(true)
+    assert.equal(page._anchorAt, 0, '超过 30 分钟必须清零，按当前时刻重算')
+    assert.ok(page.data.view, '重算后结果面仍有内容')
+    assert.equal(page.data.view.mainTime, '06:15')
+  } finally {
+    Date.now = originalNow
+  }
+})

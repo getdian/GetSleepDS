@@ -78,6 +78,37 @@ function defaultTimesFor(dayKey, now, options) {
   return { bedMinutes, wakeMinutes }
 }
 
+// 已记录日「再加一段」的候选：优先下午 30 分钟小睡。
+// 默认的 23:00→07:00 与当天已有夜间段必然重叠，面板一打开就是红字错误。
+const NAP_SLOTS = [
+  [13 * 60, 13 * 60 + 30],
+  [14 * 60, 14 * 60 + 30],
+  [15 * 60, 15 * 60 + 30],
+  [10 * 60, 10 * 60 + 30],
+  [16 * 60, 16 * 60 + 30],
+  [12 * 60, 12 * 60 + 30],
+  [17 * 60, 17 * 60 + 30]
+]
+
+/**
+ * 已记录日补一段的默认时间：返回第一个不与已有段/进行中段重叠的 30 分钟小睡。
+ * 全被占用时回退到 defaultTimesFor（用户仍可手动改时间）。
+ */
+function napTimesFor(records, dayKey, now, pending) {
+  const ts = Number(now) || Date.now()
+  const dayTs = T.parseDateKey(dayKey)
+  for (let i = 0; i < NAP_SLOTS.length; i += 1) {
+    const slot = NAP_SLOTS[i]
+    const range = X.rangeForDay(dayTs, slot[0], slot[1], ts)
+    if (range.error) continue
+    if (X.findOverlap(records || {}, range.bedAt, range.wakeAt)) continue
+    const pendingStart = pending && Number(pending.bedAt)
+    if (pendingStart && X.overlaps({ startAt: pendingStart, endAt: ts }, range)) continue
+    return { bedMinutes: slot[0], wakeMinutes: slot[1] }
+  }
+  return defaultTimesFor(dayKey, ts)
+}
+
 /**
  * 五类区间错误 + 重叠的统一文案。
  * 入睡页（范围/结束/编辑）与统计页（页内补记）都从这里取，禁止各自写 if 链。
@@ -179,6 +210,7 @@ module.exports = {
   minDayKey,
   limitCanAdd,
   defaultTimesFor,
+  napTimesFor,
   errorTextOf,
   evaluateManualRange,
   capacityErrorOf,

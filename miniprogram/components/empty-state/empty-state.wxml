@@ -1,12 +1,11 @@
 <view class="empty">
   <view class="empty-scene" aria-hidden="true">
     <view class="es-halo"></view>
-    <view class="es-moon"></view>
     <view class="es-grid">
       <view
         wx:for="{{cells}}"
         wx:key="*this"
-        class="es-cell {{index === 8 ? 'is-lit' : ''}}"
+        class="es-cell {{index === 0 ? 'is-lit' : ''}}"
       ></view>
     </view>
   </view>

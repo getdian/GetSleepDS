@@ -57,6 +57,47 @@ function ts(year, month, day, hour, minute) {
   return new Date(year, month - 1, day, hour, minute, 0, 0).getTime()
 }
 
+test('saveSession：目标日的旧 v1 夜间记录先迁到醒来日，不产出跨天混合记录', () => {
+  store[KEY] = {}
+  store[storage.KEYS.deleted] = {}
+  // 10/21 夜间（醒来 10/22）—— 应并到 22
+  store[KEY]['2026-10-21'] = {
+    day: '2026-10-21',
+    bedAt: ts(2026, 10, 21, 23, 0),
+    wakeAt: ts(2026, 10, 22, 7, 0),
+    durationMin: 480,
+    updatedAt: ts(2026, 10, 22, 7, 0)
+  }
+  // 10/22 夜间（醒来 10/23）—— 旧 v1 按入睡日挂在 22，必须先迁到 23
+  store[KEY]['2026-10-22'] = {
+    day: '2026-10-22',
+    bedAt: ts(2026, 10, 22, 22, 15),
+    wakeAt: ts(2026, 10, 23, 3, 3),
+    durationMin: 288,
+    updatedAt: ts(2026, 10, 23, 3, 3)
+  }
+  const record = storage.saveSession({
+    id: 'nap-22',
+    startAt: ts(2026, 10, 22, 13, 0),
+    endAt: ts(2026, 10, 22, 13, 30)
+  })
+  assert.ok(record)
+  assert.equal(record.day, '2026-10-22')
+  assert.equal(record.sessions.length, 2)
+  assert.equal(record.totalDurationMin, 510)
+
+  const moved = store[KEY]['2026-10-23']
+  assert.ok(moved, '10/22 夜间必须迁到醒来日 10/23')
+  assert.equal(moved.sessions.length, 1)
+  assert.equal(moved.totalDurationMin, 288)
+  assert.equal(store[KEY]['2026-10-21'], undefined)
+  assert.ok(store[storage.KEYS.deleted]['2026-10-21'])
+
+  // 同一记录的所有段必须同属一个醒来日，否则服务端会整条丢弃
+  const X = require('../miniprogram/utils/sessions')
+  assert.ok(record.sessions.every((item) => X.sessionDay(item) === '2026-10-22'))
+})
+
 test('saveSession 按醒来日聚合，并把同醒来日的旧 v1 记录并进来', () => {
   store[KEY] = {}
   store[storage.KEYS.deleted] = {}

@@ -38,6 +38,7 @@ Page({
     calendarTitle: '',
     calendarNote: '',
     canNextMonth: false,
+    canPrevMonth: false,
     monthOffset: 0,
     detail: null,
     selectedKey: '',
@@ -54,6 +55,9 @@ Page({
     manualError: '',
     settingsOpen: false,
     syncText: '尚未同步',
+    // 云端删除水位：与「是否有云端副本」分开。删除失败时 lastSyncAt 可能仍是 0，
+    // 但闸门已经落下，必须仍给用户「删除云端副本」的出口，否则开关永远打不开。
+    cloudPendingErase: false,
     syncBusy: false,
     posterPath: '',
     posterSharePath: ''
@@ -169,13 +173,22 @@ Page({
       // 缺了它切月会被去重跳过（标题/格子/canNextMonth 都不更新，且 monthOffset 已变 → 双向卡死）。
       monthOffset,
       calendarSpan,
-      calendar ? calendar.monthKey + ':' + calendar.cells.map((cell) => cell.level).join('') : '',
-      calendarMonths.map((month) => month.cells.map((cell) => cell.level).join('')).join('|'),
+      // 必须带上单格时长：同档内的补记/编辑（6h10 → 6h50）level 不变，
+      // 只拼 level 会让日历格数字一直停在旧值，且要等其它签名项变化才自愈。
+      calendar
+        ? calendar.monthKey +
+          ':' +
+          calendar.cells.map((cell) => (cell.day || cell.key) + ':' + (cell.durationMin || 0)).join(',')
+        : '',
+      calendarMonths
+        .map((month) => month.key + ':' + month.cells.map((cell) => cell.level).join(''))
+        .join('|'),
       // 跨天、进行中的会话、云端副本状态都会改变界面，必须进签名，否则不会刷新
       todayKey,
       partialDay,
       syncEnabled ? 1 : 0,
       meta.lastSyncAt ? 1 : 0,
+      cloudPending ? 1 : 0,
       syncText
     ].join('#')
 
@@ -192,6 +205,7 @@ Page({
         calendarTitle: calendar ? calendar.monthLabel : '',
         calendarNote,
         canNextMonth: monthOffset < 0,
+        canPrevMonth: monthOffset > MONTH_MIN_OFFSET,
         // 数据或周期变了才清空详情与选中态，避免指向已修改/已切换的记录
         detail: null,
         selectedKey: '',
@@ -199,6 +213,7 @@ Page({
         metricDetail: null,
         syncEnabled,
         hasCloudCopy: !!meta.lastSyncAt,
+        cloudPendingErase: cloudPending,
         syncText
       })
     }
@@ -258,11 +273,18 @@ Page({
   },
 
   /** 打开补记面板：默认时间与错误文案都走 manual-sleep 共享模块 */
-  openManualSheet(day) {
+  /**
+   * 打开补记面板：默认时间与错误文案都走 manual-sleep 共享模块。
+   * options.napDefault：已记录日「再加一段」优先给一个不与已有段重叠的小睡默认值。
+   */
+  openManualSheet(day, options) {
+    const opt = options || {}
     const now = Date.now()
     const today = T.dateKey(now)
     const target = typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : today
-    const times = MS.defaultTimesFor(target, now)
+    const times = opt.napDefault
+      ? MS.napTimesFor(storage.getRecords(), target, now, storage.getPending())
+      : MS.defaultTimesFor(target, now)
     this._manualBaseDay = T.parseDateKey(target)
     this._manualBedAt = 0
     this._manualWakeAt = 0
@@ -365,6 +387,13 @@ Page({
 
   noop() {},
 
+  /** 详情卡渲染后滚到可视区：浮动 tabBar 会盖住页面底部，不滚用户只看到半张卡 */
+  scrollToDetail() {
+    if (!this._alive) return
+    if (!wx || typeof wx.pageScrollTo !== 'function') return
+    wx.pageScrollTo({ selector: '#day-detail', duration: 220 })
+  },
+
   showDetail(day) {
     const records = this._records || {}
     const record = records[day]
@@ -373,9 +402,10 @@ Page({
     const todayKey = T.dateKey(now)
 
     if (day > todayKey) {
-      this.setData({
-        detail: { day, title, tag: '还没到', main: '这一天还没到', sub: '' }
-      })
+      this.setData(
+        { detail: { day, title, tag: '还没到', main: '这一天还没到', sub: '' } },
+        () => this.scrollToDetail()
+      )
       return
     }
 
@@ -383,44 +413,96 @@ Page({
       const pending = storage.getPending()
       const pendingDay = pending ? T.dateKey(now) : ''
       if (pending && day === pendingDay) {
-        this.setData({
+        this.setData(
+          {
+            detail: {
+              day,
+              title,
+              tag: '仅入睡',
+              main: '已记录入睡，还没有结束时间',
+              sub: '结束后才会进入时长统计'
+            }
+          },
+          () => this.scrollToDetail()
+        )
+        return
+      }
+      this.setData(
+        {
           detail: {
             day,
             title,
-            tag: '仅入睡',
-            main: '已记录入睡，还没有结束时间',
-            sub: '结束后才会进入时长统计'
+            tag: '未记录',
+            main: '这天还没有记录',
+            sub:
+              day < MS.minDayKey(now)
+                ? '超出可补记范围：云备份只保留最近 400 天'
+                : '点击格子可直接补记'
           }
-        })
-        return
-      }
-      this.setData({
-        detail: {
-          day,
-          title,
-          tag: '未记录',
-          main: '这天还没有记录',
-          sub:
-            day < MS.minDayKey(now)
-              ? '超出可补记范围：云备份只保留最近 400 天'
-              : '点击格子可直接补记'
-        }
-      })
+        },
+        () => this.scrollToDetail()
+      )
       return
     }
 
-    const night = S.durationOf(record)
+    const sessions = S.sessionsOf(record)
+    const primaryMin = S.durationOf(record)
     const totalMin = S.totalDurationOf(record)
-    const nap = Math.max(0, totalMin - night)
+    const first = sessions[0]
+    const last = sessions[sessions.length - 1]
     const pending = storage.getPending()
     const inProgress = pending && day === T.dateKey(now) ? ' · 另有进行中的一段' : ''
+    // 主行必须与总时长同口径：区间取「首段入睡 → 末段起床」，时长取当天总睡眠。
+    // 之前用主段（最长一段）的 bedAt/wakeAt 拼 totalDurationMin，会出现
+    // 「23:00 → 06:00 · 7 小时 40 分」这种区间与时长自相矛盾的表达。
+    const rangeText =
+      first && last
+        ? F.fmtClockTs(first.startAt) + ' 入睡 → ' + F.fmtClockTs(last.endAt) + ' 起床'
+        : F.fmtClockTs(record.bedAt) + ' 入睡 → ' + F.fmtClockTs(record.wakeAt) + ' 起床'
+    // 主行必须与总时长同口径：多段日用「首段 / 末段」而不是箭头区间，
+    // 否则「23:00 → 13:30 · 共 7 小时 30 分」会被读成 14.5 小时的连续睡眠。
     const main =
-      F.fmtClockTs(record.bedAt) + ' 入睡 → ' + F.fmtClockTs(record.wakeAt) + ' 结束 · ' + F.fmtDuration(totalMin)
-    const sub =
-      (nap > 0 ? '夜间 ' + F.fmtDuration(night) + ' · 午休/间断 ' + F.fmtDuration(nap) : '夜间 ' + F.fmtDuration(night)) +
-      ' · 按醒来日归档' +
-      inProgress
-    this.setData({ detail: { day, title, tag: '已记录', main, sub } })
+      sessions.length > 1
+        ? '首段 ' +
+          F.fmtClockTs(first.startAt) +
+          ' 入睡 · 末段 ' +
+          F.fmtClockTs(last.endAt) +
+          ' 起床 · 共 ' +
+          F.fmtDuration(totalMin)
+        : rangeText + ' · 共 ' + F.fmtDuration(totalMin)
+    // 副行解释「首末跨度」与「总睡眠」为什么可能对不上；不把主段硬叫「夜间」
+    // ——只睡一段午觉时，主段并不是夜间。
+    const parts = []
+    if (sessions.length > 1) {
+      parts.push(sessions.length + ' 段')
+      parts.push('最长一段 ' + F.fmtDuration(primaryMin))
+      const other = Math.max(0, totalMin - primaryMin)
+      if (other > 0) parts.push('其余 ' + F.fmtDuration(other))
+    } else {
+      parts.push('1 段')
+    }
+    parts.push('按醒来日归档')
+    this.setData(
+      {
+        detail: {
+          day,
+          title,
+          tag: '已记录',
+          main,
+          sub: parts.join(' · ') + inProgress,
+          // 已记录日也能再加一段（午休/醒来后再睡）：补记面板会按区间挡重叠。
+          canAdd: day >= MS.minDayKey(now)
+        }
+      },
+      () => this.scrollToDetail()
+    )
+  },
+
+  onDetailAdd() {
+    const detail = this.data.detail
+    if (!detail || !detail.day || !detail.canAdd) return
+    // 已记录日加一段：默认给下午小睡，避免 23:00→07:00 与已有夜间段重叠
+    this.openManualSheet(detail.day, { napDefault: true })
   },
 
   onMonthPrev() {
@@ -721,16 +803,25 @@ Page({
       })
       .catch(() => {
         wx.hideLoading()
-        // 云端删不掉时给用户出口：至少把本机数据清掉，云端副本保留
+        // 云端删不掉时给用户出口：至少把本机数据清掉，云端副本保留。
+        // 注意闸门必须保留：删除失败后若直接清掉 cloudPendingErase，重新开启云备份
+        // 会把云端旧记录拉回来；而 lastSyncAt 可能本来就是 0，靠它判断不出副本是否还在。
         wx.showModal({
           title: '云端删除失败',
-          content: '云端记录暂时删不掉。可以只清除本机数据，云端副本会保留，之后可在统计页重试删除。',
+          content: '云端记录暂时删不掉。可以只清除本机数据，云端副本会保留，下方会出现「删除云端副本（保留本机）」供重试。',
           confirmText: '只清本机',
           cancelText: '稍后重试',
           success: (res) => {
-            if (!res.confirm || !this._alive) return
+            if (!this._alive) return
+            if (!res.confirm) {
+              // 取消也要刷新：此时开关已写为关闭，停在旧 UI 会让用户以为同步仍开着。
+              this.refresh()
+              return
+            }
             this.clearLocalData()
-            wx.showToast({ title: '已清除本机数据', icon: 'none' })
+            storage.patchMeta({ cloudPendingErase: true })
+            this.refresh()
+            wx.showToast({ title: '已清除本机数据，云端副本待删除', icon: 'none' })
           }
         })
       })

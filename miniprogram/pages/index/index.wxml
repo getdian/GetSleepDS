@@ -83,8 +83,10 @@
             </view>
           </view>
 
-          <!-- 背面：推荐结果（参考图下方推荐列表的翻转实现） -->
-          <view class="calc-face calc-back {{view && view.compact ? 'is-compact' : ''}}">
+          <!-- 背面：推荐结果（参考图下方推荐列表的翻转实现）。
+               dense 条件只看行数：compact 同样是「3 行 + 主卡」，之前被排除后
+               反而比 dense 更高（多一行 meta + 更松的按钮），会顶出 712rpx 舞台。 -->
+          <view class="calc-face calc-back {{view && view.compact ? 'is-compact' : ''}} {{view && view.rows.length >= 3 ? 'is-dense' : ''}}">
             <block wx:if="{{view}}">
               <view class="result-head">
                 <!-- 结果指向入睡点用月牙，指向起床时间用太阳 -->

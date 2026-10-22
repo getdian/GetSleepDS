@@ -217,6 +217,11 @@ test('完成态时间线用总睡眠口径：首段入睡 → 末段起床', () 
   // 大数字仍是当天总睡眠（含午休），与时间线同口径
   assert.equal(view.duration, F.fmtDuration(510))
   assert.equal(view.sessions.length, 2)
+  // 分段轴：夜间 8h 占 480/870，午休 30 分钟落在尾端；中间 6 小时是清醒间断
+  assert.equal(view.timeline.length, 2)
+  assert.deepEqual(view.timeline.map((s) => s.left), [0, 96.6])
+  assert.deepEqual(view.timeline.map((s) => s.width), [55.2, 3.4])
+  assert.equal(view.segmentsText, '2 段 · 相隔 ' + F.fmtDuration(360))
 })
 
 test('单段记录时间线保持「入睡 / 起床」，不引入新概念', () => {
@@ -233,6 +238,40 @@ test('单段记录时间线保持「入睡 / 起床」，不引入新概念', ()
   assert.equal(view.sessionCount, 1)
   assert.equal(view.timelineFirstK, '入睡')
   assert.equal(view.timelineLastK, '起床')
+  // 单段：整条填满，不显示段数/间断摘要
+  assert.equal(view.timeline.length, 1)
+  assert.equal(view.timeline[0].left, 0)
+  assert.equal(view.timeline[0].width, 100)
+  assert.equal(view.segmentsText, '')
+})
+
+test('三段短睡眠：分段轴按比例落位，摘要给出段数与间断', () => {
+  resetStore()
+  const page = makePage()
+  storage.saveSession({ id: 'a', startAt: ts(2026, 10, 22, 0, 9), endAt: ts(2026, 10, 22, 0, 13) })
+  storage.saveSession({ id: 'b', startAt: ts(2026, 10, 22, 0, 14), endAt: ts(2026, 10, 22, 0, 17) })
+  storage.saveSession({ id: 'c', startAt: ts(2026, 10, 22, 0, 20), endAt: ts(2026, 10, 22, 0, 39) })
+  const record = storage.getRecords()['2026-10-22']
+  const view = page.buildRecordView(record)
+
+  // 跨度 30 分钟，实际睡眠 4 + 3 + 19 = 26 分钟，中间 1 + 3 = 4 分钟清醒
+  assert.equal(view.timeline.length, 3)
+  assert.deepEqual(view.timeline.map((s) => s.left), [0, 16.7, 36.7])
+  assert.deepEqual(view.timeline.map((s) => s.width), [13.3, 10, 63.3])
+  assert.equal(view.segmentsText, '3 段 · 中间醒了 2 次（4 分钟）')
+  assert.equal(view.duration, F.fmtDuration(26))
+})
+
+test('相邻无间隔的两段只报段数，不编造醒来次数', () => {
+  const page = makePage()
+  const view = page.buildRecordView({
+    day: '2026-10-22',
+    sessions: [
+      { id: 'a', startAt: ts(2026, 10, 22, 1, 0), endAt: ts(2026, 10, 22, 2, 0) },
+      { id: 'b', startAt: ts(2026, 10, 22, 2, 0), endAt: ts(2026, 10, 22, 3, 0) }
+    ]
+  })
+  assert.equal(view.segmentsText, '2 段')
 })
 
 /* ---------------- 文案中性（不预设夜间） ---------------- */
@@ -269,25 +308,32 @@ test('文案中性：睡梦中/空闲态都不出现「夜色/明早/今晚/今�
 })
 
 test('文案中性：完成态不写「今晚」，页脚深夜不再说「晚安」', () => {
-  resetStore()
-  const page = makePage()
-  page.selectComponent = () => null
-  const saved = storage.saveSession({
-    id: 'neutral-done',
-    startAt: ts(2026, 10, 21, 23, 0),
-    endAt: ts(2026, 10, 22, 7, 0)
-  })
-  page.refreshAll()
-  assert.equal(page.data.state, 'done')
-  // 标题只按“此刻”分早安/其他，不假设这一觉发生在夜里
-  assert.ok(!/今晚/.test(page.data.heroTitle))
-  assert.equal(page.data.heroSub, '入睡与起床时间都已保存。')
-  assert.ok(!/晚安/.test(page.data.footerText))
-  // 分享文案：白天补觉分享也成立
-  const share = page.onShareAppMessage()
-  assert.ok(!/昨晚|早睡/.test(share.title), share.title)
-  assert.match(share.title, /入睡/)
-  assert.ok(saved)
+  // 这条用例依赖“记录日 = 今天”；冻结时间，避免测试在跨午夜后变红
+  const originalNow = Date.now
+  Date.now = () => ts(2026, 10, 22, 10, 0)
+  try {
+    resetStore()
+    const page = makePage()
+    page.selectComponent = () => null
+    const saved = storage.saveSession({
+      id: 'neutral-done',
+      startAt: ts(2026, 10, 21, 23, 0),
+      endAt: ts(2026, 10, 22, 7, 0)
+    })
+    page.refreshAll()
+    assert.equal(page.data.state, 'done')
+    // 标题只按“此刻”分早安/其他，不假设这一觉发生在夜里
+    assert.ok(!/今晚/.test(page.data.heroTitle))
+    assert.equal(page.data.heroSub, '入睡与起床时间都已保存。')
+    assert.ok(!/晚安/.test(page.data.footerText))
+    // 分享文案：白天补觉分享也成立
+    const share = page.onShareAppMessage()
+    assert.ok(!/昨晚|早睡/.test(share.title), share.title)
+    assert.match(share.title, /入睡/)
+    assert.ok(saved)
+  } finally {
+    Date.now = originalNow
+  }
 })
 
 /* ---------------- 熄灯（睡前模式） ---------------- */
@@ -490,5 +536,45 @@ test('onDeleteSession：唯一一段的确认文案提示整天撤销', () => {
     assert.equal(storage.getRecords()[saved.day], undefined)
   } finally {
     global.wx.showModal = originalModal
+  }
+})
+
+test('三段中两段相接：中间醒来的次数只数真正隔开的间隔', () => {
+  const page = makePage()
+  const view = page.buildRecordView({
+    day: '2026-10-22',
+    sessions: [
+      { id: 'a', startAt: ts(2026, 10, 22, 1, 0), endAt: ts(2026, 10, 22, 2, 0) },
+      { id: 'b', startAt: ts(2026, 10, 22, 2, 0), endAt: ts(2026, 10, 22, 3, 0) },
+      { id: 'c', startAt: ts(2026, 10, 22, 4, 0), endAt: ts(2026, 10, 22, 5, 0) }
+    ]
+  })
+  // 跨度 4 小时，睡着 3 小时，只隔了 1 次（1 小时）；a/b 首尾相接不算醒
+  assert.equal(view.segmentsText, '3 段 · 中间醒了 1 次（1 小时 00 分）')
+})
+
+test('结束/补记/编辑面板开着回前台：onShow 必须重新隐藏 tabBar', () => {
+  resetStore()
+  const page = makePage()
+  const bar = {
+    data: { hidden: false },
+    setData(patch) {
+      Object.assign(this.data, patch)
+    }
+  }
+  const originalPages = global.getCurrentPages
+  global.getCurrentPages = () => [{ getTabBar: () => bar }]
+  try {
+    page.data.state = 'sleeping'
+    page.data.endShow = true
+    page.data.dim = false
+    page.refreshAll = () => {}
+    page.startClock = () => {}
+    page.openPendingAudio = () => {}
+    page.openPendingManual = () => {}
+    page.onShow()
+    assert.equal(bar.data.hidden, true, '面板期间 tabBar 不能被 audio-dock 的 show 翻出来')
+  } finally {
+    global.getCurrentPages = originalPages
   }
 })

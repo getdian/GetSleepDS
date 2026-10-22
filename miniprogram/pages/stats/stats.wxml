@@ -73,6 +73,7 @@
         cells="{{calendarCells}}"
         title="{{calendarTitle}}"
         can-next="{{canNextMonth}}"
+        can-prev="{{canPrevMonth}}"
         selected-key="{{selectedKey}}"
         bind:daytap="onCalendarTap"
         bind:prev="onMonthPrev"
@@ -105,13 +106,20 @@
         </view>
       </view>
 
-      <view wx:if="{{detail}}" class="day-detail">
+      <view wx:if="{{detail}}" id="day-detail" class="day-detail">
         <view class="dd-head">
           <text class="dd-title">{{detail.title}}</text>
           <text class="dd-tag">{{detail.tag}}</text>
         </view>
         <text class="dd-main">{{detail.main}}</text>
         <text wx:if="{{detail.sub}}" class="dd-sub">{{detail.sub}}</text>
+        <view
+          wx:if="{{detail.canAdd}}"
+          class="dd-add"
+          bindtap="onDetailAdd"
+          aria-role="button"
+          aria-label="给这一天补记一段睡眠"
+        >补记一段 ›</view>
       </view>
 
       <view class="section-foot">
@@ -144,7 +152,16 @@
           <text class="sync-sub">{{syncEnabled ? '仅上传睡眠时间，不含手机号与位置' : '默认只存本机；开启后可换机恢复'}}</text>
         </view>
         <view class="sync-ops">
-          <view wx:if="{{syncEnabled}}" class="sync-btn {{syncBusy ? 'is-busy' : ''}}" bindtap="onSyncTap" aria-role="button">{{syncBusy ? '同步中…' : '同步'}}</view>
+          <view
+            wx:if="{{syncEnabled}}"
+            class="sync-btn {{syncBusy ? 'is-busy' : ''}}"
+            bindtap="onSyncTap"
+            aria-role="button"
+            aria-label="{{syncBusy ? '同步中' : '同步'}}"
+          >
+            <view class="sync-ico"></view>
+            <text>{{syncBusy ? '同步中…' : '同步'}}</text>
+          </view>
           <view
             class="sync-toggle-hit"
             bindtap="onSyncToggle"
@@ -159,7 +176,11 @@
         </view>
       </view>
 
-      <view wx:if="{{hasCloudCopy && !syncEnabled}}" class="cloud-del" bindtap="eraseCloudOnly">删除云端副本（保留本机）</view>
+      <view
+        wx:if="{{(hasCloudCopy || cloudPendingErase) && !syncEnabled}}"
+        class="cloud-del"
+        bindtap="eraseCloudOnly"
+      >删除云端副本（保留本机）</view>
 
       <view wx:if="{{hasData}}" class="danger-entry" bindtap="onClearData" aria-role="button">
         <text class="danger-entry-title">{{syncEnabled ? '清除数据（云端+本机）' : '清除本机睡眠数据'}}</text>

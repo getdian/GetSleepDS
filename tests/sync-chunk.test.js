@@ -89,3 +89,62 @@ test('cloudPendingErase 时同步直接跳过，避免云端旧记录复活', as
   const res = await sync.syncNow(true)
   assert.equal(res.skipped, 'cloud_pending')
 })
+
+test('chunkRecords：60 条 × 5 段 + 400 墓碑时按字节分片，首片为墓碑留空间', () => {
+  const records = []
+  const base = Date.UTC(2026, 0, 1, 23, 0, 0)
+  for (let i = 0; i < 60; i += 1) {
+    const sessions = []
+    let at = base + i * 24 * 60 * 60 * 1000
+    for (let k = 0; k < 5; k += 1) {
+      sessions.push({
+        id: 's-' + at + '-' + k,
+        startAt: at,
+        endAt: at + 30 * 60 * 1000,
+        durationMin: 30,
+        source: 'manual',
+        editedAt: at
+      })
+      at += 60 * 60 * 1000
+    }
+    records.push({
+      day: '2026-01-' + String(1 + (i % 28)).padStart(2, '0'),
+      dayRule: 'wake-v1',
+      schemaVersion: 2,
+      bedAt: sessions[0].startAt,
+      wakeAt: sessions[4].endAt,
+      durationMin: 30,
+      nightDurationMin: 30,
+      totalDurationMin: 150,
+      sessions,
+      updatedAt: sessions[4].endAt
+    })
+  }
+  const deletedDays = Array.from({ length: 400 }, (_, i) => ({
+    day:
+      '2025-' +
+      String(1 + (Math.floor(i / 28) % 12)).padStart(2, '0') +
+      '-' +
+      String(1 + (i % 28)).padStart(2, '0'),
+    deletedAt: base + i * 1000
+  }))
+
+  const batches = sync.chunkRecords(records, deletedDays)
+  assert.ok(batches.length >= 2)
+  assert.equal(
+    batches.reduce((sum, batch) => sum + batch.length, 0),
+    records.length
+  )
+  batches.forEach((batch, index) => {
+    const body = {
+      records: batch,
+      deletedDays: index === 0 ? deletedDays : [],
+      includeAll: index === 0
+    }
+    assert.ok(batch.length <= 60, '单片不超过 60 条')
+    assert.ok(
+      JSON.stringify(body).length <= 44 * 1024,
+      '第 ' + index + ' 片超出字节预算：' + JSON.stringify(body).length
+    )
+  })
+})

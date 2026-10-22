@@ -189,8 +189,10 @@ Component({
       this.syncPlayerText()
       // 隐藏期间解锁可能到期；回前台补一次，避免继续显示“已解锁”
       this.refreshUnlock()
+      // tabBar 的显隐由页面 owner 统一负责：这里只保证“抽屉开着时必须隐藏”。
+      // 之前 else tabbar.show() 会在结束/补记/编辑面板开着回前台时把 tabBar 翻出来，
+      // 而 tabBar 是独立 root，页面遮罩压不住它。
       if (this.data.open) tabbar.hide()
-      else tabbar.show()
     },
     hide() {
       this._pageVisible = false
@@ -209,7 +211,18 @@ Component({
       this._loadingTimer = setTimeout(() => {
         this._loadingTimer = null
         if (!this._alive || !this.data.loading) return
-        this.setData({ loading: false, playerSub: '加载超时，点音符重试' })
+        // 12s 还没起播：不能只改文案而留下 playing=true 的绿音符。
+        // 复位播放态 + 展开播放条，让「连接超时，点按重试」可见且控件回到“播放”图标。
+        this.setData({
+          playing: false,
+          loading: false,
+          miniExpanded: true,
+          playerSub: '连接超时，点按重试'
+        })
+        storage.patchMeta({ lastTrackPlaying: false })
+        try {
+          if (this._audio) this._audio.pause()
+        } catch (e) {}
       }, 12000)
     },
 
@@ -408,6 +421,18 @@ Component({
       const handlers = {
         play: () => {
           if (!this._alive) return
+          // 系统侧恢复（通知栏/锁屏/耳机）也要过权益校验：到期后不能靠系统控件续播。
+          if (!this.isUnlocked() && !this.isFreeMode()) {
+            try {
+              this._audio.pause()
+            } catch (e) {}
+            storage.patchMeta({ lastTrackPlaying: false })
+            this.setData({ playing: false, loading: false })
+            if (this._pageVisible) {
+              wx.showToast({ title: '解锁已到期，重新解锁后继续', icon: 'none' })
+            }
+            return
+          }
           this.disarmLoadingGuard()
           playerState.clearFallback()
           const app = getApp()
@@ -437,6 +462,19 @@ Component({
         },
         timeupdate: () => {
           if (!this._alive || this._stopRequested) return
+          // 无缝回环绕过 onEnded，而 60s 的 refreshUnlock 只在页面可见时跑；
+          // 低频复检一次权益，避免切到首页/统计页后“看一次广告播整夜”。
+          const now = Date.now()
+          if (now - (this._entitlementAt || 0) > 15000) {
+            this._entitlementAt = now
+            if (this.data.currentId && !this.isUnlocked() && !this.isFreeMode()) {
+              this.stopPlayback()
+              if (this._pageVisible) {
+                wx.showToast({ title: '解锁已到期，重新解锁后继续', icon: 'none' })
+              }
+              return
+            }
+          }
           // 曲末前无缝回环：不进 ended、不换 src，保住微信悬浮音符（见 player-state.seamlessLoop）
           playerState.seamlessLoop(this._audio)
         },
@@ -667,6 +705,13 @@ Component({
         wx.showToast({ title: '当前版本不支持后台播放', icon: 'none' })
         return
       }
+      // 到期后不允许从任何入口（锁屏恢复/跨页/程序化）重新起播；
+      // 与 now-playing.handlePlay 同一口径，避免“到期但还能续播”的权益漏洞。
+      if (!this.isUnlocked() && !this.isFreeMode()) {
+        this.stopPlayback()
+        if (this._pageVisible) wx.showToast({ title: '解锁已到期，重新解锁后继续', icon: 'none' })
+        return
+      }
 
       this._stopRequested = false
       playerState.clearFallback()
@@ -697,6 +742,9 @@ Component({
       this._audio.epname = '环境音'
       this._audio.singer = '睡点'
       this.setAudioSrc(cached || track.url)
+      // 与 replay / togglePlay 同口径：赋值 src 不保证自动起播，补一次 play()，
+      // 避免少数基础库停在「正在连接音频…」直到 12s 超时。
+      this.safePlay()
 
       const savedMeta = storage.patchMeta({
         lastTrackId: track.id,

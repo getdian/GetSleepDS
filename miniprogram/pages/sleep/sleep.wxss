@@ -295,6 +295,20 @@
   color: var(--text-muted);
 }
 
+/* 记录存在但没有任何可用段（脏数据）：不给空白大数字，直接说明可撤销重记 */
+.done-empty {
+  margin-top: 40rpx;
+  padding: 0 36rpx;
+}
+
+.done-empty-text {
+  display: block;
+  text-align: center;
+  font-size: 22rpx;
+  line-height: 1.8;
+  color: var(--text-secondary);
+}
+
 .done-duration {
   margin-top: 10rpx;
   font-family: var(--font-cn-serif);
@@ -351,10 +365,37 @@
   margin: 0 18rpx;
 }
 
-.done-rail-line {
+/* 分段轨道：底色是“首段入睡 → 末段起床”的总跨度，亮条是真正睡着的段，
+   中间留空即清醒间断。单段时是一整条，视觉与旧版一致。 */
+.done-rail-track {
+  position: relative;
   flex: 1;
-  height: 1rpx;
-  background: linear-gradient(90deg, rgba(167, 164, 255, 0.15), rgba(167, 164, 255, 0.5));
+  height: 8rpx;
+  margin: 0 10rpx;
+  border-radius: 4rpx;
+  background: rgba(167, 164, 255, 0.14);
+  overflow: hidden;
+}
+
+.done-rail-seg {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  /* 0.8% 在 390 屏上只有约 1.5pt，1 分钟段仍看不见；给一个物理下限 */
+  min-width: 6rpx;
+  border-radius: 4rpx;
+  background: linear-gradient(90deg, rgba(167, 164, 255, 0.72), rgba(233, 238, 255, 0.95));
+  box-shadow: 0 0 10rpx rgba(167, 164, 255, 0.35);
+}
+
+/* 段数 / 间断摘要：解释“首末跨度”与“总睡眠”为什么对不上 */
+.done-segments-text {
+  display: block;
+  margin-top: 12rpx;
+  text-align: center;
+  font-size: 20rpx;
+  letter-spacing: 1rpx;
+  color: rgba(255, 255, 255, 0.52);
 }
 
 .done-rail-dot {
@@ -381,7 +422,8 @@
 
 .cta-mini {
   position: relative;
-  min-height: 64rpx;
+  /* 完成态主操作是「继续入睡」，32pt 的按钮在睡前单手场景偏小；视觉不变、热区补到 88rpx */
+  min-height: 88rpx;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -704,12 +746,13 @@
   flex: none;
   display: flex;
   align-items: center;
-  gap: 6rpx;
+  /* 修改/删除是相邻的破坏性操作，3pt 的间距太容易误触；留出 8pt */
+  gap: 16rpx;
 }
 
 .session-op {
   position: relative;
-  min-height: 56rpx;
+  min-height: 64rpx;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -727,14 +770,14 @@
   color: var(--color-danger);
 }
 
-/* 视觉 56rpx，命中区补到 72rpx */
+/* 视觉 64rpx，命中区补到 88rpx（上下各 12rpx） */
 .session-op::after {
   content: "";
   position: absolute;
   left: 0;
   right: 0;
-  top: -8rpx;
-  bottom: -8rpx;
+  top: -12rpx;
+  bottom: -12rpx;
 }
 
 .session-op:active {

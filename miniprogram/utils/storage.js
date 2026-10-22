@@ -82,6 +82,22 @@ function saveRecord(record) {
 }
 
 /**
+ * v1 记录按“入睡日”存放；若它被放在 day 但实际醒来日不是 day，
+ * 直接把它并进 day 会得到“一条记录跨两个醒来日”，服务端 validateRecords
+ * 会整条丢弃（云备份静默丢这一天）。
+ * 返回需要迁移到真实醒来日的记录信息；不是错位 v1 时返回 null。
+ */
+function misplacedV1Of(all, day) {
+  const record = all[day]
+  if (!record || record.dayRule === 'wake-v1') return null
+  const sessions = X.sessionsOf(record)
+  if (!sessions.length) return null
+  const wakeDay = X.sessionDay(sessions[sessions.length - 1])
+  if (!wakeDay || wakeDay === day) return null
+  return { sessions, wakeDay }
+}
+
+/**
  * 追加/更新一段睡眠，按醒来日归档。
  * 同一天已有的旧 v1 记录会先合成一段，再与新段一起聚合。
  */
@@ -94,10 +110,28 @@ function saveSession(session) {
   // 先按时间区间查全表：只看目标日会漏掉“前一天已有一段”的跨天重叠。
   // 同 id 的旧副本会被 upsert 替换，不算冲突。
   if (X.findOverlap(all, normalized.startAt, normalized.endAt, { id: normalized.id })) return false
+  // 目标日若挂着一条“实际属于次日”的 v1 夜间记录，先把它迁到真实醒来日，
+  // 再拼当天记录；否则会产出跨两个醒来日的记录（服务端会拒收）。
+  const misplaced = misplacedV1Of(all, day)
+  let baseSessions = []
+  if (misplaced) {
+    let movedList = X.sessionsOf(all[misplaced.wakeDay])
+    misplaced.sessions.forEach((item) => {
+      movedList = X.upsert({ sessions: movedList }, item)
+    })
+    if (!movedList || movedList.length > 8 || X.hasOverlap(movedList)) return false
+    if (X.totalDurationOf(movedList) > 24 * 60) return false
+    const movedRecord = X.aggregate(misplaced.wakeDay, movedList, Date.now())
+    if (!movedRecord) return false
+    all[misplaced.wakeDay] = movedRecord
+    // 旧 day 即将被新记录覆盖，不写墓碑；云端旧行由新 day 的 updatedAt 覆盖。
+    delete all[day]
+  } else {
+    baseSessions = X.sessionsOf(all[day])
+  }
   // 旧 v1 记录按入睡日存放；当它的醒来日正好是本次归档日时，顺带并到新记录，
   // 避免“昨晚记录挂在昨天、今天午休另起一条”的过渡期割裂。
   const legacyKeys = []
-  let baseSessions = X.sessionsOf(all[day])
   Object.keys(all).forEach((key) => {
     if (key === day || !all[key] || all[key].dayRule === 'wake-v1') return
     const sessions = X.sessionsOf(all[key])

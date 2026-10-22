@@ -12,6 +12,9 @@ const { getConfig, loadConfig, getConfigStatus } = require('../../utils/config')
 const CLOCK_INTERVAL = 60 * 1000
 const DEFAULT_FALL = 15
 const CLOCK_RE = /^([01]\d|2[0-3]):[0-5]\d$/
+// 结果面的锚点寿命：超过 30 分钟后回到/停留在结果面都要按“现在”重算。
+// 锚点只用于同一次计算会话内改“入睡耗时”不整体漂移，不能跨夜长期存活。
+const RESULT_TTL_MS = 30 * 60 * 1000
 
 Page({
   data: {
@@ -98,8 +101,8 @@ Page({
       .catch(() => {
         this._cfgLoaded = true
       })
-    // 切走再回来时，已翻到结果面的推荐时间要重新判定“已过”
-    if (this.data.flipped) this.calc(true)
+    // 结果面已由 refreshNow() 按当前时刻重算过，这里不再重复 calc：
+    // 同一次 onShow 连续两次全量重算/过桥没有收益，只会让结果面闪一下。
   },
 
   onHide() {
@@ -286,7 +289,10 @@ Page({
   },
 
   calc(silent, explicitValue) {
-    // 锚点固定后，切后台回来/在结果面改入睡耗时都不会让 recommended 时间整体漂移一天
+    // 锚点固定后，同一次结果内改“入睡耗时”不会让推荐整体漂移一天；
+    // 但锚点过期（切后台过夜/长时间停留）会把“今天 06:45”继续标成“明天”，
+    // 甚至给出一条已经过去的推荐。重算前先回到当前时刻。
+    if (this._anchorAt && Date.now() - this._anchorAt > RESULT_TTL_MS) this._anchorAt = 0
     const now = this._anchorAt || Date.now()
     const value =
       explicitValue || (this.data.mode === 'wake' ? this.data.wakeTime : this.data.sleepTime)

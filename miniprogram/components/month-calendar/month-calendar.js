@@ -19,6 +19,11 @@ Component({
       type: Boolean,
       value: false
     },
+    // 与 canNext 对称：翻到可回溯边界后 ‹ 必须有禁用态，不能“按了没反应”
+    canPrev: {
+      type: Boolean,
+      value: false
+    },
     // 受控选中态：页面在数据/月份变化时置空，避免“详情消失、描边还在”
     selectedKey: {
       type: String,
@@ -51,6 +56,7 @@ Component({
     },
 
     onPrev() {
+      if (!this.data.canPrev) return
       this.triggerEvent('prev')
     },
 
