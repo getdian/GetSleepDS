@@ -32,6 +32,7 @@ Page({
     bgCategory: '全部',
     bgItems: [],
     bgOpen: false,
+    whyOpen: false,
     bgUnlockHours: 24,
     bgFreeMode: false,
     bgBusy: false
@@ -103,11 +104,17 @@ Page({
 
   onHide() {
     this.stopClock()
+    // 说明弹层不跨页面：切走时收起并恢复 tabBar（独立 root，页面 z-index 盖不住）
+    if (this.data.whyOpen) {
+      this.setData({ whyOpen: false })
+      tabbar.show()
+    }
   },
 
   onUnload() {
     this._alive = false
     this.stopClock()
+    if (this.data.whyOpen) tabbar.show()
   },
 
   refreshNow() {
@@ -312,19 +319,9 @@ Page({
 
       const rows = plan.slots
         .filter((slot) => !main || slot.cycles !== main.cycles)
-        .map((slot) => {
-          const guide = G.guidanceOf(slot.cycles)
-          return {
-            cycles: slot.cycles,
-            time: F.fmtClockTs(slot.at),
-            // 跨午夜时“今天/明天”不如“凌晨/晚上”直观
-            day: F.periodLabel(slot.at),
-            duration: F.fmtDuration(slot.durationMin),
-            guideLabel: guide.label,
-            guideTone: guide.tone,
-            passed: slot.passed
-          }
-        })
+        .map((slot) => this.slotRow(slot))
+      // 6 个周期是“想多睡一会儿”的附加档：来不及就不出现，避免与主推荐抢注意力
+      if (!plan.extra.passed) rows.push(this.slotRow(plan.extra, true))
 
       view = {
         label: main ? '推荐入睡时间' : '现在睡',
@@ -350,18 +347,8 @@ Page({
       // 入睡时间已过 30 分钟宽限时会按次日算，这里必须把「明天」写出来，否则用户看不到日期已经变了。
       const sleepDay = P.dayLabel(plan.sleepAt, now)
 
-      const rows = plan.slots.slice(1).map((slot) => {
-        const guide = G.guidanceOf(slot.cycles)
-        return {
-          cycles: slot.cycles,
-          time: F.fmtClockTs(slot.at),
-          day: F.periodLabel(slot.at),
-          duration: F.fmtDuration(slot.durationMin),
-          guideLabel: guide.label,
-          guideTone: guide.tone,
-          passed: false
-        }
-      })
+      const rows = plan.slots.slice(1).map((slot) => this.slotRow(slot))
+      rows.push(this.slotRow(plan.extra, true))
 
       view = {
         label: '推荐起床时间',
@@ -386,6 +373,22 @@ Page({
     if (!silent && wx.vibrateShort) wx.vibrateShort({ type: 'light' })
   },
 
+  /** 结果行 VM：三档推荐与 6 周期附加档共用，保证文案/字段一致 */
+  slotRow(slot, extra) {
+    const guide = G.guidanceOf(slot.cycles)
+    return {
+      cycles: slot.cycles,
+      time: F.fmtClockTs(slot.at),
+      // 跨午夜时“今天/明天”不如“凌晨/晚上”直观
+      day: F.periodLabel(slot.at),
+      duration: F.fmtDuration(slot.durationMin),
+      guideLabel: guide.label,
+      guideTone: guide.tone,
+      passed: slot.passed,
+      extra: !!extra
+    }
+  },
+
   /** 非“今天”时给时段词加日期前缀（“明天 早晨”）；今天不加，避免首屏噪音 */
   dayLabelPrefix(timestamp, now) {
     const label = P.dayLabel(timestamp, now)
@@ -397,6 +400,24 @@ Page({
     this._anchorAt = 0
     this.setData({ flipped: false, view: null })
   },
+
+  /* ---------------- 90 分钟周期说明 ---------------- */
+
+  openWhy() {
+    if (!this._alive || this.data.whyOpen) return
+    // tabBar 渲染在独立 root，页面遮罩压不住它，只能主动隐藏
+    tabbar.hide()
+    this.setData({ whyOpen: true })
+  },
+
+  closeWhy() {
+    if (!this.data.whyOpen) return
+    tabbar.show()
+    this.setData({ whyOpen: false })
+  },
+
+  /** 面板内点击/滑动不穿透到遮罩 */
+  noop() {},
 
   goSleep() {
     wx.switchTab({ url: '/pages/sleep/sleep' })

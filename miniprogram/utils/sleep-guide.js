@@ -16,7 +16,24 @@ function hoursText(hours) {
 function guidanceOf(cycles) {
   const count = Number(cycles) || 0
   const hours = (count * CYCLE_MIN) / 60
-  if (hours >= ADULT_MIN_HOURS && hours <= ADULT_MAX_HOURS) {
+  // 恰好 9 小时 = 成人常见区间上限：不叫“推荐”（会与 7.5 小时撞标签），叫“充足”，作为补觉档
+  if (hours === ADULT_MAX_HOURS) {
+    return {
+      tone: 'ample',
+      label: '充足',
+      hours,
+      note:
+        count +
+        ' 个周期约 ' +
+        hoursText(hours) +
+        '；为成人常见区间 ' +
+        ADULT_MIN_HOURS +
+        '–' +
+        ADULT_MAX_HOURS +
+        ' 小时的上限，适合补觉或周末多睡一会儿'
+    }
+  }
+  if (hours >= ADULT_MIN_HOURS && hours < ADULT_MAX_HOURS) {
     return { tone: 'ok', label: '推荐', note: '', hours }
   }
   if (hours > ADULT_MAX_HOURS) {

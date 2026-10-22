@@ -2,7 +2,9 @@ const T = require('./time')
 const F = require('./format')
 
 const CYCLE = T.CYCLE_MIN
+// 主推荐只在这三档里选；6 个周期是「充足/补觉」附加档，永远不抢主推荐位
 const CYCLES = [5, 4, 3]
+const EXTRA_CYCLES = 6
 
 function dayLabel(timestamp, now) {
   const diff = Math.round((T.startOfDay(timestamp) - T.startOfDay(now)) / T.DAY_MS)
@@ -63,16 +65,18 @@ function bedtimesForWake(now, wakeMinutes, fallMinutes, progressNow) {
   const wakeAt = nextWakeAt(now, wakeMinutes, fallMinutes)
   const progressAt = Number(progressNow) || now
 
-  const slots = CYCLES.map((cycles) => {
-    const at = wakeAt - (fallMinutes + cycles * CYCLE) * T.MINUTE_MS
-    return {
-      cycles,
-      at,
-      passed: at <= progressAt,
-      dayLabel: dayLabel(at, now),
-      durationMin: cycles * CYCLE
-    }
+  const makeSlot = (cycles, at) => ({
+    cycles,
+    at,
+    passed: at <= progressAt,
+    dayLabel: dayLabel(at, now),
+    durationMin: cycles * CYCLE
   })
+  const bedtimeOf = (cycles) => wakeAt - (fallMinutes + cycles * CYCLE) * T.MINUTE_MS
+
+  const slots = CYCLES.map((cycles) => makeSlot(cycles, bedtimeOf(cycles)))
+  // 附加档：多睡一个周期（9 小时），只作为“想补觉”的备选
+  const extra = makeSlot(EXTRA_CYCLES, bedtimeOf(EXTRA_CYCLES))
 
   const availableMin = Math.max(
     0,
@@ -83,6 +87,7 @@ function bedtimesForWake(now, wakeMinutes, fallMinutes, progressNow) {
     wakeAt,
     wakeDayLabel: dayLabel(wakeAt, now),
     slots,
+    extra,
     allPassed: slots.every((slot) => slot.passed),
     availableMin,
     fallMinutes
@@ -102,21 +107,24 @@ function sleepAtOf(now, sleepMinutes) {
 function wakeTimesForSleep(now, sleepMinutes, fallMinutes) {
   const sleepAt = sleepAtOf(now, sleepMinutes)
 
-  const slots = CYCLES.map((cycles) => {
-    const at = sleepAt + (fallMinutes + cycles * CYCLE) * T.MINUTE_MS
-    return {
-      cycles,
-      at,
-      passed: false,
-      dayLabel: dayLabel(at, now),
-      durationMin: cycles * CYCLE
-    }
+  const makeSlot = (cycles, at) => ({
+    cycles,
+    at,
+    passed: false,
+    dayLabel: dayLabel(at, now),
+    durationMin: cycles * CYCLE
   })
+  const wakeAtOf = (cycles) => sleepAt + (fallMinutes + cycles * CYCLE) * T.MINUTE_MS
+
+  const slots = CYCLES.map((cycles) => makeSlot(cycles, wakeAtOf(cycles)))
+  // 附加档：多睡一个周期（9 小时），只作为“想补觉”的备选
+  const extra = makeSlot(EXTRA_CYCLES, wakeAtOf(EXTRA_CYCLES))
 
   return {
     sleepAt,
     sleepDayLabel: dayLabel(sleepAt, now),
     slots,
+    extra,
     allPassed: false,
     fallMinutes
   }
@@ -125,6 +133,7 @@ function wakeTimesForSleep(now, sleepMinutes, fallMinutes) {
 module.exports = {
   CYCLE,
   CYCLES,
+  EXTRA_CYCLES,
   dayLabel,
   nextWakeAt,
   wakeContextText,

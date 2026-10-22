@@ -120,11 +120,12 @@
                 <view
                   wx:for="{{view.rows}}"
                   wx:key="cycles"
-                  class="result-row {{item.passed ? 'is-passed' : ''}}"
+                  class="result-row {{item.passed ? 'is-passed' : ''}} {{item.extra ? 'is-extra' : ''}}"
                 >
                   <view class="result-row-left">
                     <text wx:if="{{item.day}}" class="result-row-day">{{item.day}}</text>
                     <text class="result-row-time">{{item.time}}</text>
+                    <text wx:if="{{item.extra}}" class="result-row-tag is-extra">补觉</text>
                     <text wx:if="{{item.passed}}" class="result-row-tag">已过</text>
                   </view>
                   <view class="result-row-right">
@@ -157,14 +158,60 @@
     </view>
   </view>
 
-  <view class="calc-note">
+  <view
+    class="calc-note"
+    bindtap="openWhy"
+    hover-class="calc-note--tap"
+    aria-role="button"
+    aria-label="为什么按 90 分钟周期计算"
+  >
     <text>按 90 分钟周期计算，仅作时间参考</text>
+    <text class="calc-note-more">为什么是 90 分钟？›</text>
   </view>
 
   <ad-slot slot-name="home" enabled="{{ads.home.enabled}}" unit-id="{{ads.home.unitId}}" type="{{ads.home.type}}" />
 </view>
 
 <view class="np-host"><now-playing /></view>
+
+<!-- 为什么是 90 分钟：仅陈述一般睡眠常识，不做医疗建议 -->
+<view wx:if="{{whyOpen}}" class="end-mask" catchtap="closeWhy" catchtouchmove="noop">
+  <view class="end-sheet why-sheet" catchtap="noop" catchtouchmove="noop" aria-role="dialog" aria-label="为什么按 90 分钟周期计算">
+    <view class="end-head">
+      <view class="why-head-text">
+        <text class="end-title">为什么是 90 分钟？</text>
+        <text class="end-sub">睡眠周期与闹钟的关系</text>
+      </view>
+      <text class="end-close" catchtap="closeWhy" aria-role="button" aria-label="关闭">×</text>
+    </view>
+
+    <view class="why-point">
+      <text class="why-num">1</text>
+      <view class="why-body">
+        <text class="why-title">一轮大约 90 分钟</text>
+        <text class="why-text">睡眠在浅睡、深睡与做梦（REM）之间循环。成年人一轮常见 70–120 分钟，平均约 90 分钟——90 是常用均值，不是精确值。</text>
+      </view>
+    </view>
+
+    <view class="why-point">
+      <text class="why-num">2</text>
+      <view class="why-body">
+        <text class="why-title">8 小时 = 5.33 个周期</text>
+        <text class="why-text">8 小时本身没问题，只是不在 90 分钟的整数倍上。固定时刻的闹钟不一定落在周期末尾；在周期中途（尤其深睡阶段）被叫醒，容易有刚醒时的昏沉感。深睡多集中在前半夜，后半夜以 REM 为主。</text>
+      </view>
+    </view>
+
+    <view class="why-point">
+      <text class="why-num">3</text>
+      <view class="why-body">
+        <text class="why-title">5 个周期 = 7.5 小时</text>
+        <text class="why-text">在周期末尾（浅睡或 REM）醒来，通常比在周期中途醒来更清爽。但总时长仍以成人常见的 7–9 小时为准；个体差异很大，不必为凑周期刻意少睡。</text>
+      </view>
+    </view>
+
+    <text class="why-foot">注：以上为一般睡眠常识，不构成医疗建议；作息以自身感受为准。</text>
+  </view>
+</view>
 
 <background-picker
   show="{{bgOpen}}"

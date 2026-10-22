@@ -75,6 +75,31 @@ test('起床上下文用 24h + 时段词，避免 12 小时制歧义', () => {
   assert.equal(P.wakeContextText(morning, 7 * 60 + 30, 15), '今天 早晨 07:30 起床')
 })
 
+test('附加 6 个周期作为「充足/补觉」档，不参与主推荐', () => {
+  const evening = local(2026, 10, 17, 20, 0)
+  const plan = P.bedtimesForWake(evening, 7 * 60 + 30, 15)
+
+  assert.deepEqual(plan.slots.map((slot) => slot.cycles), [5, 4, 3], '主推荐集合不变')
+  assert.equal(P.EXTRA_CYCLES, 6)
+  assert.equal(plan.extra.cycles, 6)
+  assert.equal(T.minutesOf(plan.extra.at), 22 * 60 + 15)
+  assert.equal(plan.extra.passed, false)
+  assert.equal(plan.extra.durationMin, 9 * 60)
+
+  // 23:00：6 周期（22:15）已过，5 周期（23:45）还在
+  const late = P.bedtimesForWake(local(2026, 10, 17, 23, 0), 7 * 60 + 30, 15)
+  assert.equal(late.extra.passed, true)
+  assert.equal(late.slots[0].passed, false)
+})
+
+test('入睡推起床：附加 6 个周期（9 小时）档', () => {
+  const plan = P.wakeTimesForSleep(local(2026, 10, 17, 22, 30), 23 * 60, 15)
+  assert.equal(plan.extra.cycles, 6)
+  assert.equal(T.minutesOf(plan.extra.at), 8 * 60 + 15)
+  assert.equal(plan.extra.dayLabel, '明天')
+  assert.equal(plan.extra.durationMin, 9 * 60)
+})
+
 test('入睡上下文用 24h + 时段词，并与 30 分钟宽限同口径', () => {
   const afternoon = local(2026, 10, 18, 15, 31)
   assert.equal(P.sleepContextText(afternoon, 22 * 60 + 30), '今天 晚上 22:30 入睡')

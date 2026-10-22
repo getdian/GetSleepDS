@@ -62,6 +62,18 @@ test('入睡提示陈述选中时刻；结果头图标随模式（睡点月牙 /
   assert.ok(icon.indexOf("mode === 'wake' ? 'is-moon' : 'is-sun'") >= 0, icon)
 })
 
+test('90 分钟说明：入口可点、数字留有余量、带免责声明', () => {
+  assert.ok(WXML.indexOf('bindtap="openWhy"') >= 0, '脚注必须可点')
+  assert.ok(WXML.indexOf('为什么是 90 分钟？') >= 0, '入口文案缺失')
+  // 事实口径：均值 + 个体区间，不写“正好 90 分钟”
+  assert.ok(WXML.indexOf('70–120 分钟') >= 0, '必须给出个体区间')
+  assert.ok(WXML.indexOf('平均约 90 分钟') >= 0)
+  assert.equal(WXML.indexOf('正好是 90 分钟'), -1, '不要断言人人都正好 90 分钟')
+  // 不得出现“第 6 个周期深睡期被叫醒”这类与睡眠结构不符的断言
+  assert.equal(WXML.indexOf('第 6 个周期的“深睡期”'), -1)
+  assert.ok(WXML.indexOf('不构成医疗建议') >= 0, '说明必须带免责')
+})
+
 test('落地页手机演示与应用计算器同口径', () => {
   assert.ok(SITE.indexOf('<strong>想几点起？</strong>') >= 0)
   assert.ok(SITE.indexOf('设定起床点，倒推你的入睡点') >= 0)

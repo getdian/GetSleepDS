@@ -39,8 +39,13 @@ test('文案按真实时长生成，周期档位变化不会写死旧数字', ()
   assert.match(two.note, /3 小时/)
   assert.doesNotMatch(two.note, /4\.5 小时/)
 
-  assert.equal(G.guidanceOf(6).tone, 'ok')
-  assert.equal(G.guidanceOf(6).hours, 9)
+  // 6 个周期 = 9 小时：成人区间上限，标「充足」而不是抢占 5 个周期的「推荐」
+  const ample = G.guidanceOf(6)
+  assert.equal(ample.tone, 'ample')
+  assert.equal(ample.label, '充足')
+  assert.equal(ample.hours, 9)
+  assert.match(ample.note, /9 小时/)
+  assert.match(ample.note, /补觉/)
 })
 
 test('晚睡判定覆盖 01:00–05:59', () => {

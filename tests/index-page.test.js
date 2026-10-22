@@ -48,6 +48,7 @@ function makePage() {
   }
   page.selectComponent = () => null
   page._anchorAt = 0
+  page._alive = true
   return page
 }
 
@@ -106,6 +107,57 @@ test('切换付费背景前提示剩余时长，确认后才覆盖解锁', () =>
   } finally {
     global.wx.showModal = originalModal
     storage.setBackgroundUnlock(null)
+  }
+})
+
+test('脚注打开 90 分钟说明弹层，关闭/页面隐藏后收起', () => {
+  const page = makePage()
+  assert.equal(page.data.whyOpen, false)
+
+  page.openWhy()
+  assert.equal(page.data.whyOpen, true, '点脚注应打开说明')
+  page.closeWhy()
+  assert.equal(page.data.whyOpen, false, '点遮罩/关闭应收起')
+
+  page.openWhy()
+  page.onHide()
+  assert.equal(page.data.whyOpen, false, '切走页面时不能把弹层和隐藏的 tabBar 留在一起')
+})
+
+test('结果面追加 6 周期「补觉」档，5 周期仍是主推荐', () => {
+  const originalNow = Date.now
+  const evening = new Date(2026, 9, 22, 20, 0, 0, 0).getTime()
+  Date.now = () => evening
+  try {
+    const page = makePage()
+    page.setData({ mode: 'wake', wakeTime: '07:30', fallAsleep: 15 })
+    page.calc(false)
+
+    assert.equal(page.data.view.label, '推荐入睡时间')
+    assert.equal(page.data.view.mainTime, '23:45', '主推荐仍是 5 个周期')
+    const rows = page.data.view.rows
+    const extra = rows[rows.length - 1]
+    assert.equal(extra.cycles, 6)
+    assert.equal(extra.time, '22:15')
+    assert.equal(extra.extra, true)
+    assert.equal(extra.guideLabel, '充足')
+    assert.equal(rows.filter((row) => row.extra).length, 1, '补觉档只出现一次')
+
+    // 23:00：6 周期已过 → 补觉档不渲染
+    Date.now = () => new Date(2026, 9, 22, 23, 0, 0, 0).getTime()
+    page.setData({ flipped: false })
+    page.calc(false)
+    assert.equal(page.data.view.rows.filter((row) => row.extra).length, 0)
+
+    // 入睡模式：起床时刻在将来，始终给出 6 周期档
+    Date.now = () => evening
+    page.setData({ mode: 'sleep', sleepTime: '23:00', flipped: false })
+    page.calc(false)
+    const sleepRows = page.data.view.rows
+    assert.equal(sleepRows[sleepRows.length - 1].cycles, 6)
+    assert.equal(sleepRows[sleepRows.length - 1].time, '08:15')
+  } finally {
+    Date.now = originalNow
   }
 })
 
