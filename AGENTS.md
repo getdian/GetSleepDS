@@ -1,0 +1,66 @@
+# Agent 入口（跨工具约定）
+
+任何 AI 编码工具（CodeBuddy / Codex / Claude Code / Cursor / Copilot / Aider / 其他）在本仓库开启新会话，
+先按下面顺序读，建立**可核验**的事实基线再动手。本文件只做入口与纪律，不复制事实（避免与源码漂移）。
+
+## 0. 阅读顺序（不要跳）
+
+1. `context.md` —— 当前事实速查：项目在做什么、验证基线、风险清单、历史决策索引。
+2. `DECISIONS.md` —— ADR 清单（编号即约定，**只增不改**）。
+3. `docs/13-acceptance-checklist.md` —— 哪些验过、哪些没验（第 1 区机验 / 第 2 区待真机 / 第 3 区待外部输入）。
+4. `docs/10-operations.md` §3.0 —— **线上生产现场**：目录、端口、Compose 项目名、三条红线。
+5. 要改哪个模块，再读对应源码与测试；`docs/11-changelog.md` 有 130KB，只在追溯某次改动时按标题检索，不要通读。
+
+## 1. 事实优先级（冲突时按此裁决）
+
+**运行现场实测 > 代码 > `context.md` / `DECISIONS.md` / `docs/` > 模型记忆与推测。**
+
+文档与现场不一致时：先按现场继续，同时**回写文档**，不要留一份会误导下一个人的说明。
+
+## 2. 门禁（提交前必须跑，数字如实转述）
+
+```bash
+npm test          # 2026-10-23 基线：307 项 / 306 通过 / 0 失败 / 1 skip（PG 用例无 PG_TEST_URL 时 skip）
+npm run check     # 3 页面 / 22 JSON / 17 WXML / 19 WXSS，主包约 535.5 KB
+```
+
+- 数字会随改动变化：**以本次输出为准**，不要照抄历史数字宣称通过。
+- 没跑就说没跑；skip 要说明原因。
+
+## 3. 六条防误导纪律
+
+1. **第一轮只做取证汇报**：读完代码再下结论，不要先给方案再补证据。
+2. **「线上/已部署」必须取现场证据**：`pwd`、`grep HOST_PORT .env`、`docker compose ps`、`docker compose config --services`。
+   禁止用仓库模板默认值（如 3000）或记忆中的路径（如 `/srv/...`）代替现场。
+3. **报告不是事实**：外部评审、子代理、历史注释的每条结论都要能给出 `文件:行号` 才采纳；对不上就标「未复现」。
+4. **门禁断言「结构与位置」，不断言「关键字存在」**：`grep` 只能证明字符串在，不能证明接线正确（例如按钮存在但没绑定事件）。
+5. **部署只做最小动作**：只重建 api、不覆盖 `docker-compose.yml` / `.env`、不整包解压到根目录。
+6. **交付要能复现**：每条结论附命令与期望输出；视觉类结论必须写明「未机验」或给出截图路径。
+
+## 4. 生产红线（违反会伤线上，详见 `docs/10-operations.md` §3.0）
+
+- 生产目录 `/opt/1panel/www/sites/sleepDS/index`，`HOST_PORT=3004`，反代 `https://sleep.qfmaster.com`。
+- 该机三个站点目录末级都叫 `index` → Compose 项目名同为 `index`：
+  **禁止 `docker compose down`、禁止 `--remove-orphans`、禁止改 `name:`**（改项目名会换命名卷 = 连空库）。
+- 迭代部署：`docker compose up -d --build --no-deps api`；出现 orphan 警告属正常，不要清理。
+- 数据库只做加法迁移（`CREATE/ALTER ... IF NOT EXISTS`）；改列类型、删列必须先备份并单独评审。
+- 归档日固定北京时间（`calendarDayKey`）；`dateKey` 只用于 UI 文案。
+- 云备份默认关闭；`syncEnabled=false` 时不允许发出同步请求。
+- 新增配置项必须五处同改：`server/src/lib/config-schema.js`、`server/config/app.config.json`、
+  `miniprogram/config/fallback.js`、后台 `server/public/admin/admin.js`、文档。
+
+## 5. 改动入口地图
+
+| 需求 | 先看 |
+|---|---|
+| 计算算法 / 文案 | `miniprogram/utils/plan.js`、`pages/index/*`、`tests/plan.test.js` |
+| 记录 / 归档 / 多段 | `utils/sessions.js`、`utils/storage.js`、`utils/sync.js`、`server/src/db/index.js`、`server/sql/001_init.sql` |
+| 统计口径 | `utils/stats.js`、`pages/stats/*`、`utils/manual-sleep.js` |
+| 音频 / 广告 / 解锁 | `components/audio-dock/*`、`components/now-playing/*`、`utils/ad.js`、`server/src/routes/audio.js` |
+| 运营后台 | `server/public/admin/admin.js`（`PANEL_META` / `collect` / `render` / `validatePayload`） |
+| 部署 / 备份还原 | `docs/10-operations.md` §3.0 与 §3.8、`deploy/1panel-up.sh`、`deploy/backup.sh` |
+
+## 6. 与 `CLAUDE.md` 的关系
+
+`CLAUDE.md` 是指向本文件的薄壳（Claude Code 只认这个文件名）。**规则只维护本文件**，
+改这里不需要同步内容到 `CLAUDE.md`。
