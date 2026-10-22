@@ -120,6 +120,10 @@ function show() {
 
     if (task.catch) {
       task.catch(() => {
+        // 重试链重新计时：首轮 show 的 90s 总超时不能继续吃掉 load→show 的窗口，
+        // 否则广告正在播时会被误判 error，调用方按失败策略放行解锁。
+        if (pendingTimer) clearTimeout(pendingTimer)
+        pendingTimer = setTimeout(() => settle('error'), 90000)
         ad.load()
           .then(() => ad.show())
           .catch(() => settle('error'))

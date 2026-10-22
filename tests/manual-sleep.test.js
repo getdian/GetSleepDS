@@ -225,6 +225,76 @@ test('区间校验：当天段数已满时给可行动文案（不再等到保�
   assert.equal(result.code, 'toomany')
 })
 
+test('napTimesFor：入睡页 C 态给最近空档，首帧不再落在刚结束的段里', () => {
+  const records = {
+    '2026-10-22': {
+      day: '2026-10-22',
+      sessions: [
+        {
+          id: 'night',
+          startAt: local(2026, 10, 21, 23, 0),
+          endAt: local(2026, 10, 22, 7, 0)
+        }
+      ]
+    }
+  }
+  const now = local(2026, 10, 22, 9, 0)
+  const times = M.napTimesFor(records, '2026-10-22', now, null, { recent: true })
+  assert.deepEqual(times, { bedMinutes: 8 * 60, wakeMinutes: 8 * 60 + 30 })
+
+  const result = M.evaluateManualRange({
+    records,
+    dayTs: new Date(2026, 9, 22, 0, 0, 0, 0).getTime(),
+    bedMinutes: times.bedMinutes,
+    wakeMinutes: times.wakeMinutes,
+    now
+  })
+  assert.equal(result.code, '', '默认值必须是合法区间')
+})
+
+test('napTimesFor：清晨刚结束整夜睡眠时也能给出不重叠的过去时段', () => {
+  const records = {
+    '2026-10-22': {
+      day: '2026-10-22',
+      sessions: [
+        {
+          id: 'night',
+          startAt: local(2026, 10, 21, 23, 0),
+          endAt: local(2026, 10, 22, 7, 0)
+        }
+      ]
+    }
+  }
+  const now = local(2026, 10, 22, 7, 5)
+  const times = M.napTimesFor(records, '2026-10-22', now, null, { recent: true })
+  const result = M.evaluateManualRange({
+    records,
+    dayTs: new Date(2026, 9, 22, 0, 0, 0, 0).getTime(),
+    bedMinutes: times.bedMinutes,
+    wakeMinutes: times.wakeMinutes,
+    now
+  })
+  assert.equal(result.code, '', '清晨场景也不能一开面板就红字')
+})
+
+test('napTimesFor：统计页不带 recent 时仍优先下午小睡（原语义不变）', () => {
+  const records = {
+    '2026-10-22': {
+      day: '2026-10-22',
+      sessions: [
+        {
+          id: 'night',
+          startAt: local(2026, 10, 21, 23, 0),
+          endAt: local(2026, 10, 22, 7, 0)
+        }
+      ]
+    }
+  }
+  const now = local(2026, 10, 22, 22, 0)
+  const times = M.napTimesFor(records, '2026-10-22', now, null)
+  assert.deepEqual(times, { bedMinutes: 13 * 60, wakeMinutes: 13 * 60 + 30 })
+})
+
 test('保存入参：manual 来源、时长四舍五入、id 带时间戳', () => {
   const now = 1792600000000
   const args = M.buildSaveArgs(now - 8 * 3600 * 1000, now, now)

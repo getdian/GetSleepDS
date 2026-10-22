@@ -1,5 +1,24 @@
 # 睡点 · 关键更新记录
 
+## 2026-10-23 · 代码审查修复轮：播放器停止入口 · 令牌签名派生 · 补记默认值 · 音频配置自愈
+
+> 来源：外部审查报告（2 P1 / 9 P2 / 约 20 P3）。逐条对照源码核验：P1 全部属实，P2 九条中八条属实、P2-3 属结构隐患（历史模拟器实测未溢出），P3 择要修复；本轮**未改**的项见文末。
+
+- **P1 修复：迷你播放器补「停止」**：`now-playing.wxml` 的 `.np-ctrls` 此前只绑 `toggle`，`close()`/`goSleep()` 零绑定 —— 首页/统计页只能暂停，无法结束会话。补 76rpx 停止钮（`catchtap="close"`，伪元素外扩 88rpx，`aria-label="停止播放"`），`catchtap` 阻止冒泡到 `openAudio`。
+- **P1 修复：改密后令牌签名密钥不再恒定**：未配 `ADMIN_SECRET` 的部署里 `secret` 就是 `ADMIN_PASSWORD`，改密只让 version +1，旧密码持有者可离线签名并枚举 1..N 个 version 伪造 Cookie。`admin-auth.sign()` 改为经 `signKey()`：有库凭据时用 `HMAC(secret, 'cred.'+salt+'.'+hash)` 派生，改密即换密钥。**副作用：升级后现有后台会话失效一次（重新登录）**。新增 `server/test/admin-auth.test.js` 3 条锁定。
+- **P2 修复：入睡页 tabBar 单一裁决**：新增 `syncTabbar({dim,endShow})`，替换 6 处零散 `tabbar.show/hide`。此前 `closeSheet`/`onEndCancel` 无条件 `show()`、`onDockSheetClose` 只在 `dim` 时补 `hide()` → 结束面板与声音抽屉同开时，关抽屉会把独立 root 的 tabBar 翻到面板之上。`onHide` 改为无条件 `show()`（离开页面不带走 hidden 态）。
+- **P2 修复：入睡页「补记入睡」默认值必红字**：C 态刚保存的段结束时间就是现在，`defaultTimesFor(preset:false)` 的「30 分钟前→现在」必然重叠；`napTimesFor` 的候选又全在 10:00–17:30，清晨全部 future 后仍回退到重叠值。改为：当天已有记录时走 `napTimesFor(..., {recent:true})`，新增 `recentFreeSlot()` 从“现在”往前按 30 分钟找第一个已结束且不重叠的空档（最多回溯 24h）。统计页不带 `recent`，保持「优先下午小睡」原语义。新增 3 条单测（含清晨 07:05 场景）。
+- **P2 修复：计算器结果面纵向预算**：`.result-row-time` 显式 `line-height:1.15`（不再继承 page 的 1.6，三行省约 51rpx）；`.is-dense` 的压缩从父容器 `min-height` 改到子项（父级 min-height 不会缩子元素，旧写法的 22rpx 余量实际不存在）；`.result-note` 固定两行 clamp。注：历史模拟器实测（390×844）本无溢出，本条属结构性加固。
+- **P2 修复：横滑月历可读性**：未来日去掉整格 `opacity:.5`（40rpx 格上会把日号压到不可读），改为只降文字色；日号 16→18rpx；`.is-selected` 由 `box-shadow` 改 `outline`（原写法被后面的 `.is-partial` 覆盖，选中「今天」看不到反馈）。
+- **P2 修复：时间轮支持点击选值**：两列行加 `data-col/data-value + bindtap="onItemTap"`，命中后走与 `settle` 相同的 `scrollToValue` 落位/回中路径并 `triggerEvent('change')`，与滑动手势不冲突。
+- **P2 修复：圆均值无解时的病句**：`circularMeanMinutes` 在记录分散到表盘两端时返回 null，`clockText(null)` 得 `--:--`，detail 直接拼成「本周 N 天平均 --:-- 入睡」。`metricsOf` 的入睡/起床与 `factsOf` 改为「算不出平均」+ 原因说明，sub 显示「时间分散，算不出平均」。
+- **P2 修复：音频配置自愈 + 兜底免费态**：`audio-dock` 此前只在 attached 拉一次配置（tab 页常驻不重建），首拉失败整场会话钉死在内置兜底（仅 1 条雨声、空广告位=免费）。`pageLifetimes.show` 补 `loadConfig(false)`（10 分钟 TTL，不增请求），指纹变化才 `applyRemoteConfig`；同时处理“当前曲目已下架”。`config.merge` 新增 `degraded` 标记区分「后台就是免费」与「配置没拉到」；从 degraded 恢复到真实配置时权益中断文案改为「网络已恢复，解锁后可继续播放」，不再误报「解锁已到期」。
+- **P2 修复：now-playing 不再误删健康缓存**：本地源报错分支补 `cache.isUsable()` 判断，与 audio-dock 同口径（原写法一次网络/解码错误就删掉好文件）。
+- **P3 修复**：广告「失败→load→show」重试链重置 90s 总超时（原首轮超时继续计时，广告在播也会被判 error 并按 grant 放行）；`routes/admin.js` 审计 catch 用兜底后的 `log`（未注入 logger 时 `logger.error` 会 TypeError，密码已改却返回 500）；`/api/reminders` 的 DB 异常改为 503 + 日志（原 500 无日志）。
+- **备份脚本不再吞失败（部署侧，直接关系大改数据库前的退路）**：`deploy/backup.sh` 原写法 `docker compose exec ... pg_dump | gzip > x.gz` 在 `sh` 下退出码取管道末端的 gzip，`pg_dump` 失败也会留下一个空 `.gz` 并打印 `backup ok`。改为先写临时 SQL 再压缩，并校验「非空 + 含 `PostgreSQL database dump complete`」，任一不满足即非零退出；失败时清理临时文件，成功时打印压缩包字节数。
+- **核验后不改**：①`<custom-tab-bar />` 是微信特殊组件，`tools/check.mjs:124-126` 明确禁止写进 `usingComponents`、由目录自动注册，页面挂载是门禁要求，删改需同时改门禁并真机验证；②统计页 0 数据不渲染日历属产品空态决策（保留）；③`.metric-sub` 18rpx、`.action-arrow` 硬编码、`--heat-*` 死 token、`posterPath` 无消费方、`001_init.sql` 与运行时 DDL 分叉、备份脚本管道退出码等 P3 记录在案，未在本轮动。
+- 验证：`npm test` **307 项 / 306 通过 / 0 失败 / 1 PG skip**；`npm run check` 通过（3 页面 / 22 JSON / 17 WXML / 19 WXSS，主包约 535.2 KB）；全部改动文件 `node --check` 通过。**视觉项未做模拟器复验**（打开开发者工具窗口被取消），已登记 docs/13 第 2 区。
+
 ## 2026-10-23 · 提审前收口：改密闭环 · 看板补记 · 编辑守卫修复 · 死组件清理
 
 > 上一轮推荐方案的代码事实核实与落地。四项全部属实；另发现并修复一个时间敏感的 P1。

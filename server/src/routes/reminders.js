@@ -1,11 +1,12 @@
 const express = require('express')
 const { wrap } = require('../lib/http')
-const { invalidBody, rateLimited, apiError } = require('../lib/errors')
+const { invalidBody, rateLimited, apiError, dbUnavailable } = require('../lib/errors')
 
 const DEFAULT_PAGE = 'pages/sleep/sleep?end=1'
 
 function createRemindersRoute(options) {
-  const { config, db, codeToOpenid, limitIp, now, store } = options
+  const { config, db, codeToOpenid, limitIp, now, store, logger } = options
+  const log = logger || console
   const router = express.Router()
 
   /**
@@ -45,7 +46,13 @@ function createRemindersRoute(options) {
 
       // 取消通道永远开放：即使运营临时撤掉模板，也要能停止已存在的提醒
       if (action === 'cancel') {
-        await db.cancelReminder(openid, sessionId)
+        try {
+          await db.cancelReminder(openid, sessionId)
+        } catch (e) {
+          // 与 records/events 一致：DB 不可用是 503，不是 500；不记日志只能靠猜。
+          log.error('[db] reminder cancel failed:', req.id || '', e.message)
+          throw dbUnavailable()
+        }
         res.json({ ok: true })
         return
       }
@@ -63,12 +70,17 @@ function createRemindersRoute(options) {
       if (fireAt < currentTs + 60 * 1000 || fireAt > currentTs + 48 * 60 * 60 * 1000) {
         throw invalidBody('提醒时间需在 1 分钟到 48 小时内')
       }
-      await db.saveReminder(openid, {
-        sessionId,
-        fireAt,
-        templateId: reminderConfig.templateId,
-        page: reminderConfig.page
-      })
+      try {
+        await db.saveReminder(openid, {
+          sessionId,
+          fireAt,
+          templateId: reminderConfig.templateId,
+          page: reminderConfig.page
+        })
+      } catch (e) {
+        log.error('[db] reminder save failed:', req.id || '', e.message)
+        throw dbUnavailable()
+      }
       res.json({ ok: true, fireAt })
     })
   )

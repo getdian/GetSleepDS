@@ -321,6 +321,27 @@ Component({
       this.onColumnScroll('minute', event)
     },
 
+    /**
+     * 点击某一行直接选值。
+     * 中间行有高亮带与放大，视觉上最像“可点选项”，只支持滑动会让人反复点空。
+     * scroll-view 内滚动结束后的 tap 不会触发，因此与滑动手势不冲突。
+     */
+    onItemTap(event) {
+      if (!this._ready) return
+      const col = event.currentTarget.dataset.col
+      const value = Number(event.currentTarget.dataset.value)
+      if (!Number.isFinite(value)) return
+      const h12 = col === 'hour' ? value : this.data.selH
+      const minute = col === 'minute' ? value : this.data.selM
+      if (h12 === this.data.selH && minute === this.data.selM) return
+      const next = this.build24(h12, minute, this.data.period)
+      // 与 settle 走同一条落位/回中路径，避免“值变了但列没滚过去”
+      this.scrollToValue(next)
+      this._emittedH = h12
+      this._emittedM = minute
+      this.triggerEvent('change', { value: next })
+    },
+
     onColumnScroll(which, event) {
       if (!this._ready) return
       const top = Number(event.detail.scrollTop) || 0

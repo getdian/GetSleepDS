@@ -33,6 +33,21 @@ const TIMER_OPTIONS = [
   { value: 0, label: '关' }
 ]
 
+/** 配置指纹：用于回前台时判断是否需要重新 apply（避免每 show 都 setData 一遍） */
+function configSignature(cfg) {
+  if (!cfg) return ''
+  const tracks = (cfg.audio || []).map((item) => item.id).join(',')
+  const unlock = cfg.unlock || {}
+  return [
+    cfg.version,
+    tracks,
+    unlock.mode,
+    unlock.adUnitId,
+    unlock.ttlHours,
+    cfg.degraded ? 'degraded' : 'ok'
+  ].join('|')
+}
+
 Component({
   data: {
     open: false,
@@ -82,6 +97,10 @@ Component({
       this._pageVisible = false
       this._audio = null
       this._cfg = getConfig()
+      // 兜底配置（服务端/缓存都没有）的标记：用来区分“后台就是免费模式”
+      this._degraded = this._cfg && this._cfg.degraded === true
+      this._recovered = false
+      this._cfgSig = configSignature(this._cfg)
       this._sheetTrackId = ''
       this._collapseTimer = null
       this._stopRequested = false
@@ -141,16 +160,7 @@ Component({
       // 运行中/暂停中倒计时时，按真实状态回显档位。
       this.setData({ timerMinutes: audioTimer.total() || 0 })
 
-      loadConfig(true).then((cfg) => {
-        if (!this._alive || !cfg) return
-        this._cfg = cfg
-        this.applyConfig(cfg)
-        this.syncFromAudio()
-        ad.init(cfg.unlock && cfg.unlock.adUnitId)
-        if (this.isUnlocked() && cfg.features && cfg.features.preload) {
-          cache.warmup(this.data.tracks, cfg.cache, true)
-        }
-      })
+      loadConfig(true).then((cfg) => this.applyRemoteConfig(cfg))
     },
 
     detached() {
@@ -193,6 +203,13 @@ Component({
       // 之前 else tabbar.show() 会在结束/补记/编辑面板开着回前台时把 tabBar 翻出来，
       // 而 tabBar 是独立 root，页面遮罩压不住它。
       if (this.data.open) tabbar.hide()
+      // 配置自愈：首拉失败时 _cfg 会一直是内置兜底（只有 1 条雨声），
+      // 且 tab 页常驻不会重建组件。这里按 10 分钟 TTL 复用缓存，
+      // 后台改了音轨/解锁时长/文案，最迟下一次回到本页就生效。
+      loadConfig(false).then((cfg) => {
+        if (!cfg || configSignature(cfg) === this._cfgSig) return
+        this.applyRemoteConfig(cfg)
+      })
     },
     hide() {
       this._pageVisible = false
@@ -468,10 +485,13 @@ Component({
           if (now - (this._entitlementAt || 0) > 15000) {
             this._entitlementAt = now
             if (this.data.currentId && !this.isUnlocked() && !this.isFreeMode()) {
+              // 从“配置没拉到”的免费兜底恢复到真实配置时，用户并没有做过到期操作，
+              // 不能报“解锁已到期”（会让人以为广告白看了）。
+              const title = this._recovered
+                ? '网络已恢复，解锁后可继续播放'
+                : '解锁已到期，重新解锁后继续'
               this.stopPlayback()
-              if (this._pageVisible) {
-                wx.showToast({ title: '解锁已到期，重新解锁后继续', icon: 'none' })
-              }
+              if (this._pageVisible) wx.showToast({ title, icon: 'none' })
               return
             }
           }
@@ -612,6 +632,31 @@ Component({
         collapsed: false,
         collapsing: false
       })
+    },
+
+    /**
+     * 应用一次远程配置（首次拉取与回前台自愈共用）。
+     * - 曲目被运营下架时结束当前会话，避免继续播一个已不在清单里的源；
+     * - 从兜底配置恢复到真实配置时记下 _recovered，供权益中断文案区分原因。
+     */
+    applyRemoteConfig(cfg) {
+      if (!this._alive || !cfg) return
+      const wasDegraded = this._degraded === true
+      this._cfg = cfg
+      this._degraded = cfg.degraded === true
+      this._cfgSig = configSignature(cfg)
+      if (wasDegraded && !this._degraded) this._recovered = true
+      this.applyConfig(cfg)
+      ad.init(cfg.unlock && cfg.unlock.adUnitId)
+      // findTrack 读的是 applyConfig 之后的新 tracks
+      if (this.data.currentId && !this.findTrack(this.data.currentId)) {
+        this.stopPlayback()
+      } else {
+        this.syncFromAudio()
+      }
+      if (this.isUnlocked() && cfg.features && cfg.features.preload) {
+        cache.warmup(this.data.tracks, cfg.cache, true)
+      }
     },
 
     syncFromAudio() {

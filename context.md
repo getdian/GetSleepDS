@@ -110,8 +110,8 @@ tests/            Node 纯逻辑测试
 
 ## 5. 当前验证基线
 
-- `npm test`：**300 项 / 299 通过 / 0 失败 / 1 skip**（PG 集成用例在未设置 `PG_TEST_URL` 时跳过；2026-10-23 收口轮新增 3 条：编辑同日段拦截回归、改密闭环、改密持久化契约）。
-- `npm run check`：3 页面 / 22 JSON / 17 WXML / 19 WXSS，主包约 525.3 KB（以最新输出为准；较上轮 -5KB 是删除 heatmap/sleep-trend 两个死组件）。
+- `npm test`：**307 项 / 306 通过 / 0 失败 / 1 skip**（PG 集成用例在未设置 `PG_TEST_URL` 时跳过；2026-10-23 审查修复轮新增 7 条：补记空档 3、令牌签名派生 3、圆均值病态值 1）。
+- `npm run check`：3 页面 / 22 JSON / 17 WXML / 19 WXSS，主包约 535.2 KB（以最新输出为准；较上轮 +9.9KB 是本轮注释与逻辑增量）。
 - **验收清单（2026-10-22 建）**：全部待验收项已合并至 [docs/13-acceptance-checklist.md](docs/13-acceptance-checklist.md)，分三区——本机已验收（CLI 模拟器 390×844 实测，含入睡页 10-22 改版与统计页 10-21 改版全状态截图、console 无 error）/ 待真机（音频锁屏、中断、定时、手势手感）/ 待外部输入（部署、AppSecret、COS 防盗链、流量主）。续作新增"未验收"项一律先落该表再写代码。
 - 交付包：以 `release-artifacts/` 下最新 `getsleep-<label>.zip` 为准（`npm run pack` 生成，含 `RELEASE-MANIFEST.json` 与逐文件 sha256，同时留 `.sha256` 校验文件）；打包前会强制跑 `npm test` + `npm run check`。
 - 分享归因冒烟（2026-10-19，内存模式）：`app_open` 带 `1007|pages/index/index|share` 上报 → `/api/admin/analytics` 的 `topSources` 聚合出现；`/api/share/qrcode` 无 code 返 400、密钥不可用返 503，均为优雅报错。
@@ -166,6 +166,8 @@ tests/            Node 纯逻辑测试
 26. **L4 阶段 C（2026-10-22，工程护栏）**：①生产环境 `TRUST_PROXY` 未显式设置时拒绝启动（显式 `0` 允许直连并保留告警），`docker-compose.yml` 给 api 补 `TRUST_PROXY:-1` 兜底，避免已有 1Panel 部署升级即挂；②`/records/sync` 增加 openid 维度 30/min 限流（IP 桶全站共用时的第二道闸）；③归档日统一固定北京时间——`time.calendarDayKey(ts)` + `sessions.sessionDay` + `sync` 的 `localDay` + 容量预检/面板文案/编辑校验，修设备时区变化导致本地 day 与云端 day 分叉（重复记录 + 墓碑互写）；`dateKey` 仍本地，仅用于“今天/昨天”文案；④`audio_error` 进事件白名单，target=`trackId|errCode`（1s 去重），线上可区分网络/解码/坏缓存。验证：260 项绿、check 绿（498.4KB）。未做：C4 换号归属（待 ADR-025 拍板）、C5 音频签名（需 COS 私读）、C6 订阅召回（需模板）。
 
 27. **订阅消息后台可视化（2026-10-22）**：后台新增「小程序与提醒」面板（启用开关 / 模板 ID / 跳转路径 / 获取步骤 / 只读环境状态）；`config-schema` 增加 `reminder` 段并严格校验模板 ID（10–64 位字母数字_-）与跳转路径（`pages/...`）；`/api/config` 改为后台配置优先、env 兜底；`/api/reminders` 与调度器每轮读当前配置（保存即生效，关闭后不再推送已排队任务）；新增 `GET /api/admin/env`（只返回是否就绪，不含密钥值）；客户端 `fallback.reminder.enabled` 与 `reminder.js` 同步。配置路径与字段要求见 `docs/10-operations.md` §3.2.1、`docs/03` §4.1。验证：285 项绿、check 绿（510.0KB）、真实实例 API 闭环（保存 → `/api/config` → `/api/admin/env`）。
+
+28. **代码审查修复轮（2026-10-23）**：外部审查 2 P1 / 9 P2 / 约 20 P3 逐条核验后落地——①迷你播放器补「停止」（`close()` 原为零绑定死代码）；②`admin-auth` 签名密钥改为「根密钥 + 库凭据 salt/hash」派生，未配 `ADMIN_SECRET` 时改密即失效旧密码伪造能力（**升级后现有后台会话失效一次**）；③入睡页 tabBar 收敛为 `syncTabbar()` 单一裁决（修「关抽屉把底栏翻到结束面板之上」）；④入睡页补记默认值改 `napTimesFor({recent:true})`，新增 `recentFreeSlot` 从当前时刻回溯找空档（修 C 态首帧必红字）；⑤结果面 `result-row-time` 行高 1.15 + dense 压缩落到子项 + note 两行 clamp；⑥横滑月历未来日去整格 opacity、日号 18rpx、选中改 outline；⑦时间轮支持点击选值；⑧圆均值无解时改「算不出平均」不再拼「平均 --:--」；⑨`audio-dock` 回前台按指纹刷新配置 + `config.degraded` 区分「后台免费」与「配置没拉到」，恢复时用「网络已恢复」而非「解锁已到期」；⑩`now-playing` 删缓存前补 `isUsable`。P3 修：广告重试链重置 90s 超时、`/api/reminders` DB 异常 503 + 日志、后台改密审计日志变量兜底。**未做**：`<custom-tab-bar />` 清理（门禁强制）、统计页 0 数据补记入口（产品空态决策）、`001_init.sql` 单源、备份脚本管道退出码、`--heat-*` 死 token 等。验证：307/306/1 skip、check 绿（535.2KB）、改动文件 `node --check` 全通过；**视觉项未过模拟器**（开发者工具窗口打开被取消），已登记 docs/13 §2.5。
 
 ## 8. 快速命令
 

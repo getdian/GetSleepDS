@@ -57,6 +57,17 @@
           <view class="np-ico-play"></view>
         </block>
       </view>
+
+      <view
+        class="np-icon np-stop"
+        catchtap="close"
+        hover-class="np-icon--tap"
+        hover-stay-time="100"
+        aria-role="button"
+        aria-label="停止播放"
+      >
+        <view class="np-ico-stop"></view>
+      </view>
     </view>
   </view>
 

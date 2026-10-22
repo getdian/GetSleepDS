@@ -28,8 +28,12 @@ function mergeAds(raw) {
 }
 
 function merge(raw) {
-  if (!raw) return FALLBACK
+  // degraded = 既没有远程数据也没有历史缓存，当前用的是内置兜底。
+  // 调用方（音频解锁）必须能区分“后台就是免费模式”与“配置没拉到”，
+  // 否则兜底的空广告位会被当成免费，真实配置到达后又会误报“解锁已到期”。
+  if (!raw) return Object.assign({}, FALLBACK, { degraded: true })
   return {
+    degraded: false,
     version: raw.version || FALLBACK.version,
     audio: Array.isArray(raw.audio) && raw.audio.length ? raw.audio : FALLBACK.audio,
     unlock: Object.assign({}, FALLBACK.unlock, raw.unlock || {}),

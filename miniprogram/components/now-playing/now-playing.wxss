@@ -317,6 +317,14 @@
 }
 
 /* 播放图标：三角，margin 补偿视觉居中 */
+/* 停止：小方块。与播放/暂停同一套 76rpx 命中区（伪元素外扩到 88rpx） */
+.np-ico-stop {
+  width: 22rpx;
+  height: 22rpx;
+  border-radius: 3rpx;
+  background: currentColor;
+}
+
 .np-ico-play {
   width: 0;
   height: 0;

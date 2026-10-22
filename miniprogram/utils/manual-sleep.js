@@ -90,21 +90,64 @@ const NAP_SLOTS = [
   [17 * 60, 17 * 60 + 30]
 ]
 
+/** 30 分钟一档；最多回溯 24 小时，够覆盖「整夜睡到 07:00 才补记」的清晨场景 */
+const NAP_STEP_MIN = 30
+const NAP_LOOKBACK_STEPS = 48
+
 /**
- * 已记录日补一段的默认时间：返回第一个不与已有段/进行中段重叠的 30 分钟小睡。
- * 全被占用时回退到 defaultTimesFor（用户仍可手动改时间）。
+ * 从“现在”往前找第一个已经结束、且不与任何记录/进行中段重叠的 30 分钟空档。
+ * 只看过去：补记的是已经发生的睡眠，给未来时间没有意义。
  */
-function napTimesFor(records, dayKey, now, pending) {
+function recentFreeSlot(records, dayKey, now, pending) {
   const ts = Number(now) || Date.now()
   const dayTs = T.parseDateKey(dayKey)
+  if (!Number.isFinite(dayTs)) return null
+  const nowMinutes = Math.round((ts - dayTs) / T.MINUTE_MS)
+  for (let i = 1; i <= NAP_LOOKBACK_STEPS; i += 1) {
+    const wakeMinutes = nowMinutes - i * NAP_STEP_MIN
+    const bedMinutes = wakeMinutes - NAP_STEP_MIN
+    const range = X.rangeForDay(dayTs, bedMinutes, wakeMinutes, ts)
+    if (range.error) continue
+    if (X.findOverlap(records || {}, range.bedAt, range.wakeAt)) continue
+    if (pendingOverlaps(pending, range, ts)) continue
+    return { bedMinutes, wakeMinutes }
+  }
+  return null
+}
+
+/**
+ * 已记录日补一段的默认时间：返回第一个不与已有段/进行中段重叠的 30 分钟小睡。
+ *
+ * options.recent=true（入睡页「补记入睡」）：
+ *   从“刚刚结束”往前找空档。C 态刚保存的那段结束时间就是现在，
+ *   defaultTimesFor 的 30 分钟前→现在必然落在旧段内部，面板一打开就是红字；
+ *   而 NAP_SLOTS 全在 10:00–17:30，清晨/凌晨会全部 future 再回退到必重叠的默认值。
+ *
+ * 不带该选项（统计页「空格子补记」）保持原有优先下午小睡的语义。
+ * 全被占用时最后仍会尝试最近空档，再不行才回退 defaultTimesFor（用户可手动改）。
+ */
+function napTimesFor(records, dayKey, now, pending, options) {
+  const opts = options || {}
+  const ts = Number(now) || Date.now()
+  const dayTs = T.parseDateKey(dayKey)
+
+  if (opts.recent) {
+    const recent = recentFreeSlot(records, dayKey, ts, pending)
+    if (recent) return recent
+  }
+
   for (let i = 0; i < NAP_SLOTS.length; i += 1) {
     const slot = NAP_SLOTS[i]
     const range = X.rangeForDay(dayTs, slot[0], slot[1], ts)
     if (range.error) continue
     if (X.findOverlap(records || {}, range.bedAt, range.wakeAt)) continue
-    const pendingStart = pending && Number(pending.bedAt)
-    if (pendingStart && X.overlaps({ startAt: pendingStart, endAt: ts }, range)) continue
+    if (pendingOverlaps(pending, range, ts)) continue
     return { bedMinutes: slot[0], wakeMinutes: slot[1] }
+  }
+
+  if (!opts.recent) {
+    const recent = recentFreeSlot(records, dayKey, ts, pending)
+    if (recent) return recent
   }
   return defaultTimesFor(dayKey, ts)
 }

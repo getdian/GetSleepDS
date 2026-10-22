@@ -107,8 +107,8 @@ Page({
     // 熄灯/结束/补记/编辑面板期间 tabBar 都必须隐藏：tabBar 是独立 root，
     // 页面 z-index 压不住。之前只判 dim，面板开着回前台会被 audio-dock 的
     // pageLifetimes.show 重新翻出来（与生命周期先后无关）。
-    if (this.data.dim || this.data.endShow) tabbar.hide()
-    else this.scheduleLightsOut()
+    this.syncTabbar()
+    if (!this.data.dim && !this.data.endShow) this.scheduleLightsOut()
   },
 
   /** 消费统计页传来的补记日期（meta.manualDay），打开补记面板并预填该日期 */
@@ -153,7 +153,9 @@ Page({
     // 页面不可见时不计时；tabBar 属于当前页实例，离开前恢复，
     // 避免切到计算器/统计页后底部仍被隐藏（tabbar.show 对新页面无副作用）
     this.clearLightsTimer()
-    if (this.data.dim) tabbar.show()
+    // 离开页面时无条件恢复底栏：tabBar 属于当前页实例，
+    // 带着 hidden 状态切走会让其他页的底栏一直不显示。
+    tabbar.show()
   },
 
   onUnload() {
@@ -568,8 +570,8 @@ Page({
     if (this.data.endShow) return
     const dock = this.selectComponent && this.selectComponent('#dock')
     if (dock && dock.data && dock.data.open) return
-    tabbar.hide()
     this.setData({ dim: true })
+    this.syncTabbar({ dim: true })
     this.clearLightsTimer()
   },
 
@@ -580,8 +582,8 @@ Page({
   onDockSheetClose() {
     if (this.data.state === 'sleeping' && !this.data.endShow) this.scheduleLightsOut()
     // 抽屉可以在熄灯态被程序化打开（跨页播放条 → openPendingAudio）；
-    // 关闭时 audio-dock 会无条件 tabbar.show()，这里必须把熄灯态的 tabBar 再藏回去。
-    if (this.data.dim) tabbar.hide()
+    // 关闭时 audio-dock 会无条件 tabbar.show()，这里统一按当前所有浮层重新裁决。
+    this.syncTabbar()
   },
 
   /** 唤醒：恢复正常亮度并隐藏熄灯层；不改变计时状态 */
@@ -589,7 +591,7 @@ Page({
     this.clearLightsTimer()
     if (this.data.dim) {
       this.setData({ dim: false })
-      tabbar.show()
+      this.syncTabbar({ dim: false })
     }
   },
 
@@ -691,8 +693,15 @@ Page({
     const hasPreset = typeof presetDay === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(presetDay)
     const day = hasPreset ? presetDay : today
     const dayTs = T.parseDateKey(day)
-    // 有预设（统计页带日期）：整夜 23:00 → 07:00；无预设（本页补记）：30 分钟前 → 现在
-    const times = MS.defaultTimesFor(day, now, { preset: hasPreset })
+    // 有预设（统计页带日期）：整夜 23:00 → 07:00；无预设（本页补记）：30 分钟前 → 现在。
+    // 当天已有记录（尤其是 C 态刚结束的那段，结束时间就是现在）时必须找空档，
+    // 否则面板首帧就会是「与已有睡眠段重叠」的红字，用户得先手动改两个时间。
+    const records = storage.getRecords()
+    const pending = storage.getPending()
+    const occupied = !!records[day] || (day === T.dateKey(now) && !!pending)
+    const times = occupied
+      ? MS.napTimesFor(records, day, now, pending, { recent: true })
+      : MS.defaultTimesFor(day, now, { preset: hasPreset })
     this._editingDay = ''
     this._editingSessionId = ''
     this._endBaseDay = T.startOfDay(dayTs)
@@ -729,11 +738,27 @@ Page({
     )
   },
 
+  /**
+   * tabBar 显隐的唯一裁决：熄灯层 / 结束-补记-编辑面板 / 声音抽屉，
+   * 任意一个开着就隐藏。分散调用 tabbar.show()/hide() 会让“关抽屉”把
+   * 结束面板之上的底栏翻出来（tabBar 是独立 root，页面遮罩压不住）。
+   * overrides 用于 setData 尚未生效的当拍（打开面板时 endShow 还是旧值）。
+   */
+  syncTabbar(overrides) {
+    const opts = overrides || {}
+    const dock = this.selectComponent && this.selectComponent('#dock')
+    const dockOpen = !!(dock && dock.data && dock.data.open)
+    const dim = opts.dim === undefined ? this.data.dim : opts.dim
+    const endShow = opts.endShow === undefined ? this.data.endShow : opts.endShow
+    if (dim || endShow || dockOpen) tabbar.hide()
+    else tabbar.show()
+  },
+
   /** 首帧 tabBar 可能尚未挂载：立即隐藏一次，下一拍再补一次 */
   hideTabbarForSheet() {
-    tabbar.hide()
+    this.syncTabbar({ endShow: true })
     setTimeout(() => {
-      if (this._alive && this.data.endShow) tabbar.hide()
+      if (this._alive && this.data.endShow) this.syncTabbar({ endShow: true })
     }, 60)
   },
 
@@ -851,7 +876,6 @@ Page({
     this._editingDay = ''
     this._editingSessionId = ''
     this._endStartDay = 0
-    tabbar.show()
     this.setData({
       endShow: false,
       endError: '',
@@ -860,6 +884,8 @@ Page({
       endHint: '',
       endStartDateText: ''
     })
+    // 抽屉可能还开着：不能无条件 show，否则底栏会压在抽屉/面板上
+    this.syncTabbar({ endShow: false })
     // 取消结束：仍睡梦中就继续按 30s 倒计时熄灯
     this.scheduleLightsOut()
   },
@@ -963,7 +989,6 @@ Page({
   },
 
   closeSheet() {
-    tabbar.show()
     this.setData({
       endShow: false,
       endError: '',
@@ -972,6 +997,8 @@ Page({
       endHint: '',
       endStartDateText: ''
     })
+    // 同 onEndCancel：按熄灯/抽屉的真实状态决定是否可以亮出底栏
+    this.syncTabbar({ endShow: false })
     // 保存/编辑后仍睡梦中：延迟熄灯继续生效（done/idle 由 refreshAll 收敛）
     this.scheduleLightsOut()
   },

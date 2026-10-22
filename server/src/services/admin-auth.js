@@ -67,9 +67,26 @@ function createAdminAuth(options) {
     return credentials ? Number(credentials.version) || 0 : 0
   }
 
-  function sign(version, exp) {
+  /**
+   * 签名密钥：有库凭据时，用「根密钥 + 凭据（盐/哈希）」再派生一层。
+   *
+   * 为什么不能直接用 secret：未配置独立 ADMIN_SECRET 的部署里 secret 就是
+   * ADMIN_PASSWORD。改密后 version 只 +1，旧密码持有者仍可离线用旧密码签名、
+   * 枚举 1..N 个 version 伪造管理员 Cookie——密码轮换等于白改。
+   * 派生后改密会换 salt/hash → 签名密钥随之变化，旧密钥连 HMAC 都过不了。
+   * 未配置凭据（首次引导）时仍用根密钥，行为不变。
+   */
+  function signKey() {
+    if (!credentials) return secret
     return crypto
       .createHmac('sha256', secret)
+      .update('cred.' + credentials.salt + '.' + credentials.hash)
+      .digest('hex')
+  }
+
+  function sign(version, exp) {
+    return crypto
+      .createHmac('sha256', signKey())
       .update(TOKEN_VERSION + '.' + version + '.' + exp)
       .digest('hex')
   }

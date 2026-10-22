@@ -468,7 +468,9 @@ Component({
             return
           }
           playerState.markFallback(track.url)
-          cache.remove(track.url)
+          // 与 audio-dock 同口径：只有磁盘文件确实不可用才删。
+          // 网络/解码错误时文件是好的，直接删会误伤健康缓存（还可能删到在播文件）。
+          if (!cache.isUsable(track.url)) cache.remove(track.url)
           storage.patchMeta({ lastTrackActive: true, lastTrackPlaying: true })
           this.setAudioSrc(track.url)
           return

@@ -23,6 +23,32 @@ const RECORDS = {
   '2026-10-17': record('2026-10-17', local(2026, 10, 17, 23, 55), local(2026, 10, 18, 7, 30))
 }
 
+test('圆均值无解时不拼病句：说“算不出平均”，而不是“平均 --:-- 入睡”', () => {
+  // 同周两天恰好相隔 12 小时：向量抵消，circularMeanMinutes 返回 null
+  const records = {
+    '2026-10-19': record('2026-10-19', local(2026, 10, 19, 0, 0), local(2026, 10, 19, 8, 0)),
+    '2026-10-20': record('2026-10-20', local(2026, 10, 20, 12, 0), local(2026, 10, 20, 20, 0))
+  }
+  const now = local(2026, 10, 21, 12, 0)
+
+  const metrics = S.metricsOf(records, now)
+  const bed = metrics.metrics.filter((item) => item.key === 'bed')[0]
+  assert.equal(bed.value, '--:--')
+  assert.match(bed.sub, /算不出平均/)
+  assert.match(bed.detail[0], /算不出平均/)
+  assert.ok(!/平均 --:--/.test(bed.detail[0]), '不能出现“平均 --:-- 入睡”')
+  assert.ok(!/平均 --:--/.test(bed.detail.join(' ')))
+
+  const wake = metrics.metrics.filter((item) => item.key === 'wake')[0]
+  assert.match(wake.detail[0], /算不出平均/)
+  assert.ok(!/平均 --:--/.test(wake.detail.join(' ')))
+
+  const facts = S.factsOf(records, now)
+  const schedule = facts.items.filter((item) => item.key === 'schedule')[0]
+  assert.match(schedule.note, /算不出平均入睡/)
+  assert.ok(!/平均 --:--/.test(schedule.note))
+})
+
 // 周日早上 8 点：睡眠日仍是 10-17
 const NOW = local(2026, 10, 18, 8, 0)
 

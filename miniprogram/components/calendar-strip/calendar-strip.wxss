@@ -55,8 +55,8 @@
   justify-content: center;
   border-radius: 5rpx;
   background: rgba(255, 255, 255, 0.045);
-  /* 40rpx 格内两位日号可读的最小字号 */
-  font-size: 16rpx;
+  /* 40rpx 格内两位日号：16rpx 在真机偏低，18rpx 仍能压进格子 */
+  font-size: 18rpx;
   line-height: 1;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
@@ -90,15 +90,19 @@
   box-shadow: inset 0 0 0 2rpx rgba(255, 255, 255, 0.55);
 }
 
+/* 用 outline 而不是 box-shadow：box-shadow 会被后面的 .is-partial 覆盖，
+   选中「今天」时看不到任何反馈（单月历已踩过同一个坑）。 */
 .cs-cell.is-selected {
-  box-shadow: 0 0 0 2rpx #FDE68A;
+  outline: 2rpx solid #FDE68A;
+  outline-offset: -2rpx;
   z-index: 1;
 }
 
+/* 未来日只降文字色，不再整格 opacity：40rpx 格上 0.5 透明度会把日号压到不可读 */
 .cs-cell.is-future {
   background: rgba(148, 163, 184, 0.04);
   border: 1rpx dashed rgba(148, 163, 184, 0.24);
-  opacity: 0.5;
+  color: rgba(148, 163, 184, 0.55);
 }
 
 .cs-cell.is-partial {

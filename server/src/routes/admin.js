@@ -235,7 +235,9 @@ function createAdminRoute(options) {
             at: Date.now()
           })
         } catch (e) {
-          logger.error('[audit] admin_password_change failed:', e.message)
+          // 用兜底后的 log：logger 未注入时（测试/内嵌调用）logger.error 会抛 TypeError，
+          // 让已经改成功的密码返回 500。
+          log.error('[audit] admin_password_change failed:', e.message)
         }
       }
 

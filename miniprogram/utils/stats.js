@@ -242,10 +242,14 @@ function factsOf(records, now) {
       key: 'schedule',
       label: '平均入睡',
       value: clockText(cur.avgBedMin),
+      // 圆均值在记录分散到表盘两端时无解（如一天 00:00、一天 12:00）。
+      // 此时不能输出「平均 --:-- 入睡」这种病句，要说明是“算不出来”。
       note:
-        cur.afterMidnightDays > 0
-          ? '有 ' + cur.afterMidnightDays + ' 天在 0 点后入睡'
-          : '没有 0 点后入睡的记录'
+        cur.avgBedMin === null
+          ? '记录分散在表盘两端，算不出平均入睡'
+          : cur.afterMidnightDays > 0
+            ? '有 ' + cur.afterMidnightDays + ' 天在 0 点后入睡'
+            : '没有 0 点后入睡的记录'
     },
     {
       key: 'record',
@@ -309,6 +313,10 @@ function metricsOf(records, now) {
   const d = w.delta
   const total = cur.avgTotalMin || 0
   const reference = durationNoteOf(cur)
+  // 圆均值可能无解（记录分散到表盘两端），此时 value 仍是 '--:--'，
+  // 但说明文字必须讲清“算不出来”，不能拼成「平均 --:-- 入睡」。
+  const bedSpread = cur.avgBedMin === null
+  const wakeSpread = cur.avgWakeMin === null
   const clockCompare = (diff) => {
     if (diff === null) return '上周同期没有记录，暂时无法对比'
     if (diff === 0) return '与上周同期持平'
@@ -339,15 +347,18 @@ function metricsOf(records, now) {
       key: 'bed',
       label: '平均入睡',
       value: clockText(cur.avgBedMin),
-      sub:
-        d.bed === null
+      sub: bedSpread
+        ? '时间分散，算不出平均'
+        : d.bed === null
           ? ''
           : d.bed === 0
             ? '与上周同期持平'
             : '比上周同期' + (d.bed > 0 ? '晚 ' : '早 ') + deltaAmount(d.bed),
       detail: [
-        '本周 ' + cur.count + ' 天平均 ' + clockText(cur.avgBedMin) + ' 入睡',
-        clockCompare(d.bed),
+        bedSpread
+          ? '本周 ' + cur.count + ' 天入睡时间分散在表盘两端，算不出平均值'
+          : '本周 ' + cur.count + ' 天平均 ' + clockText(cur.avgBedMin) + ' 入睡',
+        bedSpread ? '记录更集中在同一时段后，才能比较早晚' : clockCompare(d.bed),
         (cur.afterMidnightDays > 0
           ? '有 ' + cur.afterMidnightDays + ' 天在 0 点后入睡'
           : '没有 0 点后入睡的记录') + ' · 按醒来日归档'
@@ -357,15 +368,18 @@ function metricsOf(records, now) {
       key: 'wake',
       label: '平均起床',
       value: clockText(cur.avgWakeMin),
-      sub:
-        d.wake === null
+      sub: wakeSpread
+        ? '时间分散，算不出平均'
+        : d.wake === null
           ? ''
           : d.wake === 0
             ? '与上周同期持平'
             : '比上周同期' + (d.wake > 0 ? '晚 ' : '早 ') + deltaAmount(d.wake),
       detail: [
-        '本周 ' + cur.count + ' 天平均 ' + clockText(cur.avgWakeMin) + ' 起床（主睡眠）',
-        clockCompare(d.wake),
+        wakeSpread
+          ? '本周 ' + cur.count + ' 天起床时间分散在表盘两端，算不出平均值'
+          : '本周 ' + cur.count + ' 天平均 ' + clockText(cur.avgWakeMin) + ' 起床（主睡眠）',
+        wakeSpread ? '记录更集中在同一时段后，才能比较早晚' : clockCompare(d.wake),
         '这是你记录起床的时刻，不是闹钟'
       ]
     }

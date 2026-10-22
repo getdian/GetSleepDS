@@ -583,7 +583,11 @@
 }
 
 .result-note {
-  display: block;
+  /* 跨日 note 最多两行：固定上限，避免长文案把分享行顶出 712rpx 舞台 */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
   margin-top: 4rpx;
   font-size: 22rpx;
   color: rgba(185, 205, 240, 0.72);
@@ -668,6 +672,8 @@
 .result-row-time {
   font-size: 38rpx;
   font-weight: 600;
+  /* 不继承 page 的 1.6：三行各约省 17rpx，是结果面纵向预算的主要余量 */
+  line-height: 1.15;
   color: rgba(230, 240, 255, 0.95);
   font-variant-numeric: tabular-nums;
 }
@@ -896,8 +902,15 @@
 }
 
 .calc-back.is-dense .result-actions {
-  min-height: 76rpx;
+  min-height: 72rpx;
   padding-top: 4rpx;
+}
+
+/* 压缩必须落在子项上：父级 min-height 不会缩小已有 min-height 的子元素，
+   只改容器等于没生效（旧写法的 22rpx 余量实际不存在）。 */
+.calc-back.is-dense .result-reset,
+.calc-back.is-dense .result-switch {
+  min-height: 72rpx;
 }
 
 .calc-back.is-dense .result-share {
