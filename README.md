@@ -43,7 +43,7 @@
 miniprogram/            小程序（原生 WXML/WXSS/JS，无第三方 UI 库）
   config/env.js         ← API 域名（开发/体验/正式自动切换）
   config/fallback.js    ← 服务端不可达时的兜底配置
-  utils/                时间、统计、存储、请求、广告、展示位、背景图、同步、缓存、事件、跨页定时器
+  utils/                时间、统计、存储、请求、广告、展示位、背景图、同步、缓存、事件、跨页定时器、多段睡眠/补记编排
   components/           ambient / top-bar / time-wheel / audio-dock / heatmap / unlock-sheet / ad-slot / share-btn / now-playing / background-picker / empty-state
   pages/                index（计算器）/ sleep（入睡）/ stats（统计）
   assets/               tabBar 与音频图标
@@ -175,24 +175,23 @@ npm run pack -- -Label 20261019-l4
 ## 验证
 
 ```bash
-npm test        # 192 个测试：时间、统计、统计指标/日历、双向倒推、热力图/墓碑、分片同步、API、后台鉴权/事件/COS 配置/用户记录删除、启动来源归一化、看板聚合/截断、小程序码服务、展示位配置校验、同步总闸、云端副本删除、本地事实回顾、背景图逻辑与后台配置、播放器回退/缓存并发/同步批量写入、落地页 CSP/404；PG 集成用例需 PG_TEST_URL
+npm test        # 254 项：时间/统计/日历/热力图/墓碑、多段睡眠与补记编排、容量预检、分片同步、API、后台鉴权/审计/事件/COS 配置、启动来源归一化、看板聚合、小程序码、展示位校验、云端副本删除、背景图与解锁、播放器回退/缓存并发/循环、熄灯状态机、页面级冒烟；PG 集成用例需 PG_TEST_URL
 npm run check   # JSON / WXML 标签 / WXSS 括号 / 页面四件套 / 组件引用 / CSP inline 检查
 ```
 
-本次实际执行结果：
+当前基线（2026-10-22，详见 [验收清单](docs/13-acceptance-checklist.md)）：
 
-- `npm test`：152 passed / 0 failed + 1 个 PG 集成用例（未设置 `PG_TEST_URL` 时跳过）
-- `npm run check`：通过（21 JSON / 16 WXML / 17 WXSS），主包约 388.3 KB
+- `npm test`：253 passed / 0 failed + 1 个 PG 集成用例（未设置 `PG_TEST_URL` 时跳过）
+- `npm run check`：通过（3 页面 / 23 JSON / 18 WXML / 20 WXSS），主包约 495.6 KB
 - 后端内存模式冒烟：`/api/health`、`/api/config`、`/api/summary`、`/api/audio/unlock`、`/api/records/erase` 均符合预期
 - **PostgreSQL 16 容器端到端**：自动建表、解锁写入 24 小时、`sync` 幂等、空记录同步能取回 3 条（换机回填）、`summary` 正常返回、后台配置重启后仍在
-- **后台浏览器实测**：登录、保存（写库并立即改变 `/api/config` 与解锁 TTL）、环境音增删、COS 音频试听、存储面板、14 天趋势渲染、无未捕获 JS 错误
+- **后台浏览器实测**：登录、保存（写库并立即改变 `/api/config` 与解锁 TTL）、环境音增删、COS 音频试听、存储面板、操作日志、落地页小程序码、无未捕获 JS 错误
 - **H5/落地页浏览器实测**：三 Tab 切换、填充演示数据、热力图、音频解锁与回退、播放器状态
-- `docker compose config`：通过
-- 生产配置三道保护：均按预期启动失败
+- `docker compose config`：通过；生产配置三道保护均按预期启动失败
 
-**已补验**：微信开发者工具三页真实编译/截图、三页悬浮 tabBar 渲染与点击切换、时间轮 12h 循环与上午/下午、透明顶栏/灵动岛、环境声抽屉、背景选择器、统计空态、后端配置拉取、控制台无 error。
+**本机机验（微信开发者工具 390×844）**：三页编译与截图、时间轮/3D 翻转、透明顶栏、环境声抽屉、背景选择器、统计页指标/日历/补记/切月/海报、入睡页三态与多段编辑、睡前熄灯、计算器跨日文案，console 无 error。逐项勾选见 [docs/13](docs/13-acceptance-checklist.md) 第 1 区。
 
-**仍未验证**：audio-dock 抽屉完整交互、海报、真机后台音频、锁屏续播、激励视频、真机网络请求。这些必须在真机上逐项过 [验收清单](docs/00-prd-revised.md#8-验收清单)。
+**仍未验证（必须真机）**：锁屏/后台续播、耳机拔出与来电中断、定时关闭准点、时间轮手感、熄灯毛玻璃观感与 Android 降级、激励视频、真实 COS 上传/防盗链。清单与责任方见 [docs/13](docs/13-acceptance-checklist.md) 第 2/3 区。
 
 ## 已知限制
 

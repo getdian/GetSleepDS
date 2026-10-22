@@ -1,5 +1,53 @@
 # 睡点 · 关键更新记录
 
+## 2026-10-22 · 口径确认落地：醒来日 / 1 分钟精度 / 旧对象回收 / 时间校验提示
+
+- **记录口径（确认）**：一律按“醒来日”。已全链路核对：`storage.saveSession` 用 `sessions.sessionDay`（醒来日）；入睡页 `todayKey = dateKey(now)`、统计页 `partialDay = dateKey(now)`、热力图/日历格均为日历日；`sleepDayOf` 只保留给兼容旧 `bed-v1` 记录（`sync.js`）。服务端 V2 记录由 `calendarDayOf(primary.endAt)` 重算 day，不信任客户端日期。
+- **时间轮（确认）**：保留 1 分钟精度。核对实现后无需改：144 行只渲染一次，滚动时仅对可视窗口 ±3 行重算 `transform/opacity`（`buildDrumPatch` 路径式 setData），不存在全量节点重排。
+- **COS 旧对象回收（新）**：新增 `server/src/lib/cos-keys.js`（纯函数：URL→Key 反推 + 差异计划）与 `cos.deleteObject`；保存配置成功后异步删除「上一版引用、新版不再引用」的自家对象。安全边界：只允许删 `backgrounds/`、`site/` 两个白名单目录；域名/桶地址必须匹配当前存储配置；音频不参与（可能共用或来自历史 CDN）；上传后未点保存不会删除，避免线上 404；删除失败只记日志不回滚保存。
+- **时间/时区校验（新）**：墓碑日期增加“不得晚于北京时间明天”的上限（`validate.js`，保留 1 天时区容差，UTC+14 客户端不会误伤）；客户端同步前先过滤未来墓碑并提示“删除日期异常（请检查手机时间），已跳过”；同步被云端拒收时的 toast 与统计页状态行改为说明具体原因“时间重叠或超出范围”（重叠/越界本来就会被服务端拒绝，这次把原因说清楚）。
+- **验证**：相关子集 77/77（cos-keys 2 组、validate 3 组、config、admin 审计、plan 进度时钟、config-inflight、stats、manual-sleep）；`npm run check` 通过。全量 `npm test` 唯一失败来自另一路并发改动的统计文案断言（实现 `stats.js:314` 为“与上周同期持平”，`tests/stats-calendar.test.js:145` 仍断言“与上周持平”），与本轮无关，未擅自改他人口径。
+
+## 2026-10-22 · L4 阶段 A/B：容量预检 · 脏记录兜底 · 墓碑时钟 · 缓存替换 · 同期对比 · 背景确认 · 停靠 · 可读性
+
+> 定位：发版前的正确性与体验收敛（P2 中的高价值项）。视觉大改（主按钮/弹层三件套、三页标题音量）仍需逐项截图验收，未纳入本批。
+
+- **结束/补记容量预检（A）**：新增 `manual-sleep.capacityErrorOf`——按「当天段数 ≤8 / 当天总时长 ≤24h」在保存前给可行动错误（编辑先扣掉旧段）；`evaluateManualRange` 与入睡页 `computeEndSheet` 共用。此前 `storage.saveSession` 对超限静默返回 false，结束面板只能弹「记录未完整写入，请重试一次」，用户无任何出口。同时在有错误时清空 `_endBedAt/_endWakeAt`，避免某条路径只看 `endError` 被清后误落库。
+- **空 `sessions` 脏记录兜底（A）**：`sessionsOf` 在 `sessions: []` 或全部非法段时回退 `bedAt/wakeAt` 合成 v1 段；`buildRecordView` 无可用段返回 null，`refreshAll` 给「这条记录缺少可用的睡眠段，可撤销后重新记录」。此前完成态直接取 `sessions[0].startAt` 抛 TypeError，入睡页会整页无法渲染（同步合并/历史脏数据可达）。
+- **墓碑时间防回灌（A）**：`storage.tombstoneTime(record)` = `max(now, record.updatedAt+1)`，用于 `removeRecord`、`updateSession` 迁日、`saveSession` 合并 v1 三处。云端删除条件是 `updated_at <= deleted_at`，跨设备删除或本机时钟偏慢时旧实现会删不掉，下次同步把「已删除」的记录回填并清掉本地墓碑。
+- **音频缓存原子替换（A）**：`audio-cache.download` 在 rename 无法覆盖时不再 `unlink(dest)`，改为把 dest 改名备份 → 换入新文件 → 删备份；换入失败还原备份。避免 TTL 重下/预热撞上正在播放的文件时，把 BackgroundAudioManager 正在读的源删掉（表现为 seek/循环重开失败 + 一次静音跳变）。
+- **「比上周」改同期（B）**：`weekly` 的上一周只取与本周已过天数相同的一段（周一 1 天比 1 天），文案统一「比上周同期…」/「与上周同期持平」/「上周同期没有记录」。原实现注释写「避免周一拿 1 天比 7 天」，但代码实际是部分周对完整周。
+- **背景切换确认（B）**：`onBgSelect` 统一为——只要当前有一张有效付费背景且目标不同（默认图 / 另一张付费图都算），先弹「当前付费背景还剩约 X 小时，切换后会结束本次解锁」；确认后才应用或进入解锁流程。原实现只在切回默认图时提示，A→B 会静默作废 A 的剩余时长。
+- **日历停靠（B）**：`calendar-strip` 的去重键由「最后一个月 key」改为「月份数 + 首月 + 末月」，3/6/12 切换后重新 `scrollTarget`，切到 1 年不再停在最旧的月份。
+- **可读性（B）**：四处关键提示去掉外层 opacity、字号提到 20rpx——熄灯「轻触任意处唤醒」（原 17rpx/0.42，约 2.4:1）、月历「补记」（原 15rpx/0.62）、日历图例（原 18rpx + 整块 0.6）、「时间不准可修正」（原 17rpx/0.3）。
+- **audio-dock 样式单源（B）**：`.dock-mini` / `.dock-fab` 此前各定义两次，前段的定位/尺寸/底色被文件末尾覆盖。现前段只保留动画与布局（display/flex/transition），定位与玻璃底只由末尾覆盖块提供；顺带消掉全项目唯一裸 `z-index: 40`。
+- 验证：`npm test` **254 项 / 253 通过 / 1 skip**；`npm run check` 通过（主包约 495.6 KB）；模拟器实测——统计页指标副标「与上周同期持平」、月历「补记」与图例可读、12 个月视图停在 2026-10（`docs/assets/l4-b-calendar-12m.png`）、入睡页 C 态提示可读且音符位置正确（`docs/assets/l4-b-sleep-done.png`）；注入 `sessions: []` 脏记录后正常回退渲染，注入无可用段记录后 `recordView=null` + 可行动提示、页面不崩；console 无 error。
+
+## 2026-10-22 · L4 Code Review：P1 七项修复（切月死锁 / 熄灯闭环 / 编辑区间 / 补记进行中 / 跨日文案 / 清除提醒 / 音频归属）
+
+> 起因：六域子代理全量审查 + 主代理逐条复核，确认 7 条 P1（无 P0）。本轮只修 P1，P2/视觉收敛留待下一阶段。
+
+- **统计页切月死锁（P1）**：`refresh()` 的签名数组补 `monthOffset` 与 `calendar.monthKey`。此前签名只含色阶序列，空月之间（如 2026-09 与 2026-10 都是 35 格全 `'0'`）完全相同 → 按 `‹` 后 `setData` 整块被跳过：标题/格子/`canNextMonth` 全不更新，而 `monthOffset` 已变 → 既看不到历史月、也回不去。新增 `tests/stats-page.test.js` 页面级用例（切 9 月 → 标题变化、`canNextMonth=true`、切回 10 月）。
+- **熄灯两处闭环断裂（P1）**：①`openEndSheet` 的「刚睡下，再等等」早退分支此前只 toast + return，熄灯定时器已被清掉且不重排 → 页面一直亮到下次触碰；补 `scheduleLightsOut()`。②`enterLightsOut` 因声音抽屉打开而跳过时，定时器已在回调里置空；`closeSheet()` 新增 `triggerEvent('sheetclose')`，入睡页 `onDockSheetClose` 在睡梦中且无面板时重排 30s 倒计时。`tests/sleep-page.test.js` 新增 2 条。
+- **编辑面板区间语义（P1）**：编辑既有段没有日期选择器，`rangeForDay` 的「入睡 ≥ 起床 → 回退一天」会把一段午休（13:00–13:30）的入睡改成 14:00 时静默存成 23.5h 跨天段。现在 `endMode==='edit'` 且 `bedMinutes >= wakeMinutes` 直接给出 `order` 文案（「入睡时间需早于起床时间」），并清空 `_endBedAt/_endWakeAt` 防止旧值落库。新增页面级用例。
+- **补记与进行中睡眠互斥（P1）**：`manual-sleep.evaluateManualRange` 新增 `pending` 参数，把进行中的一段按「打卡时刻 → 现在」折算后与补记区间比对，命中给专用文案「与你正在进行的睡眠重叠，请先结束计时或调整时间」；统计页补记传 `storage.getPending()`。此前补记能保存成功，之后结束计时反被这段补记挡住（互为死结）。新增 3 条纯函数用例（相交/不相交/脏数据）。
+- **计算器结果面跨日（P1）**：`onFallAsleepTap` / `cycleFall` 不再清零 `_anchorAt`。此前结果面停留跨过 30 分钟宽限后点「N 分钟入睡 ⇄」，锚点重置会让整组推荐静默推后一天，而界面上只有「早晨 06:45」这类时段词。同时主推荐与 `late` 分支补日期前缀（`P.dayLabel`），凌晨场景渲染为「明天 早晨 08:45」+「明天 01:00 上床；…」。新增 `tests/index-page.test.js` 2 条（锚点不清零 / 跨日文案）。
+- **「清除全部数据」漏删订阅提醒（P1，服务端）**：`db.eraseUserData` / `eraseCloudData`（memory 与 PG 各两处）补删 `sleep_reminders` 并返回 `reminders` 计数。此前清除后云端提醒行仍在，到点仍会推送，且 `openid/session_id` 明文留存至 7 天清理。`server/test/reminders.test.js` 新增 2 条（全量清除 / 只删云端，均断言 `dueReminders` 为空）。
+- **音频 onError 归属校验（P1）**：`player-state.isCurrentSourceError(eventSrc, expectedSrc)` 新增；`audio-dock` 与 `now-playing` 的每次赋 src 收敛到 `setAudioSrc()` 并记录 `_expectSrc`，error 首行比对播放器真实 src，已切走的旧源错误直接忽略。缓存失效改为 `cache.isUsable(url)` 先判磁盘：文件正常时只做本会话黑名单（`_badUrls`）不删文件，用户主动重播时清黑名单——避免切歌竞态误删新曲缓存。新增 `isUsable` 与 `isCurrentSourceError` 单测各 1 条。**已知限制**：BAM 的 onError 不带 src，此判据无法覆盖「新旧 src 已同步后旧源错误才到达」的极端竞态，已在文档标注。
+- 验证：`npm test` **239 项 / 238 通过 / 1 skip**；`npm run check` 通过（主包约 488.4 KB）；模拟器实测——统计页空月 `‹` 切到「2026年9月」且 `canNextMonth=true`（截图 `docs/assets/l4-p1-stats-prev-month.png`）、计算器凌晨 2 点选 01:00 渲染「明天 早晨 08:45」+ 日期 note（`docs/assets/l4-p1-result-tomorrow.png`）、入睡页打卡→唤醒→60s 内点圆环（早退不开面板）→ 32s 后自动回熄灯；console 无 error。
+
+## 2026-10-22 · code review 逐项核实与修复（配置/审计/广告/反馈）
+
+- **配置**：`config/index.js` 的 `app` 补 `site` 透传——此前文件配置里的 `site` 段会被 `normalizeConfig` 静默丢弃，空库首次部署时落地页拿不到二维码；`unlockDesc` 命中自动模板正则则随 `ttlHours` 重新生成（改时长后不再残留“24 小时”）。
+- **审计**：`db.readAdminAudit`（memory/PG）+ `GET /api/admin/audit?limit=`；后台新增「操作日志」面板（空态/失败可见）；音频、背景图、小程序码三个上传端点补 `logAdminAction`（限流 `gateUpload` 核查后本已存在，未改）。
+- **广告解锁**：`ad.show()` 在已有广告在播时返回 `'busy'` 而非 `'error'`，背景解锁与环境音解锁都不再把“忙”当作加载失败放行（此前可绕过观看直接解锁）；`showBackgroundAd` 入口补 `bgBusy` 守卫。
+- **结果面**：`plan.bedtimesForWake` 增加独立进度时钟，结果页每分钟重算“还能睡多久/哪些档位已错过”，推荐时间仍锚定计算时刻不漂移。
+- **反馈补齐**：同步本机落盘失败（`writeFailed`）与声音抽屉打开失败都会提示；音频失败改为按 track 记录并支持再点重试（不再一条失败全部永久降级），文案去掉“防盗链”确定归因。
+- **站点/后台**：`site.css` 补全局 `[hidden]`（`.qr-empty` 空态不再依赖 overflow 裁切）；落地页空态文案改为“微信扫一扫 打开「睡点」”；后台 Logo 换成与落地页一致的圆+月牙；H5 演示补 30 分钟档、解锁确认/取消按钮读取后台文案、移除 `/admin` 入口与 COS 运维说明、已完成打卡点大钮给 toast；`llms.txt` 入睡耗时档位修正为 5/10/15/20/30，`sitemap.xml` 补 `lastmod`。
+- **可读性/可达性**：`--dim` 提到 `#7C8BA1`、placeholder 提到 `#64748B`；站端/后台补 `:focus-visible`；自定义 tabBar 补 `hover-class` 按压态；空态按钮、热力图格子、解锁抽屉按钮、背景选择关闭钮补 `aria-role/aria-label`；入睡耗时档位触控高度扩到 88rpx；background-picker 删除被 flex 覆盖的死 `height:52vh`。
+- **核实后判定“不属实/已修复”**：`--color-primary-soft` 已在 app.wxss 定义；熄灯遮罩进入时 `tabbar.hide()` 已调用；超 24h pending 不再静默清除（提示+手动校准）；上传限流已存在；tabBar/now-playing 已有 aria；sleep-guide 文案已按周期动态生成；热力图“今天”按醒来日口径正确（记录按 `sessionDay` 归档）；备案号已换成真实号；audio-dock 的 `.dock-fab/.dock-mini` 两段规则是叠加（前段提供定位/flex），不是死代码。
+- **验证**：`npm test` 227 pass / 0 fail（+1 PG skip，新增审计闭环、site 透传、进度时钟 3 组用例）；`npm run check` 通过；四个 CSS 文件花括号配平；浏览器实测——后台 Logo 为圆+月牙、操作日志能显示“保存配置 · 版本 v4 · 环境音 1 条”、落地页空态 `img` 为 `display:none` 且文案正确、演示页无 `/admin` 入口且五个耗时档齐全。
+
 ## 2026-10-22 · L4 评审整改：补记编排单源 · 事件白名单 · 弹层样式共享
 
 > 起因：代码评审指出统计页补记与入睡页「补记一段睡眠」是两套复制实现（约 130 行 JS + 53 行 WXML + 180 行 WXSS 近同构）。
