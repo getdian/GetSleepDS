@@ -182,7 +182,7 @@ npm run check   # JSON / WXML 标签 / WXSS 括号 / 页面四件套 / 组件引
 当前基线（2026-10-22，详见 [验收清单](docs/13-acceptance-checklist.md)）：
 
 - `npm test`：253 passed / 0 failed + 1 个 PG 集成用例（未设置 `PG_TEST_URL` 时跳过）
-- `npm run check`：通过（3 页面 / 23 JSON / 18 WXML / 20 WXSS），主包约 495.6 KB
+- `npm run check`：通过（3 页面 / 23 JSON / 18 WXML / 20 WXSS），主包约 496.1 KB
 - 后端内存模式冒烟：`/api/health`、`/api/config`、`/api/summary`、`/api/audio/unlock`、`/api/records/erase` 均符合预期
 - **PostgreSQL 16 容器端到端**：自动建表、解锁写入 24 小时、`sync` 幂等、空记录同步能取回 3 条（换机回填）、`summary` 正常返回、后台配置重启后仍在
 - **后台浏览器实测**：登录、保存（写库并立即改变 `/api/config` 与解锁 TTL）、环境音增删、COS 音频试听、存储面板、操作日志、落地页小程序码、无未捕获 JS 错误

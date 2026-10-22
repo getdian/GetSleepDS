@@ -1,5 +1,17 @@
 # 睡点 · 关键更新记录
 
+## 2026-10-22 · L4 视觉批次：主按钮/弹层单一来源 · 底部安全区 · 空态去星点 · 年视图可读性
+
+> 定位：上一轮刻意延后的观感统一。原则是“参数单源、视觉可验收”，不做结构重写。
+
+- **主按钮一套化**：`app.wxss` 新增 `--btn-primary-bg`（亮紫渐变）/ `--btn-primary-fg`（深字 `#141B45`）/ `--btn-primary-shadow`；计算器 `.calc-action`、入睡页 `.cta-mini.is-primary`、结束/补记面板 `.end-btn.primary`、解锁面板 `.sheet-primary` 四处统一引用。此前是 3 套紫 + 2 种文字明暗逻辑（解锁面板还暗一档）。
+- **底部弹层参数统一**：圆角 36rpx、底色 `rgba(16,22,40,0.98)`、抓手 64×5rpx、遮罩 `rgba(4,7,15,0.62)` + `blur(8rpx)`。`styles/sheet.wxss`（结束/补记）、`unlock-sheet`、`background-picker` 三处对齐；因小程序组件样式默认隔离，跨组件不复用类名，改为统一参数并在三处注释互相指向（避免下一次再漂移）。
+- **底部安全区**：`.page` 的 `200rpx` 与入睡页 `190rpx` 改为 `calc(... + env(safe-area-inset-bottom))`。修 iPhone 14 上内容底边与 tabBar 只剩约 7rpx 的挤压（统计页此前已是 180rpx + safe）。
+- **空态去星点**：删除 `empty-state` 的四颗装饰星（wxml 4 个节点 + wxss 5 条规则）。全局视觉基线是“深空 + 呼吸月晕、无星点”，空态是全页最亮区域，装饰星会分散月牙焦点。
+- **年视图可读性**：`calendar-strip` 的 `.cs-cell` 14→16rpx、`.cs-week-cell` 12→14rpx（40rpx 格内仍能放下两位日号）。
+- **刻意不做**：三页主标题 72 / 72 / 56 维持现状。计算器与入睡页是 Hero 标题（72rpx），统计页是页面标题（56rpx），属层级差异而非缺陷；统一会挤压统计首屏的 3 列指标，收益低于代价。
+- 验证：`npm test` **254 项 / 253 通过 / 1 skip**；`npm run check` 通过（主包约 496.1 KB）；模拟器截图——首页主按钮、背景选择器（36rpx/深底/blur 遮罩/抓手）、补记面板（深字主按钮）、解锁面板（`观看视频` 深字主按钮）、统计空态无星点（`docs/assets/l4-v-*.png`）；console 无 error。
+
 ## 2026-10-22 · 口径确认落地：醒来日 / 1 分钟精度 / 旧对象回收 / 时间校验提示
 
 - **记录口径（确认）**：一律按“醒来日”。已全链路核对：`storage.saveSession` 用 `sessions.sessionDay`（醒来日）；入睡页 `todayKey = dateKey(now)`、统计页 `partialDay = dateKey(now)`、热力图/日历格均为日历日；`sleepDayOf` 只保留给兼容旧 `bed-v1` 记录（`sync.js`）。服务端 V2 记录由 `calendarDayOf(primary.endAt)` 重算 day，不信任客户端日期。
