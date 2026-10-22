@@ -1,0 +1,17 @@
+{
+  "domain": "https://sleepintl.example.com",
+  "defaultLocale": "en",
+  "locales": ["en", "es"],
+  "brand": "SleepCycle",
+  "tagline": "Find the bedtime that fits your wake-up call",
+  "themeColor": "#0b1020",
+  "analyticsId": "",
+  "adsenseClient": "",
+  "ctaUrl": "",
+  "disclaimer": "SleepCycle is a planning tool, not medical advice. If you have a sleep disorder, talk to a clinician.",
+  "footerLinks": [
+    { "href": "/privacy", "label": "Privacy" },
+    { "href": "/terms", "label": "Terms" },
+    { "href": "/about", "label": "About" }
+  ]
+}

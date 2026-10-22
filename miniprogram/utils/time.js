@@ -9,9 +9,10 @@ const MINUTE_MS = 60 * 1000
 const CYCLE_MIN = 90
 // 睡眠日以"入睡时间往前推 12 小时"的日期为准
 const SLEEP_DAY_SHIFT_MS = 12 * HOUR_MS
-// 归档日固定按北京时间（与服务端 server/src/lib/time.js 同源）：产品只面向国内，
-// 设备出境/改时区时本地 dateKey 会与云端 day 分叉，同一段睡眠被算成两天。
-const BEIJING_OFFSET_MS = 8 * HOUR_MS
+// 默认归档时区 +480（北京）：小程序仍按国内口径，行为与历史完全一致。
+// 国际站按记录自身时区传入（-new Date().getTimezoneOffset()），避免同一夜被算成两天。
+const DEFAULT_TZ_OFFSET_MIN = 480
+const BEIJING_OFFSET_MS = DEFAULT_TZ_OFFSET_MIN * MINUTE_MS
 
 function pad2(value) {
   return value < 10 ? '0' + value : String(value)
@@ -39,9 +40,14 @@ function parseDateKey(key) {
  * 与 dateKey 的区别：dateKey 跟随设备本地时区（用于“今天/昨天”等 UI 文案），
  * 本函数固定 +8（服务端 calendarDayOf 同口径），只用于记录归属。
  */
-function calendarDayKey(timestamp) {
-  const d = new Date(Number(timestamp) + BEIJING_OFFSET_MS)
+function dayKeyOf(timestamp, tzOffsetMin) {
+  const offset = Number.isFinite(Number(tzOffsetMin)) ? Number(tzOffsetMin) : DEFAULT_TZ_OFFSET_MIN
+  const d = new Date(Number(timestamp) + offset * MINUTE_MS)
   return d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1) + '-' + pad2(d.getUTCDate())
+}
+
+function calendarDayKey(timestamp, tzOffsetMin) {
+  return dayKeyOf(timestamp, tzOffsetMin)
 }
 
 /** 一条睡眠记录归属的日期（北京时间入睡日，兼容 v1） */
@@ -153,8 +159,10 @@ module.exports = {
   CYCLE_MIN,
   pad2,
   wrapMinutes,
+  DEFAULT_TZ_OFFSET_MIN,
   dateKey,
   parseDateKey,
+  dayKeyOf,
   calendarDayKey,
   sleepDayOf,
   startOfDay,

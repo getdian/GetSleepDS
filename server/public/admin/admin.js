@@ -141,6 +141,7 @@
     mini: { title: '小程序与提醒', sub: '订阅消息模板、跳转路径与运行环境', badge: '通知' },
     copy: { title: '解锁文案', sub: '抽屉里的标题、说明与按钮', badge: '文案' },
     landing: { title: '落地页', sub: '落地页展示的小程序码与引导文案', badge: '内容' },
+    web: { title: '国际站', sub: '站点品牌、订阅入口、AdSense 与分析 ID', badge: '出海' },
     users: { title: '用户数据', sub: '按 openid 查询与删除云端记录', badge: '客服 / 合规' },
     audit: { title: '操作日志', sub: '配置保存、删除用户与上传的留痕', badge: '审计' },
     security: { title: '安全', sub: '后台密码与登录会话', badge: '安全' },
@@ -155,7 +156,8 @@
       name === 'unlock' ||
       name === 'features' ||
       name === 'copy' ||
-      name === 'landing'
+      name === 'landing' ||
+      name === 'web'
     )
   }
 
@@ -657,6 +659,15 @@
         mpQrCodeUrl: $('#site-qr-url').value.trim(),
         mpQrNote: $('#site-qr-note').value.trim()
       },
+      web: {
+        enabled: $('#web-enabled').checked,
+        brand: $('#web-brand').value.trim(),
+        tagline: $('#web-tagline').value.trim(),
+        ctaUrl: $('#web-cta').value.trim(),
+        adsenseClient: $('#web-adsense').value.trim(),
+        analyticsId: $('#web-analytics').value.trim(),
+        disclaimer: $('#web-disclaimer').value.trim()
+      },
       reminder: {
         enabled: $('#reminder-enabled').checked,
         templateId: $('#reminder-template').value.trim(),
@@ -737,6 +748,15 @@
 
     renderSite(config.site)
 
+    const web = config.web || {}
+    $('#web-enabled').checked = web.enabled !== false
+    $('#web-brand').value = web.brand || 'SleepCycle'
+    $('#web-tagline').value = web.tagline || ''
+    $('#web-cta').value = web.ctaUrl || ''
+    $('#web-adsense').value = web.adsenseClient || ''
+    $('#web-analytics').value = web.analyticsId || ''
+    $('#web-disclaimer').value = web.disclaimer || ''
+
     renderAudio(config.audio)
     renderBackgrounds(config.backgrounds || [], config.defaultBackgroundId || '')
     $('#bg-unlock-hours').value = config.backgroundUnlockHours || 24
@@ -760,6 +780,14 @@
     if (!Number.isInteger(payload.cache.ttlDays) || payload.cache.ttlDays < 1 || payload.cache.ttlDays > 30) {
       return '缓存有效期需为 1–30 天'
     }
+    const web = payload.web || {}
+    if (web.ctaUrl && !/^https:\/\//i.test(web.ctaUrl)) {
+      return '订阅入口链接必须以 https:// 开头'
+    }
+    if (web.adsenseClient && !/^ca-pub-\d{10,20}$/.test(web.adsenseClient)) {
+      return 'AdSense 客户端 ID 形如 ca-pub-1234567890123456'
+    }
+
     const reminderTemplate = payload.reminder && payload.reminder.templateId
     if (reminderTemplate && !/^[A-Za-z0-9_-]{10,64}$/.test(reminderTemplate)) {
       return '订阅消息模板 ID 格式不正确（微信后台复制，通常 43 位）'

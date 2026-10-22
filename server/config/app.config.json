@@ -29,6 +29,16 @@
     "mpQrCodeUrl": "",
     "mpQrNote": "微信搜索「睡点」"
   },
+  "web": {
+    "enabled": true,
+    "brand": "SleepCycle",
+    "tagline": "Find the bedtime that fits your wake-up call",
+    "ctaUrl": "",
+    "adsenseClient": "",
+    "analyticsId": "",
+    "locales": ["en", "es"],
+    "disclaimer": "SleepCycle is a planning tool, not medical advice. If you have a sleep disorder, talk to a clinician."
+  },
   "reminder": {
     "enabled": true,
     "templateId": "",

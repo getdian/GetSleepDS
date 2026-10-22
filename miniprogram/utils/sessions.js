@@ -95,11 +95,10 @@ function sessionsOf(record) {
   return []
 }
 
-function sessionDay(session) {
+function sessionDay(session, tzOffsetMin) {
   const endAt = Number(session && session.endAt)
-  // 归档日固定北京时间：与服务端 calendarDayOf(primary.endAt) 同口径，
-  // 否则设备时区变化后本地归到 A 日、云端重算成 B 日，同步会互相写墓碑。
-  return Number.isFinite(endAt) ? T.calendarDayKey(endAt) : ''
+  // 归档日默认 +480（与服务端 calendarDayOf 同口径）；国际站传记录自身时区。
+  return Number.isFinite(endAt) ? T.calendarDayKey(endAt, tzOffsetMin) : ''
 }
 
 function primaryOf(list) {

@@ -12,6 +12,18 @@ const MAX_BACKGROUNDS = 20
 const DEFAULT_BACKGROUND_UNLOCK_HOURS = 24
 // 落地页展示：小程序码（后台可上传/清除）与二维码下方的引导文案
 const DEFAULT_SITE = { mpQrCodeUrl: '', mpQrNote: '微信搜索「睡点」' }
+// 国际站（Web）：站点文案、订阅 CTA、广告与分析 ID；构建期快照 + 运行时兜底。
+const DEFAULT_WEB = {
+  enabled: true,
+  brand: 'SleepCycle',
+  tagline: 'Find the bedtime that fits your wake-up call',
+  ctaUrl: '',
+  adsenseClient: '',
+  analyticsId: '',
+  locales: ['en', 'es'],
+  disclaimer: 'SleepCycle is a planning tool, not medical advice.'
+}
+const WEB_LOCALES = ['en', 'es', 'pt', 'id', 'de', 'fr', 'ja']
 // 订阅消息：模板 ID 由运营在微信公众平台申请后填到这里（后台可视化，无需重启）。
 // enabled 默认 true 表示“没关门”，真正的可用性取决于 templateId 是否填写；
 // 只有运营显式取消勾选才停止下发与创建新提醒。
@@ -416,6 +428,33 @@ function validateConfig(input, base) {
   }
   site.mpQrNote = readText(siteInput.mpQrNote, '小程序码文案', 30, false) || '微信搜索「睡点」'
 
+  // 国际站配置：只放公开展示项，不放任何密钥（AdSense 客户端 ID 本身是公开的）
+  const webInput = Object.assign(
+    {},
+    isObject(baseConfig.web) ? baseConfig.web : {},
+    isObject(input.web) ? input.web : {}
+  )
+  const webCtaUrl = readText(webInput.ctaUrl, '外部 CTA 链接', 300, false)
+  if (webCtaUrl && !/^https:\/\//i.test(webCtaUrl)) {
+    throw invalidBody('外部 CTA 链接必须以 https:// 开头')
+  }
+  const webAdsenseClient = readText(webInput.adsenseClient, 'AdSense 客户端 ID', 40, false)
+  if (webAdsenseClient && !/^ca-pub-\d{10,20}$/.test(webAdsenseClient)) {
+    throw invalidBody('AdSense 客户端 ID 形如 ca-pub-1234567890123456')
+  }
+  const webLocalesInput = Array.isArray(webInput.locales) ? webInput.locales : DEFAULT_WEB.locales
+  const webLocales = webLocalesInput.filter((item) => WEB_LOCALES.indexOf(item) >= 0).slice(0, 4)
+  const web = {
+    enabled: webInput.enabled !== false,
+    brand: readText(webInput.brand, '站点品牌', 24, false) || DEFAULT_WEB.brand,
+    tagline: readText(webInput.tagline, '站点标语', 80, false) || DEFAULT_WEB.tagline,
+    ctaUrl: webCtaUrl,
+    adsenseClient: webAdsenseClient,
+    analyticsId: readText(webInput.analyticsId, '分析 ID', 40, false),
+    locales: webLocales.length ? webLocales : ['en'],
+    disclaimer: readText(webInput.disclaimer, '免责声明', 300, false) || DEFAULT_WEB.disclaimer
+  }
+
   const copyInput = Object.assign(
     {},
     isObject(baseConfig.copy) ? baseConfig.copy : {},
@@ -469,6 +508,7 @@ function validateConfig(input, base) {
     defaultBackgroundId,
     backgroundUnlockHours,
     site,
+    web,
     reminder: {
       enabled: reminderInput.enabled !== false,
       templateId: reminderTemplateId,

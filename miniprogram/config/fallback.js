@@ -46,6 +46,17 @@ module.exports = {
     templateId: '',
     page: 'pages/sleep/sleep?end=1'
   },
+  // 国际站（Web）配置：小程序不消费，仅保持与 server/config/app.config.json 同构
+  web: {
+    enabled: true,
+    brand: 'SleepCycle',
+    tagline: 'Find the bedtime that fits your wake-up call',
+    ctaUrl: '',
+    adsenseClient: '',
+    analyticsId: '',
+    locales: ['en', 'es'],
+    disclaimer: 'SleepCycle is a planning tool, not medical advice.'
+  },
   copy: {
     unlockTitle: '解锁环境音',
     unlockDesc: '观看视频，解锁环境声音（24 小时内有效）',

@@ -1,5 +1,17 @@
 # 睡点 · 关键更新记录
 
+## 2026-10-23 · 国际站阶段 1：core 复用 + 时区模型 + 静态站 + 后台可视化
+
+> 来源：商业化讨论（小程序广告依赖单一平台，出海 H5 做 SEO + 订阅）。PRD 见 `docs/14-intl-prd.md`。
+
+- **时区模型（已拍板：记录级时区，默认 +480）**：`utils/time.js` 新增 `dayKeyOf(ts, tzOffsetMin)`，`calendarDayKey` 改为其包装（不传时区时行为与历史完全一致）；`sessions.sessionDay` 增第二参数。小程序全链路仍走 +480，零回归。
+- **core 复用（不复制算法）**：`tools/build-web.mjs` 直接读取 `miniprogram/utils/{time,format,sessions,plan}.js` 打包成浏览器 bundle。此前 `server/public/site/demo.js` 已经复制过一份 `sleepDayOf`，本轮确立「Web 只引用、不重写」的规则。
+- **国际站静态站（零第三方依赖）**：`web/content/{site,i18n,pages}.json` + `web/assets/{app.js,app.css}` → `npm run build:web` 产出 11 页（en 8 / es 3）、sitemap、robots、`_headers`（CSP + 长缓存）、favicon，总 104KB。每页含 canonical、hreflang、JSON-LD（WebApplication + FAQPage）。
+- **配置下发**：`config-schema.js` 新增 `web` 段（brand/tagline/ctaUrl/adsenseClient/analyticsId/locales/disclaimer），带 https 与 `ca-pub-` 校验；`app.config.json`、`miniprogram/config/fallback.js` 同步默认值；`GET /api/config` 由 `no-store` 改为 `max-age=30, stale-while-revalidate=300`。
+- **跨域**：`app.js` 增 `WEB_ORIGINS` 白名单 CORS（不带 Cookie，仅 GET/POST/OPTIONS），未配置时行为不变。
+- **后台可视化**：新增「国际站」面板（启用开关、品牌、标语、订阅入口、AdSense ID、分析 ID、免责声明），与其它面板同一套保存/校验链路。
+- **验证**：`npm test` **312 项 / 311 通过 / 0 失败 / 1 skip**（新增 `tests/web-intl.test.js` 5 条：时区、core 无平台依赖、双向计算、内容完整性）；`npm run check` 通过（主包 536.1 KB）；`build:web` 产出 11 页、104KB。
+
 ## 2026-10-23 · 代码审查修复轮：播放器停止入口 · 令牌签名派生 · 补记默认值 · 音频配置自愈
 
 > 来源：外部审查报告（2 P1 / 9 P2 / 约 20 P3）。逐条对照源码核验：P1 全部属实，P2 九条中八条属实、P2-3 属结构隐患（历史模拟器实测未溢出），P3 择要修复；本轮**未改**的项见文末。

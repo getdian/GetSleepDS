@@ -1,0 +1,240 @@
+{
+  "pages": [
+    {
+      "slug": "/",
+      "locale": "en",
+      "mode": "wake",
+      "title": "Sleep Calculator — What Time Should I Go to Bed? | SleepCycle",
+      "description": "Enter your wake-up time and get the best bedtime for 5, 4 or 3 sleep cycles (90 minutes each), plus an extra 9-hour option.",
+      "h1": "What time should I go to bed?",
+      "lead": "Tell us when you need to wake up. We work backwards through 90-minute sleep cycles — and add the time it takes you to fall asleep.",
+      "bullets": [
+        "5 cycles (7.5 h) is the usual recommendation for adults",
+        "4 cycles (6 h) if you are short on time",
+        "6 cycles (9 h) is listed separately as a recovery option"
+      ],
+      "faq": [
+        {
+          "q": "How is the bedtime calculated?",
+          "a": "We subtract your fall-asleep time and 90 minutes per cycle from your wake-up time. A 07:00 wake-up with 15 minutes to fall asleep gives 23:15 for 5 cycles."
+        },
+        {
+          "q": "Why 90 minutes?",
+          "a": "A sleep cycle averages about 90 minutes, though it ranges from 70 to 120 minutes per person. Waking at the end of a cycle usually feels easier."
+        }
+      ]
+    },
+    {
+      "slug": "/what-time-should-i-go-to-bed",
+      "locale": "en",
+      "mode": "wake",
+      "title": "What Time Should I Go to Bed? Bedtime Calculator | SleepCycle",
+      "description": "A bedtime calculator built on 90-minute sleep cycles. Pick your alarm time and see the three best times to fall asleep.",
+      "h1": "What time should I go to bed tonight?",
+      "lead": "Most bedtime advice ignores the obvious: you cannot control when you fall asleep, only when you get into bed. This calculator subtracts both your wind-down time and whole sleep cycles.",
+      "bullets": [
+        "Works backwards from your alarm",
+        "Accounts for the minutes you need to fall asleep",
+        "Shows which options have already passed"
+      ],
+      "faq": [
+        {
+          "q": "Should I aim for 8 hours or 5 cycles?",
+          "a": "They are roughly the same (5 cycles = 7.5 hours). The cycle view matters because waking mid-cycle often feels worse than waking 30 minutes earlier."
+        }
+      ]
+    },
+    {
+      "slug": "/what-time-should-i-wake-up",
+      "locale": "en",
+      "mode": "sleep",
+      "title": "If I Go to Bed Now, What Time Should I Wake Up? | SleepCycle",
+      "description": "Enter your bedtime and see the best wake-up times for 3, 4 and 5 sleep cycles, including an extra 9-hour recovery option.",
+      "h1": "If I go to bed now, when should I wake up?",
+      "lead": "This is the other direction: you know when you are getting into bed, and you want the least painful alarm. We add 90 minutes per cycle to your bedtime.",
+      "bullets": [
+        "Useful when your bedtime is fixed but your morning is not",
+        "Shows 3, 4 and 5 cycle options side by side",
+        "Adds the time you usually need to fall asleep"
+      ],
+      "faq": [
+        {
+          "q": "What if I wake up in the middle of a cycle?",
+          "a": "You will usually feel groggier. If you wake naturally before the alarm, getting up is often better than going back to sleep for 20 minutes."
+        }
+      ]
+    },
+    {
+      "slug": "/90-minute-sleep-cycle",
+      "locale": "en",
+      "mode": "wake",
+      "title": "90-Minute Sleep Cycle Calculator | SleepCycle",
+      "description": "Sleep in whole 90-minute cycles instead of round hours. See the exact bedtimes for 3, 4, 5 and 6 cycles.",
+      "h1": "Sleep in 90-minute cycles",
+      "lead": "A sleep cycle moves through light sleep, deep sleep and REM, then briefly surfaces. Aligning your alarm with the end of a cycle is the whole idea behind cycle-based bedtimes.",
+      "bullets": [
+        "3 cycles = 4.5 hours (short night or nap)",
+        "5 cycles = 7.5 hours (typical adult target)",
+        "6 cycles = 9 hours (recovery after sleep debt)"
+      ],
+      "faq": [
+        {
+          "q": "Is 90 minutes exact?",
+          "a": "No. Cycles vary between roughly 70 and 120 minutes and lengthen towards morning. Treat 90 minutes as a planning average, not a guarantee."
+        },
+        {
+          "q": "Do naps follow the same cycle?",
+          "a": "Short naps of 20 minutes avoid deep sleep entirely, which is why they leave you alert rather than groggy."
+        }
+      ]
+    },
+    {
+      "slug": "/7-hours-of-sleep",
+      "locale": "en",
+      "mode": "wake",
+      "title": "What Time to Go to Bed for 7 Hours of Sleep | SleepCycle",
+      "description": "Need exactly 7 hours? See the bedtime that gives you 7 hours in bed after accounting for the time it takes to fall asleep.",
+      "h1": "What time should I go to bed for 7 hours of sleep?",
+      "lead": "Seven hours in bed is not seven hours asleep. This page subtracts your fall-asleep time so the number you see is real sleep, not time under the covers.",
+      "bullets": [
+        "Adjustable fall-asleep time (0–30 minutes)",
+        "Shows the trade-off between 4 and 5 cycles",
+        "Works for any wake-up time"
+      ],
+      "faq": [
+        {
+          "q": "Is 7 hours enough?",
+          "a": "Most adults need 7 to 9 hours. Seven is the lower end; if you regularly feel tired, add a cycle rather than cutting sleep further."
+        }
+      ]
+    },
+    {
+      "slug": "/night-shift-sleep-calculator",
+      "locale": "en",
+      "mode": "sleep",
+      "title": "Night Shift Sleep Calculator | SleepCycle",
+      "description": "A sleep calculator for night-shift and rotating-shift workers. Plan daytime sleep around 90-minute cycles instead of assuming a 9-to-5 schedule.",
+      "h1": "Night shift sleep calculator",
+      "lead": "Most sleep calculators assume you sleep at night. If you work 22:00–06:00 and sleep at 08:00, the maths is the same — but the timing is not.",
+      "bullets": [
+        "Built for daytime sleep after a night shift",
+        "Cycle-based wake-up times, not clock-time guilt",
+        "Useful for rotating shifts: recalculate each block"
+      ],
+      "faq": [
+        {
+          "q": "How should shift workers split sleep?",
+          "a": "A common pattern is a 4.5-hour core block (3 cycles) plus a 90-minute nap before the shift. Total sleep matters more than a single long block."
+        },
+        {
+          "q": "Does daylight make daytime sleep worse?",
+          "a": "Yes. Blackout curtains and an eye mask measurably improve daytime sleep quality; the calculator only handles timing."
+        }
+      ]
+    },
+    {
+      "slug": "/jet-lag-sleep-calculator",
+      "locale": "en",
+      "mode": "sleep",
+      "title": "Jet Lag Sleep Calculator | SleepCycle",
+      "description": "Plan sleep across time zones. Enter your bedtime in the new zone and get cycle-based wake-up times while your body clock catches up.",
+      "h1": "Jet lag sleep calculator",
+      "lead": "After a long flight your body clock is still on the old time zone. The practical fix is to anchor a consistent local bedtime and wake at the end of a cycle.",
+      "bullets": [
+        "Plan sleep in the destination time zone",
+        "Keeps a stable local wake time while you adjust",
+        "Pairs well with morning light exposure"
+      ],
+      "faq": [
+        {
+          "q": "How long does jet lag last?",
+          "a": "Roughly one day per time zone crossed. Light exposure in the morning and avoiding late caffeine shorten it."
+        },
+        {
+          "q": "Should I nap after landing?",
+          "a": "A 20-minute nap is safe. A 90-minute nap can make it harder to fall asleep at the local bedtime."
+        }
+      ]
+    },
+    {
+      "slug": "/nap-calculator",
+      "locale": "en",
+      "mode": "sleep",
+      "title": "Nap Calculator — 20, 60 or 90 Minute Naps | SleepCycle",
+      "description": "Choose a nap length and see exactly when to set your alarm. 20 minutes for alertness, 90 for a full cycle.",
+      "h1": "Nap calculator",
+      "lead": "Nap length decides how you feel afterwards. Twenty minutes keeps you in light sleep; ninety minutes completes a full cycle. Anything in between is where the grogginess lives.",
+      "bullets": [
+        "20 min: alertness boost, no grogginess",
+        "90 min: one full cycle, better for sleep debt",
+        "Avoid 40–60 minutes unless you can sleep longer"
+      ],
+      "faq": [
+        {
+          "q": "What is a coffee nap?",
+          "a": "Drink coffee, then nap for 20 minutes. Caffeine peaks as you wake, which is why it feels unusually effective."
+        }
+      ]
+    },
+    {
+      "slug": "/es/",
+      "locale": "es",
+      "mode": "wake",
+      "title": "Calculadora de sueño — ¿A qué hora debo dormir? | SleepCycle",
+      "description": "Introduce tu hora de despertar y obtén la mejor hora para dormir según 5, 4 o 3 ciclos de sueño de 90 minutos.",
+      "h1": "¿A qué hora debo dormir?",
+      "lead": "Dinos a qué hora necesitas despertarte. Calculamos hacia atrás en ciclos de 90 minutos y sumamos el tiempo que tardas en dormirte.",
+      "bullets": [
+        "5 ciclos (7,5 h) es la recomendación habitual",
+        "4 ciclos (6 h) si vas con prisa",
+        "6 ciclos (9 h) aparece aparte como opción de recuperación"
+      ],
+      "faq": [
+        {
+          "q": "¿Cómo se calcula la hora de dormir?",
+          "a": "Restamos tu tiempo para dormirte y 90 minutos por ciclo a la hora de despertar. Despertar a las 07:00 con 15 minutos para dormirte da 23:15 para 5 ciclos."
+        }
+      ]
+    },
+    {
+      "slug": "/es/a-que-hora-debo-dormir",
+      "locale": "es",
+      "mode": "wake",
+      "title": "¿A qué hora debo dormir esta noche? | SleepCycle",
+      "description": "Calculadora de hora de dormir basada en ciclos de 90 minutos. Elige tu alarma y mira las tres mejores horas para dormirte.",
+      "h1": "¿A qué hora debo dormir esta noche?",
+      "lead": "No puedes controlar cuándo te duermes, solo cuándo te metes en la cama. Esta calculadora resta tu tiempo de conciliación y ciclos completos.",
+      "bullets": [
+        "Calcula desde tu alarma",
+        "Tiene en cuenta los minutos que tardas en dormirte",
+        "Marca las opciones que ya han pasado"
+      ],
+      "faq": [
+        {
+          "q": "¿8 horas o 5 ciclos?",
+          "a": "Son casi lo mismo (5 ciclos = 7,5 horas). La diferencia es despertar al final de un ciclo en lugar de en medio."
+        }
+      ]
+    },
+    {
+      "slug": "/es/calculadora-turno-nocturno",
+      "locale": "es",
+      "mode": "sleep",
+      "title": "Calculadora de sueño para turno nocturno | SleepCycle",
+      "description": "Para quienes trabajan de noche: planifica el sueño diurno con ciclos de 90 minutos en lugar de asumir un horario de oficina.",
+      "h1": "Calculadora de sueño para turno nocturno",
+      "lead": "Casi todas las calculadoras asumen que duermes de noche. Si trabajas de 22:00 a 06:00 y duermes a las 08:00, la matemática es la misma; el momento no.",
+      "bullets": [
+        "Pensada para el sueño diurno tras el turno",
+        "Horas de despertar por ciclos",
+        "Útil en turnos rotativos: recalcula cada bloque"
+      ],
+      "faq": [
+        {
+          "q": "¿Cómo repartir el sueño?",
+          "a": "Un patrón habitual es un bloque principal de 4,5 horas (3 ciclos) más una siesta de 90 minutos antes del turno."
+        }
+      ]
+    }
+  ]
+}

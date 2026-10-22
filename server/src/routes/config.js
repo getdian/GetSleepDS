@@ -12,7 +12,10 @@ function createConfigRoute(options) {
       const current = await store.get()
       const stored = (current && current.config) || {}
       const reminder = stored.reminder || {}
-      res.set('Cache-Control', 'no-store')
+      // 国际站需要可缓存：配置是低频写、高频读，且后台保存会覆写进程内缓存。
+      // 30s 浏览器缓存 + 5min SWR，兼顾即时性与海外回源成本。
+      res.set('Cache-Control', 'public, max-age=30, stale-while-revalidate=300')
+      res.set('Vary', 'Origin')
       res.json(
         Object.assign({}, stored, {
           // 模板 ID 不是密钥；客户端需要它来发起一次性订阅授权。

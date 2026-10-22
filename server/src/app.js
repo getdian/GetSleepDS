@@ -116,6 +116,30 @@ function createApp(options) {
   // 64KB 会让这类用户每次同步首片都 413（且客户端重试生成同一片），永久不可用。
   app.use(express.json({ limit: '256kb' }))
 
+  // 国际站与小程序不同源：只对白名单来源放开「读」类跨域请求（不带 Cookie，
+  // 管理端用 Bearer token，因此不开 Allow-Credentials）。未配置时保持同源，行为不变。
+  const webOrigins = String(process.env.WEB_ORIGINS || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+  if (webOrigins.length) {
+    app.use((req, res, next) => {
+      const origin = req.headers.origin
+      if (origin && webOrigins.indexOf(origin) >= 0) {
+        res.setHeader('Access-Control-Allow-Origin', origin)
+        res.setHeader('Vary', 'Origin')
+        res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        res.setHeader('Access-Control-Max-Age', '600')
+      }
+      if (req.method === 'OPTIONS') {
+        res.status(204).end()
+        return
+      }
+      next()
+    })
+  }
+
   app.use((req, res, next) => {
     const start = Date.now()
     // Express 会在路由/静态中间件里改写 req.url，这里先固化原始路径。

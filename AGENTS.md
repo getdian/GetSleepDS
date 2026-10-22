@@ -59,6 +59,7 @@ npm run check     # 3 页面 / 22 JSON / 17 WXML / 19 WXSS，主包约 535.5 KB
 | 音频 / 广告 / 解锁 | `components/audio-dock/*`、`components/now-playing/*`、`utils/ad.js`、`server/src/routes/audio.js` |
 | 运营后台 | `server/public/admin/admin.js`（`PANEL_META` / `collect` / `render` / `validatePayload`） |
 | 部署 / 备份还原 | `docs/10-operations.md` §3.0 与 §3.8、`deploy/1panel-up.sh`、`deploy/backup.sh` |
+| 国际站（Web/SEO） | `docs/14-intl-prd.md`、`web/content/*`、`tools/build-web.mjs`、`web/assets/*` |
 
 ## 6. 各工具的文件名（都只指向本文件）
 

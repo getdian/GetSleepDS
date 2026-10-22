@@ -75,6 +75,9 @@
               <button type="button" class="side-item" data-panel="landing">
                 <span class="side-ico">☾</span><span>落地页</span>
               </button>
+              <button type="button" class="side-item" data-panel="web">
+                <span class="side-ico">⌘</span><span>国际站</span>
+              </button>
               <button type="button" class="side-item" data-panel="users">
                 <span class="side-ico">◎</span><span>用户数据</span>
               </button>
@@ -412,6 +415,30 @@
               </div>
             </div>
           </div>
+        </section>
+
+        <section class="panel admin-panel" data-panel="web" hidden>
+          <div class="panel-head">
+            <div>
+              <h2>国际站（Web / SEO）</h2>
+              <p class="hint">站点文案与投放标识。保存后由 <code>GET /api/config</code> 下发；静态页构建时读取 <code>web/content/site.json</code>，此处用于运行时兜底与订阅入口。</p>
+            </div>
+          </div>
+          <div class="switches">
+            <label class="switch"><input type="checkbox" id="web-enabled"><span>启用国际站配置下发</span></label>
+          </div>
+          <div class="grid">
+            <label class="field"><span>站点品牌</span><input id="web-brand" maxlength="24" placeholder="SleepCycle"></label>
+            <label class="field"><span>站点标语</span><input id="web-tagline" maxlength="80" placeholder="Find the bedtime that fits your wake-up call"></label>
+            <label class="field"><span>订阅入口链接（可选，https）</span><input id="web-cta" maxlength="300" placeholder="https://..."></label>
+            <label class="field"><span>AdSense 客户端 ID（可选）</span><input id="web-adsense" maxlength="40" placeholder="ca-pub-1234567890123456"></label>
+            <label class="field"><span>分析 ID（可选）</span><input id="web-analytics" maxlength="40" placeholder="G-XXXXXXX"></label>
+          </div>
+          <label class="field">
+            <span>免责声明</span>
+            <textarea id="web-disclaimer" rows="3" maxlength="300"></textarea>
+          </label>
+          <p class="hint">AdSense 客户端 ID 与分析 ID 都是公开标识，不是密钥；真正的密钥仍只放服务器 <code>.env</code>。语言列表暂固定 en / es。</p>
         </section>
 
       </form>
