@@ -5,6 +5,7 @@ const multer = require('multer')
 
 const { wrap } = require('../lib/http')
 const { rateLimited, invalidBody, apiError, dbUnavailable } = require('../lib/errors')
+const { orphanKeys } = require('../lib/cos-keys')
 const cos = require('../services/cos')
 
 const AUDIO_TYPES = {
@@ -96,6 +97,40 @@ function createAdminRoute(options) {
     next(rateLimited())
   }
 
+  // 上传审计（best-effort）：失败不阻断上传结果，但要留日志
+  function auditUpload(action, details) {
+    if (!db.logAdminAction) return
+    Promise.resolve()
+      .then(() => db.logAdminAction(action, '-', details))
+      .catch((e) => log.error('[audit] ' + action + ' failed:', e.message))
+  }
+
+  /**
+   * 保存成功后回收被替换的自家 COS 对象（背景图 / 小程序码）。
+   * - 只删 lib/cos-keys.js 白名单目录，音频不在内（可能共用/历史地址）；
+   * - 异步执行、失败只记日志：清理失败不影响本次保存结果；
+   * - 上传后未保存的情况不会触发，线上引用不会被提前删掉。
+   */
+  function removeReplacedUploads(prevConfig, nextConfig) {
+    if (!prevConfig || !nextConfig || typeof storage.getRaw !== 'function') return
+    Promise.resolve()
+      .then(() => storage.getRaw())
+      .then((settings) => {
+        if (!settings || !settings.bucket || !settings.secretId || !settings.secretKey) return
+        const keys = orphanKeys(settings, prevConfig, nextConfig)
+        return keys.reduce(
+          (chain, key) =>
+            chain.then(() =>
+              cos.deleteObject(settings, key).catch((e) => {
+                log.error('[cos] delete replaced object failed:', key, e.code || e.message)
+              })
+            ),
+          Promise.resolve()
+        )
+      })
+      .catch((e) => log.error('[cos] cleanup replaced objects failed:', e.code || e.message))
+  }
+
   router.use('/admin', (req, res, next) => {
     res.set('Cache-Control', 'no-store')
     next()
@@ -142,6 +177,13 @@ function createAdminRoute(options) {
     '/admin/config',
     auth.requireAuth,
     wrap(async (req, res) => {
+      // 上一版配置用于回收被替换的二维码/背景图；读取失败不阻断保存
+      let previous = null
+      try {
+        previous = await store.get()
+      } catch (e) {
+        previous = null
+      }
       let saved = null
       try {
         // baseUpdatedAt 由后台在载入配置时记录；不一致返回 409，避免并发保存互相覆盖
@@ -173,6 +215,8 @@ function createAdminRoute(options) {
         source: saved.source,
         storage: db.mode
       })
+      // 响应已发出：旧对象回收放到后台，失败不影响本次保存
+      removeReplacedUploads(previous && previous.config, saved.config)
     })
   )
 
@@ -183,6 +227,7 @@ function createAdminRoute(options) {
       try {
         res.json(await db.adminStats(now()))
       } catch (e) {
+        log.error('[db] adminStats failed:', req.id || '', e.message)
         throw dbUnavailable()
       }
     })
@@ -195,8 +240,27 @@ function createAdminRoute(options) {
       try {
         res.json(await analytics.overview(now()))
       } catch (e) {
+        log.error('[db] analytics failed:', req.id || '', e.message)
         throw dbUnavailable()
       }
+    })
+  )
+
+  // 审计读取：此前只写不读，误操作无法在后台对账
+  router.get(
+    '/admin/audit',
+    auth.requireAuth,
+    wrap(async (req, res) => {
+      if (!db.readAdminAudit) {
+        throw apiError('NOT_SUPPORTED', '当前存储不支持审计读取', 501)
+      }
+      let items = []
+      try {
+        items = await db.readAdminAudit(req.query && req.query.limit)
+      } catch (e) {
+        throw dbUnavailable()
+      }
+      res.json({ items })
     })
   )
 
@@ -220,6 +284,7 @@ function createAdminRoute(options) {
           ? (await db.getRecordDeletions(openid)).length
           : 0
       } catch (e) {
+        log.error('[db] admin user query failed:', req.id || '', e.message)
         throw dbUnavailable()
       }
       records.sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : 0))
@@ -251,6 +316,7 @@ function createAdminRoute(options) {
         result = await db.eraseUserData(openid, current)
       } catch (e) {
         if (e && e.status) throw e
+        log.error('[db] admin user erase failed:', req.id || '', e.message)
         throw dbUnavailable()
       }
       const tag = openidTag(openid)
@@ -362,6 +428,7 @@ function createAdminRoute(options) {
         .trim()
         .slice(0, 30)
 
+      auditUpload('admin_audio_upload', { key, size: req.file.size, title })
       res.json({
         key,
         url: cos.objectUrl(settings, key),
@@ -407,6 +474,7 @@ function createAdminRoute(options) {
         throw apiError('UPLOAD_FAILED', '上传失败，请检查 COS 配置与权限', 502)
       }
 
+      auditUpload('admin_background_upload', { key, size: req.file.size })
       res.json({
         key,
         url: cos.objectUrl(settings, key),
@@ -451,6 +519,7 @@ function createAdminRoute(options) {
         throw apiError('UPLOAD_FAILED', '上传失败，请检查 COS 配置与权限', 502)
       }
 
+      auditUpload('admin_site_qrcode_upload', { key, size: req.file.size })
       res.json({
         key,
         url: cos.objectUrl(settings, key),

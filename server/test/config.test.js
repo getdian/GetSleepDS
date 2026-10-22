@@ -161,4 +161,7 @@ test('生产环境配置齐全时可以启动', () => {
   assert.equal(config.admin.password, 'strong-password')
   assert.equal(config.security.ready, true)
   assert.equal(config.app.cache.maxMB, 80)
+  // 文件配置的 site 段必须进 app：漏传会让空库首次部署丢失落地页小程序码
+  assert.ok(config.app.site, 'app.site 缺失')
+  assert.equal(typeof config.app.site.mpQrNote, 'string')
 })

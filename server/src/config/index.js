@@ -128,6 +128,8 @@ function loadConfig(env) {
       backgrounds: file.backgrounds,
       defaultBackgroundId: file.defaultBackgroundId,
       backgroundUnlockHours: file.backgroundUnlockHours,
+      // 落地页小程序码：漏传会让文件配置在空库/首次部署时被 normalizeConfig 静默丢弃
+      site: file.site,
       features: file.features,
       cache: file.cache,
       copy: file.copy,

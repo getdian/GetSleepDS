@@ -3,7 +3,8 @@ const { wrap } = require('../lib/http')
 const { rateLimited, dbUnavailable, invalidBody } = require('../lib/errors')
 
 function createAudioRoute(options) {
-  const { config, db, codeToOpenid, limitIp, limitOpenid, now, store } = options
+  const { config, db, codeToOpenid, limitIp, limitOpenid, now, store, logger } = options
+  const log = logger || console
   const router = express.Router()
 
   router.post(
@@ -28,6 +29,8 @@ function createAudioRoute(options) {
       try {
         await db.saveUnlock(openid, expireAt)
       } catch (e) {
+        // 不记录原始错误时，唯一性冲突/连接池耗尽/语法错全部塌缩成 503，排障只能靠猜
+        log.error('[db] audio unlock failed:', req.id || '', e.message)
         throw dbUnavailable()
       }
 

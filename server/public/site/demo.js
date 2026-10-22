@@ -25,7 +25,8 @@
     current: null,
     pendingTrack: null,
     adTimer: null,
-    audioBlocked: false,
+    // 按音轨记录加载失败：一条音源失败不应把全部音轨永久换成演示音
+    failedTracks: {},
     unlockHours: 24,
     copy: {
       unlockTitle: '解锁环境音',
@@ -221,7 +222,11 @@
     const now = Date.now()
     const todayKey = sleepDayOf(now)
 
-    if (state.records[todayKey]) return
+    if (state.records[todayKey]) {
+      // 已完成后大钮仍绑着 click：必须给出反馈，否则用户无法判断是坏了还是已记录
+      toast('今天已记录，如需修改请点下方「撤销」')
+      return
+    }
 
     if (!state.pending) {
       state.pending = now
@@ -582,7 +587,9 @@
       audio.pause()
     }
     state.current = track
-    audio.src = state.audioBlocked ? FALLBACK_AUDIO : track.url
+    // 再次点击失败过的音轨 = 重试原音源；仍失败会重新落回演示音
+    delete state.failedTracks[track.id]
+    audio.src = track.url
     audio.play().then(() => {
       $('#player').hidden = false
       $('#player-title').textContent = track.title
@@ -622,14 +629,16 @@
     state.pendingTrack = track
     $('#unlock-title').textContent = state.copy.unlockTitle
     $('#unlock-desc').textContent = state.copy.unlockDesc
-    $('#unlock-confirm').textContent = '观看广告（演示 5 秒）'
+    // 后台「解锁文案」的确认/取消按钮此前是死字段，保存后演示页零变化
+    $('#unlock-confirm').textContent = (state.copy.unlockConfirm || '观看视频') + '（演示 5 秒）'
+    $('#unlock-cancel').textContent = state.copy.unlockCancel || '先不用'
     $('#unlock-confirm').disabled = false
     $('#unlock-cancel').disabled = false
     $('#unlock-modal').hidden = false
 
     // 广告还没开始就先预加载，模拟“看广告时同步缓存”
     audio.preload = 'auto'
-    audio.src = state.audioBlocked ? FALLBACK_AUDIO : track.url
+    audio.src = state.failedTracks[track.id] ? FALLBACK_AUDIO : track.url
     audio.load()
     setCacheStatus('已开始预加载：' + track.title)
   }
@@ -690,17 +699,14 @@
   })
 
   audio.addEventListener('error', () => {
-    if (!state.audioBlocked) {
-      state.audioBlocked = true
-      setCacheStatus('COS 防盗链拦截了带 Referer 的请求，演示页已切换到本地测试音')
-      toast('COS 防盗链拦截，已切换本地演示音')
-      const target = state.current || state.pendingTrack
-      if (target) {
-        audio.src = FALLBACK_AUDIO
-        if (state.current) {
-          audio.play().catch(() => {})
-        }
-      }
+    const target = state.current || state.pendingTrack
+    // 只标记这一条音轨；网络抖动/防盗链都可能触发，不做事先归因
+    if (target && !state.failedTracks[target.id]) {
+      state.failedTracks[target.id] = true
+      setCacheStatus('「' + target.title + '」加载失败，已临时切换到本地演示音（再点一次可重试原音源）')
+      toast('音频加载失败，已切换演示音')
+      audio.src = FALLBACK_AUDIO
+      if (state.current) audio.play().catch(() => {})
       return
     }
     setCacheStatus('音频加载失败，检查网络')
@@ -728,7 +734,9 @@
           loadTracks().then(() => {
             if (state.tracks[0]) {
               audio.preload = 'auto'
-              audio.src = state.audioBlocked ? FALLBACK_AUDIO : state.tracks[0].url
+              audio.src = state.failedTracks[state.tracks[0].id]
+                ? FALLBACK_AUDIO
+                : state.tracks[0].url
               audio.load()
               setCacheStatus('正在预加载第一条：' + state.tracks[0].title)
             }

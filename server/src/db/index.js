@@ -293,6 +293,9 @@ function createMemoryDb() {
       records.delete(openid)
       deletions.delete(openid)
       const unlockCount = unlocks.delete(openid) ? 1 : 0
+      // 「删除全部数据」必须连订阅提醒一起清：否则清除后仍会在到点推送，
+      // 且 openid/session_id 会继续留存在 sleep_reminders 里直到 7 天清理。
+      const reminderCount = reminders.delete(openid) ? 1 : 0
       let eventCount = 0
       for (let i = events.length - 1; i >= 0; i -= 1) {
         if (events[i].openid === openid) {
@@ -301,7 +304,13 @@ function createMemoryDb() {
         }
       }
       erasures.set(openid, erasedAt)
-      return { records: recordCount, unlocks: unlockCount, events: eventCount, erasedAt }
+      return {
+        records: recordCount,
+        unlocks: unlockCount,
+        events: eventCount,
+        reminders: reminderCount,
+        erasedAt
+      }
     },
 
     /**
@@ -315,6 +324,8 @@ function createMemoryDb() {
       records.delete(openid)
       deletions.delete(openid)
       const unlockCount = unlocks.delete(openid) ? 1 : 0
+      // 只删云端副本时，云端的订阅提醒也属于“云端数据”，必须一起清。
+      const reminderCount = reminders.delete(openid) ? 1 : 0
       let eventCount = 0
       for (let i = events.length - 1; i >= 0; i -= 1) {
         if (events[i].openid === openid) {
@@ -322,7 +333,13 @@ function createMemoryDb() {
           eventCount += 1
         }
       }
-      return { records: recordCount, unlocks: unlockCount, events: eventCount, erasedAt: 0 }
+      return {
+        records: recordCount,
+        unlocks: unlockCount,
+        events: eventCount,
+        reminders: reminderCount,
+        erasedAt: 0
+      }
     },
 
     // 兼容旧调用：全量删除等同于 erasure
@@ -382,6 +399,11 @@ function createMemoryDb() {
       })
       if (audits.length > 5000) audits.splice(0, audits.length - 5000)
       return true
+    },
+
+    async readAdminAudit(limit) {
+      const count = Math.min(Math.max(Number(limit) || 50, 1), 200)
+      return audits.slice(-count).reverse()
     },
 
     async listEvents(sinceTs) {
@@ -820,12 +842,15 @@ function createPostgresDb(connectionString) {
         const records = await client.query('DELETE FROM sleep_records WHERE openid = $1', [openid])
         const unlocks = await client.query('DELETE FROM audio_unlocks WHERE openid = $1', [openid])
         const events = await client.query('DELETE FROM events WHERE openid = $1', [openid])
+        // 订阅提醒含 openid/session_id 明文，且到点会真的推送：清除全部数据时必须一起删。
+        const reminders = await client.query('DELETE FROM sleep_reminders WHERE openid = $1', [openid])
         await client.query('DELETE FROM sleep_record_deletions WHERE openid = $1', [openid])
         await client.query('COMMIT')
         return {
           records: records.rowCount,
           unlocks: unlocks.rowCount,
           events: events.rowCount,
+          reminders: reminders.rowCount,
           erasedAt
         }
       } catch (error) {
@@ -845,12 +870,15 @@ function createPostgresDb(connectionString) {
         const records = await client.query('DELETE FROM sleep_records WHERE openid = $1', [openid])
         const unlocks = await client.query('DELETE FROM audio_unlocks WHERE openid = $1', [openid])
         const events = await client.query('DELETE FROM events WHERE openid = $1', [openid])
+        // 只删云端副本时，云端待发送的订阅提醒也属于云端数据。
+        const reminders = await client.query('DELETE FROM sleep_reminders WHERE openid = $1', [openid])
         await client.query('DELETE FROM sleep_record_deletions WHERE openid = $1', [openid])
         await client.query('COMMIT')
         return {
           records: records.rowCount,
           unlocks: unlocks.rowCount,
           events: events.rowCount,
+          reminders: reminders.rowCount,
           erasedAt: 0
         }
       } catch (error) {
@@ -948,6 +976,22 @@ function createPostgresDb(connectionString) {
         [action, openidTag, JSON.stringify(details || {})]
       )
       return true
+    },
+
+    async readAdminAudit(limit) {
+      const count = Math.min(Math.max(Number(limit) || 50, 1), 200)
+      const result = await pool.query(
+        `SELECT action, openid_tag AS "openidTag", details,
+                (EXTRACT(EPOCH FROM created_at) * 1000)::bigint AS ts
+         FROM admin_audit ORDER BY created_at DESC LIMIT $1`,
+        [count]
+      )
+      return result.rows.map((row) => ({
+        action: row.action,
+        openidTag: row.openidTag,
+        details: row.details || {},
+        createdAt: Number(row.ts)
+      }))
     },
 
     async listEvents(sinceTs) {

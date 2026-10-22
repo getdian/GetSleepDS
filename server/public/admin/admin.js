@@ -141,6 +141,7 @@
     copy: { title: '解锁文案', sub: '抽屉里的标题、说明与按钮', badge: '文案' },
     landing: { title: '落地页', sub: '落地页展示的小程序码与引导文案', badge: '内容' },
     users: { title: '用户数据', sub: '按 openid 查询与删除云端记录', badge: '客服 / 合规' },
+    audit: { title: '操作日志', sub: '配置保存、删除用户与上传的留痕', badge: '审计' },
     storage: { title: '存储与上传', sub: 'COS 凭证、加密保存与连通性测试', badge: '安全' },
     advanced: { title: '配置 JSON', sub: '只读检查当前下发的完整配置', badge: '只读' }
   }
@@ -180,6 +181,10 @@
     $('#workspace-badge').textContent = meta.badge
     updateSavebar()
     window.scrollTo({ top: 0, behavior: 'smooth' })
+    if (name === 'audit') {
+      // 审计只写不读时无法对账：进面板即拉一次，失败给出可见错误
+      loadAudit().catch(function () {})
+    }
   }
 
   function initAdminNav() {
@@ -897,6 +902,86 @@
     }
   }
 
+  /* ---------- 操作日志 ---------- */
+
+  const AUDIT_LABELS = {
+    admin_config_save: '保存配置',
+    admin_delete_user_data: '删除用户云端数据',
+    admin_audio_upload: '上传环境音',
+    admin_background_upload: '上传背景图',
+    admin_site_qrcode_upload: '上传小程序码'
+  }
+
+  function auditDetailText(item) {
+    const details = item.details || {}
+    const parts = []
+    if (details.version !== undefined) parts.push('版本 v' + details.version)
+    if (details.audioCount !== undefined) parts.push('环境音 ' + details.audioCount + ' 条')
+    if (details.backgroundCount !== undefined) parts.push('背景图 ' + details.backgroundCount + ' 张')
+    if (details.deletedRecords !== undefined) parts.push('记录 ' + details.deletedRecords + ' 条')
+    if (details.key) parts.push(details.key)
+    if (details.title) parts.push(details.title)
+    if (item.openidTag && item.openidTag !== '-') parts.push('openid ' + item.openidTag)
+    return parts.join(' · ')
+  }
+
+  function renderAudit(items) {
+    const box = $('#audit-list')
+    if (!box) return
+    box.textContent = ''
+
+    if (!items.length) {
+      const empty = document.createElement('li')
+      empty.className = 'empty-line'
+      empty.textContent = '还没有操作记录'
+      box.appendChild(empty)
+      return
+    }
+
+    items.forEach(function (item) {
+      const row = document.createElement('li')
+      row.className = 'audit-item'
+
+      const time = document.createElement('span')
+      time.className = 'audit-time'
+      time.textContent = formatRecordTime(item.createdAt)
+
+      const action = document.createElement('strong')
+      action.className = 'audit-action'
+      action.textContent = AUDIT_LABELS[item.action] || item.action
+
+      const detail = document.createElement('span')
+      detail.className = 'audit-detail'
+      detail.textContent = auditDetailText(item)
+
+      row.appendChild(time)
+      row.appendChild(action)
+      row.appendChild(detail)
+      box.appendChild(row)
+    })
+  }
+
+  async function loadAudit() {
+    const box = $('#audit-list')
+    if (!box) return
+    box.textContent = ''
+    const loading = document.createElement('li')
+    loading.className = 'empty-line'
+    loading.textContent = '加载中…'
+    box.appendChild(loading)
+
+    try {
+      const data = await api('/api/admin/audit?limit=100')
+      renderAudit(data.items || [])
+    } catch (error) {
+      box.textContent = ''
+      const failed = document.createElement('li')
+      failed.className = 'empty-line'
+      failed.textContent = '加载失败：' + (error.message || '请稍后重试')
+      box.appendChild(failed)
+    }
+  }
+
   /* ---------- COS 存储 ---------- */
 
   function renderStorage(settings) {
@@ -1605,9 +1690,16 @@
       return
     }
 
-    const button = $('#save')
-    button.disabled = true
-    button.textContent = '保存中…'
+    // 背景图面板用 form 的另一个提交按钮（#bg-save）；只禁用 #save 会留下可重复点击的入口
+    const buttons = [$('#save')]
+    if (event.submitter && buttons.indexOf(event.submitter) === -1) {
+      buttons.push(event.submitter)
+    }
+    buttons.forEach(function (btn) {
+      btn.dataset.label = btn.textContent
+      btn.disabled = true
+      btn.textContent = '保存中…'
+    })
 
     try {
       const data = await api('/api/admin/config', { method: 'PUT', body: payload })
@@ -1625,11 +1717,16 @@
     } catch (e) {
       toast(e.message || '保存失败', true)
     } finally {
-      button.disabled = false
-      button.textContent = '保存并生效'
+      buttons.forEach(function (btn) {
+        btn.disabled = false
+        btn.textContent = btn.dataset.label || '保存并生效'
+      })
     }
   })
 
+  $('#audit-refresh').addEventListener('click', function () {
+    loadAudit().catch(function () {})
+  })
   $('#storage-save').addEventListener('click', saveStorage)
   $('#storage-test').addEventListener('click', testStorage)
   $('#user-query').addEventListener('click', queryUser)

@@ -75,6 +75,9 @@
               <button type="button" class="side-item" data-panel="users">
                 <span class="side-ico">◎</span><span>用户数据</span>
               </button>
+              <button type="button" class="side-item" data-panel="audit">
+                <span class="side-ico">⌾</span><span>操作日志</span>
+              </button>
               <button type="button" class="side-item" data-panel="storage">
                 <span class="side-ico">☁</span><span>存储与上传</span>
               </button>
@@ -385,6 +388,19 @@
             <button type="button" id="user-delete" class="danger">删除该用户云端数据（含本机水位）</button>
           </div>
         </div>
+      </section>
+
+      <section class="panel admin-panel" data-panel="audit" hidden>
+        <div class="panel-head">
+          <div>
+            <h2>敏感操作记录</h2>
+            <p class="hint">配置保存、删除用户数据、上传文件都会留痕；只保留最近 200 条。openid 只记录哈希前缀。</p>
+          </div>
+          <div class="panel-actions">
+            <button type="button" id="audit-refresh" class="ghost">刷新</button>
+          </div>
+        </div>
+        <ol id="audit-list" class="audit-list"><li class="empty-line">加载中…</li></ol>
       </section>
 
       <section class="panel admin-panel" data-panel="storage" hidden>

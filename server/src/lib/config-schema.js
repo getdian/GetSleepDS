@@ -12,6 +12,8 @@ const MAX_BACKGROUNDS = 20
 const DEFAULT_BACKGROUND_UNLOCK_HOURS = 24
 // 落地页展示：小程序码（后台可上传/清除）与二维码下方的引导文案
 const DEFAULT_SITE = { mpQrCodeUrl: '', mpQrNote: '微信搜索「睡点」' }
+// 解锁说明的自动生成模板：命中即视为"未自定义"，随 ttlHours 重新生成
+const AUTO_UNLOCK_DESC = /^观看视频，解锁今晚的环境声音（\d+\s*小时内有效）$/
 
 function isObject(value) {
   return !!value && typeof value === 'object' && !Array.isArray(value)
@@ -388,6 +390,11 @@ function validateConfig(input, base) {
     isObject(baseConfig.copy) ? baseConfig.copy : {},
     isObject(input.copy) ? input.copy : {}
   )
+  // 自动生成的说明文案必须跟随 ttlHours，否则改完时长抽屉里会出现两套数字。
+  // 兼容历史两种格式：旧的「（24小时内有效）」与新生成的「（24 小时内有效）」。
+  if (typeof copyInput.unlockDesc === 'string' && AUTO_UNLOCK_DESC.test(copyInput.unlockDesc)) {
+    copyInput.unlockDesc = ''
+  }
   const copy = {
     unlockTitle: readText(copyInput.unlockTitle, '解锁标题', 20, false) || '解锁环境音',
     unlockDesc:

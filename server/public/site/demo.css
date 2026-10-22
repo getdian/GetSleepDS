@@ -354,7 +354,7 @@
 }
 
 .dot-sep {
-  color: #475569;
+  color: var(--dim);
 }
 
 .seg {
@@ -395,7 +395,7 @@
 
 .heat-week span {
   font-size: 10px;
-  color: #475569;
+  color: var(--dim);
   text-align: center;
 }
 
@@ -426,7 +426,7 @@
   gap: 5px;
   margin-top: 14px;
   font-size: 10px;
-  color: #475569;
+  color: var(--dim);
 }
 
 .heat-legend i {
@@ -471,7 +471,7 @@
 }
 
 .search input::placeholder {
-  color: #475569;
+  color: #64748B;
 }
 
 .search input:focus {

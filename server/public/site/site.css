@@ -5,7 +5,8 @@
   --line: rgba(255, 255, 255, 0.08);
   --text: #F1F5F9;
   --muted: #94A3B8;
-  --dim: #64748B;
+  /* 11–12px 文本也用它：原 #64748B 在夜空底上约 4.1:1，低于 WCAG AA */
+  --dim: #7C8BA1;
   --accent: #818CF8;
   --accent-deep: #6366F1;
   --ok: #34D399;
@@ -13,6 +14,11 @@
 
 * {
   box-sizing: border-box;
+}
+
+/* 作者样式里的 display 会覆盖 [hidden] 的 UA 规则，统一兜底（与 admin.css 同口径） */
+[hidden] {
+  display: none !important;
 }
 
 html,
@@ -33,6 +39,15 @@ body {
 a {
   color: inherit;
   text-decoration: none;
+}
+
+/* 键盘可达性：全站只有 hover 态时，Tab 用户看不到焦点位置 */
+a:focus-visible,
+button:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 8px;
 }
 
 img {

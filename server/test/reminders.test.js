@@ -35,6 +35,35 @@ test('调度器发送到点提醒并标记 sent', async () => {
   assert.equal(due.length, 0)
 })
 
+test('清除全部数据会删除待发送提醒（避免清除后仍收到推送）', async () => {
+  const db = createMemoryDb()
+  const now = Date.now()
+  await db.saveReminder('openid-erase', {
+    sessionId: 'sleep-erase',
+    fireAt: now + 60 * 1000,
+    templateId: 'tmpl-test',
+    page: 'pages/sleep/sleep?end=1'
+  })
+  const result = await db.eraseUserData('openid-erase', now)
+  assert.equal(result.reminders, 1)
+  assert.equal((await db.dueReminders(now + 2 * 60 * 1000, 10)).length, 0)
+})
+
+test('只删云端副本同样删除提醒，但不动 erasure 水位', async () => {
+  const db = createMemoryDb()
+  const now = Date.now()
+  await db.saveReminder('openid-cloud', {
+    sessionId: 'sleep-cloud',
+    fireAt: now + 60 * 1000,
+    templateId: 'tmpl-test',
+    page: 'pages/sleep/sleep?end=1'
+  })
+  const result = await db.eraseCloudData('openid-cloud')
+  assert.equal(result.reminders, 1)
+  assert.equal(await db.getErasure('openid-cloud'), 0)
+  assert.equal((await db.dueReminders(now + 2 * 60 * 1000, 10)).length, 0)
+})
+
 test('提醒创建/取消路由要求模板配置并写库', async () => {
   const config = loadConfig({
     NODE_ENV: 'test',

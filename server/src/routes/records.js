@@ -4,7 +4,8 @@ const { validateRecords, validateDeletions } = require('../lib/validate')
 const { apiError, rateLimited, dbUnavailable, invalidBody, featureOff } = require('../lib/errors')
 
 function createRecordsRoute(options) {
-  const { config, db, codeToOpenid, limitIp, limitErase, limitEraseOpenid, now, store } = options
+  const { config, db, codeToOpenid, limitIp, limitErase, limitEraseOpenid, now, store, logger } = options
+  const log = logger || console
   const eraseLimit = limitErase || limitIp
   const router = express.Router()
 
@@ -45,6 +46,7 @@ function createRecordsRoute(options) {
       try {
         result = await db.syncRecords(openid, parsed.records, deletedDays, current)
       } catch (e) {
+        log.error('[db] records sync failed:', req.id || '', e.message)
         throw dbUnavailable()
       }
 
@@ -97,6 +99,7 @@ function createRecordsRoute(options) {
         }
       } catch (e) {
         if (e && e.status) throw e
+        log.error('[db] records erase failed:', req.id || '', e.message)
         throw dbUnavailable()
       }
 

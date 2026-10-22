@@ -194,12 +194,16 @@ function validateDeletions(input, options) {
 
   const now = (options && options.now) || Date.now()
   const byDay = new Map()
+  // 墓碑只可能是过去/今天；允许 1 天时区容差（+14 区客户端在东八区零点前后会差一天）。
+  // 再往后的日期一定来自错误时钟或构造请求，直接拒绝，避免未来记录被永久挡掉。
+  const maxDay = calendarDayOf(now + MAX_FUTURE_MS)
 
   for (let i = 0; i < input.length; i += 1) {
     const item = input[i]
     if (!item || typeof item !== 'object') continue
     const day = String(item.day || '')
     if (!isRealDay(day)) continue
+    if (day > maxDay) continue
     const deletedAt = Number(item.deletedAt)
     if (!Number.isFinite(deletedAt) || !inWindow(deletedAt, now)) continue
     const previous = byDay.get(day)

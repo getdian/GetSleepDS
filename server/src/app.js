@@ -226,7 +226,8 @@ function createApp(options) {
       limitIp: unlockIp,
       limitOpenid: unlockOpenid,
       now,
-      store
+      store,
+      logger
     })
   )
   app.use('/api', createSummaryRoute({ limitIp: summaryIp, now, store }))
@@ -241,7 +242,8 @@ function createApp(options) {
       limitErase: eraseIp,
       limitEraseOpenid: eraseOpenid,
       now,
-      store
+      store,
+      logger
     })
   )
   app.use(

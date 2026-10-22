@@ -602,3 +602,23 @@ test('COS 配置加密保存且不回显 SecretKey', async () => {
   assert.equal(rowAfter.value.secretId, 'AKIDtest')
   assert.equal(rowAfter.value.secretKeyEnc, row.value.secretKeyEnc)
 })
+
+// 放在文件末尾：它会写库，把配置来源从 file 翻成 db
+test('审计可读：保存配置后能在 /api/admin/audit 查到', async () => {
+  const unauth = await fetch(base + '/api/admin/audit')
+  assert.equal(unauth.status, 401)
+
+  const current = await call('/api/admin/config', {}, true)
+  assert.equal(current.status, 200)
+  const saved = await call('/api/admin/config', { method: 'PUT', body: current.body.config }, true)
+  assert.equal(saved.status, 200)
+
+  const audit = await call('/api/admin/audit?limit=20', {}, true)
+  assert.equal(audit.status, 200)
+  assert.ok(Array.isArray(audit.body.items))
+  assert.ok(
+    audit.body.items.some((item) => item.action === 'admin_config_save'),
+    '审计里没有 admin_config_save'
+  )
+  assert.ok(audit.body.items.every((item) => typeof item.createdAt === 'number'))
+})

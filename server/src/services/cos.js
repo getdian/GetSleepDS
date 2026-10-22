@@ -59,4 +59,21 @@ function testBucket(settings) {
   })
 }
 
-module.exports = { objectUrl, uploadBuffer, testBucket }
+/**
+ * 删除对象（幂等：COS 对不存在的 Key 也返回成功）。
+ * 只应由 lib/cos-keys.js 的白名单目录调用，避免误删历史音频/外部资源。
+ */
+function deleteObject(settings, key) {
+  const client = createClient(settings)
+  return new Promise((resolve, reject) => {
+    client.deleteObject(
+      { Bucket: settings.bucket, Region: settings.region, Key: key },
+      (error, data) => {
+        if (error) reject(error)
+        else resolve(data)
+      }
+    )
+  })
+}
+
+module.exports = { objectUrl, uploadBuffer, testBucket, deleteObject }
