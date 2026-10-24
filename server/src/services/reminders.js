@@ -4,9 +4,22 @@ const { sendSubscribeMessage } = require('./wx')
 // 停机/后台关闭期间 pending 会累积，恢复后不能把几小时前的“结束入睡”补发出去。
 const MAX_LATE_MS = 15 * 60 * 1000
 
-function formatClock(timestamp) {
-  // 产品只面向国内，固定按北京时间展示模板里的时间
-  return new Date(timestamp + 8 * 60 * 60 * 1000).toISOString().slice(11, 16)
+function formatDateTime(timestamp) {
+  // 模板「提醒时间」的示例通常是完整日期时间（如 2019年11月11日 20:30）。
+  // time 类型两种格式都接受，但发完整格式与审核示例一致，用户也能看到“哪一天”。
+  const d = new Date(timestamp + 8 * 60 * 60 * 1000)
+  const pad = (n) => (n < 10 ? '0' + n : String(n))
+  return (
+    d.getUTCFullYear() +
+    '年' +
+    (d.getUTCMonth() + 1) +
+    '月' +
+    d.getUTCDate() +
+    '日 ' +
+    pad(d.getUTCHours()) +
+    ':' +
+    pad(d.getUTCMinutes())
+  )
 }
 
 /**
@@ -78,7 +91,7 @@ function createReminderService(options) {
           // 写死时换一个关键词不同的模板，微信直接返回 47003，提醒永远发不出去。
           const data = {}
           data[reminder.thingKey] = { value: '结束入睡' }
-          data[reminder.timeKey] = { value: formatClock(item.fireAt) }
+          data[reminder.timeKey] = { value: formatDateTime(item.fireAt) }
           await sendSubscribeMessage(wx, {
             openid: item.openid,
             // 任务上记录的模板优先：更换模板不应让已排队任务用错字段

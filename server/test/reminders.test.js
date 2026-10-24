@@ -229,5 +229,6 @@ test('模板字段名按后台映射发送（time1/thing2 也能用）', async (
   const body = JSON.parse(send.body)
   assert.deepEqual(Object.keys(body.data).sort(), ['thing2', 'time1'])
   assert.equal(body.data.thing2.value, '结束入睡')
-  assert.match(body.data.time1.value, /^\d{2}:\d{2}$/)
+  // 与模板参数示例一致：完整日期时间（北京时间），而不是裸 HH:mm
+  assert.match(body.data.time1.value, /^\d{4}年\d{1,2}月\d{1,2}日 \d{2}:\d{2}$/)
 })
