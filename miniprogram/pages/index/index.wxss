@@ -504,7 +504,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 22rpx 24rpx;
+  /* 主卡上下呼吸比左右略大：时间、说明、徽标挤在一行时不再贴边 */
+  padding: 26rpx 24rpx;
   border-radius: 24rpx;
   background: linear-gradient(90deg, rgba(65, 85, 175, 0.35) 0%, rgba(45, 60, 130, 0.25) 100%);
   border: 1.5rpx solid rgba(140, 175, 255, 0.3);
@@ -589,7 +590,7 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
-  margin-top: 4rpx;
+  margin-top: 6rpx;
   font-size: 22rpx;
   color: rgba(185, 205, 240, 0.72);
 }
@@ -747,7 +748,8 @@
 .result-fall {
   position: relative;
   margin-left: auto;
-  min-height: 64rpx;
+  /* 胶囊高度略收：与 46rpx 主时间同一行时不压过主信息 */
+  min-height: 56rpx;
   display: flex;
   align-items: center;
   gap: 6rpx;
@@ -790,15 +792,17 @@
   min-height: 80rpx;
   display: flex;
   align-items: center;
-  gap: 6rpx;
-  padding: 0 10rpx 0 2rpx;
-  font-size: 21rpx;
+  gap: 8rpx;
+  /* 与右侧主 CTA 同一视觉重量：不再用 21rpx 的“小字注释”尺寸 */
+  padding: 0 14rpx 0 2rpx;
+  font-size: 24rpx;
+  font-weight: 500;
   color: var(--c-primary-soft);
 }
 
 .result-remind-ico {
-  font-size: 20rpx;
-  opacity: 0.85;
+  font-size: 22rpx;
+  opacity: 0.9;
 }
 
 .result-remind:active {
@@ -807,8 +811,10 @@
 
 .result-go {
   position: relative;
-  flex: 1;
-  margin-top: 0;
+  flex: none;
+  /* 主 CTA 不再拉满整行：按内容宽度靠右，左侧留给「提醒我」 */
+  margin: 0 0 0 auto;
+  padding: 0 34rpx;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -845,26 +851,31 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12rpx;
   margin-top: auto;
-  padding-top: 8rpx;
+  padding-top: 10rpx;
 }
 
+/* 底部两个动作升级为一对轻量 pill：左侧实底浅色、右侧描边主色，层级仍低于上面的主 CTA */
 .result-reset,
 .result-switch {
-  min-height: 88rpx;
+  min-height: 72rpx;
   display: flex;
   align-items: center;
-  padding: 0 12rpx;
+  padding: 0 24rpx;
+  border-radius: 999rpx;
+  font-size: 24rpx;
   font-weight: 500;
 }
 
 .result-reset {
-  font-size: 26rpx;
-  color: rgba(220, 235, 255, 0.9);
+  border: 1rpx solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(225, 238, 255, 0.9);
 }
 
 .result-switch {
-  font-size: 24rpx;
+  border: 1rpx solid rgba(145, 175, 255, 0.26);
   color: var(--c-primary-soft);
 }
 
@@ -877,7 +888,8 @@
 .result-share {
   display: flex;
   justify-content: center;
-  margin-top: 4rpx;
+  /* 与上面两个 pill 留出一档间距，避免读成第三个按钮 */
+  margin-top: 10rpx;
 }
 
 /* 全部周期都已错过（view.compact）时结果多一行，压缩纵向节奏，
@@ -905,7 +917,7 @@
 
 .calc-back.is-compact .result-remind {
   min-height: 80rpx;
-  font-size: 20rpx;
+  font-size: 22rpx;
 }
 
 /* 4 行结果（3 档推荐 + 补觉）或 compact 时压缩纵向节奏：
@@ -916,13 +928,14 @@
 }
 
 .calc-back.is-dense .result-main {
-  padding: 16rpx 22rpx;
-  margin-bottom: 12rpx;
+  /* 4 行档也保留上下呼吸：时间与 note 不贴卡片边 */
+  padding: 20rpx 22rpx;
+  margin-bottom: 14rpx;
 }
 
 .calc-back.is-dense .result-row {
   /* dense 仍比常规更紧，但不再贴到分隔线上 */
-  padding: 12rpx 8rpx;
+  padding: 14rpx 8rpx;
 }
 
 .calc-back.is-dense .result-extra {
@@ -932,11 +945,13 @@
 .calc-back.is-dense .result-go {
   height: 72rpx;
   margin-top: 0;
+  padding: 0 26rpx;
 }
 
 .calc-back.is-dense .result-remind {
   min-height: 72rpx;
-  font-size: 20rpx;
+  font-size: 22rpx;
+  padding-right: 8rpx;
 }
 
 .calc-back.is-dense .result-actions {
@@ -948,7 +963,9 @@
    只改容器等于没生效（旧写法的 22rpx 余量实际不存在）。 */
 .calc-back.is-dense .result-reset,
 .calc-back.is-dense .result-switch {
-  min-height: 72rpx;
+  min-height: 64rpx;
+  padding: 0 20rpx;
+  font-size: 23rpx;
 }
 
 .calc-back.is-dense .result-share {
@@ -962,8 +979,8 @@
 }
 
 .calc-back.is-compact.is-dense .result-main {
-  padding: 16rpx 20rpx;
-  margin-bottom: 10rpx;
+  padding: 18rpx 20rpx;
+  margin-bottom: 12rpx;
 }
 
 .calc-back.is-compact.is-dense .result-meta {

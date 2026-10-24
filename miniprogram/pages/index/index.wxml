@@ -159,7 +159,8 @@
               </view>
 
               <view class="result-share">
-                <share-btn text="分享给朋友" variant="link" />
+                <!-- 图标 + 文字比纯蓝链接更精致，同时弱于上面两个 pill -->
+                <share-btn text="分享给朋友" variant="icon" />
               </view>
             </block>
           </view>

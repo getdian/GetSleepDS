@@ -36,14 +36,15 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10rpx;
+  gap: 12rpx;
   height: 64rpx;
-  padding: 0 4rpx;
+  /* 图标与文案之间留出呼吸，热区仍由绝对定位的 button 铺满 */
+  padding: 0 8rpx;
   color: var(--text-secondary);
 }
 
 .share-icon-label {
-  font-size: 22rpx;
+  font-size: 23rpx;
   line-height: 1;
   letter-spacing: 1rpx;
   color: var(--text-secondary);

@@ -6,7 +6,7 @@
     <view class="sg-bar sg-ab"></view>
     <view class="sg-bar sg-cb"></view>
   </view>
-  <text class="share-icon-label">分享</text>
+  <text class="share-icon-label">{{text}}</text>
   <button class="share-icon-hit" open-type="share" hover-class="share-btn--active"></button>
 </view>
 <button wx:else class="share-btn share-btn--{{variant}}" open-type="share" hover-class="share-btn--active">
