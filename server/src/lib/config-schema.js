@@ -33,9 +33,14 @@ const WEB_LOCALES = ['en', 'es', 'pt', 'id', 'de', 'fr', 'ja']
 const DEFAULT_REMINDER = {
   enabled: true,
   templateId: '',
-  page: 'pages/sleep/sleep?end=1'
+  page: 'pages/sleep/sleep?end=1',
+  // 模板字段名：不同模板的关键词不同（thing1/time2、time1/thing2…）。
+  // 后台可改，避免“换一个模板就得改代码”。
+  thingKey: 'thing1',
+  timeKey: 'time2'
 }
 const REMINDER_PAGE_RE = /^pages\/[A-Za-z0-9_/-]+(\?[^\s]*)?$/
+const REMINDER_KEY_RE = /^[a-z]+\d{1,2}$/
 // 解锁说明的自动生成模板：命中即视为"未自定义"，随 ttlHours 重新生成。
 // 兼容历史默认文案里的“今晚的”：环境音任何时段都能听，新文案不再预设夜间。
 const AUTO_UNLOCK_DESC = /^观看视频，解锁(?:今晚的)?环境声音（\d+\s*小时内有效）$/
@@ -120,7 +125,19 @@ function normalizeReminder(input, fallback) {
         ? source.page
         : typeof base.page === 'string' && base.page
           ? base.page
-          : DEFAULT_REMINDER.page
+          : DEFAULT_REMINDER.page,
+    thingKey:
+      typeof source.thingKey === 'string' && source.thingKey
+        ? source.thingKey
+        : typeof base.thingKey === 'string' && base.thingKey
+          ? base.thingKey
+          : DEFAULT_REMINDER.thingKey,
+    timeKey:
+      typeof source.timeKey === 'string' && source.timeKey
+        ? source.timeKey
+        : typeof base.timeKey === 'string' && base.timeKey
+          ? base.timeKey
+          : DEFAULT_REMINDER.timeKey
   }
 }
 
@@ -504,6 +521,18 @@ function validateConfig(input, base) {
   if (!REMINDER_PAGE_RE.test(reminderPage)) {
     throw invalidBody('提醒跳转路径需形如 pages/sleep/sleep?end=1')
   }
+  const reminderThingKey =
+    readText(reminderInput.thingKey, '提醒事项字段名', 20, false) ||
+    DEFAULT_REMINDER.thingKey
+  const reminderTimeKey =
+    readText(reminderInput.timeKey, '提醒时间字段名', 20, false) ||
+    DEFAULT_REMINDER.timeKey
+  if (!REMINDER_KEY_RE.test(reminderThingKey) || !REMINDER_KEY_RE.test(reminderTimeKey)) {
+    throw invalidBody('模板字段名需形如 thing1 / time2（小写字母 + 数字）')
+  }
+  if (reminderThingKey === reminderTimeKey) {
+    throw invalidBody('提醒事项与提醒时间不能使用同一个字段名')
+  }
   if (reminderInput.enabled !== false && !reminderTemplateId && baseConfig.reminder && baseConfig.reminder.templateId) {
     // 显式清空模板 ID 等价于关闭，不留在“开启但不可用”的中间态
     reminderInput.enabled = false
@@ -526,7 +555,9 @@ function validateConfig(input, base) {
     reminder: {
       enabled: reminderInput.enabled !== false,
       templateId: reminderTemplateId,
-      page: reminderPage
+      page: reminderPage,
+      thingKey: reminderThingKey,
+      timeKey: reminderTimeKey
     },
     features,
     cache: { maxMB, ttlDays },

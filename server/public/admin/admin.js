@@ -673,7 +673,9 @@
       reminder: {
         enabled: $('#reminder-enabled').checked,
         templateId: $('#reminder-template').value.trim(),
-        page: $('#reminder-page').value.trim()
+        page: $('#reminder-page').value.trim(),
+        thingKey: $('#reminder-thing-key').value.trim() || 'thing1',
+        timeKey: $('#reminder-time-key').value.trim() || 'time2'
       }
     }
   }
@@ -747,6 +749,8 @@
     $('#reminder-enabled').checked = reminder.enabled !== false
     $('#reminder-template').value = reminder.templateId || ''
     $('#reminder-page').value = reminder.page || 'pages/sleep/sleep?end=1'
+    $('#reminder-thing-key').value = reminder.thingKey || 'thing1'
+    $('#reminder-time-key').value = reminder.timeKey || 'time2'
 
     renderSite(config.site)
 
@@ -805,6 +809,14 @@
     const reminderPage = payload.reminder && payload.reminder.page
     if (reminderPage && !/^pages\/[A-Za-z0-9_/-]+(\?[^\s]*)?$/.test(reminderPage)) {
       return '提醒跳转路径需形如 pages/sleep/sleep?end=1'
+    }
+    const reminderKeys = payload.reminder || {}
+    const keyRe = /^[a-z]+\d{1,2}$/
+    if (!keyRe.test(reminderKeys.thingKey || '') || !keyRe.test(reminderKeys.timeKey || '')) {
+      return '模板字段名需形如 thing1 / time2（小写字母 + 数字）'
+    }
+    if (reminderKeys.thingKey === reminderKeys.timeKey) {
+      return '提醒事项与提醒时间不能使用同一个字段名'
     }
     const adSlots = ['home', 'sleep', 'stats', 'statsFooter']
     for (let i = 0; i < adSlots.length; i += 1) {

@@ -44,7 +44,9 @@
   "reminder": {
     "enabled": true,
     "templateId": "",
-    "page": "pages/sleep/sleep?end=1"
+    "page": "pages/sleep/sleep?end=1",
+    "thingKey": "thing1",
+    "timeKey": "time2"
   },
   "features": {
     "summary": true,

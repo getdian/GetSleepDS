@@ -204,18 +204,26 @@ test('订阅消息配置：默认开启、模板 ID 可后台填写、非法值�
   assert.equal(base.reminder.templateId, '')
   assert.equal(base.reminder.page, 'pages/sleep/sleep?end=1')
 
+  assert.equal(base.reminder.thingKey, 'thing1')
+  assert.equal(base.reminder.timeKey, 'time2')
+
   const ok = validateConfig(
     Object.assign({}, base, {
       reminder: {
         enabled: true,
         templateId: 'abc_DEF-1234567890',
-        page: 'pages/sleep/sleep?end=1'
+        page: 'pages/sleep/sleep?end=1',
+        thingKey: 'thing2',
+        timeKey: 'time1'
       }
     }),
     base
   )
   assert.equal(ok.reminder.templateId, 'abc_DEF-1234567890')
   assert.equal(ok.reminder.enabled, true)
+  // 「睡觉到点提醒」这类模板是 time1 + thing2：必须支持任意映射
+  assert.equal(ok.reminder.thingKey, 'thing2')
+  assert.equal(ok.reminder.timeKey, 'time1')
 
   assert.throws(
     () =>
@@ -232,6 +240,22 @@ test('订阅消息配置：默认开启、模板 ID 可后台填写、非法值�
         base
       ),
     /跳转路径/
+  )
+  assert.throws(
+    () =>
+      validateConfig(
+        Object.assign({}, base, { reminder: { thingKey: 'Thing 1' } }),
+        base
+      ),
+    /字段名/
+  )
+  assert.throws(
+    () =>
+      validateConfig(
+        Object.assign({}, base, { reminder: { thingKey: 'thing1', timeKey: 'thing1' } }),
+        base
+      ),
+    /同一个字段名/
   )
 })
 

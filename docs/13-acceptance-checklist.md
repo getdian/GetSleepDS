@@ -138,7 +138,8 @@
 - [x] 后台新增「小程序与提醒」面板：启用开关、模板 ID、跳转路径、获取步骤、只读运行环境（HTML 结构 + `node --check` 通过）。
 - [x] 真实实例（内存模式 3199）走通：登录 → 保存模板 → `/api/config` 下发 `{enabled:true,templateId,page}` → `/api/admin/env` 返回 `appidConfigured/secretConfigured/trustProxy/dbMode`，响应中不含任何密钥值。
 - [x] 单测：模板 ID 非法 / 跳转路径非法被拒；后台配置优先于 env；后台关闭后 `/api/reminders` 立即 503。
-- [ ] 待真机：微信订阅授权弹窗、到点送达、点击直达结束面板（需真实模板 ID 与 AppSecret）。
+- [x] 字段映射：后台可配 `thingKey`/`timeKey`，`time1`+`thing2` 发送键与内容正确（`server/test/reminders.test.js`）。
+- [ ] 待真机：微信订阅授权弹窗、到点送达、点击直达结束面板（需真实模板 ID 与 AppSecret；建议先用「睡觉到点提醒」模板走通，再换正式模板）。
 - [ ] 待浏览器：后台面板视觉过目（本机无 Playwright/agent-browser，已完成 API 与静态结构验证）。
 
 ### 1.14 计算器结果面留白（2026-10-22，CLI 模拟器实测）

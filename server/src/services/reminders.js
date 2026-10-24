@@ -40,7 +40,10 @@ function createReminderService(options) {
     return {
       enabled: !current || current.enabled !== false,
       templateId: (current && current.templateId) || fallbackTemplateId,
-      page: (current && current.page) || fallbackPage
+      page: (current && current.page) || fallbackPage,
+      // 字段名跟随模板：公共模板库的“睡觉到点提醒”就是 time1 + thing2
+      thingKey: (current && current.thingKey) || 'thing1',
+      timeKey: (current && current.timeKey) || 'time2'
     }
   }
 
@@ -71,15 +74,17 @@ function createReminderService(options) {
           continue
         }
         try {
+          // 字段名由后台按模板配置（thing1/time2、time1/thing2…），不能写死：
+          // 写死时换一个关键词不同的模板，微信直接返回 47003，提醒永远发不出去。
+          const data = {}
+          data[reminder.thingKey] = { value: '结束入睡' }
+          data[reminder.timeKey] = { value: formatClock(item.fireAt) }
           await sendSubscribeMessage(wx, {
             openid: item.openid,
             // 任务上记录的模板优先：更换模板不应让已排队任务用错字段
             templateId: item.templateId || reminder.templateId,
             page: item.page || reminder.page,
-            data: {
-              thing1: { value: '结束入睡' },
-              time2: { value: formatClock(item.fireAt) }
-            }
+            data
           })
           await db.markReminder(item.openid, item.sessionId, 'sent', current)
         } catch (error) {

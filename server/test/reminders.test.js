@@ -193,3 +193,41 @@ test('后台配置的模板 ID 优先于环境变量，关闭后立即拒绝创�
     await new Promise((resolve) => server.close(resolve))
   }
 })
+
+test('模板字段名按后台映射发送（time1/thing2 也能用）', async () => {
+  const db = createMemoryDb()
+  const now = Date.now()
+  await db.saveReminder('openid-map', {
+    sessionId: 'sleep-map',
+    fireAt: now - 1000,
+    templateId: 'tmpl-map',
+    page: 'pages/sleep/sleep?end=1'
+  })
+  const calls = []
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, body: options && options.body })
+    if (url.indexOf('stable_token') >= 0) {
+      return { json: async () => ({ access_token: 'token-test', expires_in: 7200 }) }
+    }
+    return { json: async () => ({ errcode: 0 }) }
+  }
+  const service = createReminderService({
+    db,
+    wx: { appid: 'appid-test', secret: 'secret-test', fetchImpl },
+    getReminder: async () => ({
+      enabled: true,
+      templateId: 'tmpl-map',
+      page: 'pages/sleep/sleep?end=1',
+      thingKey: 'thing2',
+      timeKey: 'time1'
+    }),
+    now: () => now
+  })
+  await service.tick()
+  const send = calls.filter((item) => item.url.indexOf('subscribe/send') >= 0)[0]
+  assert.ok(send, '应调用订阅消息发送')
+  const body = JSON.parse(send.body)
+  assert.deepEqual(Object.keys(body.data).sort(), ['thing2', 'time1'])
+  assert.equal(body.data.thing2.value, '结束入睡')
+  assert.match(body.data.time1.value, /^\d{2}:\d{2}$/)
+})
