@@ -116,6 +116,16 @@ Component({
       // 否则抽屉显示“已解锁”、点曲目却重新弹解锁。
       this._sessionUnlocked = false
       this._ttlDays = (this._cfg.cache && this._cfg.cache.ttlDays) || 7
+      // 主动播放后的自动缓存：Wi-Fi 立即、移动网络延迟（见 scheduleAutoCache）
+      this._netType = ''
+      this._autoCacheTimer = null
+      if (wx.getNetworkType) {
+        wx.getNetworkType({
+          success: (res) => {
+            this._netType = (res && res.networkType) || ''
+          }
+        })
+      }
       this._onCacheChange = () => this.refreshCache()
 
       cache.onChange(this._onCacheChange)
@@ -179,6 +189,7 @@ Component({
         clearInterval(this._unlockTimer)
         this._unlockTimer = null
       }
+      this.clearAutoCacheTimer()
       this.offAudio()
     }
   },
@@ -300,7 +311,7 @@ Component({
       const mb = (cache.usedBytes() / 1024 / 1024).toFixed(1)
       this.setData({
         cacheCount: count,
-        cacheText: '已缓存 ' + count + '/' + tracks.length + ' · 占用 ' + mb + ' MB'
+        cacheText: '已缓存 ' + count + '/' + tracks.length + ' 首 · 占用 ' + mb + ' MB'
       })
       this.applyFilter()
     },
@@ -731,6 +742,31 @@ Component({
       return cache.peek(url, this._ttlDays, url)
     },
 
+    clearAutoCacheTimer() {
+      if (this._autoCacheTimer) {
+        clearTimeout(this._autoCacheTimer)
+        this._autoCacheTimer = null
+      }
+    },
+
+    /**
+     * 用户主动播放后的自动缓存。
+     * 小程序无法复用 BackgroundAudioManager 的流缓存，所以首次会与流式播放并行
+     * （约多耗 1 倍流量），换来之后每次播放都走本地、不再重复下载；
+     * 移动网络延迟 15s，避免“点开听两秒”也下整首。
+     */
+    scheduleAutoCache(track) {
+      this.clearAutoCacheTimer()
+      if (!this._alive || !track || !track.url) return
+      if (cache.peek(track.url, this._ttlDays, track.url)) return
+      const delay = cache.autoCacheDelay(this._netType)
+      this._autoCacheTimer = setTimeout(() => {
+        this._autoCacheTimer = null
+        if (!this._alive) return
+        cache.ensure(track.url, null, this._ttlDays).catch(() => {})
+      }, delay)
+    },
+
     /**
      * 统一设置音源并记录“最后一次赋值的 src”。
      * 必须走这里：切歌/缓存回退/重建源三处若直接赋 src，onError 就无从判断旧源。
@@ -762,11 +798,12 @@ Component({
       playerState.clearFallback()
       const app = getApp()
       if (app && app.globalData) app.globalData.audioSession = true
+      // 用户主动点播即视为重试：必须先清黑名单再取缓存，
+      // 否则上一轮播放失败拉黑后，这次即使文件已下载好也仍走远程。
+      if (this._badUrls[track.url]) delete this._badUrls[track.url]
       const cached = localPath || this.peekCached(track.url)
       this._currentTrack = track
       this._playingFromCache = !!cached
-      // 用户主动点播即视为重试：清掉本会话的黑名单，避免重新下载成功后仍走远程
-      if (this._badUrls[track.url]) delete this._badUrls[track.url]
       this.clearCollapseTimer()
 
       this.setData({
@@ -801,6 +838,8 @@ Component({
       // 存储满时播放本身仍可用，但下次进入无法恢复曲目，必须让用户知道
       if (!savedMeta) wx.showToast({ title: '播放状态保存失败', icon: 'none' })
       events.track('audio_play', track.id)
+      // 播放即排队缓存：移动网络等 15s（避免试听浪费），Wi-Fi 立即
+      this.scheduleAutoCache(track)
 
       this.applyTimerPreference(this.data.timerMinutes)
     },
@@ -934,6 +973,8 @@ Component({
       const app = getApp()
       if (app && app.globalData) app.globalData.audioSession = false
       this.clearCollapseTimer()
+      // 主动停止后不再启动新的后台缓存；已开始的下载保留（下次可命中）
+      this.clearAutoCacheTimer()
       this.setData({ currentId: '', currentTitle: '', currentCategory: '', playing: false, loading: false, playerSub: '', timerRemainText: '', timerMinutes: 0, miniExpanded: false, collapsed: false, collapsing: false })
       if (this._audio) {
         try {

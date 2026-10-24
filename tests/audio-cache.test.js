@@ -104,6 +104,13 @@ test('缓存替换不 unlink 正在播放的 dest：先备份再换入', async (
   }
 })
 
+test('播放后自动缓存：Wi-Fi 立即，移动网络延迟 15 秒', () => {
+  assert.equal(cache.autoCacheDelay('wifi'), 0)
+  assert.equal(cache.autoCacheDelay('4g'), 15000)
+  assert.equal(cache.autoCacheDelay('5g'), 15000)
+  assert.equal(cache.autoCacheDelay(''), 15000)
+})
+
 test('同一 URL 并发 ensure 只发起一次下载', async () => {
   downloads = 0
   savedPath = ''

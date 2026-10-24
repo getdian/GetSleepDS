@@ -366,6 +366,17 @@ function cleanAll(exceptUrl) {
 }
 
 /**
+ * 主动播放后的自动缓存延迟：
+ * - Wi-Fi：立即（不计流量，边播边下）；
+ * - 移动网络：先播 15 秒再下（避免只试听几秒也下整首；用户继续听说明是真需求）。
+ * 注意：小程序无法复用 BackgroundAudioManager 的流缓存，首次后台下载会与流式播放
+ * 并行（约多耗 1 倍流量），换来之后每次播放都走本地、不再重复下载。
+ */
+function autoCacheDelay(networkType) {
+  return networkType === 'wifi' ? 0 : 15 * 1000
+}
+
+/**
  * 进入小程序/音频页的预热：仅 Wi-Fi、仅已解锁、最多前两条。
  */
 function warmup(tracks, cacheConfig, unlocked) {
@@ -390,6 +401,7 @@ module.exports = {
   remove,
   isUsable,
   maybePrune,
+  autoCacheDelay,
   warmup,
   usedBytes,
   cachedCount,

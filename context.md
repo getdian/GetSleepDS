@@ -194,3 +194,5 @@ npm run check
 30. **结果面提醒入口与列表呼吸（2026-10-25）**：入睡页「到点提醒我结束」改为「到点提醒我记录起床」（已开启态同步），消除“结束什么”的歧义；结果面主推荐行底部与「去入睡打卡」并排增加「提醒我入睡/提醒我起床」（仅主推荐、未过期时显示，不额外占纵向），点击走一次性订阅（`reminder.scheduleAt` → `plan-s-`/`plan-w-` 前缀 sessionId，不依赖 pending）；服务端按前缀发「该睡了/该起床了/结束入睡」。推荐列表行 padding 16→20rpx（dense 9→12、compact 10→13），主推荐间距 16→20rpx，4 行 dense 不溢出。验证：317 项绿、模拟器三张截图、console 无 error。
 
 31. **结果面视觉细化（2026-10-25）**：「15 分钟入睡」胶囊 64→56rpx；主卡上下 padding 22→26（dense 16→20、compact+dense 16→18）；「提醒我入睡/起床」21→24rpx（dense/compact 22）并加字重；「去入睡打卡」改 flex:none + margin-left:auto（按内容宽靠右）；「重新选择/换成我想几点起」升级为实底/描边一对 pill（24rpx/72rpx）；「分享给朋友」改 share-btn icon 变体（图标+自定义文案）。4 行 dense 不溢出，console 无 error，check 540.8KB。
+
+32. **播放后自动缓存（2026-10-25）**：普通播放原只 `peekCached` 不落盘，非 Wi-Fi 每次重播都重新拉流。现在 `play()` 后排队 `cache.ensure`：Wi-Fi 立即、移动网络延迟 15s（`cache.autoCacheDelay`）；`detached`/`stopPlayback` 清定时器；文案补「首」。同时修 `play()` 的黑名单顺序（先清 `_badUrls` 再 `peekCached`），否则失败拉黑后即使已缓存也走远程。代价：无法复用 BAM 流缓存，首次与流式并行约多 1 倍流量，之后本地 0 流量；平均听 2 次以上即净省。验证：318 项绿、模拟器 0/1→1/1（5.4MB）→重播本地路径、console 无 error。
