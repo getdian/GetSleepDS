@@ -70,6 +70,9 @@ Page({
     this._busy = false
     this._pending = null
     this._autoEnd = !!(options && options.end === '1')
+    // 结果面计划提醒（该睡了/该起床了）点进来：与 end=1 分开处理，见 consumeLaunchIntent
+    this._remindKind =
+      options && (options.remind === 'sleep' || options.remind === 'wake') ? options.remind : ''
     this._lightsTimer = null
     this._noticeTimer = null
     this._clockTimer = null
@@ -95,13 +98,7 @@ Page({
     this.startClock()
     adSlots.apply(this)
     this.openPendingAudio()
-    // 订阅消息点进来：直接打开结束面板；没有 pending 说明已在别处结束
-    if (this._autoEnd) {
-      this._autoEnd = false
-      const pending = storage.getPending()
-      if (pending) this.openEndSheet()
-      else this.setData({ notice: '这次入睡已经结束过了' })
-    }
+    this.consumeLaunchIntent()
     // 统计页点空格子补记：带日期跳过来，直接打开补记面板
     this.openPendingManual()
     // 熄灯/结束/补记/编辑面板期间 tabBar 都必须隐藏：tabBar 是独立 root，
@@ -109,6 +106,37 @@ Page({
     // pageLifetimes.show 重新翻出来（与生命周期先后无关）。
     this.syncTabbar()
     if (!this.data.dim && !this.data.endShow) this.scheduleLightsOut()
+  },
+
+  /**
+   * 消费订阅消息带来的启动意图（只生效一次）：
+   * - end=1（打卡会话的「结束入睡」）：有 pending 就打开结束面板，否则说明已结束；
+   * - remind=sleep（结果面「该睡了」）：永远不开结束面板——已提前打卡时弹面板会诱导误存一段短睡眠；
+   * - remind=wake（结果面「该起床了」）：在计时就结束，没计时就引导补记。
+   */
+  consumeLaunchIntent() {
+    const autoEnd = this._autoEnd
+    const kind = this._remindKind
+    this._autoEnd = false
+    this._remindKind = ''
+    if (!autoEnd && !kind) return
+    const pending = storage.getPending()
+    if (kind === 'sleep') {
+      this.setData({
+        notice: pending ? '已经在记录这一觉了，安心睡吧' : '到点了，准备好就轻触圆环记录入睡'
+      })
+      return
+    }
+    if (pending) {
+      this.openEndSheet()
+      return
+    }
+    this.setData({
+      notice:
+        kind === 'wake'
+          ? '起床啦。如果这一觉忘了打卡，可以点「补记入睡」补上'
+          : '这次入睡已经结束过了'
+    })
   },
 
   /** 消费统计页传来的补记日期（meta.manualDay），打开补记面板并预填该日期 */

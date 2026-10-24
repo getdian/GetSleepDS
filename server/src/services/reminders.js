@@ -18,6 +18,21 @@ function thingTextOf(sessionId) {
   return '结束入睡'
 }
 
+/**
+ * 点击消息后的落地页：
+ * - 打卡会话（sleep-）沿用后台配置（默认 pages/sleep/sleep?end=1，直接打开结束面板）；
+ * - 结果面计划提醒不能带 end=1：「该睡了」点进来若已在计时会被直接弹出结束面板，
+ *   未计时则提示“这次入睡已经结束过了”，都是错的。改为 remind=sleep|wake，由入睡页分流。
+ * 发送时也按此重算：上线前已排队、page 里仍是 end=1 的计划提醒同样被纠正，无需迁移。
+ */
+const PLAN_PAGE = 'pages/sleep/sleep'
+function pageFor(sessionId, page) {
+  const id = String(sessionId || '')
+  if (id.indexOf('plan-s-') === 0) return PLAN_PAGE + '?remind=sleep'
+  if (id.indexOf('plan-w-') === 0) return PLAN_PAGE + '?remind=wake'
+  return page
+}
+
 function formatDateTime(timestamp) {
   // 模板「提醒时间」的示例通常是完整日期时间（如 2019年11月11日 20:30）。
   // time 类型两种格式都接受，但发完整格式与审核示例一致，用户也能看到“哪一天”。
@@ -110,7 +125,7 @@ function createReminderService(options) {
             openid: item.openid,
             // 任务上记录的模板优先：更换模板不应让已排队任务用错字段
             templateId: item.templateId || reminder.templateId,
-            page: item.page || reminder.page,
+            page: pageFor(item.sessionId, item.page || reminder.page),
             data
           })
           await db.markReminder(item.openid, item.sessionId, 'sent', current)
@@ -143,4 +158,4 @@ function createReminderService(options) {
   return { start, stop, tick }
 }
 
-module.exports = { createReminderService }
+module.exports = { createReminderService, pageFor, thingTextOf }

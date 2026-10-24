@@ -600,3 +600,68 @@ test('结束/补记/编辑面板开着回前台：onShow 必须重新隐藏 tabB
     global.getCurrentPages = originalPages
   }
 })
+
+/** 启动意图测试：只观察是否开结束面板与 notice 文案 */
+function intentPage(options) {
+  const page = makePage()
+  page._autoEnd = !!(options && options.end === '1')
+  page._remindKind = (options && options.remind) || ''
+  page._opened = 0
+  page.openEndSheet = function () {
+    this._opened += 1
+  }
+  return page
+}
+
+function seedPending() {
+  const bedAt = Date.now() - 20 * 60 * 1000
+  storage.setPending({ id: 'sleep-' + bedAt, bedAt, expectedWakeAt: bedAt + 8 * 3600000 })
+}
+
+test('提醒落地：remind=sleep 已在计时也不弹结束面板（防误存短睡眠）', () => {
+  resetStore()
+  seedPending()
+  const page = intentPage({ remind: 'sleep' })
+  page.consumeLaunchIntent()
+  assert.equal(page._opened, 0)
+  assert.match(page.data.notice, /安心睡/)
+  // 只消费一次：再次回前台不重复提示
+  page.data.notice = ''
+  page.consumeLaunchIntent()
+  assert.equal(page.data.notice, '')
+})
+
+test('提醒落地：remind=sleep 未计时只提示去打卡，不说“已经结束过了”', () => {
+  resetStore()
+  const page = intentPage({ remind: 'sleep' })
+  page.consumeLaunchIntent()
+  assert.equal(page._opened, 0)
+  assert.doesNotMatch(page.data.notice, /结束过了/)
+})
+
+test('提醒落地：remind=wake 在计时打开结束面板，未计时引导补记', () => {
+  resetStore()
+  seedPending()
+  const running = intentPage({ remind: 'wake' })
+  running.consumeLaunchIntent()
+  assert.equal(running._opened, 1)
+
+  resetStore()
+  const idle = intentPage({ remind: 'wake' })
+  idle.consumeLaunchIntent()
+  assert.equal(idle._opened, 0)
+  assert.match(idle.data.notice, /补记入睡/)
+})
+
+test('提醒落地：打卡会话 end=1 行为不变', () => {
+  resetStore()
+  seedPending()
+  const page = intentPage({ end: '1' })
+  page.consumeLaunchIntent()
+  assert.equal(page._opened, 1)
+
+  resetStore()
+  const done = intentPage({ end: '1' })
+  done.consumeLaunchIntent()
+  assert.equal(done.data.notice, '这次入睡已经结束过了')
+})

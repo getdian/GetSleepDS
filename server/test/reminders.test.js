@@ -269,4 +269,61 @@ test('结果面提醒按来源发送不同事项文案（该睡了 / 该起床�
   assert.equal(sends.length, 2)
   const things = sends.map((body) => body.data.thing1.value).sort()
   assert.deepEqual(things, ['该睡了', '该起床了'])
+  // 已排队行的 page 仍是 end=1（旧版本写入），发送时必须按前缀纠正：
+  // 「该睡了」落到 end=1 会在已打卡时直接弹出结束面板。
+  const pages = {}
+  sends.forEach((body) => {
+    pages[body.data.thing1.value] = body.page
+  })
+  assert.equal(pages['该睡了'], 'pages/sleep/sleep?remind=sleep')
+  assert.equal(pages['该起床了'], 'pages/sleep/sleep?remind=wake')
+})
+
+test('pageFor：只改写计划提醒，打卡会话沿用后台配置', () => {
+  const { pageFor } = require('../src/services/reminders')
+  assert.equal(pageFor('plan-s-1', 'pages/sleep/sleep?end=1'), 'pages/sleep/sleep?remind=sleep')
+  assert.equal(pageFor('plan-w-1', 'pages/sleep/sleep?end=1'), 'pages/sleep/sleep?remind=wake')
+  assert.equal(pageFor('sleep-1', 'pages/sleep/sleep?end=1'), 'pages/sleep/sleep?end=1')
+  assert.equal(pageFor('sleep-1', 'pages/index/index'), 'pages/index/index')
+})
+
+test('路由创建计划提醒时写入分流后的落地页', async () => {
+  const config = loadConfig({
+    NODE_ENV: 'test',
+    ALLOW_DEV_LOGIN: '1',
+    DB_MODE: 'memory',
+    ADMIN_PASSWORD: 'test-admin-pass',
+    WX_REMINDER_TEMPLATE_ID: 'tmpl-test'
+  })
+  const db = createMemoryDb()
+  const app = createApp({
+    config,
+    db,
+    logger: { log() {}, error() {} },
+    now: () => Date.now()
+  })
+  const server = app.listen(0)
+  await new Promise((resolve) => server.once('listening', resolve))
+  const base = 'http://127.0.0.1:' + server.address().port
+  const fireAt = Date.now() + 10 * 60 * 1000
+  try {
+    for (const sessionId of ['plan-s-' + fireAt, 'sleep-' + fireAt]) {
+      const res = await fetch(base + '/api/reminders', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ code: 'plan-code', action: 'create', sessionId, fireAt })
+      })
+      assert.equal(res.status, 200)
+    }
+    const due = await db.dueReminders(fireAt + 1000, 10)
+    const byId = {}
+    due.forEach((item) => {
+      byId[item.sessionId.split('-')[0]] = item.page
+    })
+    assert.equal(byId.plan, 'pages/sleep/sleep?remind=sleep')
+    assert.equal(byId.sleep, 'pages/sleep/sleep?end=1')
+  } finally {
+    app.locals.reminderService.stop()
+    await new Promise((resolve) => server.close(resolve))
+  }
 })

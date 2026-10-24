@@ -1,6 +1,7 @@
 const express = require('express')
 const { wrap } = require('../lib/http')
 const { invalidBody, rateLimited, apiError, dbUnavailable } = require('../lib/errors')
+const { pageFor } = require('../services/reminders')
 
 const DEFAULT_PAGE = 'pages/sleep/sleep?end=1'
 
@@ -75,7 +76,8 @@ function createRemindersRoute(options) {
           sessionId,
           fireAt,
           templateId: reminderConfig.templateId,
-          page: reminderConfig.page
+          // 计划提醒（plan-s-/plan-w-）不能落到 end=1，见 services/reminders.pageFor
+          page: pageFor(sessionId, reminderConfig.page)
         })
       } catch (e) {
         log.error('[db] reminder save failed:', req.id || '', e.message)
