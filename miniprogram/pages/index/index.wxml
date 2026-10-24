@@ -139,6 +139,14 @@
               </view>
 
               <view class="result-extra">
+                <view
+                  wx:if="{{view.mainAt && !view.mainPassed}}"
+                  class="result-remind"
+                  bindtap="onRemindMain"
+                >
+                  <text class="result-remind-ico">◔</text>
+                  <text>{{mode === 'wake' ? '提醒我入睡' : '提醒我起床'}}</text>
+                </view>
                 <view class="result-go" bindtap="goSleep">
                   <text>去入睡打卡</text>
                   <text class="result-go-arrow">→</text>

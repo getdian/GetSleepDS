@@ -509,7 +509,8 @@
   background: linear-gradient(90deg, rgba(65, 85, 175, 0.35) 0%, rgba(45, 60, 130, 0.25) 100%);
   border: 1.5rpx solid rgba(140, 175, 255, 0.3);
   box-shadow: 0 8rpx 28rpx rgba(15, 25, 70, 0.4);
-  margin-bottom: 16rpx;
+  /* 主推荐与下方列表之间留一口气，避免整块读成一张表 */
+  margin-bottom: 20rpx;
 }
 
 .result-bar {
@@ -639,7 +640,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16rpx 8rpx;
+  /* 上下呼吸加大：三行之间靠留白分组，而不是靠分隔线 */
+  padding: 20rpx 8rpx;
   border-bottom: 1rpx solid rgba(255, 255, 255, 0.08);
 }
 
@@ -775,13 +777,38 @@
 }
 
 .result-extra {
+  /* 与「去入睡打卡」同一行：提醒是次级动作，不额外占纵向预算 */
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
   margin-top: 14rpx;
   padding: 0 4rpx;
 }
 
+.result-remind {
+  flex: none;
+  min-height: 80rpx;
+  display: flex;
+  align-items: center;
+  gap: 6rpx;
+  padding: 0 10rpx 0 2rpx;
+  font-size: 21rpx;
+  color: var(--c-primary-soft);
+}
+
+.result-remind-ico {
+  font-size: 20rpx;
+  opacity: 0.85;
+}
+
+.result-remind:active {
+  opacity: 0.7;
+}
+
 .result-go {
   position: relative;
-  margin-top: 12rpx;
+  flex: 1;
+  margin-top: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -861,11 +888,11 @@
 
 .calc-back.is-compact .result-main {
   padding: 16rpx 20rpx;
-  margin-bottom: 12rpx;
+  margin-bottom: 14rpx;
 }
 
 .calc-back.is-compact .result-row {
-  padding: 10rpx 8rpx;
+  padding: 13rpx 8rpx;
 }
 
 .calc-back.is-compact .result-extra {
@@ -873,7 +900,12 @@
 }
 
 .calc-back.is-compact .result-go {
-  margin-top: 8rpx;
+  margin-top: 0;
+}
+
+.calc-back.is-compact .result-remind {
+  min-height: 80rpx;
+  font-size: 20rpx;
 }
 
 /* 4 行结果（3 档推荐 + 补觉）或 compact 时压缩纵向节奏：
@@ -885,11 +917,12 @@
 
 .calc-back.is-dense .result-main {
   padding: 16rpx 22rpx;
-  margin-bottom: 10rpx;
+  margin-bottom: 12rpx;
 }
 
 .calc-back.is-dense .result-row {
-  padding: 9rpx 8rpx;
+  /* dense 仍比常规更紧，但不再贴到分隔线上 */
+  padding: 12rpx 8rpx;
 }
 
 .calc-back.is-dense .result-extra {
@@ -898,7 +931,12 @@
 
 .calc-back.is-dense .result-go {
   height: 72rpx;
-  margin-top: 6rpx;
+  margin-top: 0;
+}
+
+.calc-back.is-dense .result-remind {
+  min-height: 72rpx;
+  font-size: 20rpx;
 }
 
 .calc-back.is-dense .result-actions {

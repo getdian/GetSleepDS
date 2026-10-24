@@ -4,6 +4,20 @@ const { sendSubscribeMessage } = require('./wx')
 // 停机/后台关闭期间 pending 会累积，恢复后不能把几小时前的“结束入睡”补发出去。
 const MAX_LATE_MS = 15 * 60 * 1000
 
+/**
+ * 事项文案按来源区分：
+ * - plan-s-：结果面“提醒我入睡” → 该睡了
+ * - plan-w-：结果面“提醒我起床” → 该起床了
+ * - 其他（sleep- 打卡会话）：到点结束入睡 → 结束入睡
+ * 前缀编码在 sessionId 里，避免给已有表加列做迁移。
+ */
+function thingTextOf(sessionId) {
+  const id = String(sessionId || '')
+  if (id.indexOf('plan-s-') === 0) return '该睡了'
+  if (id.indexOf('plan-w-') === 0) return '该起床了'
+  return '结束入睡'
+}
+
 function formatDateTime(timestamp) {
   // 模板「提醒时间」的示例通常是完整日期时间（如 2019年11月11日 20:30）。
   // time 类型两种格式都接受，但发完整格式与审核示例一致，用户也能看到“哪一天”。
@@ -90,7 +104,7 @@ function createReminderService(options) {
           // 字段名由后台按模板配置（thing1/time2、time1/thing2…），不能写死：
           // 写死时换一个关键词不同的模板，微信直接返回 47003，提醒永远发不出去。
           const data = {}
-          data[reminder.thingKey] = { value: '结束入睡' }
+          data[reminder.thingKey] = { value: thingTextOf(item.sessionId) }
           data[reminder.timeKey] = { value: formatDateTime(item.fireAt) }
           await sendSubscribeMessage(wx, {
             openid: item.openid,

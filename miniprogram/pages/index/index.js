@@ -3,6 +3,7 @@ const F = require('../../utils/format')
 const P = require('../../utils/plan')
 const G = require('../../utils/sleep-guide')
 const storage = require('../../utils/storage')
+const reminder = require('../../utils/reminder')
 const adSlots = require('../../utils/ads')
 const backgrounds = require('../../utils/backgrounds')
 const tabbar = require('../../utils/tabbar')
@@ -339,6 +340,9 @@ Page({
           : '距离 ' + value + ' 起床',
         mainGuideLabel: mainGuide ? mainGuide.label : '',
         mainGuideTone: mainGuide ? mainGuide.tone : '',
+        // 结果面「到点提醒我」：只对主推荐、且时间仍在 1 分钟之后才可设
+        mainAt: main ? main.at : 0,
+        mainPassed: main ? main.passed === true || main.at <= now + 60 * 1000 : true,
         note,
         compact: !main,
         rows
@@ -363,6 +367,9 @@ Page({
         mainMeta: main.cycles + ' 个周期 · ' + F.fmtDuration(main.durationMin),
         mainGuideLabel: mainGuide.label,
         mainGuideTone: mainGuide.tone,
+        // 入睡模式推荐的是起床时间：到点提醒“该起床了”（仍按一次性订阅，不当闹钟）
+        mainAt: main ? main.at : 0,
+        mainPassed: main ? main.at <= now + 60 * 1000 : true,
         // late 分支只讲后半夜质量，日期前缀仍要保留：凌晨 2 点选 1 点入睡时，
         // 入睡时刻已被宽限推到明天，吞掉日期会让整组推荐看起来像“今天”。
         note: late
@@ -424,6 +431,40 @@ Page({
 
   /** 面板内点击/滑动不穿透到遮罩 */
   noop() {},
+
+  /**
+   * 结果面「到点提醒我」：一次授权一条，不承诺每天/不当闹钟。
+   * kind 与文案：起床模式推荐的是入睡点 → 该睡了；入睡模式推荐的是起床时间 → 该起床了。
+   */
+  onRemindMain() {
+    const view = this.data.view
+    if (!view || !view.mainAt || view.mainPassed) return
+    const kind = this.data.mode === 'wake' ? 'sleep' : 'wake'
+    reminder
+      .requestOptIn()
+      .then((result) => {
+        if (!result.ok) {
+          wx.showToast({
+            title:
+              result.reason === 'not_configured'
+                ? '提醒暂未配置，可先用系统闹钟'
+                : '没有开启提醒',
+            icon: 'none'
+          })
+          return
+        }
+        return reminder.scheduleAt(view.mainAt, kind).then((res) => {
+          if (res && res.skipped === 'too_soon') {
+            wx.showToast({ title: '这个时间已过，换个时间吧', icon: 'none' })
+            return
+          }
+          wx.showToast({ title: '已设置提醒', icon: 'none' })
+        })
+      })
+      .catch(() => {
+        wx.showToast({ title: '提醒设置失败，稍后再试', icon: 'none' })
+      })
+  },
 
   goSleep() {
     wx.switchTab({ url: '/pages/sleep/sleep' })

@@ -37,7 +37,7 @@
       <text class="orb-caption">{{orbCaption}}</text>
       <text wx:if="{{recordHint}}" class="orb-note">{{recordHint}}</text>
       <view wx:if="{{state === 'sleeping'}}" class="sleep-reminder {{reminderOn ? 'is-on' : ''}}" bindtap="onReminderTap">
-        {{reminderOn ? '已开启到点提醒' : '到点提醒我结束'}}
+        {{reminderOn ? '已开启 · 到点提醒记录起床' : '到点提醒我记录起床'}}
       </view>
       <view wx:if="{{overdue}}" class="sleep-overdue" bindtap="openEndSheet">
         <text class="sleep-overdue-title">该结束入睡啦</text>

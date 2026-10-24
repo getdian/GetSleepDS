@@ -232,3 +232,41 @@ test('模板字段名按后台映射发送（time1/thing2 也能用）', async (
   // 与模板参数示例一致：完整日期时间（北京时间），而不是裸 HH:mm
   assert.match(body.data.time1.value, /^\d{4}年\d{1,2}月\d{1,2}日 \d{2}:\d{2}$/)
 })
+
+test('结果面提醒按来源发送不同事项文案（该睡了 / 该起床了）', async () => {
+  const db = createMemoryDb()
+  const now = Date.now()
+  await db.saveReminder('openid-kind', {
+    sessionId: 'plan-s-1700000000000',
+    fireAt: now - 1000,
+    templateId: 'tmpl-kind',
+    page: 'pages/sleep/sleep?end=1'
+  })
+  await db.saveReminder('openid-kind', {
+    sessionId: 'plan-w-1700000000001',
+    fireAt: now - 1000,
+    templateId: 'tmpl-kind',
+    page: 'pages/sleep/sleep?end=1'
+  })
+  const calls = []
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, body: options && options.body })
+    if (url.indexOf('stable_token') >= 0) {
+      return { json: async () => ({ access_token: 'token-test', expires_in: 7200 }) }
+    }
+    return { json: async () => ({ errcode: 0 }) }
+  }
+  const service = createReminderService({
+    db,
+    wx: { appid: 'appid-test', secret: 'secret-test', fetchImpl },
+    templateId: 'tmpl-kind',
+    now: () => now
+  })
+  await service.tick()
+  const sends = calls
+    .filter((item) => item.url.indexOf('subscribe/send') >= 0)
+    .map((item) => JSON.parse(item.body))
+  assert.equal(sends.length, 2)
+  const things = sends.map((body) => body.data.thing1.value).sort()
+  assert.deepEqual(things, ['该睡了', '该起床了'])
+})

@@ -41,6 +41,22 @@ function schedule(pending) {
   return withLogin((code) => api.createReminder(code, pending.id, pending.expectedWakeAt))
 }
 
+/**
+ * 结果面「到点提醒我」：不依赖打卡（还没有 pending），用 plan- 前缀的临时 sessionId。
+ * kind=sleep（提醒入睡）/ wake（提醒起床），服务端按前缀决定消息里的事项文案。
+ */
+function scheduleAt(fireAt, kind) {
+  const id = templateId()
+  if (!id) return Promise.resolve({ skipped: 'not_configured' })
+  const at = Number(fireAt)
+  // 服务端要求未来 1 分钟–48 小时；客户端先挡一次，避免无意义的授权弹窗
+  if (!Number.isFinite(at) || at < Date.now() + 60 * 1000) {
+    return Promise.resolve({ skipped: 'too_soon' })
+  }
+  const prefix = kind === 'wake' ? 'plan-w-' : 'plan-s-'
+  return withLogin((code) => api.createReminder(code, prefix + at, at))
+}
+
 function cancel(pendingId) {
   if (!pendingId) return Promise.resolve({ skipped: 'no_session' })
   return withLogin((code) => api.cancelReminder(code, pendingId))
@@ -66,4 +82,4 @@ function addCalendar(fireAt, title) {
   })
 }
 
-module.exports = { templateId, requestOptIn, schedule, cancel, addCalendar }
+module.exports = { templateId, requestOptIn, schedule, scheduleAt, cancel, addCalendar }
