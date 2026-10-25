@@ -294,6 +294,8 @@ Component({
       const copy = cfg.copy || {}
       const unlock = cfg.unlock || {}
       const timerEnabled = !cfg.features || cfg.features.timer !== false
+      // meta 只读一次：setData 里连写三次 getMeta 会做三次 Storage 读取
+      const meta = storage.getMeta()
       this._ttlDays = (cfg.cache && cfg.cache.ttlDays) || 7
       this.setData({
         tracks,
@@ -305,10 +307,10 @@ Component({
         unlockCancel: copy.unlockCancel || '先不用',
         timerEnabled,
         favoriteIds: storage.getFavorites(),
-        queueMode: storage.getMeta().audioQueueMode === 'favorites' ? 'favorites' : 'single',
+        queueMode: meta.audioQueueMode === 'favorites' ? 'favorites' : 'single',
         resumeLabel:
-          storage.getMeta().lastTrackActive !== false && storage.getMeta().lastTrackId
-            ? storage.getMeta().lastTrackTitle || '上次的环境音'
+          meta.lastTrackActive !== false && meta.lastTrackId
+            ? meta.lastTrackTitle || '上次的环境音'
             : '',
         activeCategory: categories.indexOf(this.data.activeCategory) >= 0 ? this.data.activeCategory : '全部'
       })

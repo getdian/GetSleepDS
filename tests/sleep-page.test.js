@@ -773,6 +773,8 @@ test('超 24 小时未结束：显示常驻提示，可丢弃这一段', () => {
   const bedAt = now - 30 * 3600 * 1000
   storage.setPending({ id: 'sleep-' + bedAt, bedAt, expectedWakeAt: bedAt + 8 * 3600 * 1000, reminderOptIn: false })
   page.refreshAll()
+  // 超期首次提示会排 8s 自动消失定时器：清掉，避免测试进程空等
+  clearTimeout(page._noticeTimer)
   assert.equal(page.data.staleLong, true, '超过 24h 必须有常驻提示')
   page.clearLightsTimer()
 

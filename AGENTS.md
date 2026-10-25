@@ -20,8 +20,8 @@
 ## 2. 门禁（提交前必须跑，数字如实转述）
 
 ```bash
-npm test          # 2026-10-26 基线：377 项 / 376 通过 / 0 失败 / 1 skip（PG 用例无 PG_TEST_URL 时 skip）
-npm run check     # 3 页面 / 22 JSON / 17 WXML / 19 WXSS，主包约 619.6 KB
+npm test          # 2026-10-26 基线：385 项 / 384 通过 / 0 失败 / 1 skip（PG 用例无 PG_TEST_URL 时 skip）
+npm run check     # 3 页面 / 22 JSON / 17 WXML / 19 WXSS，主包约 621.1 KB
 ```
 
 - 数字会随改动变化：**以本次输出为准**，不要照抄历史数字宣称通过。
