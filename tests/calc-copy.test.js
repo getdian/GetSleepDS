@@ -40,6 +40,9 @@ test('胶囊 / 主按钮 / 结果面切换与 Hero 同一口径（输入→输�
 
   const swap = lineWith(WXML, 'class="result-switch"', 'result-switch')
   assert.ok(swap.indexOf("mode === 'wake' ? '换成我想几点睡' : '换成我想几点起'") >= 0, swap)
+
+  const resetBtn = lineWith(WXML, 'class="result-reset"', 'result-reset')
+  assert.ok(resetBtn.indexOf('‹ 返回') >= 0, resetBtn)
 })
 
 test('结果标签与算法方向一致：起床模式出睡点，入睡模式出起床时间', () => {
@@ -47,10 +50,11 @@ test('结果标签与算法方向一致：起床模式出睡点，入睡模式�
   lineWith(PAGE_JS, "label: '推荐起床时间'", 'sleep 结果标签')
 })
 
-test('不再残留反向配对的旧文案', () => {
+test('不再残留反向配对的旧文案与旧返回文案', () => {
   assert.equal(WXML.indexOf('想几点入睡？'), -1, 'index.wxml 仍有「想几点入睡？」')
   assert.equal(WXML.indexOf('选一个时间，找到适合你的睡点'), -1, 'index.wxml 仍有含糊副标')
   assert.equal(WXML.indexOf('换成我想几点醒'), -1, 'index.wxml 仍有「几点醒」')
+  assert.equal(WXML.indexOf('重新选择'), -1, 'index.wxml 仍有「重新选择」')
 })
 
 test('入睡提示陈述选中时刻；结果头图标随模式（睡点月牙 / 起床太阳）', () => {

@@ -162,3 +162,33 @@ test('云端删除失败（lastSyncAt=0）仍保留删除入口的状态', () =>
   assert.equal(page.data.hasCloudCopy, false, 'lastSyncAt=0 不能当作“没有待删副本”')
   assert.match(page.data.syncText, /云端副本尚未删除/)
 })
+
+test('空态：0 数据时支持从 empty-state 触发补记与去入睡', () => {
+  const originalNow = Date.now
+  Date.now = () => NOW
+  let switchedUrl = ''
+  const originalSwitchTab = global.wx.switchTab
+  global.wx.switchTab = (opts) => {
+    switchedUrl = opts.url
+  }
+  try {
+    resetStore()
+    const page = makePage()
+    page.refresh()
+    assert.equal(page.data.hasData, false, '初始无记录为 0 数据空态')
+
+    // 触发去入睡
+    page.goSleep()
+    assert.equal(switchedUrl, '/pages/sleep/sleep')
+
+    // 触发补记
+    page.onEmptyManual()
+    assert.equal(page.data.manualShow, true, '空态补记应拉起 manualSheet')
+    assert.equal(page.data.manualDay, '2026-10-22', '默认补记醒来日为今天')
+    assert.equal(page.data.manualError, '', '无记录时补记不应有报错')
+    assert.ok(page.data.manualBedTime && page.data.manualWakeTime)
+  } finally {
+    global.wx.switchTab = originalSwitchTab
+    Date.now = originalNow
+  }
+})

@@ -41,19 +41,39 @@
 }
 
 .metric {
+  position: relative;
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 10rpx;
-  padding: 18rpx 2rpx 16rpx;
+  padding: 18rpx 4rpx 16rpx;
   border-radius: var(--radius-md);
-  transition: background 0.15s ease;
+  transition: background 0.15s ease, opacity 0.15s ease, transform 0.15s ease;
 }
 
-.metric + .metric {
-  border-left: 1rpx solid var(--border-moon-subtle);
+.metric:active,
+.metric--tap {
+  opacity: 0.72;
+  transform: scale(0.97);
+}
+
+/* 弱竖线隔离：上下两端淡出的微光竖线，不顶格，晶莹通透 */
+.metric + .metric::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 18%;
+  height: 64%;
+  width: 1rpx;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.02) 0%,
+    rgba(180, 200, 255, 0.22) 50%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+  pointer-events: none;
 }
 
 .metric.is-active {
@@ -61,11 +81,11 @@
 }
 
 .metric-value {
-  font-size: 48rpx;
+  font-size: 44rpx;
   line-height: 1.1;
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: 0.5rpx;
-  color: var(--text-moon-pure);
+  color: rgba(225, 235, 255, 0.82);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -82,10 +102,29 @@
   max-width: 100%;
   font-size: 18rpx;
   line-height: 1.2;
-  color: var(--color-primary-soft);
+  color: rgba(175, 195, 240, 0.72);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* 主指标（平均睡眠）：样式略强，字号更大、纯白高亮、层次鲜明 */
+.metric--duration .metric-value {
+  font-size: 52rpx;
+  font-weight: 700;
+  color: #FFFFFF;
+  text-shadow: 0 2rpx 16rpx rgba(139, 135, 255, 0.3);
+}
+
+.metric--duration .metric-key {
+  font-size: 21rpx;
+  font-weight: 500;
+  color: rgba(230, 240, 255, 0.92);
+}
+
+.metric--duration .metric-sub {
+  font-size: 19rpx;
+  color: var(--color-primary-soft);
 }
 
 .metrics-empty {
@@ -155,35 +194,40 @@
 }
 
 /* 日历周期切换 */
-/* 周期选项：纯文字无边框；当前项更深、更大、更粗 */
+/* 周期选项：当前项加简洁无边框弱背景胶囊 */
 .span-tabs {
   display: flex;
   align-items: center;
-  gap: 22rpx;
+  gap: 10rpx;
 }
 
 .span-tab {
-  min-height: 72rpx;
+  min-height: 52rpx;
   display: inline-flex;
   align-items: center;
-  /* 22rpx 文字原本只有约 44×56rpx 的可点区域，四个 tab 相邻易误触；
-     横向补 12rpx、纵向补到 72rpx，视觉不变但热区更接近推荐值。 */
-  padding: 8rpx 12rpx;
+  justify-content: center;
+  padding: 6rpx 18rpx;
+  border-radius: 999rpx;
   font-size: 22rpx;
   line-height: 1.2;
   color: var(--text-muted);
   white-space: nowrap;
-  transition: opacity 0.16s ease;
+  border: none;
+  background: transparent;
+  transition: background 0.16s ease, color 0.16s ease, opacity 0.16s ease, transform 0.16s ease;
 }
 
-.span-tab:active {
-  opacity: 0.62;
+.span-tab:active,
+.span-tab--tap {
+  opacity: 0.65;
+  transform: scale(0.95);
 }
 
 .span-tab.is-on {
-  font-size: 26rpx;
+  font-size: 23rpx;
   font-weight: 600;
-  color: var(--text-primary);
+  color: #FFFFFF;
+  background: rgba(255, 255, 255, 0.12);
 }
 /* 分区：无框，层级只靠标题与间距 */
 .section {
@@ -213,22 +257,23 @@
   color: var(--text-muted);
 }
 
-/* 日历图例：只留档位色块，整体压弱不抢格子本身 */
+/* 日历图例：居中排布，适当降低透明度，优雅不抢格子本身 */
 .cal-legend {
   display: flex;
   align-items: center;
+  justify-content: center;
   flex-wrap: wrap;
-  gap: 16rpx;
-  margin-top: 18rpx;
+  gap: 20rpx;
+  margin-top: 22rpx;
 }
 
 .cal-legend-item {
   display: flex;
   align-items: center;
-  gap: 6rpx;
-  /* 去掉外层 opacity（原 0.6 叠 --text-muted 后约 2.7:1），18→20rpx */
-  font-size: 20rpx;
-  color: var(--text-secondary);
+  gap: 8rpx;
+  font-size: 19rpx;
+  color: var(--text-muted);
+  opacity: 0.8;
 }
 
 .cal-swatch {
@@ -297,10 +342,13 @@
   align-items: center;
   font-size: 21rpx;
   color: var(--color-primary);
+  transition: opacity 0.16s ease, transform 0.16s ease;
 }
 
-.dd-add:active {
-  opacity: 0.7;
+.dd-add:active,
+.dd-add--tap {
+  opacity: 0.52;
+  transform: scale(0.97);
 }
 
 /* 分区底部行：左侧记录数、右侧海报入口 */
@@ -331,12 +379,17 @@
 }
 
 .poster-btn:active,
+.poster-btn--tap,
 .sync-btn:active,
+.sync-btn--tap,
 .cloud-del:active,
+.cloud-del--tap,
 .danger-entry:active,
+.danger-entry--tap,
 .sync-toggle-hit:active,
-.settings-head:active {
-  opacity: 0.68;
+.settings-head:active,
+.settings-head--tap {
+  opacity: 0.65;
 }
 
 /* 淡紫玻璃胶囊：图标 + 文案，低对比度 action，不抢结论区 */
@@ -355,6 +408,13 @@
   letter-spacing: 1rpx;
   white-space: nowrap;
   color: #C7CDFB;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.poster-btn:active,
+.poster-btn--tap {
+  opacity: 0.72;
+  transform: scale(0.96);
 }
 
 /* 视觉 64rpx 的胶囊，可点区域补到 80rpx；与旁边的分享图标拉开间距防误触 */
@@ -386,6 +446,7 @@
   justify-content: space-between;
   gap: 16rpx;
   min-height: 88rpx;
+  transition: opacity 0.16s ease;
 }
 
 .settings-info {
@@ -396,20 +457,23 @@
 }
 
 .settings-title {
-  font-size: 24rpx;
+  font-size: 28rpx;
+  font-weight: 500;
+  letter-spacing: 0.5rpx;
   color: var(--text-primary);
 }
 
 .settings-sub {
-  font-size: 19rpx;
+  font-size: 21rpx;
   line-height: 1.4;
   color: var(--text-muted);
 }
 
 .settings-toggle {
   flex: none;
-  padding: 12rpx 0 12rpx 20rpx;
-  font-size: 20rpx;
+  padding: 12rpx 0 12rpx 24rpx;
+  font-size: 26rpx;
+  font-weight: 500;
   color: var(--color-primary);
 }
 
@@ -504,6 +568,13 @@
   font-size: 22rpx;
   line-height: 1;
   color: var(--color-primary);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.sync-btn:active,
+.sync-btn--tap {
+  opacity: 0.55;
+  transform: scale(0.96);
 }
 
 .sync-btn::after {
@@ -565,6 +636,13 @@
   font-size: 20rpx;
   color: var(--text-secondary);
   text-decoration: underline;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.cloud-del:active,
+.cloud-del--tap {
+  opacity: 0.52;
+  transform: scale(0.98);
 }
 
 /* 清除数据入口：居中，红色链接标题 + 灰色说明行 */
@@ -574,6 +652,13 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.stats-page .danger-entry:active,
+.stats-page .danger-entry--tap {
+  opacity: 0.55;
+  transform: scale(0.98);
 }
 
 .stats-page .danger-entry-title {

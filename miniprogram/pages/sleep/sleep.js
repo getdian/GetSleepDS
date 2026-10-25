@@ -344,9 +344,7 @@ Page({
         ? recordView
           ? ''
           : '这条记录缺少可用的睡眠段，可撤销后重新记录'
-        : sleeping
-          ? ''
-          : '只记录时间，不做睡眠评价',
+        : '',
       buttonTitle: button.title,
       buttonSub: button.sub,
       canAddSession,

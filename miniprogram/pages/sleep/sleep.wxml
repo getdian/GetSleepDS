@@ -12,7 +12,7 @@
     <text class="sleep-sub">{{heroSub}}</text>
   </view>
 
-  <view wx:if="{{notice}}" class="notice" bindtap="onNoticeClose">
+  <view wx:if="{{notice}}" class="notice" bindtap="onNoticeClose" hover-class="notice--tap" hover-stay-time="100">
     <text class="notice-text">{{notice}}</text>
     <text class="notice-close">知道了</text>
   </view>
@@ -26,6 +26,8 @@
         <view
           class="sleep-orb orb--{{state}}"
           bindtap="onPrimaryTap"
+          hover-class="sleep-orb--tap"
+          hover-stay-time="120"
           aria-role="button"
           aria-label="{{state === 'sleeping' ? '记录起床时间' : '记录入睡时间'}}"
         >
@@ -36,17 +38,20 @@
       </view>
       <text class="orb-caption">{{orbCaption}}</text>
       <text wx:if="{{recordHint}}" class="orb-note">{{recordHint}}</text>
-      <view wx:if="{{state === 'sleeping'}}" class="sleep-reminder {{reminderOn ? 'is-on' : ''}}" bindtap="onReminderTap">
+      <view wx:if="{{state === 'sleeping'}}" class="sleep-reminder {{reminderOn ? 'is-on' : ''}}" bindtap="onReminderTap" hover-class="sleep-reminder--tap" hover-stay-time="120">
         {{reminderOn ? '已开启 · 到点提醒记录起床' : '到点提醒我记录起床'}}
       </view>
-      <view wx:if="{{overdue}}" class="sleep-overdue" bindtap="openEndSheet">
+      <view wx:if="{{overdue}}" class="sleep-overdue" bindtap="openEndSheet" hover-class="sleep-overdue--tap" hover-stay-time="120">
         <text class="sleep-overdue-title">该结束入睡啦</text>
         <text class="sleep-overdue-sub">{{overdueText}} · 点此校准并保存</text>
       </view>
-      <view wx:if="{{state === 'sleeping'}}" class="undo-bed" bindtap="onUndoBed">
-        点错了？撤销本次入睡
+      <view wx:if="{{state === 'sleeping'}}" class="sleeping-sub-actions">
+        <view class="undo-bed" bindtap="onUndoBed" hover-class="undo-bed--tap" hover-stay-time="120">点错了？撤销本次入睡</view>
+        <view class="sleeping-share">
+          <share-btn text="分享这一段睡眠" variant="icon" />
+        </view>
       </view>
-      <view wx:if="{{state === 'idle'}}" class="manual-entry" bindtap="openManualSheet">
+      <view wx:if="{{state === 'idle'}}" class="manual-entry" bindtap="openManualSheet" hover-class="manual-entry--tap" hover-stay-time="120">
         补记入睡
       </view>
     </view>
@@ -92,8 +97,8 @@
               <text class="done-session-dur">{{item.duration}}</text>
             </view>
             <view class="done-session-ops">
-              <view class="session-op is-edit" data-id="{{item.id}}" data-day="{{item.day}}" catchtap="onEditSession">修改</view>
-              <view class="session-op is-del" data-id="{{item.id}}" data-day="{{item.day}}" catchtap="onDeleteSession">删除</view>
+              <view class="session-op is-edit" data-id="{{item.id}}" data-day="{{item.day}}" catchtap="onEditSession" hover-class="session-op--tap" hover-stay-time="100">修改</view>
+              <view class="session-op is-del" data-id="{{item.id}}" data-day="{{item.day}}" catchtap="onDeleteSession" hover-class="session-op--tap" hover-stay-time="100">删除</view>
             </view>
           </view>
         </view>
@@ -102,10 +107,10 @@
         <text class="done-empty-text">{{recordHint || '这条记录缺少可用的睡眠段，可撤销后重新记录'}}</text>
       </view>
       <view class="done-cta-row">
-        <view class="cta-mini is-primary" bindtap="onAddSession">继续入睡（开始计时）</view>
-        <view class="cta-mini" bindtap="openManualSheet">补记入睡</view>
+        <view class="cta-mini is-primary" bindtap="onAddSession" hover-class="cta-mini--tap" hover-stay-time="120">继续入睡（开始计时）</view>
+        <view class="cta-mini" bindtap="openManualSheet" hover-class="cta-mini--tap" hover-stay-time="120">补记入睡</view>
       </view>
-      <view class="undo" bindtap="onUndoTap">记录有误？撤销当天记录</view>
+      <view class="undo" bindtap="onUndoTap" hover-class="undo--tap" hover-stay-time="120">记录有误？撤销当天记录</view>
     </view>
   </block>
 
@@ -113,13 +118,13 @@
     <ad-slot slot-name="sleep" enabled="{{ads.sleep.enabled}}" unit-id="{{ads.sleep.unitId}}" type="{{ads.sleep.type}}" />
   </view>
 
-  <view wx:if="{{weekCount > 0 || streak > 0}}" class="stats-strip fade-up" bindtap="goStats">
+  <view wx:if="{{weekCount > 0 || streak > 0}}" class="stats-strip fade-up" bindtap="goStats" hover-class="stats-strip--tap" hover-stay-time="120">
     <text class="stats-strip-main">本周 {{weekCount}} 天 · 连续 {{streak}} 天</text>
     <text class="stats-strip-link">查看统计 ›</text>
   </view>
 
-  <view class="sleep-share">
-    <share-btn text="分享这一段睡眠" variant="link" />
+  <view wx:if="{{state !== 'sleeping'}}" class="sleep-share">
+    <share-btn text="分享这一段睡眠" variant="icon" />
   </view>
 
   <text class="sleep-quote font-poetic fade-up">{{footerText}}</text>
@@ -140,7 +145,7 @@
         <text class="end-title">{{endMode === 'manual' ? '补记一段睡眠' : (endMode === 'edit' ? '修改这段睡眠' : '结束本次入睡')}}</text>
         <text class="end-sub">{{endMode === 'manual' ? '选择醒来日与真实入睡/起床时间，不会启动计时' : (endMode === 'edit' ? '只调整时间，归属日保持不变' : (endStale ? '超过 24 小时未结束：请确认真实醒来日与时间' : '时间不准可以直接改，保存后归入醒来日'))}}</text>
       </view>
-      <text class="end-close" catchtap="onEndCancel" aria-role="button" aria-label="关闭">×</text>
+      <text class="end-close" catchtap="onEndCancel" aria-role="button" aria-label="关闭" hover-class="end-close--tap" hover-stay-time="100">×</text>
     </view>
     <picker
       wx:if="{{endMode === 'manual' || endStale}}"
@@ -150,7 +155,7 @@
       end="{{endToday}}"
       bindchange="onEndDateChange"
     >
-      <view class="end-date-row">
+      <view class="end-date-row" hover-class="end-date-row--tap" hover-stay-time="100">
         <text class="end-date-k">醒来日</text>
         <view class="end-date-v">
           <text>{{endDateText}}</text>
@@ -160,14 +165,14 @@
     </picker>
     <view class="end-times">
       <picker mode="time" value="{{endBedTime}}" data-field="endBedTime" bindchange="onEndTimeChange">
-        <view class="end-time-item">
+        <view class="end-time-item" hover-class="end-time-item--tap" hover-stay-time="100">
           <text class="end-time-k">入睡</text>
           <text class="end-time-v">{{endBedTime}}</text>
         </view>
       </picker>
       <text class="end-arrow">→</text>
       <picker mode="time" value="{{endWakeTime}}" data-field="endWakeTime" bindchange="onEndTimeChange">
-        <view class="end-time-item">
+        <view class="end-time-item" hover-class="end-time-item--tap" hover-stay-time="100">
           <text class="end-time-k">起床</text>
           <text class="end-time-v">{{endWakeTime}}</text>
         </view>
@@ -183,8 +188,8 @@
     <text wx:if="{{endHint}}" class="end-hint">{{endHint}}</text>
     <text wx:if="{{endError}}" class="end-error">{{endError}}</text>
     <view class="end-actions">
-      <view class="end-btn ghost" catchtap="onEndCancel">取消</view>
-      <view class="end-btn primary {{endError ? 'is-disabled' : ''}}" catchtap="onEndConfirm">{{endMode === 'manual' ? '保存补记' : (endMode === 'edit' ? '保存修改' : '保存记录')}}</view>
+      <view class="end-btn ghost" catchtap="onEndCancel" hover-class="end-btn--tap" hover-stay-time="120">取消</view>
+      <view class="end-btn primary {{endError ? 'is-disabled' : ''}}" catchtap="onEndConfirm" hover-class="end-btn--tap" hover-stay-time="120">{{endMode === 'manual' ? '保存补记' : (endMode === 'edit' ? '保存修改' : '保存记录')}}</view>
     </view>
   </view>
 </view>

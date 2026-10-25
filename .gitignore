@@ -4,8 +4,16 @@ node_modules/
 project.private.config.json
 .DS_Store
 tools/_preview-*.png
+docs/assets/review-*.png
+docs/assets/test-*.png
 server/coverage/
 release-artifacts/
 dist/
 backups/
 *.sql.gz
+logs/
+
+# Agent 本地技能与工作区扩展（已安装在全局用户目录 ~/.gemini/config/skills/）
+.agents/
+wechatide-tools/
+wechatide-skill/

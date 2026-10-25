@@ -16,12 +16,19 @@ Component({
     actionText: {
       type: String,
       value: ''
+    },
+    secondaryText: {
+      type: String,
+      value: ''
     }
   },
 
   methods: {
     onAction() {
       this.triggerEvent('action')
+    },
+    onSecondary() {
+      this.triggerEvent('secondary')
     }
   }
 })

@@ -11,13 +11,28 @@
   </view>
   <text class="empty-title">{{title}}</text>
   <text wx:if="{{desc}}" class="empty-desc">{{desc}}</text>
-  <view
-    wx:if="{{actionText}}"
-    class="empty-btn"
-    bindtap="onAction"
-    aria-role="button"
-    aria-label="{{actionText}}"
-  >
-    <text>{{actionText}}</text>
+  <view wx:if="{{actionText || secondaryText}}" class="empty-actions">
+    <view
+      wx:if="{{actionText}}"
+      class="empty-btn is-primary"
+      bindtap="onAction"
+      hover-class="empty-btn--tap"
+      hover-stay-time="120"
+      aria-role="button"
+      aria-label="{{actionText}}"
+    >
+      <text>{{actionText}}</text>
+    </view>
+    <view
+      wx:if="{{secondaryText}}"
+      class="empty-btn is-secondary"
+      bindtap="onSecondary"
+      hover-class="empty-btn--tap"
+      hover-stay-time="120"
+      aria-role="button"
+      aria-label="{{secondaryText}}"
+    >
+      <text>{{secondaryText}}</text>
+    </view>
   </view>
 </view>

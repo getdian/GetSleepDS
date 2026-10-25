@@ -99,11 +99,13 @@
   background: rgba(18, 26, 56, 0.6);
   border: 1rpx solid rgba(255, 255, 255, 0.09);
   box-shadow: 0 6rpx 20rpx rgba(4, 8, 24, 0.35);
-  transition: opacity 0.16s ease;
+  transition: opacity 0.16s ease, transform 0.16s ease;
 }
 
-.mode-capsule:active {
-  opacity: 0.82;
+.mode-capsule:active,
+.mode-capsule--tap {
+  opacity: 0.76;
+  transform: scale(0.97);
 }
 
 .mode-pill-active {
@@ -282,6 +284,7 @@
   padding: 0 12rpx;
   font-size: 24rpx;
   color: var(--c-primary-soft);
+  transition: opacity 0.16s ease, transform 0.16s ease;
 }
 
 /* 垂直外扩 4rpx：视觉不变，命中区补到 72rpx */
@@ -294,8 +297,10 @@
   bottom: -4rpx;
 }
 
-.now-link:active {
-  opacity: 0.68;
+.now-link:active,
+.now-link--tap {
+  opacity: 0.52;
+  transform: scale(0.97);
 }
 
 /* 选择起床时间时只隐藏动作，保留行高，避免切模式时把下面的耗时档位顶下去 */
@@ -399,8 +404,10 @@
   bottom: -22rpx;
 }
 
+.fall-chip:active,
 .fall-chip--tap {
-  opacity: 0.7;
+  opacity: 0.68;
+  transform: scale(0.94);
 }
 
 .fall-chip.is-on {
@@ -434,12 +441,14 @@
   font-weight: 600;
   letter-spacing: 2rpx;
   box-shadow: var(--btn-primary-shadow);
-  transition: transform 0.16s ease, opacity 0.16s ease;
+  transition: transform 0.16s ease, opacity 0.16s ease, box-shadow 0.16s ease;
 }
 
-.calc-action:active {
-  transform: scale(0.98);
-  opacity: 0.92;
+.calc-action:active,
+.calc-action--tap {
+  transform: scale(0.96);
+  opacity: 0.82;
+  box-shadow: 0 4rpx 14rpx rgba(118, 131, 251, 0.22);
 }
 
 .action-arrow {
@@ -455,7 +464,7 @@
   align-items: center;
   gap: 12rpx;
   margin-top: 6rpx;
-  margin-bottom: 18rpx;
+  margin-bottom: 20rpx;
 }
 
 .result-ico {
@@ -505,13 +514,13 @@
   align-items: center;
   justify-content: space-between;
   /* 主卡上下呼吸比左右略大：时间、说明、徽标挤在一行时不再贴边 */
-  padding: 26rpx 24rpx;
+  padding: 28rpx 24rpx;
   border-radius: 24rpx;
   background: linear-gradient(90deg, rgba(65, 85, 175, 0.35) 0%, rgba(45, 60, 130, 0.25) 100%);
   border: 1.5rpx solid rgba(140, 175, 255, 0.3);
   box-shadow: 0 8rpx 28rpx rgba(15, 25, 70, 0.4);
   /* 主推荐与下方列表之间留一口气，避免整块读成一张表 */
-  margin-bottom: 20rpx;
+  margin-bottom: 22rpx;
 }
 
 .result-bar {
@@ -759,6 +768,7 @@
   background: rgba(30, 45, 90, 0.35);
   color: var(--c-primary-soft);
   font-size: 20rpx;
+  transition: opacity 0.16s ease, transform 0.16s ease;
 }
 
 .result-fall::after {
@@ -770,8 +780,10 @@
   bottom: -4rpx;
 }
 
-.result-fall:active {
-  opacity: 0.72;
+.result-fall:active,
+.result-fall--tap {
+  opacity: 0.65;
+  transform: scale(0.96);
 }
 
 .result-fall-swap {
@@ -783,7 +795,7 @@
   display: flex;
   align-items: center;
   gap: 10rpx;
-  margin-top: 14rpx;
+  margin-top: 24rpx;
   padding: 0 4rpx;
 }
 
@@ -792,21 +804,25 @@
   min-height: 80rpx;
   display: flex;
   align-items: center;
-  gap: 8rpx;
-  /* 与右侧主 CTA 同一视觉重量：不再用 21rpx 的“小字注释”尺寸 */
-  padding: 0 14rpx 0 2rpx;
-  font-size: 24rpx;
+  gap: 10rpx;
+  /* 与右侧主 CTA 同一视觉重量：清晰明朗的尺寸与对比度 */
+  padding: 0 16rpx 0 4rpx;
+  font-size: 27rpx;
   font-weight: 500;
-  color: var(--c-primary-soft);
+  letter-spacing: 0.5rpx;
+  color: rgba(220, 235, 255, 0.92);
+  transition: opacity 0.16s ease, transform 0.16s ease;
 }
 
 .result-remind-ico {
-  font-size: 22rpx;
-  opacity: 0.9;
+  font-size: 26rpx;
+  opacity: 0.95;
 }
 
-.result-remind:active {
-  opacity: 0.7;
+.result-remind:active,
+.result-remind--tap {
+  opacity: 0.62;
+  transform: scale(0.96);
 }
 
 /* 已设提醒：薄荷色表示“已完成”，与补觉标签同一色系，不再像一个待点动作 */
@@ -817,7 +833,7 @@
 .result-go {
   position: relative;
   flex: none;
-  /* 主 CTA 不再拉满整行：按内容宽度靠右，左侧留给「提醒我」 */
+  /* 主 CTA：与正面「计算我的睡点」统一为实底主按钮 */
   margin: 0 0 0 auto;
   padding: 0 34rpx;
   display: flex;
@@ -826,11 +842,14 @@
   gap: 10rpx;
   height: 80rpx;
   border-radius: 999rpx;
-  border: 1rpx solid rgba(145, 175, 255, 0.3);
-  background: rgba(34, 48, 96, 0.45);
-  color: var(--c-primary-soft);
+  border: none;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
   font-size: 26rpx;
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: 1rpx;
+  box-shadow: var(--btn-primary-shadow);
+  transition: transform 0.16s ease, opacity 0.16s ease, box-shadow 0.16s ease;
 }
 
 /* dense 下视觉高度 72rpx；用伪元素把命中区补回约 88rpx，不再靠缩小热区换高度 */
@@ -843,13 +862,17 @@
   bottom: -8rpx;
 }
 
-.result-go:active {
-  opacity: 0.8;
-  transform: scale(0.98);
+.result-go:active,
+.result-go--tap {
+  opacity: 0.82;
+  transform: scale(0.96);
+  box-shadow: 0 4rpx 14rpx rgba(118, 131, 251, 0.22);
 }
 
 .result-go-arrow {
   font-size: 28rpx;
+  font-weight: 600;
+  color: var(--btn-primary-fg);
 }
 
 .result-actions {
@@ -861,7 +884,7 @@
   padding-top: 10rpx;
 }
 
-/* 底部两个动作升级为一对轻量 pill：左侧实底浅色、右侧描边主色，层级仍低于上面的主 CTA */
+/* 底部两个次级动作：无边框轻量胶囊，去线框化，层级严格低于上面的主 CTA */
 .result-reset,
 .result-switch {
   min-height: 72rpx;
@@ -869,24 +892,34 @@
   align-items: center;
   padding: 0 24rpx;
   border-radius: 999rpx;
+  border: none;
   font-size: 24rpx;
   font-weight: 500;
+  transition: opacity 0.16s ease, transform 0.16s ease, background 0.16s ease;
 }
 
 .result-reset {
-  border: 1rpx solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(225, 238, 255, 0.9);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(225, 238, 255, 0.88);
 }
 
 .result-switch {
-  border: 1rpx solid rgba(145, 175, 255, 0.26);
+  background: rgba(145, 175, 255, 0.10);
   color: var(--c-primary-soft);
 }
 
 .result-reset:active,
-.result-switch:active {
-  opacity: 0.72;
+.result-reset--tap {
+  opacity: 0.65;
+  transform: scale(0.96);
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.result-switch:active,
+.result-switch--tap {
+  opacity: 0.65;
+  transform: scale(0.96);
+  background: rgba(145, 175, 255, 0.18);
 }
 
 .result-share {
@@ -921,20 +954,20 @@
 
 .calc-back.is-compact .result-remind {
   min-height: 80rpx;
-  font-size: 22rpx;
+  font-size: 24rpx;
 }
 
 /* 4 行结果（3 档推荐 + 补觉）或 compact 时压缩纵向节奏：
    不压缩时内容会超过 712rpx 舞台，分享行溢出到卡片外、与脚注重叠。
    compact 现在也命中 dense（见 wxml），下面再保留它自己的主卡内距和 meta 行。 */
 .calc-back.is-dense .result-head {
-  margin-bottom: 10rpx;
+  margin-bottom: 20rpx;
 }
 
 .calc-back.is-dense .result-main {
-  /* 4 行档也保留上下呼吸：时间与 note 不贴卡片边 */
-  padding: 20rpx 22rpx;
-  margin-bottom: 14rpx;
+  /* 4 行档也保留饱满的上下呼吸：时间与 note 不贴卡片边 */
+  padding: 26rpx 22rpx;
+  margin-bottom: 20rpx;
 }
 
 .calc-back.is-dense .result-row {
@@ -943,7 +976,7 @@
 }
 
 .calc-back.is-dense .result-extra {
-  margin-top: 6rpx;
+  margin-top: 24rpx;
 }
 
 .calc-back.is-dense .result-go {
@@ -954,8 +987,12 @@
 
 .calc-back.is-dense .result-remind {
   min-height: 72rpx;
-  font-size: 22rpx;
+  font-size: 26rpx;
   padding-right: 8rpx;
+}
+
+.calc-back.is-dense .result-remind-ico {
+  font-size: 25rpx;
 }
 
 .calc-back.is-dense .result-actions {
@@ -1022,10 +1059,13 @@
   font-size: 21rpx;
   line-height: 1.9;
   color: rgba(255, 255, 255, 0.58);
+  transition: opacity 0.16s ease, transform 0.16s ease;
 }
 
+.calc-note:active,
 .calc-note--tap {
-  opacity: 0.7;
+  opacity: 0.55;
+  transform: scale(0.98);
 }
 
 .calc-note-more {
