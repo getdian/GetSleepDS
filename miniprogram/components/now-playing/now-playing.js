@@ -12,6 +12,7 @@ const playerState = require('../../utils/player-state')
 const cache = require('../../utils/audio-cache')
 const events = require('../../utils/events')
 const audioSession = require('../../utils/audio-session')
+const { resolvePlayerSurface } = require('../../utils/player-surface')
 const { getConfig } = require('../../utils/config')
 
 const TOGGLE_GUARD_MS = 220
@@ -347,30 +348,28 @@ Component({
       if (!this._alive) return
       const meta = storage.getMeta()
       const audio = this._audio
-      const hasSrc = !!(audio && audio.src)
-      // 仍在本进程出声时，即使 meta.lastTrackActive 被外部原因误清也要保留入口：
-      // 需求口径是“只有用户在小程序内停止才消失”，外部中断不算停止。
-      const playingNow = !!(audio && !audio.paused)
-      const hasSession = !!meta.lastTrackId && meta.lastTrackActive !== false
-      const active = hasSession || playingNow
-
-      // 跨页时个别基础库会短暂清空 src；只要本次启动创建过音频会话就保留入口，
-      // 播放状态用最后一次 play/pause 事件兜底，避免“明明在播却什么都不显示”。
       const app = getApp()
-      const session = !!(app && app.globalData && app.globalData.audioSession)
-      const ghost = !hasSrc && !session && !playingNow
-      if (!active || ghost) {
-        // 冷启动残影：没有 src、本进程没起过播、也没在出声。
-        // 这里要把 meta 残留清掉——只挂 now-playing 的页面（计算器/统计）
-        // 不会走 audio-dock 的 ghost 分支，否则上个进程的 lastTrackActive
-        // 会让 audio-session.isActive() 恒真，自动续播的会话门失效。
-        if (ghost) storage.patchMeta({ lastTrackActive: false, lastTrackPlaying: false })
+      const surface = resolvePlayerSurface({
+        lastTrackId: meta.lastTrackId,
+        lastTrackActive: meta.lastTrackActive,
+        lastTrackPlaying: meta.lastTrackPlaying,
+        hasSrc: !!(audio && audio.src),
+        playingNow: !!(audio && !audio.paused),
+        sessionLive: !!(app && app.globalData && app.globalData.audioSession)
+      })
+      if (!surface.visible) {
+        // 只有“用户显式停止”或从未播放过才收起入口
         this.collapse()
         this.syncTimer(true)
         return
       }
+      // 冷启动/悬浮 X 停止后的残影：只把播放态归零，**不清会话**。
+      // 清了会话（markStopped）会让用户重进小程序时迷你条消失，无法继续听。
+      if (surface.cold && meta.lastTrackPlaying !== false) {
+        storage.patchMeta({ lastTrackPlaying: false })
+      }
 
-      const playing = playingNow || (!hasSrc && meta.lastTrackPlaying !== false)
+      const playing = surface.playing
       const title = meta.lastTrackTitle || '环境音'
       const category = meta.lastTrackCategory || ''
       // 播放中保留用户手动展开的状态，避免 play/pause 事件把条瞬间收回

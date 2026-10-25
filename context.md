@@ -16,7 +16,7 @@
   - 「本日睡眠段」每行右侧「修改 / 删除」两个文字按钮（加粗、异色、无边框）；删除有确认弹窗（唯一段时提示整天一起撤销），删空当天 = 撤销整天（写墓碑），剩余段重算主睡眠与总时长（`storage.removeSession`）。
   - C 态主操作两个小型按钮同一行：「继续入睡（开始计时）」主按钮 +「补记入睡」次按钮；下方「记录有误？撤销当天记录」不变；A 态补记入口文案同为「补记入睡」。
   - 原「最近 7 天」柱状区与试做的「睡眠轨迹圆盘」（canvas 24h 环）均已移除：圆盘与入睡圆环在 sleeping/idle 态信息重复（入睡时刻/已睡时长是 orb 的第三个副本）、占空间，且“声音/计算器摘要/睡眠知识”等替代内容均与既有入口重复。现该位置只保留一行轻量统计「本周 X 天 · 连续 Y 天 · 查看统计 ›」（0 数据时不渲染，点击进统计），7 天柱状、`buildWeekDays`、`components/sleep-disc`、`utils/disc-geometry.js` 全部删除（本周/连续计数保留）。
-  - **熄灯（睡前模式，仅 sleeping 态）**：打卡后立即进入持久熄灯——全屏毛玻璃（`rgba(4,7,15,0.84)` + `backdrop-filter: blur(20rpx)`，不支持 blur 时深底自动退回接近关灯）压暗整页，只留熄灭态入睡时间（orbTime/orbMeta，`filter:brightness(0.84)`）+ 顶部「晚安」+ 底部「轻触任意处唤醒」；**tabBar 同步 `tabbar.hide()`**（独立 root 压不住）。熄灯态 orb 不可点：任意点触 = 唤醒（`wakeUp` → tabbar.show），唤醒后再点 orb 才进结束面板；唤醒后 30s（`LIGHTS_OUT_DELAY`）无操作自动回熄灯，任何页面触摸（根 view `bindtouchstart`）重置计时。结束面板/声音抽屉打开时、done/idle 态、页面 onHide 均不熄灯；保存/取消面板后恢复倒计时。
+  - **熄灯（睡前模式，仅 sleeping 态）**：打卡后立即进入持久熄灯——全屏毛玻璃（`rgba(4,7,15,0.84)` + `backdrop-filter: blur(20rpx)`，不支持 blur 时深底自动退回接近关灯）压暗整页，只留熄灭态入睡时间（orbTime/orbMeta，`filter:brightness(0.84)`）+ 顶部「晚安」+ 底部「轻触任意处唤醒」；**tabBar 同步 `tabbar.hide()`**（独立 root 压不住）。熄灯态 orb 不可点：任意点触 = 唤醒（`wakeUp` → tabbar.show），唤醒后再点 orb 才进结束面板；唤醒后 30s（`LIGHTS_OUT_DELAY`）无操作自动回熄灯，任何页面触摸（根 view `bindtouchstart`）重置计时。结束面板/声音抽屉打开时、done/idle 态、页面 onHide 均不熄灯；保存/取消面板后恢复倒计时。熄灯层底部新增「结束入睡」按钮（一次点击按当前时间落库，超 24h/重叠/容量满时唤醒并打开结束面板校准）；入睡中圆环提示词为「点击圆环、结束入睡」（不再写“记录起床”）。
 - 统计：首屏 3 列核心指标（平均睡眠 `3h39` / 平均入睡 / 平均起床，对比副标带主语「比上周多 1h20m」，点击展开 3 行说明；平均睡眠下方按常见 7.5–8 小时给事实陈述，不足 3 天提示补记）、打卡日历（当月 92×76rpx 扁格可切月，列间距 4rpx / 行间距 16rpx；3/6/12 个月横向滑动 48rpx 格；4 档色阶、选中态 + 详情卡）、近 30 天海报、云同步/清除数据（折叠）。近 14 天趋势已删除。**空格补记（2026-10-22 三轮）**：格内写「补记」，点击直接在统计页弹补记面板（醒来日 + 入睡/起床时间，复用 `sessions.rangeForDay`/`findOverlap` 校验，保存落 v2 session 并同步），不再跳入睡页；有记录/进行中/未来日仍走详情卡。视觉：指标区无底无框、居中弱色「点上方↑数字看说明」、图例仅 4 档弱化、底注「本月已记录 N 天」、海报按钮「生成 30 天海报」。
 - 声音：`audio-dock` 悬浮钮 + 迷你播放器 + 底部抽屉；搜索、分类、收藏、缓存、广告解锁、定时关闭（**默认关**：打开抽屉胶囊默认选中「关」，不跨会话回忆档位，明确选 30/60/90 才起表；到点/停止/失败即复位「关」）。入口仍在入睡页；播放后首页/统计页显示 `now-playing` 迷你条，可跨页暂停/继续/停止。**会话口径（2026-10-25）**：`utils/audio-session.js` 是 `lastTrackActive` 的唯一写入口——只有用户在小程序内停止、定时到点、权益到期、清除数据才隐藏迷你条；来电/闹钟/其他 App 抢占/系统 stop 只改播放态。注册 `wx.onAudioInterruptionBegin/End` + `App.onHide/onShow` 补偿，中断结束后自动续播（重设被清空的 `src`、曲末先 `seek(0)`）；用户在小程序内暂停过的不会被拉起。`player-state.armLoop` 用定时器兜底曲末回环（`onTimeUpdate` 官方只在前后台回调，锁屏后不再触发，回环尾部 1.2s）。停止需 3s 内二次点按确认（迷你条停止方块 / 抽屉「结束播放」，首点转暖红并提示）；中断 begin/end 上报 `audio_interrupt`（end 带秒数与 resume/skip），后台播放卡副标显示本周中断数。`audio-cache` 维护会话级坏源黑名单（`markBad/isBad/clearBad`），`peek` 跳过坏源、重下成功自动解禁，自动续播不再反复命中坏文件。**改音频前先读铁律：`AGENTS.md` §5 / `docs/12` §10**（状态单写入口、可见性、中断恢复、回环、停止二次确认、坏源与回归门禁）。音符与播放条三页统一底部安全位 `176rpx + safe-area`（2026-10-22 由 132rpx 上移，与悬浮 tabBar 顶边 128rpx 拉开 48rpx）；音符圆底为轻玻璃 `rgba(8,11,20,.30)` + `blur(18rpx)`，108rpx、右缘 26rpx。这条右下带（约 292rpx 顶点）由页面让出：统计页 `.safe-bottom` = `180rpx + safe-area`（运营定档——配合页脚广告位约 140rpx 把「数据与备份/展开」行抬出音符带；广告位关闭/失败时行会落回带内，广告实载时其下部被音符遮，要两者都避免需 ≥300rpx），入睡页天然安全未改。
 - 分享：计算器结果背面、入睡页、统计页海报区均有 `share-btn`（button open-type=share），`onShareAppMessage` 按场景动态生成标题。
@@ -112,8 +112,8 @@ tests/            Node 纯逻辑测试
 
 ## 5. 当前验证基线
 
-- `npm test`：**355 项 / 354 通过 / 0 失败 / 1 skip**（2026-10-25 音频体验收口轮实测；PG 集成用例在未设置 `PG_TEST_URL` 时跳过）。
-- `npm run check`：3 页面 / 22 JSON / 17 WXML / 19 WXSS，主包约 593.6 KB（以最新输出为准）。
+- `npm test`：**377 项 / 376 通过 / 0 失败 / 1 skip**（2026-10-26 环境音专项轮实测；PG 集成用例在未设置 `PG_TEST_URL` 时跳过）。
+- `npm run check`：3 页面 / 22 JSON / 17 WXML / 19 WXSS，主包约 609.3 KB（以最新输出为准）。
 - **验收清单（2026-10-22 建）**：全部待验收项已合并至 [docs/13-acceptance-checklist.md](docs/13-acceptance-checklist.md)，分三区——本机已验收（CLI 模拟器 390×844 实测，含入睡页 10-22 改版与统计页 10-21 改版全状态截图、console 无 error）/ 待真机（音频锁屏、中断、定时、手势手感）/ 待外部输入（部署、AppSecret、COS 防盗链、流量主）。续作新增"未验收"项一律先落该表再写代码。
 - 交付包：以 `release-artifacts/` 下最新 `getsleep-<label>.zip` 为准（`npm run pack` 生成，含 `RELEASE-MANIFEST.json` 与逐文件 sha256，同时留 `.sha256` 校验文件）；打包前会强制跑 `npm test` + `npm run check`。
 - 分享归因冒烟（2026-10-19，内存模式）：`app_open` 带 `1007|pages/index/index|share` 上报 → `/api/admin/analytics` 的 `topSources` 聚合出现；`/api/share/qrcode` 无 code 返 400、密钥不可用返 503，均为优雅报错。
@@ -189,6 +189,10 @@ tests/            Node 纯逻辑测试
     - **统计页**：3 个核心指标卡（`.metric`）、周期选项切换标签（`.span-tab`）、详情卡内「补记一段 ›」（`.dd-add`）、底部「生成 30 天海报」（`.poster-btn`）、数据与备份「展开/收起」（`.settings-head`）、云备份「同步」（`.sync-btn`）、独立删除入口「删除云端副本」（`.cloud-del`）、以及「清除数据」红色文字入口（`.danger-entry`）全面配置物理轻按弱状态；
     - **公共层**：底部通用弹层面板（`styles/sheet.wxss` 中的 `.end-close` 关闭叉号、`.end-date-row` 醒来日选择行、`.end-time-item` 时间项、`.end-btn` 主次保存按钮）与空态组件（`empty-state` 中的主次按钮）全局生效。
     - **验证**：333 项测试通过（332 pass / 1 skip）、check 检查通过（主包约 561.9 KB）。
+
+36. **双报告合并审查后的正确性收口（2026-10-26）**：①**同步 trailing**——`utils/sync.js` 在途期间的修改会被旧轮误报“已同步”且云端缺最新段；现在 `resyncRequested` 触发补跑（≤4 轮），`lastSyncAt` 只在无 trailing 时落，`whenIdle()` 覆盖 trailing 轮。②**提醒可信**——入睡页改为服务端排上后才写 `reminderOptIn`（原先写本地再请求，断网/配置关闭会留下“已开启但无提醒且无法重试”）；结果面“已设提醒”点击改为取消；结束打卡撤销匹配的 `plan-w-*`；服务端 `saveReminder` 允许 cancelled/failed/expired 恢复 pending（sent 幂等），路由校验真实写入后才回 ok。③**音频回环熔断**——`audio-dock.replay()` 原调 `markUserPlay()` 清零预算，8 次上限永远不触发；拆出 `markAutoReplay()`，并用 `player-state.setLoopGuard()` 让 `seamlessLoop` 也纳入同一预算。④**P2**：`wx.login` 10s 超时（防整条身份队列挂死）、`lastTrackActive` 写入口收敛回 `audio-session`、解锁到期巡检不再依赖页面可见、`/api/events` 按条跳过脏数据并回 `dropped`。⑤**交互/视觉**：圆环中心与统计提示提亮、6 处热区补到 88rpx、假禁用点击给 toast、`--c-primary-soft` 拼写修正、迷你条层级改 `--z-player`、首页 onShow 对齐外部偏好变更。门禁：`npm test` 367/366/0 fail/1 skip、`npm run check` 通过（603.0 KB）、音频四件套 47/47。**未机验**：对比度/热区视觉、提醒 cold/hot start、锁屏到期收口。详见 changelog 2026-10-26。
+
+37. **环境音专项：播放条常驻（2026-10-26，产品口径）**：新增 `utils/player-surface.js` 统一 `audio-dock`/`now-playing` 的可见性判定——①只有用户在小程序内点停止（`lastTrackActive=false`）才隐藏入口；②有 `lastTrackId` 且未显式停止就一直显示，**冷启动/退出微信/悬浮 X 停止后都是“已暂停”的条**，点按可续播；③冷启动残影只归零 `lastTrackPlaying`，不再 `markStopped()`（旧实现会让重进小程序时条子消失）。切歌竞态：`onError` 用 `_srcSetAt` 挡切歌 1.5s 内的迟到错误，缓存回退远程后补 `safePlay + armLoadingGuard`。熄灯一键结束与提醒取消补偿见第 36 条与 changelog。**待真机**：冷启动保留条、悬浮 X 停止后续播、来电/切 App 恢复、锁屏多轮回环、熄灯按钮手感。
 
 ## 8. 快速命令
 

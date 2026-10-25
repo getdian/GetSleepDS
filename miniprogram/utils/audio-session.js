@@ -151,18 +151,33 @@ function getExpectedSrc() {
   return expectedSrc
 }
 
-/** 小程序内主动播放/续播：清掉“用户暂停”标记，允许后续自动恢复 */
-function markUserPlay() {
+function markPlayIntent(resetReplay) {
   userPaused = false
   userPausedAt = 0
   wantPlaying = true
   stoppedAt = 0
-  // 用户重新点播 = 重新计时，清掉上一轮的自动重播限流
-  replayAt = 0
-  replayCount = 0
+  // 只有“用户重新点播”才重新计时；自动回环不得清预算，否则坏源会以 1Hz 无限重建
+  if (resetReplay) {
+    replayAt = 0
+    replayCount = 0
+  }
   setAppSession(true)
   // 起播后由 onPlay/canplay 重新排回环定时器
   playerState.clearLoopTimer()
+}
+
+/** 小程序内主动播放/续播：清掉“用户暂停”标记，允许后续自动恢复 */
+function markUserPlay() {
+  markPlayIntent(true)
+}
+
+/**
+ * 自动回环续播（ended / seamlessLoop 兜底路径）。
+ * 与 markUserPlay 的唯一区别：不动 replayAt/replayCount，
+ * 这样 10 秒内 8 次的上限才真正生效（AGENTS.md §5.6）。
+ */
+function markAutoReplay() {
+  markPlayIntent(false)
 }
 
 /** 小程序内主动暂停：这是唯一不允许自动恢复的暂停来源 */
@@ -397,6 +412,10 @@ function init() {
 }
 
 /** 仅供单测：清空模块内存态（不清理 storage） */
+// 回环预算注入：seamlessLoop（前台 timeupdate + 后台 armLoop）与 ended 共用同一窗口，
+// 否则 duration 略大于回环 tail 的坏源能靠 seek(0) 永久绕过 8 次上限。
+playerState.setLoopGuard(allowReplay)
+
 function _resetForTest() {
   clearResumeTimer()
   audio = null
@@ -424,6 +443,7 @@ module.exports = {
   wantsPlayback: () => wantPlaying,
   canPlay,
   markUserPlay,
+  markAutoReplay,
   markUserPause,
   markStopped,
   onPlay,

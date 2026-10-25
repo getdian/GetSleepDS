@@ -80,6 +80,16 @@ test('isUsable 只反映磁盘事实：不判 TTL、不删记录、不通知', (
   assert.ok(storage['sleep:audio-cache:v1'][url])
 })
 
+test('sizeOf 只返回该曲目的缓存大小，删除后归零', async () => {
+  const url = 'https://cdn.example.com/size-only.mp3'
+  assert.equal(cache.sizeOf(url), 0, '未缓存时为 0')
+  const path = await cache.ensure(url, null, 7)
+  assert.ok(path)
+  assert.equal(cache.sizeOf(url), 1024)
+  cache.remove(url)
+  assert.equal(cache.sizeOf(url), 0)
+})
+
 test('缓存替换不 unlink 正在播放的 dest：先备份再换入', async () => {
   renameCalls.length = 0
   unlinkCalls.length = 0

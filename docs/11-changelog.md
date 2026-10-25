@@ -1,5 +1,24 @@
 # 睡点 · 关键更新记录
 
+## 2026-10-26 · 环境音专项：播放条常驻口径 · 熄灯一键结束 · 提醒清理补偿
+
+- **播放条常驻（核心体验，按产品口径重写判定）**：新增 `utils/player-surface.js`（纯函数 + 7 条单测），`audio-dock` 与 `now-playing` 共用一套判定。规则：①只有用户在小程序内点“停止”（`markStopped` → `lastTrackActive=false`）才收起入口；②只要有 `lastTrackId` 且未被显式停止，入口就一直在——**冷启动、退出微信、微信悬浮 X 停止后都保留播放条**，只是显示“已暂停”，点按可续播；③冷启动残影只把 `lastTrackPlaying` 归零，**不再清会话**（旧实现会 `markStopped()`，导致重进小程序条子消失）。
+- **切歌竞态**：`audio-dock.onError` 记录 `_srcSetAt`，切歌 1.5s 内到达的错误只收 loading、不删缓存不拉黑（`onError` 不带 src，无法精确归属，避免误删新曲缓存）；缓存→远程回退后补 `armLoadingGuard()` + `safePlay()`，与 play/replay 同口径。
+- **熄灯一键结束**：熄灯层新增「结束入睡」按钮（`onLightsOutEnd`），一次点击按当前时间落库（超 24h / 重叠 / 容量满时唤醒并打开结束面板手动校准，不静默失败）；入睡中提示词「轻触圆环，记录起床」→「点击圆环、结束入睡」，无障碍 label 同步。
+- **提醒清理补偿**：清除数据时在 `clearAll` 前收集 `pending.id` 与 `planReminder.id`，清空后逐个取消；失败的写入 `meta.pendingReminderCancel`，统计页 `onShow` 自动重试（`retryPendingReminderCancel`），兜住“云端 erase 失败 + 从未同步”时仍会收到推送的边角。
+- **登录健壮性**：`wx.login` 同步抛错（API 缺失/基础库异常）时走 `done()` 清理 10s 超时定时器，避免测试/异常环境空等。
+- **验证**：`npm test` **377 项 / 376 通过 / 0 失败 / 1 skip**；`npm run check` 通过（3 页面 / 22 JSON / 17 WXML / 19 WXSS，主包约 **609.3 KB**）。**未机验**：冷启动保留条、悬浮 X 停止后继续播放、来电/切 App 恢复、锁屏多轮回环、熄灯新按钮手感——全部列入 `docs/13` 第 2 区真机验收。
+
+## 2026-10-26 · 双报告合并审查后的正确性收口（同步 trailing · 提醒可信 · 音频回环熔断）
+
+- **同步 trailing（P1，数据一致性）**：`utils/sync.js` 原来在 `inflight` 时直接返回旧 Promise，本轮快照之后的新增/编辑/删除不会被上传，旧轮却照写 `lastSyncAt` 并回“已同步”。现在在途期间收到新请求会置 `resyncRequested`，当前轮结束后强制再跑一轮（最多 4 轮），`lastSyncAt` 只在“没有 trailing”时落；`whenIdle()` 因 inflight 已包含 trailing 轮，删除云端副本不再漏等在途请求。新增 `tests/sync-trailing.test.js` 3 条（含 deferred Promise 并发验证）。
+- **提醒状态可信化（P1，会“显示已开启但收不到”）**：①入睡页 `onReminderTap` 改为**服务端排上后才写本地 `reminderOptIn`**，先挡已过期时间、处理 `skipped`（走日历兜底）、本地写失败时补偿取消；②结果面「已设提醒」点击改为**取消**（原只弹 toast，没有任何撤销出口），设置成功的 toast 提示可再点取消；③结束打卡时若结果面的 `plan-w-*` 正是这一觉的提醒则一并撤销，避免已完成还收到“该起床了”；④`reminder.schedule` 补未来 1 分钟校验。
+- **提醒服务端（P1，A→B→A 静默失效）**：`saveReminder` 原遇到 `cancelled/failed/expired` 直接返回（memory）/`WHERE status='pending'` 不更新（PG），用户“设 A → 改 B → 再改回 A”后服务端没有任何待发送任务。现在 sent 保持幂等、其余状态允许恢复为 pending（PG 用 CTE + `status <> 'sent'`）；`/api/reminders` 校验真实写入后才返回 `ok`，否则 503 `REMINDER_NOT_SAVED`。
+- **音频回环熔断（P1，整夜约 1Hz 重建音源）**：`audio-dock.replay()` 调 `markUserPlay()`，把刚累计的回环次数清零，导致 10s/8 次上限永远打不满。拆出 `audio-session.markAutoReplay()`（不清预算），回环路径改用它；`player-state.setLoopGuard()` 由 audio-session 注入 `allowReplay`，`seamlessLoop`（前台 timeupdate + 后台 armLoop）也纳入同一预算，duration 略大于 1.2s 的坏源不能靠 `seek(0)` 绕过 `ended` 熔断。
+- **P2 收口**：①`utils/login.js` 的 `wx.login` 加 10s 超时（原来既不回调也不失败时会挂住整条身份队列：同步/提醒/事件全部等待）；②`lastTrackActive` 写入收敛回 `audio-session`（`audio-dock`/`now-playing` 的残影清理改调 `markStopped()`，统计页清除数据不再重复 patch）；③解锁到期巡检不再依赖页面可见（锁屏整夜播放会在到期后被收口）；④`/api/events` 改为按条跳过脏数据并返回 `dropped`，一条坏事件不再 400 带走同批 20 条。
+- **交互/视觉修正**：圆环中心 `orb-kicker/orb-meta` 提亮并加轻阴影；统计页「点上方数字看说明」去 opacity 提亮（隐藏交互入口）；月历禁用箭头 0.24→0.45、未来日号 0.55→0.7；已过时刻行 0.55→0.72；提醒键 / 底部次按钮 / 周期标签 / 切月箭头 / 列表播放键 / 定时档位热区统一补到 88rpx；补记与结束面板的“假禁用”点击改为 toast 说明；`empty-state` 修正拼错的 `--c-primary-soft`；迷你条层级改 `--z-player`（原 fallback 9999 会压过弹层）；首页 onShow 对齐外部变更的偏好（清除数据后不再显示旧起床时间）。
+- **验证**：`npm test` **367 项 / 366 通过 / 0 失败 / 1 skip**（PG 用例无 `PG_TEST_URL`）；`npm run check` 通过（3 页面 / 22 JSON / 17 WXML / 19 WXSS，主包约 **603.0 KB**）；音频四件套 47/47。**未机验**：本轮视觉改动（对比度/热区）未过模拟器截图；提醒的 cold/hot start 落地意图、锁屏到期收口仍需真机。详见 `docs/13-acceptance-checklist.md`。
+
 ## 2026-10-25 · 音频体验四项收口（停止防误触 · 回环尾部收紧 · 中断可观测 · 坏源黑名单下沉）
 
 - **停止防误触（P1，真实误触成本）**：`now-playing` 迷你条停止方块与 `audio-dock` 抽屉「结束播放」改为 **3 秒内二次点按**。首点只“上膛”：方块转暖红（`.np-stop.is-armed`）、抽屉文案变「再点一次结束」并 toast 提示；再点才 `markStopped()`。3 秒自动复位；切歌、暂停、关抽屉、组件销毁都会清掉上膛态。睡前误触一次不再导致整夜没声音。

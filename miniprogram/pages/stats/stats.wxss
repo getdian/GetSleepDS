@@ -187,10 +187,10 @@
 }
 
 .week-hint {
-  font-size: 19rpx;
+  font-size: 20rpx;
   line-height: 1;
-  color: var(--text-muted);
-  opacity: 0.75;
+  /* 它是指标展开的唯一提示（隐藏交互入口），不能再用 opacity 压低对比度 */
+  color: var(--text-secondary);
 }
 
 /* 日历周期切换 */
@@ -202,6 +202,7 @@
 }
 
 .span-tab {
+  position: relative;
   min-height: 52rpx;
   display: inline-flex;
   align-items: center;
@@ -215,6 +216,16 @@
   border: none;
   background: transparent;
   transition: background 0.16s ease, color 0.16s ease, opacity 0.16s ease, transform 0.16s ease;
+}
+
+/* 52rpx 视觉高度 + 上下各 18rpx 外扩 = 88rpx 热区（三个标签间距足够） */
+.span-tab::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -18rpx;
+  bottom: -18rpx;
 }
 
 .span-tab:active,

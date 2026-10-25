@@ -7,7 +7,7 @@
   right: 0;
   /* 与入睡页 dock 共用同一套底部安全位：避开 tabBar 并拉开间距，又不压住计算器主按钮 */
   bottom: calc(176rpx + env(safe-area-inset-bottom));
-  z-index: var(--z-overlay, 9999);
+  z-index: var(--z-player, 100);
   padding: 0 0 0 24rpx;
   pointer-events: none;
   visibility: hidden;

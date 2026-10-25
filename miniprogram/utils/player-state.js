@@ -67,6 +67,10 @@ function seamlessLoop(audio, tailSeconds) {
   const tail = Number(tailSeconds) > 0 ? Number(tailSeconds) : DEFAULT_TAIL_SECONDS
   if (duration - current > tail) return false
   if (!claimLoop()) return false
+  // 回环预算由 audio-session 注入（与 ended 路径共用同一窗口）。
+  // 预算用尽时不 seek：让音频自然走到 ended，由 ended 路径熔断并提示，
+  // 否则 duration 略大于 1.2s 的坏源可以靠 seek(0) 永久绕过 ended。
+  if (loopGuard && loopGuard() === false) return false
   try {
     audio.seek(0)
     // 个别基础库 seek 会顺带暂停：确认仍在播放，避免回环点静默停住
@@ -81,6 +85,7 @@ function seamlessLoop(audio, tailSeconds) {
 
 let loopTimer = null
 let loopTimerAt = 0
+let loopGuard = null
 
 function clearLoopTimer() {
   if (loopTimer) {
@@ -173,6 +178,21 @@ function isCurrentSourceError(eventSrc, expectedSrc) {
   return eventSrc === expectedSrc
 }
 
+/**
+ * 回环预算钩子：audio-session 在加载时注入 allowReplay。
+ * 返回 false 表示本轮不执行 seek（预算耗尽）。未注入时保持旧行为。
+ */
+function setLoopGuard(fn) {
+  loopGuard = typeof fn === 'function' ? fn : null
+}
+
+/** 仅测试用：清掉各去重/限流窗口，避免用例之间的模块级状态互相影响 */
+function _resetClaims() {
+  endedClaimAt = 0
+  expiryToastAt = 0
+  loopClaimAt = 0
+}
+
 /** 定时到点提示在 dock 与 now-playing 间只允许一个弹出 */
 function claimExpiryToast(windowMs) {
   const now = Date.now()
@@ -191,6 +211,8 @@ module.exports = {
   seamlessLoop,
   armLoop,
   clearLoopTimer,
+  setLoopGuard,
+  _resetClaims,
   claimExpiryToast,
   isCurrentSourceError
 }

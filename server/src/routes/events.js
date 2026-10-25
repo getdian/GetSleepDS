@@ -42,27 +42,35 @@ function createEventsRoute(options) {
       if (list.length > MAX_EVENTS) throw payloadTooLarge('单次最多 ' + MAX_EVENTS + ' 个事件')
 
       const current = now()
-      const events = list.map((item, index) => {
+      // 按条跳过脏数据：旧实现只要一条非法就 400，客户端会按“永久脏数据”
+      // 丢弃整批（≤20 条），一条坏事件能带走同批的 app_open/checkin。
+      const events = []
+      let dropped = 0
+      list.forEach((item) => {
         if (!item || TYPES.indexOf(item.type) < 0) {
-          throw invalidBody('第 ' + (index + 1) + ' 个事件类型不合法')
+          dropped += 1
+          return
         }
         const ts = Number(item.ts) || current
         if (Math.abs(ts - current) > MAX_AGE) {
-          throw invalidBody('第 ' + (index + 1) + ' 个事件时间超出范围')
+          dropped += 1
+          return
         }
-        return {
+        events.push({
           type: item.type,
           target: typeof item.target === 'string' ? item.target.slice(0, 64) : '',
           ts
-        }
+        })
       })
+      // 整批都不可用：与旧行为一致返回 400，客户端丢弃本批即可
+      if (!events.length) throw invalidBody('没有可记录的事件')
 
       const openid = await codeToOpenid(code, config.wx)
 
       try {
         // 由 DB 在同一事务/锁内重新读取 erasure 水位，避免删除后旧事件被写回。
         const accepted = await db.insertEvents(openid, events)
-        res.json({ accepted })
+        res.json({ accepted, dropped })
       } catch (e) {
         if (e && e.status) throw e
         throw dbUnavailable()

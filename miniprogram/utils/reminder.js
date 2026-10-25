@@ -44,7 +44,13 @@ function schedule(pending) {
   if (!id || !pending || !pending.id || !pending.expectedWakeAt) {
     return Promise.resolve({ skipped: 'not_configured' })
   }
-  return withLogin((code) => api.createReminder(code, pending.id, pending.expectedWakeAt))
+  // 与 scheduleAt 同口径：服务端只接受未来 1 分钟–48 小时。
+  // 24h 未结束的 pending 其 expectedWakeAt 可能已过，先挡下避免“已开启”的假状态。
+  const at = Number(pending.expectedWakeAt)
+  if (!Number.isFinite(at) || at < Date.now() + 60 * 1000) {
+    return Promise.resolve({ skipped: 'too_soon' })
+  }
+  return withLogin((code) => api.createReminder(code, pending.id, at))
 }
 
 /**

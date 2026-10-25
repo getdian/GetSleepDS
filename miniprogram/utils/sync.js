@@ -14,6 +14,12 @@ const MAX_SLEEP_MS = 24 * 60 * 60 * 1000
 const DAY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/
 
 let inflight = null
+// 在途同步期间又来了新请求：说明本轮快照之外还有新修改，必须在当前轮之后再跑一轮。
+// 否则旧一轮会把 lastSyncAt 写上并返回“已同步”，云端却缺最新段/保留旧编辑值。
+let resyncRequested = false
+let resyncForce = false
+// 连点/连续编辑时最多补跑的轮数，防止长时间脏网络下无限循环
+const MAX_SYNC_ROUNDS = 4
 // 未来墓碑只可能是设备时钟错误；同一会话只提示一次，避免每次同步都弹
 let warnedFutureTombstone = false
 
@@ -304,13 +310,14 @@ function doSync(force) {
     }
 
     storage.patchMeta({
-      lastSyncAt: Date.now(),
       // 有记录被服务端丢弃，或本机合并结果没写进去：都不能算“完整同步”
       lastSyncPartial: dropped > 0 || writeFailed,
       lastSyncDropped: dropped,
       lastSyncWriteFailed: writeFailed
     })
-    return { synced, dropped, restored, chunks: batches.length, writeFailed }
+    // lastSyncAt 不在这里写：本轮快照之后可能又有新修改（resyncRequested），
+    // 由 runSyncLoop 在确认没有 trailing 轮时才落时间戳。
+    return { synced, dropped, restored, chunks: batches.length, writeFailed, completed: true }
   }
 
   return run().catch((error) => {
@@ -332,14 +339,47 @@ function syncNow(force) {
     return Promise.resolve({ skipped: 'feature_off' })
   }
 
-  if (inflight) return inflight
-  inflight = doSync(force).finally(() => {
+  if (inflight) {
+    // 在途期间的新修改不在本轮快照里：要求补跑一轮，并让所有调用方一起等它结束
+    resyncRequested = true
+    if (force) resyncForce = true
+    return inflight
+  }
+  resyncForce = !!force
+  inflight = runSyncLoop().finally(() => {
     inflight = null
+    resyncRequested = false
+    resyncForce = false
   })
   return inflight
 }
 
-/** 等待在途同步结束（删除云端副本/清除数据前使用） */
+/**
+ * 单轮 + trailing：只要本轮在途期间收到过新同步请求，就再跑一轮（强制 force，
+ * 因为这代表快照之外还有新修改，不能被 1 小时节流吞掉）。
+ * 被关闭同步 / 清除数据 / 云端待删除打断时不再续跑。
+ */
+async function runSyncLoop() {
+  let result = null
+  let round = 0
+  let force = resyncForce
+  do {
+    resyncRequested = false
+    resyncForce = false
+    result = await doSync(force)
+    round += 1
+    force = true
+    if (!result || (result.skipped && result.skipped !== 'throttled')) break
+  } while (resyncRequested && round < MAX_SYNC_ROUNDS)
+  // 只有“这轮之后没有新修改”才承认同步完成；否则保留下次再同步的机会
+  if (result && result.completed && !resyncRequested) {
+    storage.patchMeta({ lastSyncAt: Date.now() })
+  }
+  if (result && round > 1) result.rounds = round
+  return result
+}
+
+/** 等待在途同步结束（删除云端副本/清除数据前使用）；inflight 已包含 trailing 轮 */
 function whenIdle() {
   if (!inflight) return Promise.resolve()
   return inflight.then(

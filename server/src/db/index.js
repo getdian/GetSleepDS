@@ -179,10 +179,14 @@ function createMemoryDb() {
         reminders.set(openid, bucket)
       }
       const previous = bucket.get(reminder.sessionId)
-      if (previous && previous.status !== 'pending') return previous
+      // 已发送的同 ID 任务保持幂等，不重复排队；
+      // cancelled/failed/expired 是“用户主动重新创建”，必须能恢复为 pending，
+      // 否则「设 A → 改 B → 再改回 A」会静默没有任何待发送任务。
+      if (previous && previous.status === 'sent') return true
       const next = Object.assign({}, reminder, { openid, status: 'pending' })
+      delete next.cancelledAt
       bucket.set(reminder.sessionId, next)
-      return next
+      return true
     },
 
     async cancelReminder(openid, sessionId) {
@@ -535,16 +539,26 @@ function createPostgresDb(connectionString) {
     },
 
     async saveReminder(openid, reminder) {
+      // 与 memory 实现同口径：sent 幂等不重置，cancelled/failed/expired 允许用户主动重建。
+      // 第二条 SELECT 让“已 sent”也返回成功，避免路由把幂等场景误判为写入失败。
       const result = await pool.query(
-        `INSERT INTO sleep_reminders (openid, session_id, fire_at, template_id, page, status)
-         VALUES ($1, $2, $3, $4, $5, 'pending')
-         ON CONFLICT (openid, session_id) DO UPDATE SET
-           fire_at = EXCLUDED.fire_at,
-           template_id = EXCLUDED.template_id,
-           page = EXCLUDED.page,
-           status = 'pending'
-         WHERE sleep_reminders.status = 'pending'
-         RETURNING session_id`,
+        `WITH ins AS (
+           INSERT INTO sleep_reminders (openid, session_id, fire_at, template_id, page, status)
+           VALUES ($1, $2, $3, $4, $5, 'pending')
+           ON CONFLICT (openid, session_id) DO UPDATE SET
+             fire_at = EXCLUDED.fire_at,
+             template_id = EXCLUDED.template_id,
+             page = EXCLUDED.page,
+             status = 'pending',
+             cancelled_at = NULL
+           WHERE sleep_reminders.status <> 'sent'
+           RETURNING session_id
+         )
+         SELECT session_id FROM ins
+         UNION ALL
+         SELECT session_id FROM sleep_reminders
+          WHERE openid = $1 AND session_id = $2 AND status = 'sent'
+         LIMIT 1`,
         [openid, reminder.sessionId, reminder.fireAt, reminder.templateId, reminder.page]
       )
       return result.rowCount > 0

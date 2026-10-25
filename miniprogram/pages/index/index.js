@@ -67,6 +67,8 @@ Page({
     const nowClock = F.fmtClock(T.minutesOf(now))
     // 本地偏好可能被写脏（如 99:99），非法时回退默认值，避免算出四天后的日期
     const wakeTime = CLOCK_RE.test(prefs.wakeTime || '') ? prefs.wakeTime : '07:30'
+    // 记录载入时的偏好值：onShow 用它判断“外部是否改过”，避免覆盖本次手动选择
+    this._prefsWake = wakeTime
     this.setData({
       wakeTime,
       // 起床时间补一个“今天/明天”的上下文，避免 07:30 上午不知道指哪天
@@ -95,6 +97,17 @@ Page({
     this._alive = true
     const tabBar = this.getTabBar && this.getTabBar()
     if (tabBar) tabBar.setData({ selected: 0 })
+    // 偏好可能被外部改过（「清除全部数据」会重置 prefs）：只在值真的变化时回写，
+    // 避免把用户本次手动拨动的时间轮覆盖掉。
+    const prefs = storage.getPrefs()
+    const prefWake = CLOCK_RE.test(prefs.wakeTime || '') ? prefs.wakeTime : '07:30'
+    if (this._prefsWake && prefWake !== this._prefsWake) {
+      this._prefsWake = prefWake
+      this.setData({
+        wakeTime: prefWake,
+        wakeContext: this.wakeContextText(prefWake, DEFAULT_FALL, Date.now())
+      })
+    }
     // 提醒可能已到点或被「清除全部数据」撤销：按本机记录重新对齐按钮状态
     const planReminder = reminder.getPlanReminder()
     const remindAt = planReminder ? Number(planReminder.at) : 0
@@ -467,7 +480,16 @@ Page({
       return
     }
     if (this.data.remindAt === at) {
-      wx.showToast({ title: '已设置，到点会提醒你', icon: 'none' })
+      // 已设提醒必须可撤销：旧版本这里只弹 toast，用户没有任何取消出口
+      this._remindBusy = true
+      reminder
+        .cancelPlanReminder()
+        .catch(() => {})
+        .then(() => {
+          this._remindBusy = false
+          if (this._alive) this.setData({ remindAt: 0 })
+          wx.showToast({ title: '已取消到点提醒', icon: 'none' })
+        })
       return
     }
     const title = kind === 'sleep' ? '睡点：该睡了' : '睡点：该起床了'
@@ -502,7 +524,7 @@ Page({
           }
           reminder.setPlanReminder(kind, at)
           if (this._alive) this.setData({ remindAt: at })
-          wx.showToast({ title: '已设置提醒', icon: 'none' })
+          wx.showToast({ title: '已设置提醒，再点一次可取消', icon: 'none' })
         })
       })
       .catch(() => {

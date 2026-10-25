@@ -63,6 +63,24 @@ function makePage() {
 // 2026-10-22 10:00：10 月 35 格（周四开月），9 月也是 35 格 —— 空月签名冲突的典型月份
 const NOW = new Date(2026, 9, 22, 10, 0, 0, 0).getTime()
 
+test('提醒取消补偿队列：成功的移除、失败的保留（下次进页再试）', async () => {
+  resetStore()
+  const page = makePage()
+  const reminder = require('../miniprogram/utils/reminder')
+  const original = reminder.cancel
+  storage.patchMeta({ pendingReminderCancel: ['sleep-a', 'sleep-b'] })
+  reminder.cancel = (id) =>
+    id === 'sleep-a' ? Promise.resolve({ ok: true }) : Promise.reject(new Error('network'))
+  try {
+    page.retryPendingReminderCancel()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    assert.deepEqual(storage.getMeta().pendingReminderCancel, ['sleep-b'])
+  } finally {
+    reminder.cancel = original
+  }
+})
+
 test('切月：空月之间也必须重渲染（签名含 monthOffset / monthKey）', () => {
   const originalNow = Date.now
   Date.now = () => NOW

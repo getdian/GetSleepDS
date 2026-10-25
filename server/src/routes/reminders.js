@@ -71,8 +71,9 @@ function createRemindersRoute(options) {
       if (fireAt < currentTs + 60 * 1000 || fireAt > currentTs + 48 * 60 * 60 * 1000) {
         throw invalidBody('提醒时间需在 1 分钟到 48 小时内')
       }
+      let saved = false
       try {
-        await db.saveReminder(openid, {
+        saved = await db.saveReminder(openid, {
           sessionId,
           fireAt,
           templateId: reminderConfig.templateId,
@@ -83,6 +84,8 @@ function createRemindersRoute(options) {
         log.error('[db] reminder save failed:', req.id || '', e.message)
         throw dbUnavailable()
       }
+      // 没真正写入/恢复就不能回 ok：否则客户端显示“已开启”而服务端没有待发送任务
+      if (!saved) throw apiError('REMINDER_NOT_SAVED', '提醒未能保存，请稍后重试', 503)
       res.json({ ok: true, fireAt })
     })
   )

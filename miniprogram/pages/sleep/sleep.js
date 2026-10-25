@@ -57,6 +57,8 @@ Page({
     endDurationText: '',
     endHint: '',
     endError: '',
+    // 这次入睡已超过 24 小时：显示常驻提示与「丢弃这段」
+    staleLong: false,
     dim: false,
     notice: '',
     weekCount: 0,
@@ -236,7 +238,7 @@ Page({
       overdueText: overdue
         ? '已超过预计起床 ' + F.fmtDuration(Math.round((now - expectedWakeAt) / 60000))
         : '',
-      orbCaption: overdue ? '已超过预计起床，轻触结束并校准' : '轻触圆环，记录起床'
+      orbCaption: overdue ? '已超过预计起床，轻触结束并校准' : '点击圆环、结束入睡'
     })
     this.pruneStalePending(pending, now)
   },
@@ -332,7 +334,7 @@ Page({
       orbCaption: sleeping
         ? overdue
           ? '已超过预计起床，轻触结束并校准'
-          : '轻触圆环，记录起床'
+          : '点击圆环、结束入睡'
         : '轻触圆环，记录入睡',
       reminderOn: this.reminderCovered(pending, now),
       overdue,
@@ -479,9 +481,12 @@ Page({
   pruneStalePending(pending, now) {
     if (!pending) {
       this._staleNoticeKey = ''
+      if (this.data.staleLong) this.setData({ staleLong: false })
       return
     }
-    if (now - pending.bedAt <= STALE_PENDING_MS) return
+    const staleLong = now - pending.bedAt > STALE_PENDING_MS
+    if (this.data.staleLong !== staleLong) this.setData({ staleLong })
+    if (!staleLong) return
     const key = pending.id || 'bed-' + pending.bedAt
     if (this._staleNoticeKey === key) return
     this._staleNoticeKey = key
@@ -535,25 +540,49 @@ Page({
       return
     }
     const fireAt = Number(pending.expectedWakeAt) || this.defaultExpectedWake(pending.bedAt)
+    // 服务端只接受未来 1 分钟之后的提醒：先挡下，避免授权后留下“已开启”的假状态
+    if (fireAt < Date.now() + 60 * 1000) {
+      wx.showToast({ title: '已过预计起床时间，直接记录起床即可', icon: 'none' })
+      return
+    }
+    if (this._remindBusy) return
+    this._remindBusy = true
     reminder
       .requestOptIn()
       .then((result) => {
         if (!result.ok) {
           this.offerCalendar(fireAt, result.reason === 'not_configured' ? '订阅提醒暂未配置' : '没有开启订阅提醒')
-          return
+          return null
         }
         const next = Object.assign({}, pending, { reminderOptIn: true, expectedWakeAt: fireAt })
-        if (!storage.setPending(next)) {
-          wx.showToast({ title: '本地状态保存失败', icon: 'none' })
-          return
-        }
-        this._pending = next
-        this.refreshAll()
-        return reminder.schedule(next).then(() => {
+        wx.showLoading({ title: '设置中', mask: true })
+        // 顺序很关键：先让服务端真正排上任务，成功后才写本地 reminderOptIn。
+        // 旧顺序（先写本地再请求）在断网/配置被关时会留下“已开启但无提醒”且无法重试。
+        return reminder.schedule(next).then((scheduled) => {
+          if (scheduled && scheduled.skipped) {
+            this.offerCalendar(
+              fireAt,
+              scheduled.skipped === 'not_configured' ? '订阅提醒暂未配置' : '提醒时间已过，可改用日历'
+            )
+            return null
+          }
+          if (!storage.setPending(next)) {
+            // 服务端已排上但本地写失败：补偿取消，避免两边状态分叉
+            reminder.cancel(next.id).catch(() => {})
+            wx.showToast({ title: '本地状态保存失败，请重试', icon: 'none' })
+            return null
+          }
+          this._pending = next
+          this.refreshAll()
           wx.showToast({ title: '已设置到点提醒', icon: 'none' })
+          return null
         })
       })
       .catch(() => this.offerCalendar(fireAt, '提醒服务暂不可用'))
+      .then(() => {
+        this._remindBusy = false
+        wx.hideLoading()
+      })
   },
 
   offerCalendar(fireAt, reason) {
@@ -963,7 +992,12 @@ Page({
   },
 
   onEndConfirm() {
-    if (this.data.endError || !this._endBedAt || !this._endWakeAt) return
+    if (!this._endBedAt || !this._endWakeAt) return
+    if (this.data.endError) {
+      // 视觉上是禁用态，但点击仍会进来：必须给反馈，不能静默 return
+      wx.showToast({ title: this.data.endError, icon: 'none' })
+      return
+    }
     if (this.data.endMode === 'manual') {
       this.saveManualSession()
       return
@@ -1009,6 +1043,18 @@ Page({
       return
     }
     reminder.cancel(pending.id).catch(() => {})
+    // 结果面「提醒我起床」若正是这一觉的提醒（与 reminderCovered 同口径），
+    // 结束后必须一并撤销：否则已记录完成还会收到“该起床了”。
+    const planReminder = reminder.getPlanReminder()
+    const expectedWakeAt = Number(pending.expectedWakeAt) || 0
+    if (
+      planReminder &&
+      planReminder.kind === 'wake' &&
+      expectedWakeAt &&
+      Math.abs(Number(planReminder.at) - expectedWakeAt) < 60 * 1000
+    ) {
+      reminder.cancelPlanReminder().catch(() => {})
+    }
     const cleared = storage.clearPending()
     this._pending = null
     this.finishSave({
@@ -1181,6 +1227,76 @@ Page({
   onDimTap() {
     this.wakeUp()
     this.scheduleLightsOut()
+  },
+
+  /** 超 24h 的 pending：允许直接丢弃（不计入记录、不上传云端） */
+  onDiscardPending() {
+    const pending = this._pending || storage.getPending()
+    if (!pending) return
+    wx.showModal({
+      title: '丢弃这一段？',
+      content: '这段不会计入睡眠记录，也不会上传到云端。',
+      confirmText: '丢弃',
+      confirmColor: '#F87171',
+      success: (res) => {
+        if (!res.confirm) return
+        reminder.cancel(pending.id).catch(() => {})
+        storage.clearPending()
+        this._pending = null
+        this.setData({ staleLong: false, endShow: false })
+        this.refreshAll()
+        wx.showToast({ title: '已丢弃这一段', icon: 'none' })
+      }
+    })
+  },
+
+  /**
+   * 熄灯态「结束入睡」：一次点击按当前时间结束（不再要求"唤醒 → 点圆环 → 保存"三步）。
+   * 校验不过（超 24h / 重叠 / 容量满）时唤醒并打开结束面板，让用户手动校准，
+   * 绝不静默失败。保存后仍可在「本日睡眠段」修改/撤销。
+   */
+  onLightsOutEnd() {
+    const pending = this._pending || storage.getPending()
+    if (!pending) {
+      this.wakeUp()
+      return
+    }
+    const now = Date.now()
+    const startAt = Number(pending.bedAt) || 0
+    if (!startAt || now <= startAt || now - startAt > MAX_SLEEP_MS) {
+      wx.showToast({ title: '这一段超过 24 小时，请手动校准', icon: 'none' })
+      this.wakeUp()
+      this.openEndSheet()
+      return
+    }
+    const records = storage.getRecords()
+    const durationMin = Math.round((now - startAt) / 60000)
+    let error = ''
+    if (X.findOverlap(records, startAt, now, { id: pending.id })) {
+      error = MS.errorTextOf('overlap')
+    } else {
+      const capacity = MS.capacityErrorOf({
+        records,
+        dayKey: T.calendarDayKey(now),
+        durationMin,
+        excludeId: ''
+      })
+      if (capacity) error = MS.errorTextOf(capacity)
+    }
+    if (error) {
+      wx.showToast({ title: error, icon: 'none' })
+      this.wakeUp()
+      this.openEndSheet()
+      return
+    }
+    this._endBedAt = startAt
+    this._endWakeAt = now
+    this._endBaseDay = 0
+    this._endStartDay = 0
+    this._autoEnd = false
+    this.setData({ endMode: 'pending', endStale: false })
+    this.wakeUp()
+    this.onEndConfirm()
   },
 
   /**

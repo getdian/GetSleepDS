@@ -23,6 +23,7 @@
 }
 
 .mc-nav-btn {
+  position: relative;
   width: 56rpx;
   height: 56rpx;
   display: flex;
@@ -35,8 +36,19 @@
   color: var(--text-secondary);
 }
 
+/* 只上下外扩：左右相邻按钮间距仅 6rpx，横向扩会互相抢点击 */
+.mc-nav-btn::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -16rpx;
+  bottom: -16rpx;
+}
+
 .mc-nav-btn.is-off {
-  opacity: 0.24;
+  /* 0.24 在深底上约 1.5:1，禁用态也需可辨识 */
+  opacity: 0.45;
 }
 
 .mc-nav-btn:active {
@@ -173,7 +185,7 @@
 }
 
 .mc-cell.is-future .mc-num {
-  color: rgba(148, 163, 184, 0.55);
+  color: rgba(164, 179, 200, 0.7);
 }
 
 /* 进行中的一段：保留当天已有颜色，用内描边 + 亮点提示“还没结束” */

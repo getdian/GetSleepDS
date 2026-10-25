@@ -22,7 +22,13 @@ global.wx = {
   },
   showToast() {},
   showModal() {},
+  showLoading() {},
+  hideLoading() {},
   vibrateShort() {},
+  // 提醒取消走 withLogin：桩一个同步成功，避免真网络分支
+  login(options) {
+    options.success({ code: 'sleep-test-code' })
+  },
   getAccountInfoSync() {
     return { miniProgram: { envVersion: 'develop' } }
   }
@@ -666,6 +672,9 @@ test('提醒落地：打卡会话 end=1 行为不变', () => {
   assert.equal(done.data.notice, '这次入睡已经结束过了')
 })
 
+const fs = require('node:fs')
+const path = require('node:path')
+
 const reminderUtil = require('../miniprogram/utils/reminder')
 
 test('打卡：使用计算器带来的起床时刻作为预计起床，并且只消费一次', () => {
@@ -694,4 +703,120 @@ test('打卡：结果面已设「提醒我起床」且时刻一致时，入睡�
   // 「该睡了」不覆盖起床提醒
   reminderUtil.setPlanReminder('sleep', at)
   assert.equal(page.reminderCovered(pending, now), false)
+})
+
+const flushMicro = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+test('提醒：服务端没排上任务时不写 reminderOptIn，成功后才置为已开启', async () => {
+  resetStore()
+  const page = makePage()
+  const now = Date.now()
+  const at = now + 7 * 3600000
+  const pending = { id: 'sleep-' + now, bedAt: now, expectedWakeAt: at, reminderOptIn: false }
+  storage.setPending(pending)
+  page._pending = pending
+  page._remindBusy = false
+  const original = { requestOptIn: reminderUtil.requestOptIn, schedule: reminderUtil.schedule }
+  reminderUtil.requestOptIn = () => Promise.resolve({ ok: true })
+  // 配置在授权与创建之间被关掉：返回 skipped，不能留下“已开启”
+  reminderUtil.schedule = () => Promise.resolve({ skipped: 'not_configured' })
+  try {
+    page.onReminderTap()
+    await flushMicro()
+    await flushMicro()
+    assert.equal(storage.getPending().reminderOptIn, false, 'skipped 不能置为已开启')
+    assert.equal(page._remindBusy, false, '失败后必须解除忙碌，允许重试')
+
+    reminderUtil.schedule = () => Promise.resolve({ ok: true })
+    page.onReminderTap()
+    await flushMicro()
+    await flushMicro()
+    assert.equal(storage.getPending().reminderOptIn, true)
+    page.clearLightsTimer()
+  } finally {
+    reminderUtil.requestOptIn = original.requestOptIn
+    reminderUtil.schedule = original.schedule
+  }
+})
+
+test('熄灯「结束入睡」：一次点击按当前时间落库并清 pending', () => {
+  resetStore()
+  const page = makePage()
+  const now = Date.now()
+  const bedAt = now - 2 * 3600 * 1000
+  const pending = {
+    id: 'sleep-' + bedAt,
+    bedAt,
+    expectedWakeAt: now + 3600 * 1000,
+    reminderOptIn: false
+  }
+  storage.setPending(pending)
+  page._pending = pending
+  // 只关心落库结果：唤醒/关面板/收尾在其它用例覆盖
+  page.wakeUp = () => {}
+  page.closeSheet = () => {}
+  page.syncTabbar = () => {}
+  page.finishSave = () => {}
+  page.onLightsOutEnd()
+
+  const day = T.calendarDayKey(Date.now())
+  const record = storage.getRecords()[day]
+  assert.ok(record, '必须写入当天记录')
+  assert.equal(Array.isArray(record.sessions) ? record.sessions.length : 1, 1)
+  assert.equal(storage.getPending(), null, '结束后必须清掉进行中的 pending')
+})
+
+test('超 24 小时未结束：显示常驻提示，可丢弃这一段', () => {
+  resetStore()
+  const page = makePage()
+  const now = Date.now()
+  const bedAt = now - 30 * 3600 * 1000
+  storage.setPending({ id: 'sleep-' + bedAt, bedAt, expectedWakeAt: bedAt + 8 * 3600 * 1000, reminderOptIn: false })
+  page.refreshAll()
+  assert.equal(page.data.staleLong, true, '超过 24h 必须有常驻提示')
+  page.clearLightsTimer()
+
+  // 丢弃：确认后清 pending，不写记录
+  const originalModal = global.wx.showModal
+  global.wx.showModal = (options) => options.success({ confirm: true })
+  try {
+    page.onDiscardPending()
+    assert.equal(storage.getPending(), null)
+    assert.equal(page.data.staleLong, false)
+    assert.deepEqual(storage.getRecords(), {})
+  } finally {
+    global.wx.showModal = originalModal
+  }
+})
+
+test('入睡中提示词改为明确的「结束入睡」动作', () => {
+  const src = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/sleep/sleep.js'), 'utf8')
+  assert.equal(src.indexOf('轻触圆环，记录起床'), -1, '旧文案会让人以为只是记录时间')
+  assert.ok(src.indexOf('点击圆环、结束入睡') >= 0)
+})
+
+test('提醒：预计起床时间已过时不申请订阅授权', () => {
+  resetStore()
+  const page = makePage()
+  const now = Date.now()
+  const pending = {
+    id: 'sleep-' + now,
+    bedAt: now - 26 * 3600000,
+    expectedWakeAt: now - 1000,
+    reminderOptIn: false
+  }
+  page._pending = pending
+  page._remindBusy = false
+  const original = reminderUtil.requestOptIn
+  let optIn = 0
+  reminderUtil.requestOptIn = () => {
+    optIn += 1
+    return Promise.resolve({ ok: true })
+  }
+  try {
+    page.onReminderTap()
+    assert.equal(optIn, 0, '注定被服务端拒绝时不让用户白授权一次')
+  } finally {
+    reminderUtil.requestOptIn = original
+  }
 })

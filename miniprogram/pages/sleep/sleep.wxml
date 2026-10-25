@@ -29,7 +29,7 @@
           hover-class="sleep-orb--tap"
           hover-stay-time="120"
           aria-role="button"
-          aria-label="{{state === 'sleeping' ? '记录起床时间' : '记录入睡时间'}}"
+          aria-label="{{state === 'sleeping' ? '结束入睡并记录起床时间' : '记录入睡时间'}}"
         >
           <text class="orb-kicker">{{orbKicker}}</text>
           <text class="orb-time">{{orbTime}}</text>
@@ -41,9 +41,17 @@
       <view wx:if="{{state === 'sleeping'}}" class="sleep-reminder {{reminderOn ? 'is-on' : ''}}" bindtap="onReminderTap" hover-class="sleep-reminder--tap" hover-stay-time="120">
         {{reminderOn ? '已开启 · 到点提醒记录起床' : '到点提醒我记录起床'}}
       </view>
-      <view wx:if="{{overdue}}" class="sleep-overdue" bindtap="openEndSheet" hover-class="sleep-overdue--tap" hover-stay-time="120">
+      <view wx:if="{{overdue && !staleLong}}" class="sleep-overdue" bindtap="openEndSheet" hover-class="sleep-overdue--tap" hover-stay-time="120">
         <text class="sleep-overdue-title">该结束入睡啦</text>
         <text class="sleep-overdue-sub">{{overdueText}} · 点此校准并保存</text>
+      </view>
+      <view wx:if="{{staleLong}}" class="sleep-stale">
+        <text class="sleep-stale-title">这次入睡已超过 24 小时</text>
+        <text class="sleep-stale-sub">建议结束并校准起床时间；如果这不是一觉，可以直接丢弃这段。</text>
+        <view class="sleep-stale-actions">
+          <view class="sleep-stale-btn" bindtap="openEndSheet" hover-class="sleep-stale-btn--tap" hover-stay-time="120">结束并校准</view>
+          <view class="sleep-stale-btn is-ghost" bindtap="onDiscardPending" hover-class="sleep-stale-btn--tap" hover-stay-time="120">丢弃这段</view>
+        </view>
       </view>
       <view wx:if="{{state === 'sleeping'}}" class="sleeping-sub-actions">
         <view class="undo-bed" bindtap="onUndoBed" hover-class="undo-bed--tap" hover-stay-time="120">点错了？撤销本次入睡</view>
@@ -201,6 +209,7 @@
     <text class="dim-orb-time">{{orbTime}}</text>
     <text class="dim-orb-meta">{{orbMeta}}</text>
   </view>
+  <view class="dim-end" catchtap="onLightsOutEnd" hover-class="dim-end--tap" hover-stay-time="120">结束入睡</view>
   <text class="dim-hint">轻触任意处唤醒</text>
 </view>
 

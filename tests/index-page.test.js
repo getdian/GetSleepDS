@@ -227,7 +227,7 @@ const reminder = require('../miniprogram/utils/reminder')
 /** 临时替换 reminder 模块方法（页面持有同一对象引用），返回调用计数 */
 function stubReminder(overrides) {
   const originals = {}
-  const calls = { optIn: 0, schedule: [], cancel: [] }
+  const calls = { optIn: 0, schedule: [], cancel: [], cancelPlan: 0 }
   const base = {
     templateId: () => 'tmpl-test',
     requestOptIn: () => {
@@ -240,6 +240,13 @@ function stubReminder(overrides) {
     },
     cancel: (id) => {
       calls.cancel.push(id)
+      return Promise.resolve({ ok: true })
+    },
+    // 页面调用的是 exports 上的 cancelPlanReminder；模块内部直接引用 cancel，
+    // 替换 cancel 无法拦截，这里按真实语义打桩（清本地 + 返回成功）
+    cancelPlanReminder: () => {
+      calls.cancelPlan += 1
+      storage.patchMeta({ planReminder: null })
       return Promise.resolve({ ok: true })
     }
   }
@@ -304,8 +311,20 @@ test('提醒我：设置后显示已设状态，重复点击不再授权；改�
     assert.deepEqual(calls.schedule[0], [first, 'sleep'], '起床模式推荐入睡点 → 该睡了')
     assert.equal(reminder.getPlanReminder().id, 'plan-s-' + first)
 
+    // 再点一次 = 取消这条提醒（撤销出口），而不是只弹一句 toast
     page.onRemindMain()
-    assert.equal(calls.optIn, 1, '已设置后重复点击不再弹授权')
+    await flush()
+    assert.equal(calls.optIn, 1, '取消不需要再次授权')
+    assert.equal(page.data.remindAt, 0, '取消后回到未设置状态')
+    assert.equal(reminder.getPlanReminder(), null)
+    assert.equal(calls.cancelPlan, 1, '取消必须真正走撤销入口')
+
+    // 取消后能就同一时刻重新创建（服务端允许 cancelled → pending）
+    page.onRemindMain()
+    await flush()
+    await flush()
+    assert.equal(page.data.remindAt, first)
+    assert.equal(reminder.getPlanReminder().id, 'plan-s-' + first)
 
     // 改了入睡耗时，主推荐时刻变化后重设：只保留一条
     const second = first + 5 * 60 * 1000
@@ -313,7 +332,7 @@ test('提醒我：设置后显示已设状态，重复点击不再授权；改�
     page.onRemindMain()
     await flush()
     await flush()
-    assert.deepEqual(calls.cancel, ['plan-s-' + first])
+    assert.equal(calls.cancel[calls.cancel.length - 1], 'plan-s-' + first, '重设时撤掉旧提醒')
     assert.equal(reminder.getPlanReminder().at, second)
   } finally {
     calls.restore()

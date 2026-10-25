@@ -660,8 +660,8 @@
 }
 
 .result-row.is-passed {
-  /* 0.38 在深色底上对比度不足 2:1；“已过”仍需可读，只做弱化 */
-  opacity: 0.55;
+  /* 整行降透明度会叠乘文字自身的半透明色；0.72 仍能看出弱化且保持可读 */
+  opacity: 0.72;
 }
 
 /* 6 个周期「充足/补觉」档：虚线分隔，避免读成第 4 个“推荐” */
@@ -800,6 +800,7 @@
 }
 
 .result-remind {
+  position: relative;
   flex: none;
   min-height: 80rpx;
   display: flex;
@@ -812,6 +813,16 @@
   letter-spacing: 0.5rpx;
   color: rgba(220, 235, 255, 0.92);
   transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+/* 热区外扩到 88rpx（44px），视觉尺寸不变 */
+.result-remind::after {
+  content: '';
+  position: absolute;
+  left: -4rpx;
+  right: -4rpx;
+  top: -4rpx;
+  bottom: -4rpx;
 }
 
 .result-remind-ico {
@@ -887,6 +898,7 @@
 /* 底部两个次级动作：无边框轻量胶囊，去线框化，层级严格低于上面的主 CTA */
 .result-reset,
 .result-switch {
+  position: relative;
   min-height: 72rpx;
   display: flex;
   align-items: center;
@@ -896,6 +908,17 @@
   font-size: 24rpx;
   font-weight: 500;
   transition: opacity 0.16s ease, transform 0.16s ease, background 0.16s ease;
+}
+
+/* 72rpx 视觉高度 + 上下各 8rpx 外扩 = 88rpx 热区；左右不扩，避免两个胶囊互抢点击 */
+.result-reset::after,
+.result-switch::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -8rpx;
+  bottom: -8rpx;
 }
 
 .result-reset {

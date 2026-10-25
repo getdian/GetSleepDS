@@ -233,6 +233,57 @@ test('模板字段名按后台映射发送（time1/thing2 也能用）', async (
   assert.match(body.data.time1.value, /^\d{4}年\d{1,2}月\d{1,2}日 \d{2}:\d{2}$/)
 })
 
+test('取消后同 ID 重建会恢复为 pending（设 A → 改 B → 再改回 A）', async () => {
+  const db = createMemoryDb()
+  const now = Date.now()
+  const a = 'plan-s-1700000000000'
+  const b = 'plan-s-1700000001000'
+  const build = (sessionId) => ({
+    sessionId,
+    fireAt: now + 3600000,
+    templateId: 'tmpl-restore',
+    page: 'pages/sleep/sleep?remind=sleep'
+  })
+  assert.equal(await db.saveReminder('openid-restore', build(a)), true)
+  await db.cancelReminder('openid-restore', a)
+  await db.saveReminder('openid-restore', build(b))
+  await db.cancelReminder('openid-restore', b)
+  // 再改回 A：旧实现遇到 cancelled 直接返回，服务端将没有任何待发送任务
+  assert.equal(await db.saveReminder('openid-restore', build(a)), true)
+  const due = await db.dueReminders(now + 3600001, 10)
+  assert.deepEqual(due.map((item) => item.sessionId), [a], '只有 A 处于 pending')
+})
+
+test('已 sent 的同 ID 提醒保持幂等，不重复排队', async () => {
+  const db = createMemoryDb()
+  const now = Date.now()
+  const sessionId = 'sleep-sent-1'
+  await db.saveReminder('openid-sent', {
+    sessionId,
+    fireAt: now - 1000,
+    templateId: 'tmpl-sent',
+    page: 'pages/sleep/sleep?end=1'
+  })
+  const service = createReminderService({
+    db,
+    wx: {
+      appid: 'appid-test',
+      secret: 'secret-test',
+      fetchImpl: async (url) => ({
+        json: async () =>
+          url.indexOf('stable_token') >= 0
+            ? { access_token: 'token-test', expires_in: 7200 }
+            : { errcode: 0 }
+      })
+    },
+    templateId: 'tmpl-sent',
+    now: () => now
+  })
+  await service.tick()
+  assert.equal(await db.saveReminder('openid-sent', { sessionId, fireAt: now + 1000, templateId: 'tmpl-sent', page: 'p' }), true)
+  assert.equal((await db.dueReminders(now + 2000, 10)).length, 0, 'sent 不会被重置回 pending')
+})
+
 test('结果面提醒按来源发送不同事项文案（该睡了 / 该起床了）', async () => {
   const db = createMemoryDb()
   const now = Date.now()

@@ -152,6 +152,6 @@
 .empty-btn.is-secondary {
   border-color: rgba(145, 175, 255, 0.24);
   background: rgba(139, 135, 255, 0.08);
-  color: var(--c-primary-soft, #9BA8DA);
+  color: var(--color-primary-soft, #A7A4FF);
   font-weight: 500;
 }

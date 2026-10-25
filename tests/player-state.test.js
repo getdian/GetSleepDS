@@ -47,6 +47,68 @@ test('claimEnded 超过去重窗口后可再次接管', () => {
   }
 })
 
+// 注意：文件后面已有 loopAudio(duration)（函数声明会提升并覆盖同名），
+// 这里用独立名字，避免 duration 变成 undefined 导致用例恒假。
+function budgetAudio() {
+  return {
+    paused: false,
+    duration: 2,
+    currentTime: 1.5,
+    seeks: 0,
+    seek(position) {
+      this.seeks += 1
+      this.currentTime = position
+    },
+    play() {
+      this.paused = false
+    }
+  }
+}
+
+test('回环预算耗尽时 seamlessLoop 不再 seek（坏源不能靠 seek(0) 绕过熔断）', () => {
+  const originalNow = Date.now
+  playerState._resetClaims()
+  // 用一个远大于真实时钟的基准：前面用例可能留下基于真实时间的 claim 记录，
+  // 若基准更小会导致 now - claimAt 为负而误判为“窗口内”。
+  let now = 10000000000000
+  Date.now = () => now
+  let budget = false
+  playerState.setLoopGuard(() => budget)
+  try {
+    const audio = budgetAudio()
+    assert.equal(playerState.seamlessLoop(audio, 1.2), false)
+    assert.equal(audio.seeks, 0, '预算耗尽时不能 seek，让音频自然 ended 后熔断')
+
+    // 用户重新点播后预算恢复：下一个窗口正常回环
+    now += 1500
+    budget = true
+    audio.currentTime = 1.5
+    assert.equal(playerState.seamlessLoop(audio, 1.2), true)
+    assert.equal(audio.seeks, 1)
+  } finally {
+    playerState.setLoopGuard(null)
+    // mock 时钟会把 loopClaimAt 写成未来值，恢复真实时钟后必须清掉，
+    // 否则后续用例的 claimLoop 永远判为“窗口内”。
+    playerState._resetClaims()
+    Date.now = originalNow
+  }
+})
+
+test('未注入预算钩子时 seamlessLoop 保持旧行为', () => {
+  const originalNow = Date.now
+  playerState._resetClaims()
+  let now = 20000000000000
+  Date.now = () => now
+  try {
+    const audio = budgetAudio()
+    assert.equal(playerState.seamlessLoop(audio, 1.2), true)
+    assert.equal(audio.seeks, 1)
+  } finally {
+    playerState._resetClaims()
+    Date.now = originalNow
+  }
+})
+
 test('claimExpiryToast 在窗口内只让一个组件弹提示', () => {
   const originalNow = Date.now
   let now = 500000

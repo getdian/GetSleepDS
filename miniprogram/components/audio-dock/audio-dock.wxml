@@ -145,9 +145,20 @@
     </view>
   </scroll-view>
 
+  <view wx:if="{{resumeLabel}}" class="dock-resume" catchtap="onResumeLast" hover-class="dock-resume--tap" hover-stay-time="120">
+    <text class="dock-resume-k">继续上次</text>
+    <text class="dock-resume-v">{{resumeLabel}}</text>
+    <text class="dock-resume-arrow">▶</text>
+  </view>
+
   <view class="dock-section">
     <text class="dock-section-title">全部声音</text>
-    <text class="dock-section-count">{{filteredTracks.length}} 首</text>
+    <view class="dock-section-right">
+      <view class="dock-queue {{queueMode === 'favorites' ? 'is-on' : ''}}" catchtap="onToggleQueueMode">
+        {{queueMode === 'favorites' ? '🔁 收藏连播' : '🔂 单曲循环'}}
+      </view>
+      <text class="dock-section-count">{{filteredTracks.length}} 首</text>
+    </view>
   </view>
 
   <scroll-view class="dock-list" scroll-y enhanced show-scrollbar="{{false}}">
@@ -157,6 +168,7 @@
       class="dock-track {{currentId === item.id ? 'is-playing' : ''}}"
       data-id="{{item.id}}"
       bindtap="onTrackTap"
+      bindlongpress="onTrackLongPress"
     >
       <view class="dock-icon-wrap tone-{{item.tone}}">
         <image class="dock-icon" src="{{item.icon}}" mode="aspectFit" />
@@ -213,7 +225,10 @@
   </view>
 
   <view class="dock-cache" catchtouchmove="noop">
-    <text class="dock-cache-text">{{cacheText}}</text>
+    <view class="dock-cache-main">
+      <text class="dock-cache-text">{{cacheText}}</text>
+      <text class="dock-cache-tip">长按已缓存曲目，可只删除该曲</text>
+    </view>
     <text wx:if="{{cacheCount}}" class="dock-cache-clean" bindtap="onCleanCache">清理</text>
   </view>
 

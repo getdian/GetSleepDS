@@ -78,10 +78,35 @@ Page({
     const tabBar = this.getTabBar && this.getTabBar()
     if (tabBar) tabBar.setData({ selected: 2 })
     this.refresh()
+    this.retryPendingReminderCancel()
     adSlots.apply(this)
     loadConfig(true)
       .then(() => {
         if (this._alive) this.refresh()
+      })
+      .catch(() => {})
+  },
+
+  /**
+   * 清除数据时提醒取消失败的补偿队列。
+   * 云端 erase 也会删提醒，所以主路径不会残留；这里兜住“erase 失败 + 从未同步”
+   * 以及断网时取消不成功的情况，下次进统计页自动重试，避免清除后仍收到推送。
+   */
+  retryPendingReminderCancel() {
+    const meta = storage.getMeta()
+    const list = Array.isArray(meta.pendingReminderCancel) ? meta.pendingReminderCancel : []
+    if (!list.length) return
+    Promise.all(
+      list.map((id) =>
+        reminder
+          .cancel(id)
+          .then(() => '')
+          .catch(() => id)
+      )
+    )
+      .then((results) => {
+        const failed = results.filter((id) => !!id)
+        storage.patchMeta({ pendingReminderCancel: failed })
       })
       .catch(() => {})
   },
@@ -353,7 +378,12 @@ Page({
   },
 
   onManualConfirm() {
-    if (this.data.manualError || !this._manualBedAt || !this._manualWakeAt) return
+    if (!this._manualBedAt || !this._manualWakeAt) return
+    if (this.data.manualError) {
+      // 按钮已是“假禁用”视觉：点击要给反馈，而不是静默 return
+      wx.showToast({ title: this.data.manualError, icon: 'none' })
+      return
+    }
     this.saveManualSession()
   },
 
@@ -725,13 +755,17 @@ Page({
       wx.getBackgroundAudioManager().stop()
     } catch (e) {}
     const pending = storage.getPending()
-    if (pending && pending.id) reminder.cancel(pending.id).catch(() => {})
-    // 结果面「提醒我入睡/起床」同样撤销；必须在 clearAll 之前读，clearAll 会重置 meta
-    reminder.cancelPlanReminder().catch(() => {})
+    const planReminder = reminder.getPlanReminder()
+    // 必须在 clearAll 之前收集 id（clearAll 会重置 meta）；取消动作放到 clearAll 之后，
+    // 失败写入 pendingReminderCancel，由 retryPendingReminderCancel 下次重试。
+    const cancelIds = []
+    if (pending && pending.id) cancelIds.push(pending.id)
+    if (planReminder && planReminder.id) cancelIds.push(planReminder.id)
     const cleared = storage.clearAll()
     events.clearQueue()
     cache.cleanAll()
-    const patch = { syncEpoch: Date.now(), lastTrackActive: false, lastTrackPlaying: false }
+    // lastTrackActive 已由上面的 audioSession.markStopped() 统一负责，这里不再重复写
+    const patch = { syncEpoch: Date.now() }
     const app = getApp()
     if (app && app.globalData) {
       app.globalData.audioSession = false
@@ -746,6 +780,22 @@ Page({
       patch.cloudPendingErase = false
     }
     storage.patchMeta(patch)
+    if (cancelIds.length) {
+      // 清空后再取消（不阻塞清除流程）：失败入队，下次进统计页自动重试
+      Promise.all(
+        cancelIds.map((id) =>
+          reminder
+            .cancel(id)
+            .then(() => '')
+            .catch(() => id)
+        )
+      )
+        .then((results) => {
+          const failed = results.filter((id) => !!id)
+          if (failed.length) storage.patchMeta({ pendingReminderCancel: failed })
+        })
+        .catch(() => {})
+    }
     this._signature = ''
     this.setData({
       posterPath: '',

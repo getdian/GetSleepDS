@@ -171,6 +171,20 @@ test('audio_error 在事件白名单内，target 保留 trackId|错误码', asyn
   assert.equal(res.body.accepted, 1)
 })
 
+test('一条脏事件只丢自己，不带走同批有效事件', async () => {
+  const res = await post('/api/events', {
+    code: 'dev-code',
+    events: [
+      { type: 'app_open', target: '1007|pages/index/index|other', ts: FIXED_NOW + 180 * 1000 },
+      { type: 'hack', ts: FIXED_NOW + 180 * 1000 },
+      { type: 'checkin', target: '', ts: FIXED_NOW + 180 * 1000 }
+    ]
+  })
+  assert.equal(res.status, 200)
+  assert.equal(res.body.accepted, 2, '有效事件必须仍然入库')
+  assert.equal(res.body.dropped, 1)
+})
+
 test('audio_interrupt 在事件白名单内（外部中断可观测）', async () => {
   const res = await post('/api/events', {
     code: 'dev-code',

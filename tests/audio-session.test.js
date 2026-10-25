@@ -288,6 +288,22 @@ test('自动重播有上限，用户重新点播后重新计时', () => {
   assert.equal(audioSession.allowReplay(), true)
 })
 
+test('自动回环续播不得清零预算（否则 8 次上限永远打不满）', () => {
+  reset()
+  for (let i = 0; i < 8; i += 1) assert.equal(audioSession.allowReplay(), true)
+  // 回环路径：ended → markAutoReplay → 再次 allowReplay
+  audioSession.markAutoReplay()
+  assert.equal(audioSession.allowReplay(), false, '自动续播后预算必须仍然耗尽')
+  // 连续坏源：每一轮都走自动续播，第 9 轮起必然熔断
+  for (let i = 0; i < 5; i += 1) {
+    audioSession.markAutoReplay()
+    assert.equal(audioSession.allowReplay(), false)
+  }
+  // 只有用户手动重新点播才恢复预算
+  audioSession.markUserPlay()
+  assert.equal(audioSession.allowReplay(), true)
+})
+
 test('isSessionLive 只认本进程真正播放过的会话', () => {
   reset()
   // meta 说 active（上个进程残留），但本进程没起过播

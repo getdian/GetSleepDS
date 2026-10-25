@@ -1171,6 +1171,7 @@
 }
 
 .dock-play {
+  position: relative;
   width: 76rpx;
   height: 76rpx;
   flex: none;
@@ -1180,6 +1181,21 @@
   border: 1.5rpx solid rgba(255, 255, 255, 0.18);
   border-radius: 50%;
   color: rgba(240, 243, 255, 0.92);
+}
+
+/* 列表主播放键：76rpx 视觉 + 6rpx 外扩 = 88rpx 热区，并补按压反馈 */
+.dock-play::after {
+  content: '';
+  position: absolute;
+  left: -6rpx;
+  right: -6rpx;
+  top: -6rpx;
+  bottom: -6rpx;
+}
+
+.dock-play:active {
+  transform: scale(0.94);
+  opacity: 0.82;
 }
 
 .dock-play.is-pause {
@@ -1280,6 +1296,7 @@
 }
 
 .dock-timer-chip {
+  position: relative;
   flex: none;
   min-width: 76rpx;
   height: 44rpx;
@@ -1292,6 +1309,16 @@
   font-size: 23rpx;
   text-align: center;
   color: rgba(190, 204, 230, 0.7);
+}
+
+/* 44rpx 视觉 + 上下各 22rpx 外扩 = 88rpx 热区（档位横向间距小，只做纵向） */
+.dock-timer-chip::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -22rpx;
+  bottom: -22rpx;
 }
 
 .dock-timer-chip.is-on {
@@ -1443,4 +1470,87 @@
   width: 7rpx;
   height: 32rpx;
   border-radius: 2rpx;
+}
+
+/* 播放模式切换（单曲循环 / 收藏连播）：只在抽屉内出现，默认单曲 */
+.dock-section-right {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.dock-queue {
+  position: relative;
+  min-height: 56rpx;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 16rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 19rpx;
+  color: rgba(190, 204, 230, 0.72);
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.dock-queue::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -16rpx;
+  bottom: -16rpx;
+}
+
+.dock-queue.is-on {
+  color: #e9e7ff;
+  background: rgba(145, 175, 255, 0.16);
+}
+
+.dock-cache-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.dock-cache-tip {
+  font-size: 18rpx;
+  color: rgba(190, 204, 230, 0.5);
+}
+
+/* 继续上次：冷启动/重进小程序的一键续听入口 */
+.dock-resume {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-top: 16rpx;
+  padding: 14rpx 18rpx;
+  border-radius: 18rpx;
+  background: rgba(145, 175, 255, 0.1);
+  border: 1rpx solid rgba(145, 175, 255, 0.2);
+}
+
+.dock-resume-k {
+  font-size: 20rpx;
+  color: rgba(190, 204, 230, 0.7);
+}
+
+.dock-resume-v {
+  flex: 1;
+  min-width: 0;
+  font-size: 23rpx;
+  color: rgba(233, 239, 255, 0.92);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dock-resume-arrow {
+  font-size: 22rpx;
+  color: var(--color-primary-soft);
+}
+
+.dock-resume--tap {
+  background: rgba(145, 175, 255, 0.18);
 }

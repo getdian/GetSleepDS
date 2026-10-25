@@ -372,6 +372,13 @@ function cachedCount(tracks, ttlDays, keepUrl) {
   return (tracks || []).filter((track) => !!peek(track.url, ttlDays, keepUrl)).length
 }
 
+/** 单条缓存大小（字节）；未缓存返回 0。用于「删除这首缓存（X MB）」与按曲目管理 */
+function sizeOf(url) {
+  if (!url) return 0
+  const item = readMeta()[url]
+  return item && item.size ? Number(item.size) || 0 : 0
+}
+
 function cleanAll(exceptUrl) {
   // 先中止在途下载：否则「清理」完成后，还没下完的任务会把文件与计数重新写回来
   if (exceptUrl) {
@@ -453,6 +460,7 @@ module.exports = {
   warmup,
   usedBytes,
   cachedCount,
+  sizeOf,
   cleanAll,
   onChange,
   offChange
