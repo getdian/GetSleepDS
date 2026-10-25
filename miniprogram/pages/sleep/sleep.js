@@ -303,7 +303,10 @@ Page({
         : this.data.endDateText
 
     const recordView = record ? this.buildRecordView(record) : null
+    // 超过 24h 的进行中会话：标题/副标必须换口径，不能再说“这一觉开始了”
+    const staleLong = !!(sleeping && pending && now - pending.bedAt > STALE_PENDING_MS)
     this.setData({
+      staleLong,
       dateText: F.fmtDateCN(now),
       greeting: F.greeting(now),
       endToday,
@@ -318,12 +321,16 @@ Page({
           ? '早安，睡得好吗'
           : '这一觉记下了'
         : sleeping
-          ? '这一觉开始了'
+          ? staleLong
+            ? '这一觉还没结束'
+            : '这一觉开始了'
           : '我准备睡了',
       heroSub: done
         ? '入睡与起床时间都已保存。'
         : sleeping
-          ? '醒来后记得回来记录起床。'
+          ? staleLong
+            ? '已超过 24 小时，请结束并校准或丢弃。'
+            : '醒来后记得回来记录起床。'
           : '记录入睡这一刻，醒来后再记起床。',
       orbKicker: sleeping ? '入睡时间' : '当前时间',
       orbTime: sleeping && pending ? F.fmtClockTs(pending.bedAt) : nowText,
@@ -480,23 +487,13 @@ Page({
   /** 超过 24h 的 pending 不再静默清除；同一个 pending 只提示一次，避免 30 秒一闪 */
   pruneStalePending(pending, now) {
     if (!pending) {
-      this._staleNoticeKey = ''
       if (this.data.staleLong) this.setData({ staleLong: false })
       return
     }
+    // 超过 24h 由常驻提示卡（staleLong）承载；不再额外弹一次性 notice，
+    // 否则同一屏会出现两条「超过 24 小时」的重复文案。
     const staleLong = now - pending.bedAt > STALE_PENDING_MS
     if (this.data.staleLong !== staleLong) this.setData({ staleLong })
-    if (!staleLong) return
-    const key = pending.id || 'bed-' + pending.bedAt
-    if (this._staleNoticeKey === key) return
-    this._staleNoticeKey = key
-    this.setData({
-      notice: '这次入睡已超过 24 小时，请点圆环结束并校准时间'
-    })
-    clearTimeout(this._noticeTimer)
-    this._noticeTimer = setTimeout(() => {
-      if (this._alive) this.setData({ notice: '' })
-    }, 8000)
   },
 
   onPrimaryTap() {
@@ -1289,6 +1286,24 @@ Page({
       this.openEndSheet()
       return
     }
+    // 熄灯层按钮易误触：刚打卡就点会立刻产生一条 1 分钟记录，先确认一次
+    if (durationMin < 5) {
+      wx.showModal({
+        title: '这一觉只有 ' + durationMin + ' 分钟',
+        content: '如果是误触，可以继续入睡；确认结束会记录这一段。',
+        confirmText: '结束',
+        cancelText: '继续睡',
+        success: (res) => {
+          if (res.confirm) this.commitLightsOutEnd(startAt, now)
+        }
+      })
+      return
+    }
+    this.commitLightsOutEnd(startAt, now)
+  },
+
+  /** 熄灯一键结束的实际提交（区间与容量校验已在 onLightsOutEnd 通过） */
+  commitLightsOutEnd(startAt, now) {
     this._endBedAt = startAt
     this._endWakeAt = now
     this._endBaseDay = 0

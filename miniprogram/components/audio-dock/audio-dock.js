@@ -249,6 +249,11 @@ Component({
       this._loadingTimer = setTimeout(() => {
         this._loadingTimer = null
         if (!this._alive || !this.data.loading) return
+        // 超时前已实际起播：不能判失败（play 事件可能丢失）
+        if (this._audio && !this._audio.paused) {
+          this.setData({ playing: true, loading: false })
+          return
+        }
         // 12s 还没起播：不能只改文案而留下 playing=true 的绿音符。
         // 复位播放态 + 展开播放条，让「连接超时，点按重试」可见且控件回到“播放”图标。
         this.setData({
@@ -517,15 +522,22 @@ Component({
         },
         waiting: () => {
           if (!this._alive || this._stopRequested) return
-          // 音频加载中（弱网/首次播放）：保持“正在连接”，并给一次自动重试。
+          // 音频加载中（弱网/首次播放）：只进“连接中”，**不要**把 playing 置 false。
+          // BAM 缓冲时经常只发 waiting、不再补发 play，置 false 会让正在播放的音频
+          // 一直显示“已暂停”（实机/模拟器均复现）。
           this._waitingAt = Date.now()
-          this.setData({ loading: true, playing: false })
+          this.setData({ loading: true })
           this.armLoadingGuard()
           this.syncPlayerText()
           clearTimeout(this._waitRetryTimer)
           this._waitRetryTimer = setTimeout(() => {
             if (!this._alive || !this._audio || this._stopRequested) return
-            if (!this._audio.paused || !this.data.currentId) return
+            if (!this.data.currentId) return
+            if (!this._audio.paused) {
+              // 实际已在播，只是 play 事件没到：以真实状态为准自愈
+              this.setData({ playing: true, loading: false })
+              return
+            }
             // 个别基础库缓冲结束后不自动续播：补一次 play
             this.safePlay()
           }, 4000)
@@ -533,7 +545,12 @@ Component({
         canplay: () => {
           if (!this._alive) return
           this.disarmLoadingGuard()
-          if (this.data.loading) this.setData({ loading: false })
+          // canplay 比 play 事件更可靠：部分基础库起播时不补发 play。
+          // 以播放器真实状态自愈，避免“声音在播、UI 显示已暂停”。
+          const live = !!(this._audio && !this._audio.paused)
+          if (this.data.loading || (live && !this.data.playing)) {
+            this.setData({ loading: false, playing: live || this.data.playing })
+          }
           playerState.armLoop(this._audio)
         },
         timeupdate: () => {

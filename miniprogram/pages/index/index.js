@@ -363,9 +363,11 @@ Page({
         mainTime: main ? F.fmtClockTs(main.at) : F.fmtDuration(plan.availableMin),
         // 跨天后必须写“明天 早晨”：只给时段词会让用户把次日时间读成今天。
         mainDay: main ? this.dayLabelPrefix(main.at, now) + F.periodLabel(main.at) : '',
+        // compact（所有周期都已过）时大数字是“还能睡多久”，必须写明已扣除入睡耗时，
+        // 否则用户会把它当成从此刻到起床的时长。
         mainMeta: main
           ? main.cycles + ' 个周期 · ' + F.fmtDuration(main.durationMin)
-          : '距离 ' + value + ' 起床',
+          : '距 ' + value + ' 起床 · 已扣 ' + this.data.fallAsleep + ' 分钟入睡',
         mainGuideLabel: mainGuide ? mainGuide.label : '',
         mainGuideTone: mainGuide ? mainGuide.tone : '',
         // 结果面「到点提醒我」：只对主推荐、且时间仍在 1 分钟之后才可设。

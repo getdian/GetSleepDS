@@ -268,6 +268,20 @@
 - [x] 门禁检查：`npm test` 333 项通过（332 pass / 1 skip）、`npm run check` 检查通过（3 页面 / 22 JSON / 17 WXML / 19 WXSS，主包约 561.9 KB）。
 - [x] 顺带回归（本轮未改动，模拟器走查无异常）：打卡即熄灯、点触唤醒；入睡 <60s 点圆环不开面板；结束面板「归入 10月25日（醒来日）· 时长 3 分钟」保存后 C 态时间轨 + 段列表；统计页当月日历当天格亮起；云备份开关默认关闭；「清除本机睡眠数据」二次确认文案完整。
 
+### 1.20 环境音与超期态 L4 模拟器复验（2026-10-26，iPhone 12/13 Pro 390×844）
+
+- [x] **P0 工具链事实**：新增 `utils/player-queue.js` / `player-surface.js` 后仅 `simulator_refresh` 不会把它编进包，`audio-dock` 报 `module ... is not defined` + `Component is not found`，组件整体不渲染。**必须 `close_project_window` + `open_project_window` 触发完整编译**；重开后 console 干净。后续新增文件一律按此复验。
+- [x] **播放状态一致性（本轮修）**：修复前实测 `paused:false`（音频真的在播）但 `data.playing:false` / `playerSub:"已暂停"`，是 `waiting` 后基础库不补发 `play` 所致。改为 waiting 只进「连接中」、canplay 与 12s 守卫按真实 `paused` 自愈、4s 补播；复验 `playing:true`、绿色音符在场。
+- [x] 跨页迷你条：入睡页播放「雨声」后切计算器，`#np` `visible=true / playing=true / title=雨声`，右下角绿色音符；截图 `docs/assets/l4-audio-mini.png`。
+- [x] 抽屉结构：搜索/分类/全部声音/单曲循环胶囊/曲目（已缓存 · 点击播放）/定时关闭（关为默认）/缓存区（已缓存 1/1 首 · 占用 5.4 MB，长按可删单曲）；截图 `docs/assets/l4-audio-sheet.png`。
+- [x] 熄灯态：打卡后 `dim=true`、tabBar 隐藏、圆球「入睡时间 + 已睡 N 分钟」、**底部「结束入睡」按钮**、底部「轻触任意处唤醒」；截图 `docs/assets/l4-lights-out.png`。
+- [x] 一键结束：点「结束入睡」→ `state=done`、`pending` 清空、记录 1 分钟（打卡 18 秒后结束），页面显示「早安，睡得好吗 / 1 分钟 / 入睡 05:25-05:25」；新增 <5 分钟二次确认防误触。
+- [x] 超 24h：`staleLong=true`、标题「这一觉还没结束」、副标「已超过 24 小时，请结束并校准或丢弃。」、常驻卡片两个出口（结束并校准 / 丢弃这段），**原 8s 一次性 notice 已删除（不再同屏重复）**；截图 `docs/assets/l4-sleep-stale-final.png`。
+- [x] 丢弃这段：确认后 pending 清空、不写记录、回到 idle；测试数据已清理（`sleep:pending:v1` 删除、`2026-10-26` 记录删除）。
+- [x] 统计页日历：空格由「补记」改为轻量「+」，整月 20+ 处重复文案消失；截图 `docs/assets/l4-stats-calendar.png`。
+- [x] 结果面 compact（所有周期已过）：主卡「1 小时 45 分」+ 副标「距 07:30 起床 · 已扣 15 分钟入睡」；三行「已过」整行 opacity 0.55→0.88 且标签单独提亮；「‹ 返回」加宽 152rpx；截图 `docs/assets/l4-calc-result-final.png`。
+- [x] console 无 error（`grep -i error` 返回空）。
+
 ## 2. 待真机验收（代码就绪，模拟器不可替代）
 
 > 按风险排序。每项都曾在 changelog 标注"未真机验证"；本机 CLI 已把可截图的全部截完，剩余必须真机。
@@ -296,6 +310,17 @@
 - [ ] 真机：微信浮窗 X（系统 `stop`）后迷你条以“已暂停”保留、点播放能重建音源。
 - [x] 单测：`audio_interrupt` 的 `begin` / `end|秒|resume|skip`、服务端白名单放行、analytics 只统计 `begin`。
 - [x] 单测：坏源黑名单 `markBad` 后 `peek` 返回空、重下成功自动解禁、`remove` 解禁。
+
+**2026-10-26 环境音批次 C（`player-surface` / 缓冲态 / 单曲缓存 / 连播）**
+
+- [x] 单测：`player-surface` 7 条（显式停止才隐藏、冷启动仍可见且 playing=false、悬浮 X 停止保留、外部中断不误清）、`player-queue` 6 条（单曲/收藏连播/不足 2 首/已下架过滤）。
+- [x] 模拟器：缓冲态不再把播放中误标「已暂停」（修复前实测 `paused:false` + `playing:false`；修复后 `playing:true`）。
+- [ ] 真机：弱网首次起播——应显示「正在连接」且 4s 内自动补播，不得出现「刚点播放就暂停」。
+- [ ] 真机：微信悬浮 X 停止后，三页仍显示「已暂停」条，点按能续播（冷启动/杀进程各一次）。
+- [ ] 真机：长按已缓存曲目 →「删除这首的缓存（X MB）」，只删该曲；在播曲目被拒绝删除。
+- [ ] 真机：收藏连播（≥2 首收藏）曲末自动切下一首；切歌时微信悬浮音符短暂消失属平台行为，需确认可接受。
+- [ ] 真机：「继续上次」在杀进程重进后可见且能一键续播（不自动播放）。
+- [ ] 真机：熄灯态「结束入睡」<5 分钟二次确认手感；>5 分钟一次点击直接落库。
 - [x] 模拟器（wechatide 390×844）：抽屉「结束播放」首点 `stopArmed=true` 且仍在播、二点停止（`currentId=''`）；迷你条停止方块首点转红不停止、二点停止且 `lastTrackActive=false`（截图 `docs/assets/l4-audio-stop-armed.png`、`l4-audio-stop-np-armed.png`）。
 - [ ] 真机：停止二次确认的暖红/文案与 3 秒节奏是否符合睡前手感（首点误触后应明确知道“还没停”）。
 - [ ] 后台看板：播放卡副标「本周 N · 中断 M」与 14 天趋势 tooltip 的中断数（需起服务 + 有事件数据，**未机验**）。

@@ -35,7 +35,7 @@
     >
       <text wx:if="{{!item.pad}}" class="mc-num">{{item.dayNum}}</text>
       <text wx:if="{{item.durText}}" class="mc-dur">{{item.durText}}</text>
-      <text wx:if="{{item.canAdd}}" class="mc-add">补记</text>
+      <text wx:if="{{item.canAdd}}" class="mc-add">+</text>
       <view wx:if="{{item.partial}}" class="mc-partial-dot"></view>
     </view>
   </view>

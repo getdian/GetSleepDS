@@ -1,5 +1,14 @@
 # 睡点 · 关键更新记录
 
+## 2026-10-26 · L4 模拟器实测：播放状态不一致（P0）· 超期文案 · 日历降噪
+
+- **P0 工具链事实（会阻断整页）**：新增 `utils/player-queue.js`、`utils/player-surface.js` 后只跑 `simulator_refresh` 不会把它们编进包，`audio-dock` 直接报 `module ... is not defined` + `Component is not found`，入睡页整块播放器不渲染。**新增文件后必须 `close_project_window` + `open_project_window` 触发完整编译**；已写入 `docs/13` §1.20 作为后续纪律。
+- **P0 播放状态不一致（用户报障根因之一）**：实测修复前 `paused:false`（音频真的在播）但组件 `playing:false`、`playerSub="已暂停"`——`waiting`（缓冲）之后基础库不补发 `play`，旧实现还把 `playing` 置 false。修复：`waiting` 只进「连接中」不改 `playing`；`canplay` / 12s 守卫 / 4s 补播都按播放器真实 `paused` 自愈；`now-playing.handleCanPlay` 同步加自愈。复验 `playing:true`、绿色音符在场。
+- **超期态（>24h）**：删除与常驻卡片重复的 8s 一次性 notice；标题由「这一觉开始了」改为「这一觉还没结束」、副标「已超过 24 小时，请结束并校准或丢弃。」（短一行，避免压在圆球光晕上）；熄灯「结束入睡」在 <5 分钟时二次确认，避免误触产生 1 分钟记录。
+- **统计页日历降噪**：空格里的「补记」改为轻量「+」（整月 20+ 处重复文案会让日历像一堆按钮），真实入口仍在详情卡与空态。
+- **结果面 compact 口径**：主卡是「还能睡」的时长，副标补「已扣 N 分钟入睡」，消除「1 小时 55 分」被读成到起床时长的歧义；「已过」行 opacity 0.55→0.88 并单独提亮标签；「‹ 返回」加宽到 152rpx 平衡底部双按钮。
+- **验证**：`npm test` **385 项 / 384 通过 / 0 失败 / 1 skip**；`npm run check` 通过（主包约 **623.8 KB**）；模拟器 iPhone 12/13 Pro 390×844 实测截图 `docs/assets/l4-{calc-home,calc-result-final,stats-calendar,sleep-main,sleep-stale-final,lights-out,lights-out-done,audio-sheet,audio-mini}.png`，console `grep -i error` 为空。**未真机**：弱网首播、悬浮 X 后续播、收藏连播切歌、继续上次、熄灯短时长确认、锁屏回环。
+
 ## 2026-10-26 · 批次 C：首播缓冲 · 单曲缓存 · 播放模式 · 继续上次 · 超期段丢弃
 
 - **首次播放被误判为暂停（用户报障）**：BAM 缓冲时会自动 `pause`，原 `pause` 处理把它当用户暂停（冻结定时、收成“已暂停”），弱网首播表现为“刚点播放就暂停”。新增 `waiting` 监听：进入“正在连接”态、重置 12s 守卫、4s 未起播补一次 `safePlay()`；缓冲窗口（8s）内的 `pause` 不冻结定时、不收起播放条。

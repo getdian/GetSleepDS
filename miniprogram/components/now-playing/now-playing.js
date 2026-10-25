@@ -229,7 +229,12 @@ Component({
     handleCanPlay() {
       if (!this._alive) return
       this.disarmLoadingGuard()
-      if (this.data.loading) this.setData({ loading: false })
+      // 部分基础库起播时不补发 play 事件：以播放器真实状态自愈，
+      // 否则会“声音在播、迷你条显示已暂停”。
+      const live = !!(this._audio && !this._audio.paused)
+      if (this.data.loading || (live && !this.data.playing)) {
+        this.setData({ loading: false, playing: live || this.data.playing })
+      }
       playerState.armLoop(this._audio)
     },
 
