@@ -723,6 +723,8 @@ Page({
     } catch (e) {}
     const pending = storage.getPending()
     if (pending && pending.id) reminder.cancel(pending.id).catch(() => {})
+    // 结果面「提醒我入睡/起床」同样撤销；必须在 clearAll 之前读，clearAll 会重置 meta
+    reminder.cancelPlanReminder().catch(() => {})
     const cleared = storage.clearAll()
     events.clearQueue()
     cache.cleanAll()

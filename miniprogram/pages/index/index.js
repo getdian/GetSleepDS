@@ -39,7 +39,11 @@ Page({
     whyOpen: false,
     bgUnlockHours: 24,
     bgFreeMode: false,
-    bgBusy: false
+    bgBusy: false,
+    // 结果面已设置的提醒时刻（与 view.mainAt 相等时按钮显示“已设提醒”）
+    remindAt: 0,
+    // 朋友圈单页模式：无 tabBar、不能 switchTab/登录，隐藏跨页与提醒入口
+    singlePage: false
   },
 
   onLoad() {
@@ -51,6 +55,12 @@ Page({
     // 结果面的计算锚点：同一次结果内的重算（改入睡耗时以外的重算、切后台回来）
     // 必须沿用同一个“现在”，否则入睡模式会因 30 分钟宽限把推荐静默推后一天。
     this._anchorAt = 0
+    this._remindBusy = false
+    let singlePage = false
+    try {
+      const launch = wx.getLaunchOptionsSync && wx.getLaunchOptionsSync()
+      singlePage = !!(launch && Number(launch.scene) === 1154)
+    } catch (e) {}
     const now = Date.now()
     const prefs = storage.getPrefs()
     // 入睡默认跟随真实当前时间（时间轮支持 1 分钟粒度），不再固定白天 23:00
@@ -65,7 +75,8 @@ Page({
       // 入睡时间同样补“今天/明天 + 时段”的上下文，替代原来的“当前 HH:MM”
       sleepContext: this.sleepContextText(nowClock, now),
       // 入睡耗时以 15 分为默认起点；旧版本存下的 5 分不再作为初值
-      fallAsleep: DEFAULT_FALL
+      fallAsleep: DEFAULT_FALL,
+      singlePage
     })
 
     this.loadBackgrounds()
@@ -84,6 +95,10 @@ Page({
     this._alive = true
     const tabBar = this.getTabBar && this.getTabBar()
     if (tabBar) tabBar.setData({ selected: 0 })
+    // 提醒可能已到点或被「清除全部数据」撤销：按本机记录重新对齐按钮状态
+    const planReminder = reminder.getPlanReminder()
+    const remindAt = planReminder ? Number(planReminder.at) : 0
+    if (remindAt !== this.data.remindAt) this.setData({ remindAt })
     this.refreshNow()
     // 未手动调过入睡时间时，回到前台让默认值重新跟随当前时间
     if (this.data.mode === 'sleep' && !this._sleepTouched && !this.data.flipped) {
@@ -340,9 +355,12 @@ Page({
           : '距离 ' + value + ' 起床',
         mainGuideLabel: mainGuide ? mainGuide.label : '',
         mainGuideTone: mainGuide ? mainGuide.tone : '',
-        // 结果面「到点提醒我」：只对主推荐、且时间仍在 1 分钟之后才可设
+        // 结果面「到点提醒我」：只对主推荐、且时间仍在 1 分钟之后才可设。
+        // 用真实当前时刻判断：锚点最多落后 30 分钟，用它会把已过的时刻当成可设。
         mainAt: main ? main.at : 0,
-        mainPassed: main ? main.passed === true || main.at <= now + 60 * 1000 : true,
+        mainPassed: main ? main.at <= Date.now() + 60 * 1000 : true,
+        // 去入睡打卡时带给入睡页的计划起床时刻
+        targetWakeAt: plan.wakeAt,
         note,
         compact: !main,
         rows
@@ -369,7 +387,8 @@ Page({
         mainGuideTone: mainGuide.tone,
         // 入睡模式推荐的是起床时间：到点提醒“该起床了”（仍按一次性订阅，不当闹钟）
         mainAt: main ? main.at : 0,
-        mainPassed: main ? main.at <= now + 60 * 1000 : true,
+        mainPassed: main ? main.at <= Date.now() + 60 * 1000 : true,
+        targetWakeAt: main ? main.at : 0,
         // late 分支只讲后半夜质量，日期前缀仍要保留：凌晨 2 点选 1 点入睡时，
         // 入睡时刻已被宽限推到明天，吞掉日期会让整组推荐看起来像“今天”。
         note: late
@@ -435,38 +454,84 @@ Page({
   /**
    * 结果面「到点提醒我」：一次授权一条，不承诺每天/不当闹钟。
    * kind 与文案：起床模式推荐的是入睡点 → 该睡了；入睡模式推荐的是起床时间 → 该起床了。
+   * 顺序很重要：先在本地挡掉“已过/已设/未配置”，再申请订阅——否则用户先白授权一次才被告知不行。
+   * requestSubscribeMessage 仍在 tap 的同步调用栈内发起（微信要求）。
    */
   onRemindMain() {
     const view = this.data.view
-    if (!view || !view.mainAt || view.mainPassed) return
+    if (!view || !view.mainAt || this._remindBusy) return
+    const at = view.mainAt
     const kind = this.data.mode === 'wake' ? 'sleep' : 'wake'
+    if (at < Date.now() + 60 * 1000) {
+      wx.showToast({ title: '这个时间已过，换个时间吧', icon: 'none' })
+      return
+    }
+    if (this.data.remindAt === at) {
+      wx.showToast({ title: '已设置，到点会提醒你', icon: 'none' })
+      return
+    }
+    const title = kind === 'sleep' ? '睡点：该睡了' : '睡点：该起床了'
+    // 订阅模板未配置（上线前/后台关闭）：与入睡页同一兜底——加入手机日历，不留死胡同
+    if (!reminder.templateId()) {
+      this.offerPlanCalendar(at, title, '订阅提醒暂未开放')
+      return
+    }
+    this._remindBusy = true
     reminder
       .requestOptIn()
       .then((result) => {
         if (!result.ok) {
-          wx.showToast({
-            title:
-              result.reason === 'not_configured'
-                ? '提醒暂未配置，可先用系统闹钟'
-                : '没有开启提醒',
-            icon: 'none'
-          })
+          this._remindBusy = false
+          this.offerPlanCalendar(at, title, '没有开启订阅提醒')
           return
         }
-        return reminder.scheduleAt(view.mainAt, kind).then((res) => {
+        const previous = reminder.getPlanReminder()
+        return reminder.scheduleAt(at, kind).then((res) => {
+          this._remindBusy = false
           if (res && res.skipped === 'too_soon') {
             wx.showToast({ title: '这个时间已过，换个时间吧', icon: 'none' })
             return
           }
+          if (res && res.skipped) {
+            this.offerPlanCalendar(at, title, '订阅提醒暂未开放')
+            return
+          }
+          // 只保留一条结果面提醒：改了入睡耗时/时间后重设，旧的那条必须撤掉，否则会收到两次
+          if (previous && previous.id !== reminder.planIdOf(kind, at)) {
+            reminder.cancel(previous.id).catch(() => {})
+          }
+          reminder.setPlanReminder(kind, at)
+          if (this._alive) this.setData({ remindAt: at })
           wx.showToast({ title: '已设置提醒', icon: 'none' })
         })
       })
       .catch(() => {
+        this._remindBusy = false
         wx.showToast({ title: '提醒设置失败，稍后再试', icon: 'none' })
       })
   },
 
+  /** 订阅不可用时的兜底：写入系统日历（不能深链回小程序，只写说明） */
+  offerPlanCalendar(at, title, reason) {
+    wx.showModal({
+      title: '加到手机日历？',
+      content: (reason ? reason + '。' : '') + '可以把这个时间加到系统日历，到点由日历提醒你。',
+      confirmText: '加入日历',
+      cancelText: '不用',
+      success: (res) => {
+        if (!res.confirm) return
+        reminder.addCalendar(at, title, '打开睡点记录这一觉。').then((ok) => {
+          wx.showToast({ title: ok ? '已加入手机日历' : '加入失败，可稍后重试', icon: 'none' })
+        })
+      }
+    })
+  },
+
   goSleep() {
+    // 把算出的起床时刻带给入睡页：打卡时作为预计起床（超时提示/结束提醒同口径），
+    // 否则入睡模式算出 06:45、打卡却仍按偏好 07:30。
+    const view = this.data.flipped ? this.data.view : null
+    if (view && view.targetWakeAt) reminder.savePlanTarget(view.targetWakeAt, Date.now())
     wx.switchTab({ url: '/pages/sleep/sleep' })
   },
 

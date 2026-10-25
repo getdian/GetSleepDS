@@ -809,6 +809,11 @@
   opacity: 0.7;
 }
 
+/* 已设提醒：薄荷色表示“已完成”，与补觉标签同一色系，不再像一个待点动作 */
+.result-remind.is-set {
+  color: #2DD4BF;
+}
+
 .result-go {
   position: relative;
   flex: none;
@@ -879,7 +884,6 @@
   color: var(--c-primary-soft);
 }
 
-.result-action:active,
 .result-reset:active,
 .result-switch:active {
   opacity: 0.72;

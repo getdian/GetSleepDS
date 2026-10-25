@@ -759,12 +759,33 @@ Component({
       this.clearAutoCacheTimer()
       if (!this._alive || !track || !track.url) return
       if (cache.peek(track.url, this._ttlDays, track.url)) return
-      const delay = cache.autoCacheDelay(this._netType)
-      this._autoCacheTimer = setTimeout(() => {
-        this._autoCacheTimer = null
-        if (!this._alive) return
-        cache.ensure(track.url, null, this._ttlDays).catch(() => {})
-      }, delay)
+      const url = track.url
+      const trackId = track.id
+      const arm = (netType) => {
+        // getNetworkType 是异步的：回调到来前用户可能已停止/切歌（stopPlayback 会清 currentId）
+        if (!this._alive || this.data.currentId !== trackId) return
+        // 离线时不排队；网络类型按“此刻”取：挂载时的快照在 Wi-Fi→4G 后会误判为立即下载
+        if (netType === 'none') return
+        this.clearAutoCacheTimer()
+        this._autoCacheTimer = setTimeout(() => {
+          this._autoCacheTimer = null
+          if (!this._alive) return
+          // 容量上限此前只靠每天一次 maybePrune 收敛；自动缓存不能把占用推过 maxMB
+          if (!cache.canAutoCache(this._cfg && this._cfg.cache)) return
+          cache.ensure(url, null, this._ttlDays).catch(() => {})
+        }, cache.autoCacheDelay(netType))
+      }
+      if (!wx.getNetworkType) {
+        arm(this._netType)
+        return
+      }
+      wx.getNetworkType({
+        success: (res) => {
+          this._netType = (res && res.networkType) || ''
+          arm(this._netType)
+        },
+        fail: () => arm(this._netType)
+      })
     },
 
     /**

@@ -8,6 +8,12 @@
 const api = require('./api')
 const { withLogin } = require('./login')
 const { getConfig } = require('./config')
+const storage = require('./storage')
+
+// 计算器结果 → 入睡页的“计划起床时刻”寿命：算完超过 12 小时才打卡，就不再代表这一觉
+const PLAN_TARGET_TTL = 12 * 60 * 60 * 1000
+// 计划起床时刻只接受“打卡之后 16 小时内”，否则回退偏好
+const PLAN_TARGET_MAX_AHEAD = 16 * 60 * 60 * 1000
 
 function templateId() {
   const config = getConfig()
@@ -53,8 +59,7 @@ function scheduleAt(fireAt, kind) {
   if (!Number.isFinite(at) || at < Date.now() + 60 * 1000) {
     return Promise.resolve({ skipped: 'too_soon' })
   }
-  const prefix = kind === 'wake' ? 'plan-w-' : 'plan-s-'
-  return withLogin((code) => api.createReminder(code, prefix + at, at))
+  return withLogin((code) => api.createReminder(code, planIdOf(kind, at), at))
 }
 
 function cancel(pendingId) {
@@ -62,12 +67,12 @@ function cancel(pendingId) {
   return withLogin((code) => api.cancelReminder(code, pendingId))
 }
 
-function addCalendar(fireAt, title) {
+function addCalendar(fireAt, title, description) {
   if (!wx.addPhoneCalendar) return Promise.resolve(false)
   return new Promise((resolve) => {
     wx.addPhoneCalendar({
       title: title || '睡点：该结束入睡啦',
-      description: '打开睡点，结束本次入睡并校准起床时间。',
+      description: description || '打开睡点，结束本次入睡并校准起床时间。',
       startTime: Math.floor(fireAt / 1000),
       endTime: Math.floor(fireAt / 1000) + 15 * 60,
       alarm: true,
@@ -82,4 +87,66 @@ function addCalendar(fireAt, title) {
   })
 }
 
-module.exports = { templateId, requestOptIn, schedule, scheduleAt, cancel, addCalendar }
+/**
+ * 结果面「去入睡打卡」写入算出的起床时刻；入睡页打卡时优先用它作为 expectedWakeAt，
+ * 否则入睡模式算出 06:45 起床、打卡却按偏好 07:30 判超时与发提醒。只存本机、不同步。
+ */
+function savePlanTarget(wakeAt, now) {
+  const at = Number(wakeAt)
+  if (!Number.isFinite(at) || at <= 0) return false
+  return !!storage.patchMeta({ planTarget: { wakeAt: at, createdAt: Number(now) || Date.now() } })
+}
+
+/** 取出并清除（只消费一次）；过期或不在合理窗口内返回 0 */
+function takePlanTarget(now) {
+  const current = Number(now) || Date.now()
+  const target = storage.getMeta().planTarget
+  if (!target) return 0
+  storage.patchMeta({ planTarget: null })
+  const wakeAt = Number(target.wakeAt) || 0
+  const createdAt = Number(target.createdAt) || 0
+  if (current - createdAt > PLAN_TARGET_TTL || createdAt > current + 60 * 1000) return 0
+  if (wakeAt <= current || wakeAt > current + PLAN_TARGET_MAX_AHEAD) return 0
+  return wakeAt
+}
+
+/** 当前仍有效（未到点）的结果面提醒；没有返回 null */
+function getPlanReminder(now) {
+  const item = storage.getMeta().planReminder
+  if (!item || !item.at || !item.id) return null
+  if (Number(item.at) <= (Number(now) || Date.now())) return null
+  return item
+}
+
+function planIdOf(kind, at) {
+  return (kind === 'wake' ? 'plan-w-' : 'plan-s-') + Number(at)
+}
+
+function setPlanReminder(kind, at) {
+  return !!storage.patchMeta({
+    planReminder: { kind: kind === 'wake' ? 'wake' : 'sleep', at: Number(at), id: planIdOf(kind, at) }
+  })
+}
+
+/** 取消尚未到点的结果面提醒（改时间重设 / 清除全部数据）；本地记录同时清掉 */
+function cancelPlanReminder(now) {
+  const item = getPlanReminder(now)
+  storage.patchMeta({ planReminder: null })
+  if (!item) return Promise.resolve({ skipped: 'none' })
+  return cancel(item.id)
+}
+
+module.exports = {
+  templateId,
+  requestOptIn,
+  schedule,
+  scheduleAt,
+  cancel,
+  addCalendar,
+  savePlanTarget,
+  takePlanTarget,
+  getPlanReminder,
+  setPlanReminder,
+  cancelPlanReminder,
+  planIdOf
+}

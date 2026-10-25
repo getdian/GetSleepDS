@@ -112,8 +112,8 @@ tests/            Node 纯逻辑测试
 
 ## 5. 当前验证基线
 
-- `npm test`：**307 项 / 306 通过 / 0 失败 / 1 skip**（PG 集成用例在未设置 `PG_TEST_URL` 时跳过；2026-10-23 审查修复轮新增 7 条：补记空档 3、令牌签名派生 3、圆均值病态值 1）。
-- `npm run check`：3 页面 / 22 JSON / 17 WXML / 19 WXSS，主包约 535.2 KB（以最新输出为准；较上轮 +9.9KB 是本轮注释与逻辑增量）。
+- `npm test`：**332 项 / 331 通过 / 0 失败 / 1 skip**（2026-10-25 Code Review 修复轮实测；PG 集成用例在未设置 `PG_TEST_URL` 时跳过）。
+- `npm run check`：3 页面 / 22 JSON / 17 WXML / 19 WXSS，主包约 552.4 KB（以最新输出为准）。
 - **验收清单（2026-10-22 建）**：全部待验收项已合并至 [docs/13-acceptance-checklist.md](docs/13-acceptance-checklist.md)，分三区——本机已验收（CLI 模拟器 390×844 实测，含入睡页 10-22 改版与统计页 10-21 改版全状态截图、console 无 error）/ 待真机（音频锁屏、中断、定时、手势手感）/ 待外部输入（部署、AppSecret、COS 防盗链、流量主）。续作新增"未验收"项一律先落该表再写代码。
 - 交付包：以 `release-artifacts/` 下最新 `getsleep-<label>.zip` 为准（`npm run pack` 生成，含 `RELEASE-MANIFEST.json` 与逐文件 sha256，同时留 `.sha256` 校验文件）；打包前会强制跑 `npm test` + `npm run check`。
 - 分享归因冒烟（2026-10-19，内存模式）：`app_open` 带 `1007|pages/index/index|share` 上报 → `/api/admin/analytics` 的 `topSources` 聚合出现；`/api/share/qrcode` 无 code 返 400、密钥不可用返 503，均为优雅报错。
@@ -136,7 +136,7 @@ tests/            Node 纯逻辑测试
 
 1. **COS 防盗链**：当前 `img.qfmaster.com` 的音频可匿名 HEAD 200；若开启防盗链，需放行 `servicewechat.com`（及 `https://sleep.qfmaster.com`），否则真机 403。
 2. **真机未验收**：DevTools 已跑通，但锁屏续播、耳机/来电中断、激励视频、真实 COS 上传仍需真机；`sleep.qfmaster.com` 尚未部署，当前 SSL 不可用。
-3. **后台改密码未实现**：当前改 `.env` 的 `ADMIN_PASSWORD` 并重启；不建议开放明文改文件。要做需“DB 存 scrypt 哈希 + 当前密码校验 + 会话失效/审计”，属于安全改造，不能半套（ADR-013）。
+3. **后台改密码已实现**（2026-10-23，ADR-013）：scrypt+盐入库、当前密码校验、改密即全端会话失效、审计留痕；`.env` 的 `ADMIN_PASSWORD` 仅首次引导。后台「安全」面板的浏览器点击仍待人工验收（docs/13 §1.6）。
 4. **大模型未接入**：当前 `/api/summary` 是模板，稳定、零调用成本、合规；LLM 仅适合可选润色，默认关闭，需超时/禁词/降级。
 5. **午休/多次睡眠**：已支持一天多段（v2 `records[day].sessions[]`，主睡眠取最长一段用于连续天数与详情拆分，统计页 Hero/趋势/日历统一展示 `totalDurationMin` 总睡眠）；未做独立的 `nap` 类型字段，跨天段由客户端按“醒来日”拆到各自记录（一段只归一个醒来日）。
 6. **H5 仍是旧结构**：`/demo/` 已修空播放条、全过期展示和解锁 TTL 读取，但仍是旧三屏结构；三 tab + audio-dock 待重做。
@@ -196,3 +196,5 @@ npm run check
 31. **结果面视觉细化（2026-10-25）**：「15 分钟入睡」胶囊 64→56rpx；主卡上下 padding 22→26（dense 16→20、compact+dense 16→18）；「提醒我入睡/起床」21→24rpx（dense/compact 22）并加字重；「去入睡打卡」改 flex:none + margin-left:auto（按内容宽靠右）；「重新选择/换成我想几点起」升级为实底/描边一对 pill（24rpx/72rpx）；「分享给朋友」改 share-btn icon 变体（图标+自定义文案）。4 行 dense 不溢出，console 无 error，check 540.8KB。
 
 32. **播放后自动缓存（2026-10-25）**：普通播放原只 `peekCached` 不落盘，非 Wi-Fi 每次重播都重新拉流。现在 `play()` 后排队 `cache.ensure`：Wi-Fi 立即、移动网络延迟 15s（`cache.autoCacheDelay`）；`detached`/`stopPlayback` 清定时器；文案补「首」。同时修 `play()` 的黑名单顺序（先清 `_badUrls` 再 `peekCached`），否则失败拉黑后即使已缓存也走远程。代价：无法复用 BAM 流缓存，首次与流式并行约多 1 倍流量，之后本地 0 流量；平均听 2 次以上即净省。验证：318 项绿、模拟器 0/1→1/1（5.4MB）→重播本地路径、console 无 error。
+
+33. **Code Review 修复轮（2026-10-25）**：①P1 结果面计划提醒落地页分流——`plan-s-`/`plan-w-` 改落 `pages/sleep/sleep?remind=sleep|wake`（`services/reminders.pageFor`，保存与发送两处改写，旧排队行发送时纠正），入睡页 `consumeLaunchIntent()` 统一消费 `end`/`remind`：「该睡了」永不开结束面板；②「去入睡打卡」写 `meta.planTarget`，打卡 `expectedWakeAt` 优先取计算结果（只消费一次，>12h/不在 16h 窗口丢弃）；③结果面提醒写 `meta.planReminder`，入睡页同一时刻的起床提醒视为「已开启」，重设撤旧、清除全部数据时取消；④「提醒我」先本地挡已过/已设/未配置再申请订阅，`mainPassed` 用真实时刻，设置后「✓ 已设提醒」，未配置/拒绝走日历兜底；⑤朋友圈单页模式隐藏跨页与提醒入口；⑥自动缓存实时取网络类型 + `maxMB` 容量闸。meta 新字段只存本机、不同步、非配置项。**未做**：结果面按钮主次重排（需视觉拍板，见 review 报告 P2-3）、统计页 0 数据补记入口（产品决策）。验证：332/331/0 fail/1 skip、check 552.4KB；视觉与真机项见 docs/13 §1.14。

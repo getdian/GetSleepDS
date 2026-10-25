@@ -138,14 +138,15 @@
                 </view>
               </view>
 
-              <view class="result-extra">
+              <!-- 朋友圈单页模式不能 switchTab / 登录，跨页与提醒入口一起隐藏 -->
+              <view wx:if="{{!singlePage}}" class="result-extra">
                 <view
                   wx:if="{{view.mainAt && !view.mainPassed}}"
-                  class="result-remind"
+                  class="result-remind {{remindAt === view.mainAt ? 'is-set' : ''}}"
                   bindtap="onRemindMain"
                 >
-                  <text class="result-remind-ico">◔</text>
-                  <text>{{mode === 'wake' ? '提醒我入睡' : '提醒我起床'}}</text>
+                  <text class="result-remind-ico">{{remindAt === view.mainAt ? '✓' : '◔'}}</text>
+                  <text>{{remindAt === view.mainAt ? '已设提醒' : (mode === 'wake' ? '提醒我入睡' : '提醒我起床')}}</text>
                 </view>
                 <view class="result-go" bindtap="goSleep">
                   <text>去入睡打卡</text>

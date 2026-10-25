@@ -111,6 +111,24 @@ test('播放后自动缓存：Wi-Fi 立即，移动网络延迟 15 秒', () => {
   assert.equal(cache.autoCacheDelay(''), 15000)
 })
 
+test('自动缓存容量闸：占用达到 maxMB 后不再自动下载', () => {
+  const saved = storage['sleep:audio-cache:v1']
+  const MB = 1024 * 1024
+  try {
+    storage['sleep:audio-cache:v1'] = { a: { path: '/x/a.mp3', size: 30 * MB, savedAt: Date.now() } }
+    assert.equal(cache.canAutoCache({ maxMB: 80 }), true)
+    storage['sleep:audio-cache:v1'] = {
+      a: { path: '/x/a.mp3', size: 50 * MB, savedAt: Date.now() },
+      b: { path: '/x/b.mp3', size: 30 * MB, savedAt: Date.now() }
+    }
+    assert.equal(cache.canAutoCache({ maxMB: 80 }), false, '恰好到上限也不再自动下载')
+    assert.equal(cache.canAutoCache(null), false, '缺省上限 80MB')
+    assert.equal(cache.canAutoCache({ maxMB: 200 }), true)
+  } finally {
+    storage['sleep:audio-cache:v1'] = saved
+  }
+})
+
 test('同一 URL 并发 ensure 只发起一次下载', async () => {
   downloads = 0
   savedPath = ''

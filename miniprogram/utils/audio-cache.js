@@ -377,6 +377,16 @@ function autoCacheDelay(networkType) {
 }
 
 /**
+ * 自动缓存的容量闸：已占用达到后台 maxMB（默认 80）就不再自动下载。
+ * maybePrune 一天只跑一次，不加这道闸时连续试听多首会把占用推过上限直到第二天。
+ * 用户主动的「缓存」动作不受此限。
+ */
+function canAutoCache(cacheConfig) {
+  const maxMB = Number(cacheConfig && cacheConfig.maxMB) || 80
+  return usedBytes() < maxMB * 1024 * 1024
+}
+
+/**
  * 进入小程序/音频页的预热：仅 Wi-Fi、仅已解锁、最多前两条。
  */
 function warmup(tracks, cacheConfig, unlocked) {
@@ -402,6 +412,7 @@ module.exports = {
   isUsable,
   maybePrune,
   autoCacheDelay,
+  canAutoCache,
   warmup,
   usedBytes,
   cachedCount,

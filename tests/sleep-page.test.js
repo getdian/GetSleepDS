@@ -665,3 +665,33 @@ test('提醒落地：打卡会话 end=1 行为不变', () => {
   done.consumeLaunchIntent()
   assert.equal(done.data.notice, '这次入睡已经结束过了')
 })
+
+const reminderUtil = require('../miniprogram/utils/reminder')
+
+test('打卡：使用计算器带来的起床时刻作为预计起床，并且只消费一次', () => {
+  resetStore()
+  const page = makePage()
+  page.enterLightsOut = () => {}
+  const now = Date.now()
+  const planned = now + 6 * 3600000 + 45 * 60000
+  reminderUtil.savePlanTarget(planned, now)
+  assert.equal(page.markSleep(), true)
+  // refreshAll 会排 30s 熄灯定时器：测试里清掉，避免进程空等 30 秒
+  page.clearLightsTimer()
+  assert.equal(storage.getPending().expectedWakeAt, planned)
+  assert.equal(storage.getMeta().planTarget, null, '已消费，下一次打卡回退偏好')
+})
+
+test('打卡：结果面已设「提醒我起床」且时刻一致时，入睡页直接显示已开启', () => {
+  resetStore()
+  const page = makePage()
+  const now = Date.now()
+  const at = now + 7 * 3600000
+  const pending = { id: 'sleep-' + now, bedAt: now, expectedWakeAt: at, reminderOptIn: false }
+  assert.equal(page.reminderCovered(pending, now), false)
+  reminderUtil.setPlanReminder('wake', at)
+  assert.equal(page.reminderCovered(pending, now), true)
+  // 「该睡了」不覆盖起床提醒
+  reminderUtil.setPlanReminder('sleep', at)
+  assert.equal(page.reminderCovered(pending, now), false)
+})

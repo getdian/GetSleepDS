@@ -219,3 +219,129 @@ test('结果面锚点超过 30 分钟：重算必须回到当前时刻，不能�
     Date.now = originalNow
   }
 })
+
+/* ---------------- 结果面提醒 / 去入睡打卡 ---------------- */
+
+const reminder = require('../miniprogram/utils/reminder')
+
+/** 临时替换 reminder 模块方法（页面持有同一对象引用），返回调用计数 */
+function stubReminder(overrides) {
+  const originals = {}
+  const calls = { optIn: 0, schedule: [], cancel: [] }
+  const base = {
+    templateId: () => 'tmpl-test',
+    requestOptIn: () => {
+      calls.optIn += 1
+      return Promise.resolve({ ok: true })
+    },
+    scheduleAt: (at, kind) => {
+      calls.schedule.push([at, kind])
+      return Promise.resolve({ ok: true })
+    },
+    cancel: (id) => {
+      calls.cancel.push(id)
+      return Promise.resolve({ ok: true })
+    }
+  }
+  const impl = Object.assign(base, overrides || {})
+  Object.keys(impl).forEach((key) => {
+    originals[key] = reminder[key]
+    reminder[key] = impl[key]
+  })
+  calls.restore = () => Object.keys(originals).forEach((key) => (reminder[key] = originals[key]))
+  return calls
+}
+
+function remindPage(mainAt, mode) {
+  const page = makePage()
+  page._remindBusy = false
+  page.setData({ mode: mode || 'wake', flipped: true, view: { mainAt, mainPassed: false } })
+  return page
+}
+
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+test('提醒我：时间已过时先本地拦截，不弹订阅授权', () => {
+  storage.patchMeta({ planReminder: null })
+  const calls = stubReminder()
+  try {
+    const page = remindPage(Date.now() + 30 * 1000)
+    page.onRemindMain()
+    assert.equal(calls.optIn, 0, '注定失败时不能先让用户授权一次')
+  } finally {
+    calls.restore()
+  }
+})
+
+test('提醒我：模板未配置走日历兜底，不弹订阅授权', () => {
+  storage.patchMeta({ planReminder: null })
+  const calls = stubReminder({ templateId: () => '' })
+  const originalModal = global.wx.showModal
+  let modal = null
+  global.wx.showModal = (options) => {
+    modal = options
+  }
+  try {
+    remindPage(Date.now() + 3600000).onRemindMain()
+    assert.equal(calls.optIn, 0)
+    assert.ok(modal && /日历/.test(modal.title), '应给出加入手机日历的出口')
+  } finally {
+    global.wx.showModal = originalModal
+    calls.restore()
+  }
+})
+
+test('提醒我：设置后显示已设状态，重复点击不再授权；改时间重设会撤掉旧的那条', async () => {
+  storage.patchMeta({ planReminder: null })
+  const calls = stubReminder()
+  try {
+    const first = Date.now() + 3600000
+    const page = remindPage(first, 'wake')
+    page.onRemindMain()
+    await flush()
+    await flush()
+    assert.equal(page.data.remindAt, first)
+    assert.deepEqual(calls.schedule[0], [first, 'sleep'], '起床模式推荐入睡点 → 该睡了')
+    assert.equal(reminder.getPlanReminder().id, 'plan-s-' + first)
+
+    page.onRemindMain()
+    assert.equal(calls.optIn, 1, '已设置后重复点击不再弹授权')
+
+    // 改了入睡耗时，主推荐时刻变化后重设：只保留一条
+    const second = first + 5 * 60 * 1000
+    page.setData({ view: { mainAt: second, mainPassed: false } })
+    page.onRemindMain()
+    await flush()
+    await flush()
+    assert.deepEqual(calls.cancel, ['plan-s-' + first])
+    assert.equal(reminder.getPlanReminder().at, second)
+  } finally {
+    calls.restore()
+    storage.patchMeta({ planReminder: null })
+  }
+})
+
+test('去入睡打卡：只在结果面带上算出的起床时刻，且只消费一次', () => {
+  storage.patchMeta({ planTarget: null })
+  const now = Date.now()
+  const wakeAt = now + 7 * 3600000
+  const page = makePage()
+  page.setData({ flipped: false, view: { targetWakeAt: wakeAt } })
+  page.goSleep()
+  assert.equal(reminder.takePlanTarget(now), 0, '正面（未出结果）不写计划时刻')
+
+  page.setData({ flipped: true })
+  page.goSleep()
+  assert.equal(reminder.takePlanTarget(now), wakeAt)
+  assert.equal(reminder.takePlanTarget(now), 0, '只消费一次')
+})
+
+test('计划起床时刻：过期或不在 16 小时窗口内都丢弃', () => {
+  const now = Date.now()
+  reminder.savePlanTarget(now + 7 * 3600000, now - 13 * 3600000)
+  assert.equal(reminder.takePlanTarget(now), 0, '算完超过 12 小时才打卡')
+  reminder.savePlanTarget(now - 60 * 1000, now)
+  assert.equal(reminder.takePlanTarget(now), 0, '已经过去的起床时刻')
+  reminder.savePlanTarget(now + 20 * 3600000, now)
+  assert.equal(reminder.takePlanTarget(now), 0, '超过 16 小时')
+})

@@ -334,7 +334,7 @@ Page({
           ? '已超过预计起床，轻触结束并校准'
           : '轻触圆环，记录起床'
         : '轻触圆环，记录入睡',
-      reminderOn: !!(pending && pending.reminderOptIn),
+      reminderOn: this.reminderCovered(pending, now),
       overdue,
       overdueText,
       record,
@@ -517,9 +517,25 @@ Page({
     return now + 90 * 60 * 1000
   },
 
+  /**
+   * 本次入睡是否已有到点提醒：入睡页自己设的，或结果面「提醒我起床」恰好落在预计起床。
+   * 后者不认会让用户再订阅一次，同一个早上收到两条。
+   */
+  reminderCovered(pending, now) {
+    if (!pending) return false
+    if (pending.reminderOptIn) return true
+    const plan = reminder.getPlanReminder(now)
+    const expected = Number(pending.expectedWakeAt) || 0
+    return !!(plan && plan.kind === 'wake' && expected && Math.abs(Number(plan.at) - expected) < 60 * 1000)
+  },
+
   onReminderTap() {
     const pending = this._pending || storage.getPending()
     if (!pending) return
+    if (this.reminderCovered(pending, Date.now())) {
+      wx.showToast({ title: '已开启，到点会提醒你', icon: 'none' })
+      return
+    }
     const fireAt = Number(pending.expectedWakeAt) || this.defaultExpectedWake(pending.bedAt)
     reminder
       .requestOptIn()
@@ -562,7 +578,8 @@ Page({
     const now = Date.now()
     const pending = {
       bedAt: now,
-      expectedWakeAt: this.defaultExpectedWake(now),
+      // 从计算器结果面过来：用算出的起床时刻（只消费一次、过期丢弃），否则按偏好推算
+      expectedWakeAt: reminder.takePlanTarget(now) || this.defaultExpectedWake(now),
       reminderOptIn: false,
       id: 'sleep-' + now
     }
