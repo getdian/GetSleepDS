@@ -10,6 +10,8 @@ const TYPES = [
   'audio_play',
   'audio_unlock',
   'audio_error',
+  // 外部中断（来电/闹钟/其他 App）：target = begin|trackId 或 end|秒|resume|skip
+  'audio_interrupt',
   'ad_show',
   'ad_error',
   'manual_sleep'

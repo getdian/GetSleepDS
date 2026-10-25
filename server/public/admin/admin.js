@@ -230,7 +230,7 @@
     })
 
     const allZero = list.every(function (item) {
-      return item.opens === 0 && item.checkins === 0 && item.plays === 0
+      return item.opens === 0 && item.checkins === 0 && item.plays === 0 && !item.interrupts
     })
 
     if (!list.length || allZero) {
@@ -244,7 +244,12 @@
     list.forEach(function (item) {
       const col = document.createElement('div')
       col.className = 'trend-col'
-      col.title = item.day + ' 打开 ' + item.opens + ' · 打卡 ' + item.checkins + ' · 播放 ' + item.plays
+      col.title =
+        item.day +
+        ' 打开 ' + item.opens +
+        ' · 打卡 ' + item.checkins +
+        ' · 播放 ' + item.plays +
+        ' · 中断 ' + (item.interrupts || 0)
 
       const openCount = document.createElement('span')
       openCount.className = 'trend-open'
@@ -398,7 +403,9 @@
     $('#stat-manual').textContent = today.manualSleeps || 0
     $('#stat-manual-sub').textContent = '本周 ' + (week.manualSleeps || 0)
     $('#stat-plays').textContent = today.plays || 0
-    $('#stat-plays-sub').textContent = '本周 ' + (week.plays || 0)
+    // 中断次数放在播放卡副标：运营一眼看到“外部中断规模”，不新开一张卡
+    $('#stat-plays-sub').textContent =
+      '本周 ' + (week.plays || 0) + ' · 中断 ' + (week.interrupts || 0)
     $('#stat-users').textContent = totals.users || 0
     $('#stat-users-sub').textContent = '有效解锁 ' + (totals.activeUnlocks || 0)
 

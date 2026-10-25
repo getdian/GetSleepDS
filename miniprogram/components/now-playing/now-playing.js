@@ -11,6 +11,7 @@ const audioTimer = require('../../utils/audio-timer')
 const playerState = require('../../utils/player-state')
 const cache = require('../../utils/audio-cache')
 const events = require('../../utils/events')
+const audioSession = require('../../utils/audio-session')
 const { getConfig } = require('../../utils/config')
 
 const TOGGLE_GUARD_MS = 220
@@ -30,7 +31,9 @@ Component({
     // 手动折叠后即使暂停也保持音符形态；播放/展开时复位
     collapsed: false,
     // 折叠中：保留播放条播放“向右收缩”动画，动画结束后再切音符
-    collapsing: false
+    collapsing: false,
+    // 停止按钮已“上膛”：3 秒内再点一次才真正停止（防睡前误触）
+    stopArmed: false
   },
 
   lifetimes: {
@@ -72,6 +75,8 @@ Component({
         this._collapseTimer = null
       }
       this.disarmLoadingGuard()
+      // 组件销毁时清掉“停止上膛”的定时器（_alive 已置 false，不会再 setData）
+      this.clearStopArm()
       if (this._unsubTimer) {
         this._unsubTimer()
         this._unsubTimer = null
@@ -195,6 +200,8 @@ Component({
       const app = getApp()
       if (app && app.globalData) app.globalData.audioSession = true
       this.disarmLoadingGuard()
+      // 任何来源的起播都算会话存活（含中断结束后的自动续播）
+      audioSession.onPlay()
       storage.patchMeta({ lastTrackPlaying: true })
       this.setData({ loading: false })
       this.sync(true)
@@ -202,6 +209,8 @@ Component({
       // 与入睡页 dock 同口径：偏好取内存中的 audioTimer.total()（默认“关”=0，
       // 不跨会话回忆 meta 里的旧档位）。
       this.applyTimerPreference(audioTimer.total())
+      // 后台/锁屏时 onTimeUpdate 不再回调，回环点改由定时器兜底
+      playerState.armLoop(this._audio)
     },
 
     handlePause() {
@@ -209,6 +218,8 @@ Component({
       this.disarmLoadingGuard()
       // 与 audio-dock 同口径：通知栏/锁屏/耳机暂停也必须冻结倒计时。
       audioTimer.pause()
+      // 只有用户在小程序内暂停才阻止自动恢复
+      audioSession.onPause()
       storage.patchMeta({ lastTrackPlaying: false })
       if (this.data.loading) this.setData({ loading: false })
       this.sync(true)
@@ -218,6 +229,7 @@ Component({
       if (!this._alive) return
       this.disarmLoadingGuard()
       if (this.data.loading) this.setData({ loading: false })
+      playerState.armLoop(this._audio)
     },
 
     handleTimeUpdate() {
@@ -240,12 +252,16 @@ Component({
       }
       // 曲末前无缝回环：不进 ended、不换 src，保住微信悬浮音符（见 player-state.seamlessLoop）
       playerState.seamlessLoop(this._audio)
+      // 前台每秒校准回环定时器；锁屏后没有 timeupdate 时由它独立兜底
+      playerState.armLoop(this._audio)
     },
 
     /** 统一设置音源并记录最后一次赋值，供 onError 判断是否为旧源 */
     setAudioSrc(url) {
       const next = url || ''
       this._expectSrc = next
+      // 与 audio-dock 共用同一份期望源：错误归属判断不能各自为政
+      audioSession.setExpectedSrc(next)
       if (this._audio) this._audio.src = next
     },
 
@@ -269,13 +285,28 @@ Component({
 
     handleEnded() {
       if (!this._alive) return
+      // 会话已被显式终止（用户停止 / 定时到点）：迟到的 ended 不能把音频重新拉响。
+      // 两个组件是同一个播放器的监听者，谁先拿到 claim 不确定，口径必须一致。
+      if (!audioSession.isActive()) {
+        storage.patchMeta({ lastTrackPlaying: false })
+        this.setData({ playing: false })
+        this.sync(true)
+        return
+      }
       // 同一轮 ended 只允许一个组件重播（audio-dock 也会收到），否则会重复赋 src + play()。
       if (!playerState.claimEnded()) return
-      // 到期后不再自动循环续播；保留入口让用户回入睡页重新解锁。
+      // 坏源/极短源的自动重播限流（与 audio-dock 共用同一窗口）
+      if (!audioSession.allowReplay()) {
+        audioSession.onPlayFailed()
+        storage.patchMeta({ lastTrackPlaying: false })
+        this.setData({ playing: false })
+        this.sync(true)
+        if (this._pageVisible) wx.showToast({ title: '播放异常，请重新播放', icon: 'none' })
+        return
+      }
+      // 到期后不再自动循环续播；保留入口让用户回入睡页重新解锁（业务终止，允许收会话）。
       if (!this.canPlay()) {
-        storage.patchMeta({ lastTrackActive: false, lastTrackPlaying: false })
-        const app = getApp()
-        if (app && app.globalData) app.globalData.audioSession = false
+        audioSession.markStopped()
         this.collapse()
         this.rejectLocked()
         return
@@ -285,11 +316,18 @@ Component({
       audioTimer.restore()
       const expiredAt = audioTimer.lastExpiredAt()
       const justExpired = expiredAt && Date.now() - expiredAt < EXPIRY_TOAST_WINDOW_MS
-      if (audioTimer.shouldStop() || justExpired || !this.rebuildSource()) {
-        storage.patchMeta({ lastTrackActive: false, lastTrackPlaying: false })
-        const app = getApp()
-        if (app && app.globalData) app.globalData.audioSession = false
+      if (audioTimer.shouldStop() || justExpired) {
+        // 定时到点：业务终止，隐藏入口
+        audioSession.markStopped()
         this.collapse()
+        return
+      }
+      if (!this.rebuildSource()) {
+        // 配置还没落地/曲目暂时找不到：保留会话与“已暂停”入口，
+        // 等 App.onShow 拉到真实配置后由 audio-session.onConfigReady 续播。
+        storage.patchMeta({ lastTrackPlaying: false })
+        this.setData({ playing: false })
+        this.sync(true)
         return
       }
       try {
@@ -297,8 +335,10 @@ Component({
         this._audio.play()
       } catch (e) {
         this.disarmLoadingGuard()
-        storage.patchMeta({ lastTrackActive: false, lastTrackPlaying: false })
-        this.collapse()
+        // 起播失败同样保留会话，交给 onError / 用户点按重试收口
+        storage.patchMeta({ lastTrackPlaying: false })
+        this.setData({ playing: false })
+        this.sync(true)
       }
     },
 
@@ -308,19 +348,29 @@ Component({
       const meta = storage.getMeta()
       const audio = this._audio
       const hasSrc = !!(audio && audio.src)
-      const active = !!meta.lastTrackId && meta.lastTrackActive !== false
+      // 仍在本进程出声时，即使 meta.lastTrackActive 被外部原因误清也要保留入口：
+      // 需求口径是“只有用户在小程序内停止才消失”，外部中断不算停止。
+      const playingNow = !!(audio && !audio.paused)
+      const hasSession = !!meta.lastTrackId && meta.lastTrackActive !== false
+      const active = hasSession || playingNow
 
       // 跨页时个别基础库会短暂清空 src；只要本次启动创建过音频会话就保留入口，
       // 播放状态用最后一次 play/pause 事件兜底，避免“明明在播却什么都不显示”。
       const app = getApp()
       const session = !!(app && app.globalData && app.globalData.audioSession)
-      if (!active || (!hasSrc && !session)) {
+      const ghost = !hasSrc && !session && !playingNow
+      if (!active || ghost) {
+        // 冷启动残影：没有 src、本进程没起过播、也没在出声。
+        // 这里要把 meta 残留清掉——只挂 now-playing 的页面（计算器/统计）
+        // 不会走 audio-dock 的 ghost 分支，否则上个进程的 lastTrackActive
+        // 会让 audio-session.isActive() 恒真，自动续播的会话门失效。
+        if (ghost) storage.patchMeta({ lastTrackActive: false, lastTrackPlaying: false })
         this.collapse()
         this.syncTimer(true)
         return
       }
 
-      const playing = hasSrc ? !audio.paused : meta.lastTrackPlaying !== false
+      const playing = playingNow || (!hasSrc && meta.lastTrackPlaying !== false)
       const title = meta.lastTrackTitle || '环境音'
       const category = meta.lastTrackCategory || ''
       // 播放中保留用户手动展开的状态，避免 play/pause 事件把条瞬间收回
@@ -334,9 +384,11 @@ Component({
           this._enterTimer = setTimeout(() => {
             this._enterTimer = null
             if (!this._alive) return
-            // 入场延迟期间恰好停止播放时不要再弹出来
+            // 入场延迟期间恰好停止播放时不要再弹出来；
+            // 但“外部中断把 lastTrackActive 误清、播放器仍在出声”不算停止
             const latest = storage.getMeta()
-            if (latest.lastTrackActive === false || !this._audio) return
+            const stillPlaying = !!(this._audio && !this._audio.paused)
+            if (!this._audio || (latest.lastTrackActive === false && !stillPlaying)) return
             this.setData({ visible: true })
           }, 32)
         })
@@ -422,6 +474,11 @@ Component({
     handleStop() {
       if (!this._alive) return
       this.disarmLoadingGuard()
+      // 系统 stop（微信浮窗 X / 系统回收）只取消自动续播意图，不结束会话
+      audioSession.onStop()
+      // 必须落“已暂停”：src 已被清空时 sync 会用这个字段兜底，
+      // 漏写会把暂停态渲染成“正在播放”，点暂停反而重建音源起播。
+      storage.patchMeta({ lastTrackPlaying: false })
       if (this.data.loading) this.setData({ loading: false })
       const expiredAt = audioTimer.lastExpiredAt()
       if (
@@ -438,7 +495,10 @@ Component({
     handleError(err) {
       if (!this._alive) return
       // 切歌/回退竞态：旧源的错误迟到时不能拿去处理新会话（会误删新曲缓存、清掉迷你条）。
-      if (!playerState.isCurrentSourceError(this._audio && this._audio.src, this._expectSrc)) {
+      // 期望源以会话模块为准：自动续播会重设 src，组件本地值可能是旧的。
+      const expected = audioSession.getExpectedSrc() || this._expectSrc
+      if (!expected) return
+      if (!playerState.isCurrentSourceError(this._audio && this._audio.src, expected)) {
         return
       }
       // 与 audio-dock 同口径：错误码进事件队列，1s 内只报一条
@@ -453,6 +513,12 @@ Component({
       }
       this.disarmLoadingGuard()
       if (this.data.loading) this.setData({ loading: false })
+      // 仍在出声：网络/解码抖动交给底层重连，不能清会话。
+      // 否则会出现“音乐还在播，首页/统计页迷你条已经消失”的状态错位。
+      if (this._audio && !this._audio.paused) {
+        this.sync(true)
+        return
+      }
       const audio = this._audio
       // 本地缓存源损坏时，dock 不在场（首页/统计页）也要自行回退远程一次；
       // 否则重建源会反复命中同一个坏文件，用户点一次播放就失败一次。
@@ -479,7 +545,7 @@ Component({
       // 两个组件监听同一个全局播放器，事件顺序不保证。
       // 等一个极短窗口，让 audio-dock（播放会话的 owner）先决定：
       // - 缓存失败回退：它会把 lastTrackActive 保持 true 并重设 src；
-      // - 终态失败：它会把 lastTrackActive 置 false。
+      // - 会话已被显式终止（用户停止/定时到点）：lastTrackActive=false。
       setTimeout(() => {
         if (!this._alive) return
         const meta = storage.getMeta()
@@ -488,8 +554,9 @@ Component({
           return
         }
         if (meta.lastTrackActive === false) {
-          const app = getApp()
-          if (app && app.globalData) app.globalData.audioSession = false
+          // 会话已终止：只取消播放意图，不重复 markStopped（避免把 stoppedAt
+          // 推到 now，害得用户 800ms 内的“点按重试”被当成迟到事件）
+          audioSession.onStop()
           this.setData({ playing: false })
           this.collapse()
           if (this._pageVisible) wx.showToast({ title: '音频加载失败，请重新播放', icon: 'none' })
@@ -500,19 +567,22 @@ Component({
           this.sync(true)
           return
         }
-        // audio-dock 不在场（例如冷启动直接落到首页）时由这里兜底收口。
+        // 终态失败也**保留会话**：迷你条继续以“已暂停”显示，用户可点按重试。
+        // 只有用户主动停止（close）才允许移除入口——外部原因不算停止。
         playerState.clearFallback()
-        audioTimer.clear(undefined, true)
-        storage.patchMeta({ lastTrackActive: false, lastTrackPlaying: false })
-        const app = getApp()
-        if (app && app.globalData) app.globalData.audioSession = false
+        audioSession.onPlayFailed()
+        // 失败后冻结倒计时，避免到点 stopAudio() 把“外部失败”变成业务终止
+        audioTimer.pause()
+        storage.patchMeta({ lastTrackPlaying: false })
         this.setData({ playing: false })
-        this.collapse()
-        if (this._pageVisible) wx.showToast({ title: '音频加载失败，请重新播放', icon: 'none' })
+        this.sync(true)
+        if (this._pageVisible) wx.showToast({ title: '音频加载失败，点按重试', icon: 'none' })
       }, 300)
     },
 
     toggle() {
+      // 用户改按播放/暂停：取消未完成的“停止上膛”
+      this.clearStopArm()
       const audio = this._audio
       if (!audio) return
       const now = Date.now()
@@ -525,16 +595,18 @@ Component({
         return
       }
 
+      // 续播意图必须在重建音源之前确定：BAM 赋 src 会自动起播，
+      // 之后再看 audio.paused 可能已经是 false，会把刚重建的播放又暂停一次。
+      let next = !!audio.paused
       if (!audio.src) {
         // 系统侧 stop 会清空 src：此前这里静默 return，用户点播放毫无反应。
         if (!this.rebuildSource()) {
           wx.showToast({ title: '音频已结束，请重新播放', icon: 'none' })
           return
         }
+        next = true
         this.sync(true)
       }
-
-      const next = !!audio.paused
       // 先反馈再调底层：播放中收回音符，暂停时展开播放条
       this.clearCollapseTimer()
       this.setData({
@@ -545,10 +617,11 @@ Component({
         collapsing: false
       })
       storage.patchMeta({ lastTrackPlaying: next })
+      // 用户在小程序内的暂停/续播：这是“是否允许中断后自动恢复”的判定依据
+      if (next) audioSession.markUserPlay()
+      else audioSession.markUserPause()
       try {
         if (next) {
-          const app = getApp()
-          if (app && app.globalData) app.globalData.audioSession = true
           // 与入睡页 dock 一致：暂停中续剩余，没有运行中的倒计时才按偏好重新起表；
           // 偏好取 audioTimer.total()（默认“关”=0，不跨会话回忆旧档位）
           this.applyTimerPreference(audioTimer.total())
@@ -568,12 +641,37 @@ Component({
       this.syncTimer()
     },
 
+    /**
+     * 停止二次确认：首点只上膛 3 秒（图标转暖红 + toast 提示），再点才真正停止。
+     * 迷你条上的停止方块与播放键相邻，睡前误触一次就整夜没声音，成本太高。
+     */
+    requestStop() {
+      if (this._stopArmTimer) {
+        this.close()
+        return
+      }
+      if (this._alive) this.setData({ stopArmed: true })
+      wx.showToast({ title: '再点一次停止播放', icon: 'none', duration: 1500 })
+      this._stopArmTimer = setTimeout(() => {
+        this._stopArmTimer = null
+        if (this._alive) this.setData({ stopArmed: false })
+      }, 3000)
+    },
+
+    clearStopArm() {
+      if (this._stopArmTimer) {
+        clearTimeout(this._stopArmTimer)
+        this._stopArmTimer = null
+      }
+      if (this._alive && this.data.stopArmed) this.setData({ stopArmed: false })
+    },
+
     close() {
+      this.clearStopArm()
       // 关闭播放条是“停止本次会话”，不是“把下次定时偏好归零”。
       audioTimer.clear(undefined, true)
-      storage.patchMeta({ lastTrackActive: false, lastTrackPlaying: false })
-      const app = getApp()
-      if (app && app.globalData) app.globalData.audioSession = false
+      // 用户主动停止：唯一允许隐藏迷你条并关闭自动恢复的入口
+      audioSession.markStopped()
       this.collapse()
       if (this._audio) {
         try {

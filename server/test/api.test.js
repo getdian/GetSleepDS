@@ -170,3 +170,15 @@ test('audio_error 在事件白名单内，target 保留 trackId|错误码', asyn
   assert.equal(res.status, 200)
   assert.equal(res.body.accepted, 1)
 })
+
+test('audio_interrupt 在事件白名单内（外部中断可观测）', async () => {
+  const res = await post('/api/events', {
+    code: 'dev-code',
+    events: [
+      { type: 'audio_interrupt', target: 'begin|sleep-10001', ts: FIXED_NOW + 120 * 1000 },
+      { type: 'audio_interrupt', target: 'end|12s|resume', ts: FIXED_NOW + 120 * 1000 }
+    ]
+  })
+  assert.equal(res.status, 200)
+  assert.equal(res.body.accepted, 2)
+})

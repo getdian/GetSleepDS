@@ -85,6 +85,19 @@ test('本周按周一 00:00 起，不把上周日算进来', async () => {
   assert.equal(overview.today.checkins, 1)
 })
 
+test('audio_interrupt 只统计 begin：中断频次不被 end 翻倍', async () => {
+  const events = [
+    eventAt(0, 'audio_interrupt', 'begin|a1'),
+    eventAt(0, 'audio_interrupt', 'end|12s|resume'),
+    eventAt(0, 'audio_interrupt', 'begin|a1')
+  ]
+  const analytics = createAnalytics(fakeDeps(events))
+  const overview = await analytics.overview(Date.now())
+  assert.equal(overview.today.interrupts, 2)
+  assert.equal(overview.trend[13].interrupts, 2)
+  assert.ok(overview.week.interrupts >= 2)
+})
+
 test('dayKey 按东八区归日', () => {
   const noon = Date.parse('2026-10-19T12:00:00+08:00')
   assert.equal(dayKey(noon), '2026-10-19')

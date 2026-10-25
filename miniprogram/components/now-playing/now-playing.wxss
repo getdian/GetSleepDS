@@ -328,6 +328,14 @@
   background: currentColor;
 }
 
+/* 停止二次确认：首点后 3 秒内暖红 + 放大，再点才真正停止（防睡前误触） */
+.np-stop.is-armed .np-ico-stop {
+  background: #F87171;
+  transform: scale(1.24);
+  box-shadow: 0 0 0 8rpx rgba(248, 113, 113, 0.16);
+  transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
 .np-ico-play {
   width: 0;
   height: 0;

@@ -59,12 +59,12 @@
       </view>
 
       <view
-        class="np-icon np-stop"
-        catchtap="close"
+        class="np-icon np-stop {{stopArmed ? 'is-armed' : ''}}"
+        catchtap="requestStop"
         hover-class="np-icon--tap"
         hover-stay-time="100"
         aria-role="button"
-        aria-label="停止播放"
+        aria-label="{{stopArmed ? '再点一次停止播放' : '停止播放'}}"
       >
         <view class="np-ico-stop"></view>
       </view>

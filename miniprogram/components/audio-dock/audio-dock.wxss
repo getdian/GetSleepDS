@@ -339,6 +339,12 @@
   color: var(--text-muted);
 }
 
+/* 停止二次确认：首点后 3 秒内转暖红并提示，再点才真正结束 */
+.dock-head-stop.is-armed {
+  color: #FCA5A5;
+  font-weight: 600;
+}
+
 .dock-close {
   flex: none;
   width: 72rpx;

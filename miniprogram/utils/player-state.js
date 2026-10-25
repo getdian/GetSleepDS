@@ -17,6 +17,10 @@ const ENDED_CLAIM_MS = 800
 // onTimeUpdate，不去重会在同一轮各 seek 一次，表现为回环点“跳两下”。
 const LOOP_CLAIM_MS = 1200
 
+// 距曲末多少秒触发回环。2s 会每轮截掉约 1% 的尾部（3 分钟音源），
+// 1.2s 仍留出前台 timeupdate（约 1s 一次）的余量，且后台由 armLoop 精确排程。
+const DEFAULT_TAIL_SECONDS = 1.2
+
 let fallbackUrl = ''
 let fallbackAt = 0
 let endedClaimAt = 0
@@ -51,7 +55,7 @@ function claimLoop() {
  * 的老路径接手（音乐不断，但那一轮的微信浮窗会掉）。
  *
  * @param {object} audio BackgroundAudioManager 实例
- * @param {number} [tailSeconds] 距结尾多少秒内触发回环，默认 2 秒
+ * @param {number} [tailSeconds] 距结尾多少秒内触发回环，默认 1.2 秒
  * @returns {boolean} 本轮是否已由本组件完成回环
  */
 function seamlessLoop(audio, tailSeconds) {
@@ -60,7 +64,7 @@ function seamlessLoop(audio, tailSeconds) {
   const current = Number(audio.currentTime)
   if (!isFinite(duration) || duration <= 0) return false
   if (!isFinite(current) || current < 0) return false
-  const tail = Number(tailSeconds) > 0 ? Number(tailSeconds) : 2
+  const tail = Number(tailSeconds) > 0 ? Number(tailSeconds) : DEFAULT_TAIL_SECONDS
   if (duration - current > tail) return false
   if (!claimLoop()) return false
   try {
@@ -71,6 +75,73 @@ function seamlessLoop(audio, tailSeconds) {
   } catch (e) {
     return false
   }
+}
+
+/* ---------------- 回环定时器 ---------------- */
+
+let loopTimer = null
+let loopTimerAt = 0
+
+function clearLoopTimer() {
+  if (loopTimer) {
+    clearTimeout(loopTimer)
+    loopTimer = null
+    loopTimerAt = 0
+  }
+}
+
+/**
+ * 在“距曲末 tail 秒”预排一次回环，给后台/锁屏兜底。
+ *
+ * BackgroundAudioManager 没有 loop 属性，唯一官方做法是 ended 后重设 src；
+ * 但 onTimeUpdate 官方口径是“只有小程序在前台时才回调”，锁屏后 seamlessLoop
+ * 永远等不到窗口，而 ended 在后台又可能延迟/丢失 → 表现为“播完就停，没有循环”。
+ * 这里把回环点换成一个 setTimeout：前台由 timeupdate 每秒校准，后台由定时器兜底。
+ * timeupdate 与定时器同源（player-state 单例），不会出现两个定时器各 seek 一次。
+ *
+ * @param {object} audio BackgroundAudioManager 实例
+ * @param {number} [tailSeconds] 距结尾多少秒内回环，默认 1.2 秒
+ * @returns {boolean} 是否成功排上
+ */
+function armLoop(audio, tailSeconds) {
+  if (!audio || audio.paused) return false
+  const duration = Number(audio.duration)
+  const current = Number(audio.currentTime)
+  if (!isFinite(duration) || duration <= 0) return false
+  if (!isFinite(current) || current < 0) return false
+  const tail = Number(tailSeconds) > 0 ? Number(tailSeconds) : DEFAULT_TAIL_SECONDS
+  const delay = (duration - current - tail) * 1000
+  if (delay <= 0) return false
+  const at = Date.now() + delay
+  // timeupdate 每秒一次：目标时间没变就不要反复重建定时器
+  if (loopTimer && Math.abs(loopTimerAt - at) < 500) return true
+  clearLoopTimer()
+  const timer = setTimeout(() => {
+    loopTimer = null
+    loopTimerAt = 0
+    if (audio.paused) return
+    const latestDuration = Number(audio.duration)
+    const latestCurrent = Number(audio.currentTime)
+    if (!isFinite(latestDuration) || latestDuration <= 0) return
+    if (!isFinite(latestCurrent) || latestCurrent < 0) return
+    // 定时器被系统节流提前唤醒：还没到回环点，按最新位置重排
+    if (latestDuration - latestCurrent > tail + 0.5) {
+      armLoop(audio, tail)
+      return
+    }
+    if (!seamlessLoop(audio, tail + 0.5)) return
+    // 回环后立刻排下一轮。个别基础库 seek(0) 后 currentTime 未同步刷新，
+    // armLoop 会因 delay<=0 拒绝排队；锁屏后没有 timeupdate 补排，
+    // 不补这一次就会出现“后台只回环一轮”。等一拍再试。
+    if (armLoop(audio, tail)) return
+    setTimeout(() => {
+      if (!audio.paused) armLoop(audio, tail)
+    }, 800)
+  }, delay)
+  if (timer && typeof timer.unref === 'function') timer.unref()
+  loopTimer = timer
+  loopTimerAt = at
+  return true
 }
 
 function markFallback(url) {
@@ -118,6 +189,8 @@ module.exports = {
   claimEnded,
   claimLoop,
   seamlessLoop,
+  armLoop,
+  clearLoopTimer,
   claimExpiryToast,
   isCurrentSourceError
 }

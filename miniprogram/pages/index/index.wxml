@@ -26,7 +26,7 @@
     <view class="calc-card">
       <!-- 模式切换：一体化胶囊常驻卡片顶部，不参与翻转 -->
       <view class="mode-row">
-        <view class="mode-capsule" bindtap="toggleMode">
+        <view class="mode-capsule" bindtap="toggleMode" hover-class="mode-capsule--tap" hover-stay-time="120">
           <view class="mode-pill-active">
             <view class="mode-ico {{mode === 'wake' ? 'is-sun' : 'is-moon'}}"></view>
             <text class="mode-text">{{mode === 'wake' ? '选择起床时间' : '选择入睡时间'}}</text>
@@ -53,7 +53,7 @@
             <view class="now-row">
               <!-- 两种模式都陈述“选中的这个时刻指哪一天”：今天/明天 + 时段 + 24h 时间 -->
               <text class="now-hint">{{mode === 'wake' ? wakeContext : sleepContext}}</text>
-              <text class="now-link {{mode === 'sleep' ? '' : 'is-hidden'}}" bindtap="onNowTap">用现在的时间</text>
+              <text class="now-link {{mode === 'sleep' ? '' : 'is-hidden'}}" bindtap="onNowTap" hover-class="now-link--tap" hover-stay-time="120">用现在的时间</text>
             </view>
 
             <view class="fall-row">
@@ -77,7 +77,7 @@
               </view>
             </view>
 
-            <view class="calc-action" bindtap="onCalc">
+            <view class="calc-action" bindtap="onCalc" hover-class="calc-action--tap" hover-stay-time="120">
               <text>{{mode === 'wake' ? '计算我的睡点' : '计算我的起床时间'}}</text>
               <text class="action-arrow">→</text>
             </view>
@@ -92,7 +92,7 @@
                 <!-- 结果指向入睡点用月牙，指向起床时间用太阳 -->
                 <view class="result-ico {{mode === 'wake' ? 'is-moon' : 'is-sun'}}"></view>
                 <text class="result-label">{{view.label}}</text>
-                <view class="result-fall" bindtap="cycleFall">
+                <view class="result-fall" bindtap="cycleFall" hover-class="result-fall--tap" hover-stay-time="120">
                   <text>{{fallAsleep}} 分钟入睡</text>
                   <text class="result-fall-swap">⇄</text>
                 </view>
@@ -144,19 +144,21 @@
                   wx:if="{{view.mainAt && !view.mainPassed}}"
                   class="result-remind {{remindAt === view.mainAt ? 'is-set' : ''}}"
                   bindtap="onRemindMain"
+                  hover-class="result-remind--tap"
+                  hover-stay-time="120"
                 >
                   <text class="result-remind-ico">{{remindAt === view.mainAt ? '✓' : '◔'}}</text>
                   <text>{{remindAt === view.mainAt ? '已设提醒' : (mode === 'wake' ? '提醒我入睡' : '提醒我起床')}}</text>
                 </view>
-                <view class="result-go" bindtap="goSleep">
+                <view class="result-go" bindtap="goSleep" hover-class="result-go--tap" hover-stay-time="120">
                   <text>去入睡打卡</text>
                   <text class="result-go-arrow">→</text>
                 </view>
               </view>
 
               <view class="result-actions">
-                <view class="result-reset" bindtap="reset">↻ 重新选择</view>
-                <view class="result-switch" bindtap="toggleMode">{{mode === 'wake' ? '换成我想几点睡' : '换成我想几点起'}} ⇄</view>
+                <view class="result-reset" bindtap="reset" hover-class="result-reset--tap" hover-stay-time="120">‹ 返回</view>
+                <view class="result-switch" bindtap="toggleMode" hover-class="result-switch--tap" hover-stay-time="120">{{mode === 'wake' ? '换成我想几点睡' : '换成我想几点起'}} ⇄</view>
               </view>
 
               <view class="result-share">
@@ -174,6 +176,7 @@
     class="calc-note"
     bindtap="openWhy"
     hover-class="calc-note--tap"
+    hover-stay-time="120"
     aria-role="button"
     aria-label="为什么按 90 分钟周期计算"
   >
@@ -184,7 +187,7 @@
   <ad-slot slot-name="home" enabled="{{ads.home.enabled}}" unit-id="{{ads.home.unitId}}" type="{{ads.home.type}}" />
 </view>
 
-<view class="np-host"><now-playing /></view>
+<view class="np-host"><now-playing id="np" /></view>
 
 <!-- 为什么是 90 分钟：仅陈述一般睡眠常识，不做医疗建议 -->
 <view wx:if="{{whyOpen}}" class="end-mask" catchtap="closeWhy" catchtouchmove="noop">
@@ -194,7 +197,7 @@
         <text class="end-title">为什么是 90 分钟？</text>
         <text class="end-sub">睡眠周期与闹钟的关系</text>
       </view>
-      <text class="end-close" catchtap="closeWhy" aria-role="button" aria-label="关闭">×</text>
+      <text class="end-close" catchtap="closeWhy" aria-role="button" aria-label="关闭" hover-class="end-close--tap" hover-stay-time="100">×</text>
     </view>
 
     <view class="why-point">

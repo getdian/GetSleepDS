@@ -1,4 +1,5 @@
 const storage = require('./storage')
+const audioSession = require('./audio-session')
 
 let endAt = 0
 let totalMinutes = 0
@@ -35,11 +36,8 @@ function stopAudio() {
     const audio = wx.getBackgroundAudioManager()
     audio.stop()
   } catch (e) {}
-  storage.patchMeta({ lastTrackActive: false, lastTrackPlaying: false })
-  try {
-    const app = getApp()
-    if (app && app.globalData) app.globalData.audioSession = false
-  } catch (e) {}
+  // 定时到点是业务终止：只有这类显式终止才允许清会话（与“外部中断不算停止”同一口径）
+  audioSession.markStopped()
 }
 
 /** 后台音频是否仍有存活会话（冷启动时没有 src，持久化的倒计时不应继续生效） */
@@ -194,9 +192,35 @@ function restore() {
   const savedTotal = Number(meta.audioTimerMinutes) || 0
   if (!savedEnd && !savedRemain) return 0
 
-  // 杀进程/冷启动后没有后台音频会话，持久化的倒计时不应该“复活”
-  if (!hasLiveAudio()) {
+  // 到点优先：即使播放器 src 已被系统清空，也要把可能残留的后台会话停掉
+  if (savedEnd && savedEnd <= Date.now()) {
+    expiredAt = Date.now()
     stopAudio()
+    clear(undefined, true)
+    return 0
+  }
+
+  // 杀进程/冷启动/外部中断后 src 可能为空：不能调用 stopAudio()——
+  // 那会把“外部中断导致 src 短暂为空”误判成用户主动停止
+  // （audio.stop() + lastTrackActive=false → 首页/统计页迷你条消失、入睡页显示暂停）。
+  if (!hasLiveAudio()) {
+    // 本进程会话还活着（外部中断清空 src）时保留倒计时，等 audio-session 续播后继续，
+    // 避免“续播成功但定时被清、从零重算/整夜不放”。
+    if (audioSession.isSessionLive()) {
+      if (savedRemain > 0) {
+        pausedRemaining = savedRemain
+        totalMinutes = savedTotal
+        emit()
+        return pausedRemaining
+      }
+      if (savedEnd) {
+        endAt = savedEnd
+        totalMinutes = savedTotal
+        startTicker()
+        emit()
+        return remaining()
+      }
+    }
     clear(undefined, true)
     return 0
   }
@@ -206,12 +230,6 @@ function restore() {
     totalMinutes = savedTotal
     emit()
     return pausedRemaining
-  }
-  if (savedEnd <= Date.now()) {
-    expiredAt = Date.now()
-    stopAudio()
-    clear(undefined, true)
-    return 0
   }
   endAt = savedEnd
   totalMinutes = savedTotal

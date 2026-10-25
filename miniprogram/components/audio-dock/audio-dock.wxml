@@ -87,7 +87,13 @@
         <text class="dock-title">环境声音</text>
       </view>
     </view>
-    <text wx:if="{{currentId}}" class="dock-head-stop" catchtap="stopPlayback" aria-role="button">结束播放</text>
+    <text
+      wx:if="{{currentId}}"
+      class="dock-head-stop {{stopArmed ? 'is-armed' : ''}}"
+      catchtap="requestStop"
+      aria-role="button"
+      aria-label="{{stopArmed ? '再点一次结束播放' : '结束播放'}}"
+    >{{stopArmed ? '再点一次结束' : '结束播放'}}</text>
     <view class="dock-close" catchtap="closeSheet" aria-role="button" aria-label="关闭环境声音"></view>
   </view>
 

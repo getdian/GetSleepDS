@@ -10,6 +10,7 @@ const api = require('../../utils/api')
 const { withLogin } = require('../../utils/login')
 const { syncNow, whenIdle } = require('../../utils/sync')
 const audioTimer = require('../../utils/audio-timer')
+const audioSession = require('../../utils/audio-session')
 const reminder = require('../../utils/reminder')
 const tabbar = require('../../utils/tabbar')
 const events = require('../../utils/events')
@@ -718,6 +719,8 @@ Page({
     backgrounds.cleanCache()
     // 先停播放再清缓存：反过来会先删掉正在播放的文件，触发一条“音频加载失败”提示。
     audioTimer.clear()
+    // 清除数据是用户显式终止：同步关掉自动恢复意图，避免回前台把声音又拉起来
+    audioSession.markStopped()
     try {
       wx.getBackgroundAudioManager().stop()
     } catch (e) {}
@@ -1125,5 +1128,9 @@ Page({
 
   goSleep() {
     wx.switchTab({ url: '/pages/sleep/sleep' })
+  },
+
+  onEmptyManual() {
+    this.openManualSheet()
   }
 })

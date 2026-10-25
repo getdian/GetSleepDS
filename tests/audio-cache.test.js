@@ -129,6 +129,32 @@ test('自动缓存容量闸：占用达到 maxMB 后不再自动下载', () => {
   }
 })
 
+test('坏源黑名单：标记后不命中缓存，重下成功自动解禁', async () => {
+  const url = 'https://cdn.example.com/sleep/broken-loop.mp3'
+  storage['sleep:audio-cache:v1'] = {
+    ...(storage['sleep:audio-cache:v1'] || {}),
+    [url]: { path: '/tmp/getsleep-audio-test/broken-loop.mp3', savedAt: Date.now() }
+  }
+  assert.ok(cache.peek(url, 7, url), '正常文件应命中')
+
+  cache.markBad(url)
+  assert.equal(cache.isBad(url), true)
+  // 组件与 audio-session 都走 peek：坏源必须回退远程，避免每轮循环重演“报错→回退”
+  assert.equal(cache.peek(url, 7, url), '')
+  assert.equal(cache.cachedCount([{ url: url }], 7, url), 0, '坏源不计入“已缓存”数量')
+
+  // ensure 会重新下载（文件仍在但播放失败），成功后自动解禁
+  const path = await cache.ensure(url, null, 7)
+  assert.ok(path)
+  assert.equal(cache.isBad(url), false)
+  assert.ok(cache.peek(url, 7, url))
+
+  // 删除缓存记录同样解除标记
+  cache.markBad(url)
+  cache.remove(url)
+  assert.equal(cache.isBad(url), false)
+})
+
 test('同一 URL 并发 ensure 只发起一次下载', async () => {
   downloads = 0
   savedPath = ''

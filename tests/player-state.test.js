@@ -180,3 +180,78 @@ test('seamlessLoop 暂停或时长未知时不动', () => {
     Date.now = originalNow
   }
 })
+
+/** 回环定时器需要能自己推进 currentTime 的播放器：seamlessLoop 读的是真实进度。 */
+function loopAudio(duration) {
+  return {
+    paused: false,
+    duration,
+    currentTime: 0,
+    seeks: 0,
+    seek(position) {
+      this.seeks += 1
+      this.currentTime = position
+    },
+    play() {
+      this.paused = false
+    }
+  }
+}
+
+test('armLoop 在没有 timeupdate 的后台也能按时回环', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  playerState.clearLoopTimer()
+  // 绕过 claimLoop 的 1.2s 去重窗口：同一进程里前一个用例可能刚回环过
+  const originalNow = Date.now
+  Date.now = () => originalNow() + 5000
+  try {
+    const audio = loopAudio(100)
+    audio.currentTime = 10
+    assert.equal(playerState.armLoop(audio), true)
+
+    // 还没到回环点：不能提前 seek
+    t.mock.timers.tick(80000)
+    assert.equal(audio.seeks, 0)
+
+    audio.currentTime = 99
+    t.mock.timers.tick(8800)
+    assert.equal(audio.seeks, 1)
+    assert.equal(audio.currentTime, 0)
+  } finally {
+    Date.now = originalNow
+    playerState.clearLoopTimer()
+  }
+})
+
+test('armLoop 被提前唤醒时按最新位置重排', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  playerState.clearLoopTimer()
+  const originalNow = Date.now
+  Date.now = () => originalNow() + 10000
+  try {
+    const audio = loopAudio(100)
+    audio.currentTime = 10
+    playerState.armLoop(audio)
+
+    // 定时器被系统节流提前唤醒：位置没到结尾，只重排不 seek
+    t.mock.timers.tick(88800)
+    assert.equal(audio.seeks, 0)
+
+    audio.currentTime = 99
+    t.mock.timers.tick(88800)
+    assert.equal(audio.seeks, 1)
+  } finally {
+    Date.now = originalNow
+    playerState.clearLoopTimer()
+  }
+})
+
+test('armLoop 暂停或时长未知时不排定时器', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  playerState.clearLoopTimer()
+  const paused = loopAudio(100)
+  paused.paused = true
+  assert.equal(playerState.armLoop(paused), false)
+  assert.equal(playerState.armLoop(loopAudio(0)), false)
+  assert.equal(playerState.armLoop(null), false)
+})

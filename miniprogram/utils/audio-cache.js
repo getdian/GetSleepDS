@@ -6,6 +6,28 @@ const DAY_MS = 24 * 60 * 60 * 1000
 let dirReady = false
 const listeners = []
 
+/**
+ * 会话级坏源黑名单：播放报错但磁盘文件仍在（解码/网络抖动）时只标记、不删文件。
+ * 放在缓存模块而不是组件里，是为了让「自动续播」与「预热/自动缓存」也共享同一口径：
+ * - peek() 命中坏源返回空 → 组件回退远程、续播不会再次命中；
+ * - 下载成功自动解禁（文件已被重下/修复）；
+ * - 手动播放/清理缓存时解禁，允许用户重新验证一次。
+ */
+const badUrls = new Set()
+
+function markBad(url) {
+  if (url) badUrls.add(url)
+}
+
+function isBad(url) {
+  return !!url && badUrls.has(url)
+}
+
+function clearBad(url) {
+  if (url) badUrls.delete(url)
+  else badUrls.clear()
+}
+
 function notify() {
   listeners.slice().forEach((fn) => {
     try {
@@ -86,6 +108,8 @@ function ensureDir() {
  */
 function peek(url, ttlDays, keepUrl) {
   if (!url) return ''
+  // 本会话内已判定播不出来的源：不算命中，让调用方走远程/重下
+  if (isBad(url)) return ''
   const meta = readMeta()
   const item = meta[url]
   if (!item || !item.path) return ''
@@ -112,6 +136,7 @@ function peek(url, ttlDays, keepUrl) {
 }
 
 function remove(url) {
+  clearBad(url)
   const meta = readMeta()
   const item = meta[url]
   if (!item) return
@@ -217,6 +242,8 @@ function download(url, onProgress, ttlDays, onTask) {
                   savedAt: Date.now()
                 }
                 writeMeta(meta)
+                // 重新下载成功 = 文件已修复，解除本会话的坏源标记
+                clearBad(url)
                 notify()
                 resolve(dest)
               },
@@ -347,6 +374,13 @@ function cachedCount(tracks, ttlDays, keepUrl) {
 
 function cleanAll(exceptUrl) {
   // 先中止在途下载：否则「清理」完成后，还没下完的任务会把文件与计数重新写回来
+  if (exceptUrl) {
+    Array.from(badUrls).forEach((url) => {
+      if (url !== exceptUrl) badUrls.delete(url)
+    })
+  } else {
+    badUrls.clear()
+  }
   Array.from(inflight.keys()).forEach((url) => {
     if (!exceptUrl || url !== exceptUrl) cancel(url)
   })
@@ -410,6 +444,9 @@ module.exports = {
   cancel,
   remove,
   isUsable,
+  markBad,
+  isBad,
+  clearBad,
   maybePrune,
   autoCacheDelay,
   canAutoCache,

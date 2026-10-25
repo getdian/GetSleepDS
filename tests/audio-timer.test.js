@@ -6,6 +6,7 @@ let stopped = 0
 let audioSrc = ''
 
 global.wx = {
+  env: { USER_DATA_PATH: '/tmp/sleep-audio-test' },
   getStorageSync(key) {
     return Object.prototype.hasOwnProperty.call(memory, key) ? memory[key] : ''
   },
@@ -98,6 +99,40 @@ test('冷启动没有后台音频时不复活上次倒计时，只保留偏好',
   assert.equal(timer.restore(), 0)
   assert.equal(storage.getMeta().audioTimerEndAt, 0)
   assert.equal(storage.getMeta().audioTimerMinutes, 60)
+})
+
+test('冷启动无活音频只清运行态，不把外部中断当成用户停止', () => {
+  timer.clear()
+  audioSrc = ''
+  stopped = 0
+  storage.patchMeta({
+    lastTrackActive: true,
+    lastTrackPlaying: true,
+    audioTimerEndAt: Date.now() + 60 * 60 * 1000,
+    audioTimerMinutes: 60,
+    audioTimerPausedRemaining: 0
+  })
+  assert.equal(timer.restore(), 0)
+  // 之前这里会调用 stopAudio()：audio.stop() + lastTrackActive=false，
+  // 导致“系统清空 src”被误判成用户停止，首页/统计页迷你条消失。
+  assert.equal(stopped, 0)
+  assert.equal(storage.getMeta().lastTrackActive, true)
+})
+
+test('定时到点终止会话（这是业务终止，允许清 lastTrackActive）', () => {
+  timer.clear()
+  audioSrc = ''
+  storage.patchMeta({
+    lastTrackActive: true,
+    lastTrackPlaying: true,
+    audioTimerEndAt: Date.now() - 1000,
+    audioTimerMinutes: 30
+  })
+  timer.restore()
+  const meta = storage.getMeta()
+  assert.equal(meta.audioTimerEndAt, 0)
+  assert.equal(meta.lastTrackActive, false)
+  assert.equal(meta.lastTrackPlaying, false)
 })
 
 test('暂停中的倒计时同样不能跨进程复活', () => {

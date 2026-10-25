@@ -5,6 +5,7 @@ const events = require('./utils/events')
 const { launchSourceOf } = require('./utils/launch-source')
 const audioCache = require('./utils/audio-cache')
 const audioTimer = require('./utils/audio-timer')
+const audioSession = require('./utils/audio-session')
 
 App({
   globalData: {
@@ -20,6 +21,12 @@ App({
   onLaunch(options) {
     const launchSource = launchSourceOf(options)
     this._lastLaunchKey = launchSource
+
+    // 中断可观测：会话层只发回调，事件队列由 App 注入（单测不启动上报定时器）
+    audioSession.setReporter((type, target) => events.track(type, target))
+    // 环境音中断恢复：注册 wx.onAudioInterruptionBegin/End（全局只注册一次），
+    // 来电/闹钟/其他 App 抢占结束后自动续播（用户在小程序内主动暂停的不恢复）。
+    audioSession.init()
 
     // 开发版专用：真实感模拟数据入口（体验/正式版不挂载）
     // 开发者工具 console 里执行：getApp().seedDemo() 或 getApp().seedDemo(60)
@@ -76,13 +83,23 @@ App({
     if (!current || !current.features || current.features.timer !== false) {
       audioTimer.restore()
     }
+    // 切到其他含音频的 App 不会触发 interruption 事件：回前台时补偿续播
+    // （用户在小程序内主动暂停/停止的不会恢复，判定在 audio-session 内）
+    audioSession.onAppShow()
 
     // 每次回前台都强制刷新，后台改广告位/背景图/开关后能尽快生效；
     // config 内部有在途去重，不会和页面 onShow 的请求叠加。
     loadConfig(true)
       .then((config) => {
         this.globalData.config = config
+        // 首屏可能只有内置兜底配置（找不到上次的曲目），拿到真实清单后补一次续播
+        audioSession.onConfigReady()
       })
       .catch(() => {})
+  },
+
+  onHide() {
+    // 只记录“离开时是否在播”，真正的恢复判定在 onShow / interruptionEnd
+    audioSession.onAppHide()
   }
 })

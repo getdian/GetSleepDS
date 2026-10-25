@@ -15,6 +15,8 @@ function emptyBucket(day) {
     unlocks: 0,
     adShows: 0,
     adErrors: 0,
+    // 外部中断次数：只统计 begin（end 只是时长与恢复结果，不计频次）
+    interrupts: 0,
     // 补记次数：只打卡不补记 vs 高补记率，是判断“打卡闭环是否成立”的关键信号
     manualSleeps: 0
   }
@@ -53,6 +55,7 @@ function createAnalytics(options) {
     let weekUnlocks = 0
     let weekAdShows = 0
     let weekAdErrors = 0
+    let weekInterrupts = 0
     let weekManualSleeps = 0
     const top = new Map()
     const sources = new Map()
@@ -77,6 +80,9 @@ function createAnalytics(options) {
         top.set(key, (top.get(key) || 0) + 1)
       }
       if (event.type === 'audio_unlock') bucket.unlocks += 1
+      if (event.type === 'audio_interrupt' && String(event.target || '').indexOf('begin') === 0) {
+        bucket.interrupts += 1
+      }
       if (event.type === 'manual_sleep') bucket.manualSleeps += 1
 
       if (event.type === 'ad_show' || event.type === 'ad_error') {
@@ -97,6 +103,9 @@ function createAnalytics(options) {
         if (event.type === 'checkin') weekCheckins += 1
         if (event.type === 'audio_play') weekPlays += 1
         if (event.type === 'audio_unlock') weekUnlocks += 1
+        if (event.type === 'audio_interrupt' && String(event.target || '').indexOf('begin') === 0) {
+          weekInterrupts += 1
+        }
         if (event.type === 'ad_show') weekAdShows += 1
         if (event.type === 'ad_error') weekAdErrors += 1
         if (event.type === 'manual_sleep') weekManualSleeps += 1
@@ -136,6 +145,7 @@ function createAnalytics(options) {
         unlocks: todayBucket.unlocks,
         adShows: todayBucket.adShows,
         adErrors: todayBucket.adErrors,
+        interrupts: todayBucket.interrupts,
         manualSleeps: todayBucket.manualSleeps
       },
       week: {
@@ -145,6 +155,7 @@ function createAnalytics(options) {
         unlocks: weekUnlocks,
         adShows: weekAdShows,
         adErrors: weekAdErrors,
+        interrupts: weekInterrupts,
         manualSleeps: weekManualSleeps
       },
       ads: {
@@ -161,7 +172,8 @@ function createAnalytics(options) {
         day: bucket.day,
         opens: bucket.opens.size,
         checkins: bucket.checkins,
-        plays: bucket.plays
+        plays: bucket.plays,
+        interrupts: bucket.interrupts
       })),
       topTracks,
       topSources,

@@ -42,7 +42,9 @@ GetSleepDS/
 │   │   ├── login.js               # wx.login 静默取 code
 │   │   ├── config.js              # 远程配置拉取/缓存/兜底
 │   │   ├── sync.js                # 静默云同步
-│   │   ├── audio-cache.js         # 音频落盘、预加载、容量清理
+│   │   ├── audio-cache.js         # 音频落盘、预加载、容量清理、坏源黑名单
+│   │   ├── audio-session.js       # 环境音会话状态机（中断恢复/会话可见性/播放意图）
+│   │   ├── player-state.js        # 曲末回环去重与后台回环定时器
 │   │   ├── audio-timer.js         # 跨页面的定时关闭单例
 │   │   ├── events.js              # 轻量事件队列与上报
 │   │   └── ad.js                  # 激励视频生命周期

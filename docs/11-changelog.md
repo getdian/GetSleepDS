@@ -1,5 +1,62 @@
 # 睡点 · 关键更新记录
 
+## 2026-10-25 · 音频体验四项收口（停止防误触 · 回环尾部收紧 · 中断可观测 · 坏源黑名单下沉）
+
+- **停止防误触（P1，真实误触成本）**：`now-playing` 迷你条停止方块与 `audio-dock` 抽屉「结束播放」改为 **3 秒内二次点按**。首点只“上膛”：方块转暖红（`.np-stop.is-armed`）、抽屉文案变「再点一次结束」并 toast 提示；再点才 `markStopped()`。3 秒自动复位；切歌、暂停、关抽屉、组件销毁都会清掉上膛态。睡前误触一次不再导致整夜没声音。
+- **回环尾部 2s → 1.2s（P1，听感）**：`player-state` 新增 `DEFAULT_TAIL_SECONDS = 1.2`（原两处硬编码 2），每轮少截掉约 0.8s 尾音；`armLoop` 回调仍用 `tail + 0.5` 接受窗口，锁屏回环兜底不变。`tests/player-state.test.js` 的排程断言按 88800ms 调整。
+- **中断可观测（P2，运营）**：`audio-session.setReporter(fn)` 由 `app.js` 接 `events.track`（单测不启动上报定时器）。`audio_interrupt` 上报 `begin|trackId` 与 `end|<秒>s|resume|skip`；服务端 `TYPES` 放行，`analytics` 只把 `begin` 计入 `today/week/trend.interrupts`，后台播放卡副标变「本周 N · 中断 M」、14 天趋势 tooltip 追加中断数。
+- **坏源黑名单下沉（P3，可靠性）**：`audio-cache` 新增模块级 `markBad/isBad/clearBad`；`peek()` 命中坏源返回空（组件回退远程、`audio-session` 续播与 `warmup/ensure` 不再反复命中），下载成功 / `remove()` / `cleanAll()` 自动解禁。`audio-dock` 删除私有 `_badUrls`，错误路径统一写缓存模块。
+- **配套**：`index.wxml` / `stats.wxml` 的 `<now-playing id="np" />` 补 id（自动化取证需要；无视觉变化）。
+- **文档铁律**：`AGENTS.md` §5 与 `docs/12` §10 新增「音频播放铁律」（状态单写入口 / 可见性 / 中断恢复 / 回环 / 停止二次确认 / 坏源与错误 / 可观测 / 回归门禁），`context.md` 与 `docs/13` §2.1 加指针；违反任一条视为回退已验收的真机行为。
+- **验证**：`npm test` **355 项 / 354 通过 / 0 失败 / 1 skip**（新增中断上报 1 条、坏源黑名单 1 条、服务端白名单 1 条、analytics 1 条）；`npm run check` 通过（3 页面 / 22 JSON / 17 WXML / 19 WXSS，主包约 **593.6 KB**）；模拟器 390×844 实测：抽屉首点 `stopArmed=true` 且仍在播、二点停止（`currentId=''`）；迷你条首点转红不停止、二点停止且 `lastTrackActive=false`（截图 `docs/assets/l4-audio-stop-armed.png`、`l4-audio-stop-np-armed.png`）。
+- **未机验/非代码**：真机的暖红上膛视觉与 3s 手感、1.2s 回环点听感；后台看板中断数需起服务 + 事件数据；多音源内容供给需运营素材；定时淡出受 `BackgroundAudioManager` 无 `volume` 限制，平台不支持。详见 `docs/12-sleep-audio-refresh.md` §9.6、`docs/13-acceptance-checklist.md` §2.1。
+
+## 2026-10-25 · 环境音外部中断自动恢复 + 迷你条会话口径 + 后台曲末回环
+
+- **根因（改前代码事实）**：①全仓没有 `wx.onAudioInterruptionBegin/End`，来电/闹钟/其他 App 抢占后只有底层 `pause`，没有任何续播入口；②`lastTrackActive` 有 8 个写入点，其中 `audio-dock.onError` 终态分支**不调用 `stop()` 就清会话**、`now-playing.handleError` 的 300ms 兜底同样清会话——网络/解码抖动时音频仍在出声，页面却把迷你条收掉；③`audio-dock.syncFromAudio` 在 `src` 为空时只信 `meta.lastTrackPlaying`，忽略真实 `paused`，外部中断后入睡页显示“已暂停”；④回环依赖 `onTimeUpdate`（官方口径：只有小程序在前台才回调），锁屏后只剩不可靠的 `onEnded`，且 `audio-timer.restore()` 的“无活音频”分支会 `stopAudio()` → `lastTrackActive=false`，把外部中断误判成用户停止；⑤`now-playing.handleEnded` 无“会话已终止”守卫，两组件谁先抢到 `claimEnded` 不确定。
+- **新增 `utils/audio-session.js`（会话状态机，唯一写入口径）**：`markStopped()`（用户停止/定时到点/权益到期/清除数据）之外一律不清 `lastTrackActive`；`wantPlaying + userPaused` 区分“外部中断”与“用户在小程序内暂停”，800ms 宽限拦住停止/暂停后迟到的 `play`；`init()` 幂等注册 `wx.onAudioInterruptionBegin/End`，`App.onHide/onShow` 补偿“切到其他 App”场景；续播时 `src` 被清空则按 `lastTrackId` 重建（优先缓存），已到曲末先 `seek(0)`，`canPlay()` 与组件同口径（到期不靠中断恢复续播）；`allowReplay()` 给坏源/极短源 10s 8 次的重播上限。
+- **可见性**：`now-playing.sync` 改为“仍在出声即显示”（`active = meta.active || !paused`），冷启动幽灵才隐藏；`audio-dock.syncFromAudio` 用 `!paused` 优先；`now-playing.handleStop` 补落 `lastTrackPlaying:false`（否则 `src` 被系统清空时会显示“正在播放”、点暂停反而起播）。两个组件的 `ended` 都先检查 `audioSession.isActive()` 再抢 claim。
+- **回环兜底**：`player-state.armLoop()` 把“距曲末 tail 秒”换成 `setTimeout`，前台由 `onTimeUpdate` 每秒校准，锁屏后无 timeupdate 也能 `seek(0)`；`markUserPause/markStopped` 会清定时器；回环成功后立即重排，个别基础库 `seek` 后 `currentTime` 未刷新时补 800ms 重试。
+- **配套修复**：`now-playing.toggle` 在重建 `src` 前先确定续播意图（BAM 赋 `src` 会自动起播，旧代码随后读 `audio.paused` 可能把刚重建的播放再暂停）；`audio-timer.stopAudio()` 统一走 `markStopped()`；统计页“清除数据”同步关闭自动恢复意图。
+- **验证**：`npm test` **351 项 / 350 通过 / 0 失败 / 1 skip**（新增 `tests/audio-session.test.js` 13 条、`player-state` armLoop 3 条、`audio-timer` 2 条）；`npm run check` 通过（3 页面 / 22 JSON / 17 WXML / 19 WXSS，主包约 **588.1 KB**）；wechatide 模拟器 390×844 实测四条：外部暂停后迷你条保留 / 回前台自动续播（37s 继续）/ 应用内暂停不复活 / 应用内停止后迷你条消失且回前台不复活。
+- **未真机**：来电/闹钟真实 interruption 回调顺序、锁屏多轮回环与微信悬浮音符、耳机拔出、通知栏暂停（API 无原因字段，当前按“外部中断可恢复”处理）。详见 `docs/12-sleep-audio-refresh.md` §9、`docs/13-acceptance-checklist.md` §2.1。
+
+## 2026-10-25 · 全局按钮与文字触控弱状态反馈（计算器 · 入睡 · 统计全页面落地）
+
+- **背景与目标**：解决真机轻触、快速点击、弱网交互时用户反映“不知道是否点击成功、缺乏按压弱状态反馈”的问题。采用微信小程序原生 `hover-class` 配合 `hover-stay-time="100~120ms"` + CSS `:active` 双层保障，确保轻触也能稳定展现轻柔弹性缩放与半透明确认。
+- **计算器页 (`miniprogram/pages/index`)**：
+  - 顶部模式切换胶囊（`.mode-capsule`）：增加 `hover-class="mode-capsule--tap"`，点击触发 `opacity: 0.76; transform: scale(0.97)`。
+  - 正面输入区：文字链接「用现在的时间」（`.now-link`）配置 `opacity: 0.52; transform: scale(0.97)`；入睡耗时档位（`.fall-chip`）补充 `:active` 与弹性 `scale(0.94)`；正面主按钮「计算我的睡点」（`.calc-action`）配置 `transform: scale(0.96); opacity: 0.82; box-shadow` 紧贴微收。
+  - 结果面背面：入睡耗时切换（`.result-fall`）与「提醒我入睡/起床」（`.result-remind`）配置 `opacity: 0.62~0.65; transform: scale(0.96)`；主 CTA「去入睡打卡」（`.result-go`）配置 `transform: scale(0.96); opacity: 0.82`；底部轻量药丸「‹ 返回」与「换成我想几点睡/起」配置物理下凹背景加深与微缩；脚注「为什么是 90 分钟？」（`.calc-note`）配置 `opacity: 0.55; transform: scale(0.98)`。
+- **入睡页 (`miniprogram/pages/sleep`)**：
+  - 中央主呼吸环（`.sleep-orb`）：配置 `transform: scale(0.96); opacity: 0.88`；顶部通知条（`.notice`）配置轻按反馈。
+  - 进行中态（B态）：弱实心胶囊「到点提醒我记录起床」（`.sleep-reminder`）配置 `opacity: 0.65; transform: scale(0.97)`；超时卡片（`.sleep-overdue`）配置 `transform: scale(0.98)`；次级文字链接「点错了？撤销本次入睡」（`.undo-bed`）配置 `opacity: 0.52; transform: scale(0.97)`。
+  - 空闲与完成态：居中主按钮「补记入睡」（`.manual-entry`）配置实底缩放与阴影贴紧；睡眠段操作「修改/删除」（`.session-op`）配置 `opacity: 0.5; transform: scale(0.94)`；完成态双按钮「继续入睡/补记入睡」（`.cta-mini`）配置 `transform: scale(0.96)`；文字链接「记录有误？撤销当天记录」（`.undo`）与底部统计轻量条（`.stats-strip`）均补齐触控反馈。
+- **统计页 (`miniprogram/pages/stats`) 与公共组件**：
+  - 统计页核心区：3 个指标卡（`.metric`）增加 `scale(0.97)` 弹性点击感；周期切换选项（`.span-tab`）配置 `opacity: 0.65; transform: scale(0.95)`；详情卡补记入口「补记一段 ›」（`.dd-add`）配置 `opacity: 0.52`；海报生成按钮（`.poster-btn`）配置柔和微缩。
+  - 低频设置区：数据与备份「展开/收起」（`.settings-head`）、云备份「同步」（`.sync-btn`）、独立入口「删除云端副本」（`.cloud-del`）与「清除数据」（`.danger-entry`）全面添加触控弱状态。
+  - 公共弹层面板（`styles/sheet.wxss`）：关闭叉号（`.end-close`）、醒来日选择行（`.end-date-row`）、时间项（`.end-time-item`）、主次保存按钮（`.end-btn`）统一定义并在三页弹层通用。
+  - 空态组件（`components/empty-state`）：主按钮「去入睡」与次按钮「补记睡眠」增加触控下按弹性与透明度反馈。
+- **验证**：`npm test` **333 项 / 332 通过 / 0 失败 / 1 skip**；`npm run check` 检查通过（3 页面 / 22 JSON / 17 WXML / 19 WXSS，主包约 **561.9 KB**）。
+
+## 2026-10-25 · 结果面主按钮实底化 + 统计页 0 数据补记入口（Review P2-3 / P3-5 收口）
+
+- **P2-3 结果面主 CTA 实底化与视觉呼吸空间拉开**：计算器背面「去入睡打卡」改为实底主药丸按钮（`background: var(--btn-primary-bg)`，文字与右箭头为 `var(--btn-primary-fg)` 纯白，字重 600，`box-shadow: var(--btn-primary-shadow)`，去边框），与正面主按钮规则严格对齐；主推荐卡拉高呼吸距离（内边距 26rpx，外边距 20rpx）；次级动作「提醒我入睡/起床」字号由 22rpx 扩大至 26rpx、图标 25rpx，颜色提亮为高对比柔白，与上方列表间距由 6rpx 拉大至 24rpx，消除原先紧贴压迫感；4 行 dense 依然紧凑 0 溢出（截图 `docs/assets/l4-calc-result-breathing.png`、`l4-calc-result-sleep-breathing.png`）。
+- **入睡页视觉精简与层次提升**：①移除圆环下方冗余文案「只记录时间，不做睡眠评价」，页面更加纯净安宁；②「补记入睡」由小下划线文字链接升级为居中小实底主药丸按钮（`height: 64rpx`，`--btn-primary-*`），与打卡主色调呼应；③底部「分享这一段睡眠」由纯文本升级为带矢量分享图标（`variant="icon"`），全页呼吸感与质感显著提升（截图 `docs/assets/l4-sleep-visual-refined.png`）。
+- **P3-5 统计页 0 数据态补记入口与视觉优化**：①通用组件 `empty-state` 扩展支持 `secondaryText` 属性与 `secondary` 事件抛出；空态主按钮「去入睡」升级为小实底主药丸按钮（`--btn-primary-*`），与次级「补记睡眠」形成分明主次；点击「补记睡眠」直接打开预填今天的手动补记底面板，新装用户白天进入统计页也可直接录入既往睡眠；②底部「数据与备份」标题由 24rpx 放大至 28rpx，右侧「展开/收起」字样由 20rpx 放大至 26rpx，层级与易读性显著提升（截图 `docs/assets/l4-p3-5-stats-empty.png`、`l4-stats-visual-refined.png`、`l4-stats-settings-open.png`；新增单测 `tests/stats-page.test.js`）。
+- **统计页有数据态视觉优化（指标隔离微光竖线 · 主次分层 · 时间跨度弱背景 · 图例居中微透）**：①指标区隔离由生硬的整列边框升级为垂直居中、上下两端淡出的微光弱竖线（`linear-gradient`，64% 适中高度），通透晶莹；②核心指标主次强化：主指标「平均睡眠」放大为 52rpx / 700 纯白高亮并带微光阴影，次级「平均入睡 / 平均起床」收敛至 44rpx / 500 次白（`rgba(225,235,255,0.82)`），避免三指标等大导致视觉发散；③时间跨度选项紧凑化（间距收至 10rpx），当前项增加 `rgba(255, 255, 255, 0.12)` 简洁无边框弱背景胶囊，选中态自然温润；④日历图例由居左排布改为居中排布（`justify-content: center`），字号微调并降低透明度至 0.8，优雅不抢主表格（截图 `docs/assets/l4-stats-data-refined.png`）。
+- **计算器结果面动作精简与去线框化（「‹ 返回」· 去掉按钮边框）**：①「重新选择」精简为「‹ 返回」，与卡片 3D 翻转返回正面的导航心理模型精准契合，字数减半，左右主次分明，与右侧 `⇄` 形成方向符号呼应；②`.result-reset` 与 `.result-switch` 移除 `border`，采用柔和弱背景胶囊（白柔光 `0.08` 与紫柔光 `0.10`），消除生硬 1px 线框感（单测 `tests/calc-copy.test.js`）。
+- **入睡页进行中态（B态）视觉优化（弱实心提醒按钮 · 撤销与分享同行并排）**：①「到点提醒我记录起床」升级为简洁无边框弱实心胶囊按钮（`rgba(255, 255, 255, 0.08)`，开启态弱紫微光 `0.22` 高亮）；②次级动作行重构为左右并排：左侧「点错了？撤销本次入睡」，右侧「分享这一段睡眠」，居中 560rpx 优雅两端对齐，消除层叠孤行感，底部 `sleep-share` 仅在非 sleeping 态显示避免重复。
+- **验证**：`npm test` **333 项 / 332 通过 / 0 失败 / 1 skip**（PG 用例无 `PG_TEST_URL` 时跳过；新增统计页空态双 CTA 及唤起补记单测 1 项、返回文案断言 1 项）；`npm run check` 检查通过（3 页面 / 22 JSON / 17 WXML / 19 WXSS，主包约 **555.9 KB**）；微信开发者工具模拟器交互及控制台复核通过（0 error）。
+- **文档与工程化**：`07-code-review.md` 开放项收口并标注解决状态；`13-acceptance-checklist.md` §1.14 补齐证据链条；`context.md` 与 `AGENTS.md` 门禁基线同步。
+
+## 2026-10-25 · 修复轮模拟器复核 + 文档工程化整理（无代码改动）
+
+- **模拟器复核**（`wechatide` CLI，iPhone 12/13 Pro 390×844）：结果面两种模式 4 行 dense 不溢出；未配模板点「提醒我」直接弹日历兜底、不先弹订阅授权；**计算→打卡闭环运行时取证**——入睡模式算出 20:22 →「去入睡打卡」→ `meta.planTarget.wakeAt` 同值 → `markSleep()` 后 `pending.expectedWakeAt = 20:22`（白天默认应为 now+90min ≈ 14:10）、`planTarget` 已清；熄灯/结束面板/C 态/统计/清除确认顺带回归正常；console `grep -i error` 为空。「✓ 已设提醒」态需配置模板，**未验**。详见 docs/13 §1.14。
+- **文档**：①2026-10-25 审查报告入库为 [07-code-review.md §B](07-code-review.md)（逐条状态 + 提交号 + 开放项），修复 context/changelog 中指向仓库外「review 报告 P2-3」的悬空引用；②`context.md` §7 第 29–33 条从 §8 之后归位、重复编号第二个 23 改 `23b`（外部按编号引用，不整体重排）、混合换行统一 CRLF、ADR 数 18→27；③`context.md` §8 补模拟器取证命令与截图约定；④`AGENTS.md` §3-6 补截图命名规则。
+- **仓库卫生**：`.gitignore` 新增 `logs/`、`.agents/`、`wechatide-tools/`、`wechatide-skill/`（Agent 技能已装在用户全局目录，不入库）与 `docs/assets/review-*.png`、`docs/assets/test-*.png`（临时探针图）；本轮 19 张临时截图已删除。
+- 验证：`npm test` 332 / 331 / 0 fail / 1 skip（PG）；`npm run check` 552.4 KB。部署：无。
+
 ## 2026-10-25 · Code Review 修复轮（提醒落地页 · 计算→打卡闭环 · 提醒按钮 · 自动缓存）
 
 - **P1 提醒落地页**：结果面计划提醒此前与打卡会话共用 `pages/sleep/sleep?end=1`——「该睡了」点进来若已打卡会**直接弹出结束面板**（易误存十几分钟的一段），未打卡则提示「这次入睡已经结束过了」。现在 `services/reminders.pageFor` 按前缀改写：`plan-s-` → `?remind=sleep`、`plan-w-` → `?remind=wake`，**保存与发送两处都改写**，上线前已排队的旧行在发送时同样被纠正（无需迁移）。入睡页 `consumeLaunchIntent()` 统一消费 `end`/`remind`：`remind=sleep` 永不开面板；`remind=wake` 在计时则结束、否则引导「补记入睡」。

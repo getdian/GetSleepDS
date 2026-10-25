@@ -14,7 +14,9 @@
       title="还没有记录"
       desc="打一次卡，这里就会长出第一格。"
       actionText="去入睡"
+      secondaryText="补记睡眠"
       bind:action="goSleep"
+      bind:secondary="onEmptyManual"
     />
   </block>
 
@@ -24,9 +26,11 @@
       <view
         wx:for="{{metrics}}"
         wx:key="key"
-        class="metric {{metricKey === item.key ? 'is-active' : ''}}"
+        class="metric metric--{{item.key}} {{metricKey === item.key ? 'is-active' : ''}}"
         data-key="{{item.key}}"
         bindtap="onMetricTap"
+        hover-class="metric--tap"
+        hover-stay-time="100"
         aria-role="button"
         aria-label="{{item.label}} {{item.value}}"
       >
@@ -61,10 +65,10 @@
         <text class="section-title">打卡日历</text>
         <!-- 周期选项：纯文字，无边框；当前项更深、更大、更粗 -->
         <view class="span-tabs">
-          <text class="span-tab {{calendarSpan === 1 ? 'is-on' : ''}}" data-span="1" bindtap="onSpanTap">当月</text>
-          <text class="span-tab {{calendarSpan === 3 ? 'is-on' : ''}}" data-span="3" bindtap="onSpanTap">3 个月</text>
-          <text class="span-tab {{calendarSpan === 6 ? 'is-on' : ''}}" data-span="6" bindtap="onSpanTap">6 个月</text>
-          <text class="span-tab {{calendarSpan === 12 ? 'is-on' : ''}}" data-span="12" bindtap="onSpanTap">1 年</text>
+          <text class="span-tab {{calendarSpan === 1 ? 'is-on' : ''}}" data-span="1" bindtap="onSpanTap" hover-class="span-tab--tap" hover-stay-time="100">当月</text>
+          <text class="span-tab {{calendarSpan === 3 ? 'is-on' : ''}}" data-span="3" bindtap="onSpanTap" hover-class="span-tab--tap" hover-stay-time="100">3 个月</text>
+          <text class="span-tab {{calendarSpan === 6 ? 'is-on' : ''}}" data-span="6" bindtap="onSpanTap" hover-class="span-tab--tap" hover-stay-time="100">6 个月</text>
+          <text class="span-tab {{calendarSpan === 12 ? 'is-on' : ''}}" data-span="12" bindtap="onSpanTap" hover-class="span-tab--tap" hover-stay-time="100">1 年</text>
         </view>
       </view>
 
@@ -117,6 +121,8 @@
           wx:if="{{detail.canAdd}}"
           class="dd-add"
           bindtap="onDetailAdd"
+          hover-class="dd-add--tap"
+          hover-stay-time="120"
           aria-role="button"
           aria-label="给这一天补记一段睡眠"
         >补记一段 ›</view>
@@ -126,7 +132,7 @@
         <text class="heat-note">{{calendarNote}}</text>
         <view class="section-actions">
           <share-btn variant="icon" />
-          <view class="poster-btn" bindtap="onMakePoster" aria-role="button" aria-label="生成近 30 天海报并保存到相册">
+          <view class="poster-btn" bindtap="onMakePoster" hover-class="poster-btn--tap" hover-stay-time="120" aria-role="button" aria-label="生成近 30 天海报并保存到相册">
             <text class="poster-spark">✦</text>
             <text>生成 30 天海报</text>
           </view>
@@ -137,7 +143,7 @@
 
   <!-- 低频操作下沉：默认只露一行状态，展开后才出现同步与删除 -->
   <view class="settings fade-up">
-    <view class="settings-head" bindtap="onToggleSettings" aria-role="button" aria-label="数据与备份">
+    <view class="settings-head" bindtap="onToggleSettings" hover-class="settings-head--tap" hover-stay-time="120" aria-role="button" aria-label="数据与备份">
       <view class="settings-info">
         <text class="settings-title">数据与备份</text>
         <text class="settings-sub">{{syncText}}</text>
@@ -156,6 +162,8 @@
             wx:if="{{syncEnabled}}"
             class="sync-btn {{syncBusy ? 'is-busy' : ''}}"
             bindtap="onSyncTap"
+            hover-class="sync-btn--tap"
+            hover-stay-time="120"
             aria-role="button"
             aria-label="{{syncBusy ? '同步中' : '同步'}}"
           >
@@ -180,9 +188,11 @@
         wx:if="{{(hasCloudCopy || cloudPendingErase) && !syncEnabled}}"
         class="cloud-del"
         bindtap="eraseCloudOnly"
+        hover-class="cloud-del--tap"
+        hover-stay-time="120"
       >删除云端副本（保留本机）</view>
 
-      <view wx:if="{{hasData}}" class="danger-entry" bindtap="onClearData" aria-role="button">
+      <view wx:if="{{hasData}}" class="danger-entry" bindtap="onClearData" hover-class="danger-entry--tap" hover-stay-time="120" aria-role="button">
         <text class="danger-entry-title">{{syncEnabled ? '清除数据（云端+本机）' : '清除本机睡眠数据'}}</text>
         <text class="danger-entry-hint">{{syncEnabled ? '云端和本机记录都会删除，且不可恢复' : '本机记录会删除，且不可恢复'}}</text>
       </view>
@@ -197,7 +207,7 @@
   <view class="safe-bottom"></view>
 </view>
 
-<view class="np-host"><now-playing /></view>
+<view class="np-host"><now-playing id="np" /></view>
 
 <!-- 页内补记面板：与入睡页"补记入睡"同一套口径，不跳页 -->
 <view wx:if="{{manualShow}}" class="end-mask" catchtap="onManualCancel" catchtouchmove="noop">
@@ -207,7 +217,7 @@
         <text class="end-title">补记一段睡眠</text>
         <text class="end-sub">选择醒来日与真实入睡/起床时间，不会启动计时</text>
       </view>
-      <text class="end-close" catchtap="onManualCancel" aria-role="button" aria-label="关闭">×</text>
+      <text class="end-close" catchtap="onManualCancel" aria-role="button" aria-label="关闭" hover-class="end-close--tap" hover-stay-time="100">×</text>
     </view>
     <picker
       mode="date"
@@ -216,7 +226,7 @@
       end="{{manualToday}}"
       bindchange="onManualDateChange"
     >
-      <view class="end-date-row">
+      <view class="end-date-row" hover-class="end-date-row--tap" hover-stay-time="100">
         <text class="end-date-k">醒来日</text>
         <view class="end-date-v">
           <text>{{manualDateText}}</text>
@@ -226,14 +236,14 @@
     </picker>
     <view class="end-times">
       <picker mode="time" value="{{manualBedTime}}" data-field="manualBedTime" bindchange="onManualTimeChange">
-        <view class="end-time-item">
+        <view class="end-time-item" hover-class="end-time-item--tap" hover-stay-time="100">
           <text class="end-time-k">入睡</text>
           <text class="end-time-v">{{manualBedTime}}</text>
         </view>
       </picker>
       <text class="end-arrow">→</text>
       <picker mode="time" value="{{manualWakeTime}}" data-field="manualWakeTime" bindchange="onManualTimeChange">
-        <view class="end-time-item">
+        <view class="end-time-item" hover-class="end-time-item--tap" hover-stay-time="100">
           <text class="end-time-k">起床</text>
           <text class="end-time-v">{{manualWakeTime}}</text>
         </view>
@@ -246,8 +256,8 @@
     </view>
     <text wx:if="{{manualError}}" class="end-error">{{manualError}}</text>
     <view class="end-actions">
-      <view class="end-btn ghost" catchtap="onManualCancel">取消</view>
-      <view class="end-btn primary {{manualError ? 'is-disabled' : ''}}" catchtap="onManualConfirm">保存补记</view>
+      <view class="end-btn ghost" catchtap="onManualCancel" hover-class="end-btn--tap" hover-stay-time="120">取消</view>
+      <view class="end-btn primary {{manualError ? 'is-disabled' : ''}}" catchtap="onManualConfirm" hover-class="end-btn--tap" hover-stay-time="120">保存补记</view>
     </view>
   </view>
 </view>

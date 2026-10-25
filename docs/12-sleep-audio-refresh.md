@@ -120,3 +120,109 @@
 - **修法**：`utils/player-state.js` 新增 `seamlessLoop(audio)`——在 `onTimeUpdate` 里检测「距结尾 ≤2 秒」时 `seek(0)`，让同一会话永不进入 ended、不换 `src`，浮窗得以常驻，回环点也没有静音间隙。`claimLoop()` 做 1.2s 跨组件去重（`audio-dock` 与 `now-playing` 都监听同一播放器的 `onTimeUpdate`，不去重会 seek 两次）。`onEnded → replay` 老路径保留为兜底：基础库若在后台节流 `onTimeUpdate` 错过窗口，仍能续播（该轮浮窗会掉）。
 - **不影响的边界**：暂停仍只 `pause()`、不 `stop()`；定时到点的 ticker/到点停止、解锁到期、点微信浮窗 X 的行为都不变（X 之后小程序内保留一条「已暂停」条，经运营确认可接受——点击即用户主动起播，浮窗会重新出现）。
 - 验证：`node --test tests/player-state.test.js` 8/8（新增窗口边界/跨组件去重/暂停与非法时长 3 组），`npm test` 205 通过 / 0 失败 / 1 PG skip；`node tools/check.mjs` 通过（主包约 463.0 KB）。**未真机复验**：锁屏连续多轮回环后微信浮窗是否常驻、回环点是否有可听断层、部分基础库 `onTimeUpdate` 节流时是否退回 ended 路径。
+
+## 9. 外部中断恢复、迷你条可见性与后台回环（2026-10-25）
+
+### 9.1 现象与代码根因
+
+| 现象 | 根因（改前） |
+|---|---|
+| 切到其他含音频的 App / 来电后，环境音停了就不再响 | 全仓没有 `wx.onAudioInterruptionBegin/End`；中断结束后无人 `play()`。`App.onShow` 只做定时器校时，不处理播放态。 |
+| 微信里音乐还在响，计算器/统计页迷你条却消失；入睡页显示暂停/空闲 | 会话标记 `lastTrackActive` 被 8 个不同入口写 false，其中 `audio-dock.onError` 终态分支**不调用 `stop()` 就清会话**（网络/解码抖动时音频仍在播）；`now-playing.handleError` 的 300ms 兜底同样会清。`now-playing.sync` 只认 meta，不认“还在出声”。 |
+| 入睡页错误显示「已暂停」 | `audio-dock.syncFromAudio` 在 `src` 为空时只信 `meta.lastTrackPlaying`；外部中断/基础库清空 `src` 后，真实播放器状态（`!paused`）被忽略。 |
+| 曲末不循环 / 锁屏只播一轮 | 回环依赖 `onTimeUpdate`，而官方口径是“只有小程序在前台时才回调”；锁屏后只能等 `onEnded`（后台回调不保证），且 `audioTimer.restore()` 的“无活音频”分支会 `stopAudio()` → `lastTrackActive=false`，把外部中断误判成用户停止。 |
+| 用户停止后又被拉起 | `now-playing.handleEnded` 没有“会话已终止”守卫，两个组件谁先抢到 `claimEnded` 不确定；且“赋 src 会自动起播”，旧的 `toggle` 在重建后又读 `audio.paused`，可能把刚重建的播放再暂停。 |
+
+### 9.2 会话状态机（`utils/audio-session.js`）
+
+- **唯一写入口径**：`lastTrackActive=false` 只允许由 `markStopped()` 触发（用户停止 / 定时到点 / 权益到期 / 清除数据）。错误、系统 `stop`、`src` 被清空都只改 `lastTrackPlaying`，不动会话 → 迷你条不会因外部原因被误隐藏。
+- **播放意图**：`wantPlaying`（应在播）+ `userPaused`（小程序内主动暂停）。只有 `userPaused` 阻止自动恢复；`markUserPause/markUserPlay/onPlay/onStop` 是唯一改这两个标志的入口，并由 800ms 宽限拦住“停止/暂停后迟到的 play 事件”。
+- **中断恢复**：`init()` 幂等注册 `wx.onAudioInterruptionBegin/End`；`onInterruptionEnd` → `resumeIfPossible()`。`App.onHide/onShow` 补偿“切到其他 App”这类没有 interruption 事件的场景。续播时若 `src` 被清空则按 `lastTrackId` 重建（优先本地缓存），若已到曲末则先 `seek(0)`；`canPlay()` 与组件同一口径（会话解锁 / 免费模式），到期不会靠中断恢复续播。
+- **前后台语义**：外层 `App.onShow` 先跑 `audioTimer.restore()` 再跑 `audioSession.onAppShow()`；定时到点会先 `markStopped()`，因此不会被回前台拉起。
+
+### 9.3 可见性判定
+
+- `now-playing.sync`：`active = meta.lastTrackActive !== false || !audio.paused`；隐藏条件额外要求“没有 src、本进程没起过播、也不在出声”。仍在出声时一定显示（外部误清会话也会被纠正）。
+- `audio-dock.syncFromAudio`：`playing = !paused || (无 src 时 meta.lastTrackPlaying !== false)`；冷启动幽灵判定只排除“无 src + 无会话 + 不在出声”。
+- `now-playing.handleStop` 必须落 `lastTrackPlaying:false`；否则 `src` 被系统清空时会渲染成“正在播放”，点暂停反而重建音源起播。
+- 两个组件的 `ended` 处理都先检查 `audioSession.isActive()`，再抢 `claimEnded()`；`allowReplay()` 给坏源/极短源 10 秒 8 次的重播上限，超过停在“已暂停”。
+
+### 9.4 后台回环（`player-state.armLoop`）
+
+- `onTimeUpdate` 前台每秒调用 `armLoop` 校准；`armLoop` 把“距曲末 tail 秒”换成一个 `setTimeout`，锁屏后没有 timeupdate 也能 `seek(0)`。tail 默认 **1.2 秒**（2026-10-25 由 2s 收紧，减少每轮被截掉的尾音；回调仍用 `tail + 0.5` 的接受窗口给前台 timeupdate 留余量）。
+- 同一模块单例定时器 + `claimLoop()` 1.2s 去重，不会和 timeupdate 路径重复 seek；回环后立即重排下一轮，个别基础库 `seek` 后 `currentTime` 未同步刷新时补一次 800ms 重试。
+- `markUserPause/markStopped` 会 `clearLoopTimer()`，停止后不会残留定时器把音频拉起。
+
+### 9.5 验证与剩余边界
+
+- 单测：`tests/audio-session.test.js`（中断恢复/用户暂停/外部 stop/回前台/音源重建/曲末 seek/停止宽限/会话门/重播限流）、`tests/player-state.test.js` 的 `armLoop` 3 条、`tests/audio-timer.test.js` 的“冷启动只清运行态”与“到点清会话”。
+- 模拟器（wechatide CLI，390×844，真实音频 `sleep-10001.mp3`）：①播放 → 外部 `pause()` → 入睡页“已暂停”、首页迷你条仍在；②`App.onHide/onShow` → 自动续播到 37s（续播非重头）；③应用内 `togglePlay` 暂停 → 再 `onHide/onShow` 仍暂停；④`stopPlayback` → `lastTrackActive=false`、首页无迷你条、回前台不复活。
+- **未真机**：来电/闹钟的真实 interruption 回调顺序、锁屏多轮回环、耳机拔出、通知栏暂停（API 无原因字段，当前按“外部中断可恢复”处理；小程序内暂停一定不拉起）。
+
+### 9.6 运营化收口（2026-10-25 第二轮）
+
+1. **停止防误触**：`now-playing` 的停止方块与抽屉「结束播放」都改为 **3 秒内二次点按**——首点只“上膛”（方块转暖红 + toast「再点一次停止播放/结束播放」），再点才真正 `markStopped()`；3 秒后自动复位。切歌、暂停、关抽屉、组件销毁都会清掉上膛态。
+2. **回环尾部 2s → 1.2s**：见 §9.4，`DEFAULT_TAIL_SECONDS` 单点定义；测试改为 88800ms 排程。
+3. **中断可观测**：`audio-session.setReporter(fn)` 由 `app.js` 接 `events.track`；`audio_interrupt` 的 target 为 `begin|trackId` 与 `end|<秒>s|resume|skip`。服务端 `TYPES` 放行该类型，`analytics` 只把 `begin` 计入 `today/week/trend.interrupts`，后台播放卡副标显示「本周 N · 中断 M」，趋势 tooltip 追加中断数。
+4. **坏源黑名单下沉到 `audio-cache`**：`markBad/isBad/clearBad` 为模块级会话状态，`peek()` 命中坏源返回空 → 组件回退远程、`audio-session` 续播与 `warmup/ensure` 不再反复命中；重新下载成功、`remove()`、`cleanAll()` 自动解禁。`audio-dock` 删除私有 `_badUrls`。
+5. **单测/验证**：`tests/audio-session.test.js` 新增中断上报（resume/skip 两态）；`tests/audio-cache.test.js` 新增坏源标记/peek/重下解禁/remove 解禁；`tests/player-state.test.js` 按 1.2s 调整；`server/test/api.test.js` 放行 `audio_interrupt`；`server/test/analytics.test.js` 只统计 begin。模拟器实测：抽屉首点 `stopArmed=true` 且仍在播、二点停止；迷你条停止方块首点变红不停止、二点停止且 `lastTrackActive=false`。
+6. **非代码项**：多音源内容供给（需运营素材）、定时到点淡出（`BackgroundAudioManager` 无 `volume`，平台不支持）。
+
+## 10. 音频播放铁律（2026-10-25 定稿，改音频前必读）
+
+> 本节是 `AGENTS.md` §5 的详细版与依据。任何一条被改回去，都会重现已验收过的真机故障：中断后不恢复、音乐还在响但迷你条消失、入睡页误显暂停、锁屏只播一轮。
+
+### 10.1 状态所有权（单写入口）
+
+| 状态 | 唯一写入方 | 禁止 |
+|---|---|---|
+| `meta.lastTrackActive` | `audio-session.markStopped()`（用户停止 / 定时到点 / 权益到期 / 清除数据） | 组件、错误回调、`audio-timer` 冷启动分支、播放器事件直接写 `false` |
+| `meta.lastTrackPlaying` | 组件的 `play/pause/stop/error/canplay` 回调 + `audio-session.onPlay/onPause` | 用 `src` 是否为空推断“已停止” |
+| `wantPlaying` / `userPaused` | `markUserPlay / markUserPause / onPlay / onPause / onStop / markStopped` | 其他地方直接改意图；用户暂停后由迟到的 `play` 清标记（800ms 宽限） |
+| 坏源黑名单 | `audio-cache.markBad / clearBad` | 组件各存一份 `_badUrls` |
+| 回环定时器 | `player-state.armLoop / clearLoopTimer` | `pause/stop` 后遗留定时器 |
+
+### 10.2 可见性
+
+- 显示判据：`会话存活（lastTrackId && lastTrackActive !== false）` **或** `!audio.paused`；隐藏只在“业务终止”或“冷启动残影（无 src + 本进程未起播 + 未出声）”时发生。
+- `now-playing.sync` 负责计算器/统计页；`audio-dock.syncFromAudio` 负责入睡页。两者口径必须一致，不得只在其中一个修。
+- 无 `src` 时用 `lastTrackPlaying` 兜底，但不能盖过真实的 `!paused`。
+- `handleStop` 必须落 `lastTrackPlaying:false`，否则系统清空 `src` 后会把暂停态渲染成“正在播放”。
+
+### 10.3 中断与恢复
+
+- `audio-session.init()` 在 `App.onLaunch` 幂等注册 `wx.onAudioInterruptionBegin/End`；`App.onHide/onShow` 补偿“切到其他 App”没有 interruption 事件的场景。
+- 恢复条件：`wantPlaying && !userPaused && !interrupted && isActive() && canPlay()`；缺一不可。定时到点已经 `markStopped()`，不得被回前台拉起；到期不得靠中断恢复续播（`canPlay` 同组件口径）。
+- 续播要处理两种脏状态：`src` 被系统清空（按 `lastTrackId` 从配置找曲目、优先本地缓存重建）与已到曲末（先 `seek(0)`，否则 `play()` 立刻再次 ended）。
+- 锁屏/通知栏的暂停与系统中断在 API 上不可区分（只有 `pause`，无原因字段）。**当前口径**：外部原因可恢复，小程序内暂停/停止一定不拉起；若产品要改这个口径，必须同时改 `onPause/onAppShow` 与验收清单，不能只在某个组件里加判断。
+
+### 10.4 循环
+
+- `onTimeUpdate` 官方口径是“只有小程序在前台才回调”，**不得**作为唯一回环路径。
+- `armLoop(audio)` 用 `setTimeout` 在距曲末 `DEFAULT_TAIL_SECONDS = 1.2s` 处 `seek(0)`；前台 timeupdate 每秒校准，后台由定时器兜底；回环后立即重排（`seek` 后 `currentTime` 未刷新时补 800ms 重试）。
+- `claimLoop()` 保证同一轮只有一个组件 seek；`claimEnded()` 保证同一轮只有一个组件重播。`markUserPause/markStopped` 必须 `clearLoopTimer()`。
+- `allowReplay()` 给坏源/极短源上限（10 秒 8 次），超过停在“已暂停”，不得无限重建音源。
+
+### 10.5 用户操作
+
+- 停止必须二次确认：`now-playing` 停止方块与 `audio-dock`「结束播放」首点只“上膛”（3 秒），二点才 `markStopped()`；切歌/暂停/关抽屉/组件销毁清上膛态。
+- `toggle` 在重建 `src` 前先确定续播意图：BackgroundAudioManager 赋 `src` 会自动起播，重建后读 `paused` 再判断会把刚重建的播放又暂停。
+- 暂停只 `pause()` 不 `stop()`；不建议在暂停时清 `src`（会让恢复路径更复杂，且丢微信浮窗）。
+
+### 10.6 错误、坏源与可观测
+
+- `onError` 时若 `!audio.paused`（仍在出声）：只收 loading，不清会话、不删缓存。
+- 缓存源报错：`cache.isUsable(url)` 为假才删文件；无论删没删都 `cache.markBad(url)`。用户主动点播时 `cache.clearBad(url)` 重新验证；下载成功/`remove`/`cleanAll` 自动解禁。
+- 中断上报 `audio_interrupt`：`begin|trackId`、`end|<秒>s|resume|skip`。新增事件类型必须同步 `server/src/routes/events.js` 的 `TYPES` 与 `analytics` 计数，否则整批事件会被 400 拒绝。
+- 看板口径：只把 `begin` 计入 `today/week/trend.interrupts`；`end` 只用于时长/恢复率。
+
+### 10.7 回归门禁（每次改音频都要跑）
+
+1. `node --test tests/audio-session.test.js tests/audio-cache.test.js tests/audio-timer.test.js tests/player-state.test.js`
+2. `node --test server/test/api.test.js server/test/analytics.test.js`
+3. 模拟器（wechatide，390×844，真实音频）四条：
+   - 外部 `pause()` → 迷你条保留且显示“已暂停”；
+   - 外部暂停 + `App.onHide/onShow` → 自动续播（从原进度继续，非重头）；
+   - 应用内暂停 + `App.onHide/onShow` → 保持暂停；
+   - 应用内停止（二次确认）→ `lastTrackActive=false`、迷你条消失、回前台不复活。
+4. 真机（无法在模拟器替代）：来电/闹钟 interruption、锁屏多轮回环、耳机拔出、通知栏暂停。未真机验证前，不得宣称音频行为已验收。
