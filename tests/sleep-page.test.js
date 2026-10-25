@@ -781,6 +781,8 @@ test('超 24 小时未结束：显示常驻提示，可丢弃这一段', () => {
   global.wx.showModal = (options) => options.success({ confirm: true })
   try {
     page.onDiscardPending()
+    // 丢弃后 refreshAll 可能重排 30s 熄灯定时器：清掉，避免测试进程空等
+    page.clearLightsTimer()
     assert.equal(storage.getPending(), null)
     assert.equal(page.data.staleLong, false)
     assert.deepEqual(storage.getRecords(), {})
