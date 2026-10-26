@@ -10,7 +10,7 @@
   <view class="hero-bg-scrim"></view>
 </view>
 
-<top-bar brand-only="{{true}}" action-text="换背景" bind:action="openBgPicker" />
+<top-bar brand-only="{{true}}" action-text="{{!singlePage && backgrounds.length ? '换背景' : ''}}" bind:action="openBgPicker" />
 
 <view class="page calc-page">
   <view class="calc-hero {{flipped ? 'is-result' : ''}}">
@@ -242,4 +242,4 @@
   bind:select="onBgSelect"
 />
 
-<custom-tab-bar />
+<custom-tab-bar wx:if="{{!singlePage}}" />

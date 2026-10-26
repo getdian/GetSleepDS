@@ -98,6 +98,28 @@ test('audio_interrupt 只统计 begin：中断频次不被 end 翻倍', async ()
   assert.ok(overview.week.interrupts >= 2)
 })
 
+test('audio_unlock_fail 按原因聚合，并进入今日/本周', async () => {
+  const events = [
+    eventAt(0, 'audio_unlock', 'a1'),
+    eventAt(0, 'audio_unlock_fail', 'error|a1'),
+    eventAt(0, 'audio_unlock_fail', 'unavailable|a1'),
+    eventAt(0, 'audio_unlock_fail', 'skipped|a1'),
+    eventAt(0, 'audio_unlock_fail', 'error|a1')
+  ]
+  const analytics = createAnalytics(fakeDeps(events))
+  const overview = await analytics.overview(Date.now())
+
+  assert.equal(overview.today.unlocks, 1)
+  assert.equal(overview.today.unlockFails, 4)
+  assert.equal(overview.week.unlockFails, 4)
+  assert.equal(overview.unlockLoadFailureRate, 75, '加载失败率 = (error+unavailable)/(成功+两者)')
+  assert.deepEqual(overview.unlockFailReasons, [
+    { reason: 'error', count: 2 },
+    { reason: 'skipped', count: 1 },
+    { reason: 'unavailable', count: 1 }
+  ])
+})
+
 test('dayKey 按东八区归日', () => {
   const noon = Date.parse('2026-10-19T12:00:00+08:00')
   assert.equal(dayKey(noon), '2026-10-19')

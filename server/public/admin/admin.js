@@ -391,6 +391,36 @@
     })
   }
 
+  const UNLOCK_FAIL_LABELS = {
+    skipped: '用户未看完',
+    busy: '广告忙碌',
+    error: '广告加载失败',
+    unavailable: '广告不可用'
+  }
+
+  function renderUnlockFailReasons(list) {
+    const box = $('#unlock-fail-reasons')
+    if (!box) return
+    box.textContent = ''
+
+    if (!list || !list.length) {
+      const empty = document.createElement('li')
+      empty.className = 'empty-line'
+      empty.textContent = '还没有解锁失败数据'
+      box.appendChild(empty)
+      return
+    }
+
+    list.forEach(function (item) {
+      const li = document.createElement('li')
+      const label = document.createElement('b')
+      label.textContent = UNLOCK_FAIL_LABELS[item.reason] || item.reason
+      li.appendChild(label)
+      li.appendChild(document.createTextNode(' · ' + item.count + ' 次'))
+      box.appendChild(li)
+    })
+  }
+
   async function loadAnalytics() {
     const data = await api('/api/admin/analytics')
     const note = $('#analytics-note')
@@ -428,10 +458,20 @@
     $('#stat-ad-fill').textContent =
       ads.fillRate === null || ads.fillRate === undefined ? '–' : ads.fillRate + '%'
 
+    $('#stat-audio-unlocks').textContent = today.unlocks || 0
+    $('#stat-audio-unlocks-sub').textContent = '本周 ' + (week.unlocks || 0)
+    $('#stat-audio-fails').textContent = today.unlockFails || 0
+    $('#stat-audio-fails-sub').textContent = '本周 ' + (week.unlockFails || 0)
+    $('#stat-audio-fail-rate').textContent =
+      data.unlockLoadFailureRate === null || data.unlockLoadFailureRate === undefined
+        ? '–'
+        : data.unlockLoadFailureRate + '%'
+
     renderTrend(data.trend)
     renderTopTracks(data.topTracks)
     renderTopSources(data.topSources)
     renderAdSlots(ads.bySlot)
+    renderUnlockFailReasons(data.unlockFailReasons)
   }
 
   /* ---------- 环境音 ---------- */

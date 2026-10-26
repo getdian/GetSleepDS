@@ -98,6 +98,18 @@ Page({
    * 云端 erase 也会删提醒，所以主路径不会残留；这里兜住“erase 失败 + 从未同步”
    * 以及断网时取消不成功的情况，下次进统计页自动重试，避免清除后仍收到推送。
    */
+  /**
+   * 删除云端副本会删掉服务端提醒。本地若继续保留“已开启”标记，
+   * 首页 remindAt 与入睡页 reminderCovered 都会阻止用户重新设置。
+   */
+  clearLocalCloudReminderState() {
+    storage.patchMeta({ planReminder: null })
+    const pending = storage.getPending()
+    if (pending && pending.reminderOptIn) {
+      storage.setPending(Object.assign({}, pending, { reminderOptIn: false }))
+    }
+  },
+
   retryPendingReminderCancel() {
     const meta = storage.getMeta()
     const list = Array.isArray(meta.pendingReminderCancel) ? meta.pendingReminderCancel : []
@@ -778,10 +790,13 @@ Page({
           .then(() => withLogin((code) => api.eraseRecords(code, { cloudOnly: true })))
           .then(() => {
             storage.patchMeta({ lastSyncAt: 0, cloudPendingErase: false })
+            // 服务端 eraseCloudData 会一并删除 sleep_reminders：本地状态必须同步收敛，
+            // 否则首页/入睡页仍显示“已开启”，用户却收不到任何提醒且无法原地重设。
+            this.clearLocalCloudReminderState()
             this._cloudBusy = false
             wx.hideLoading()
             this.refresh()
-            wx.showToast({ title: '云端副本已删除', icon: 'none' })
+            wx.showToast({ title: '云端副本与提醒已删除', icon: 'none' })
           })
           .catch(() => {
             // 保留 lastSyncAt/cloudPendingErase：页面出现重试入口；同步已关闭，不会复活。
@@ -895,9 +910,14 @@ Page({
           if (hadCloud) wx.showToast({ title: '云端副本已删除', icon: 'none' })
         })
         .catch(() => {
-          // lastSyncAt/cloudPendingErase 已保留，统计页会出现“删除云端副本”重试入口
+          // 本机已清除但服务端 erase 失败：无论 lastSyncAt 是否为 0，都必须保留
+          // “云端副本待删除”出口，否则用户既看不到重试入口，服务端提醒/事件也可能残留。
+          storage.patchMeta({ cloudPendingErase: true })
           this.refresh()
-          if (hadCloud) wx.showToast({ title: '云端副本未删除，可在统计页重试', icon: 'none' })
+          wx.showToast({
+            title: hadCloud ? '云端副本未删除，可在统计页重试' : '服务端数据未清理，可在统计页重试',
+            icon: 'none'
+          })
         })
       return
     }

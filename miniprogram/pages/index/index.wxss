@@ -1057,6 +1057,13 @@
   font-size: 23rpx;
 }
 
+/* dense 视觉只有 64rpx：伪元素上下各补 12rpx，仍保证 88rpx 命中区 */
+.calc-back.is-dense .result-reset::after,
+.calc-back.is-dense .result-switch::after {
+  top: -12rpx;
+  bottom: -12rpx;
+}
+
 .calc-back.is-dense .result-share {
   margin-top: 0;
 }
@@ -1101,6 +1108,7 @@
 /* 脚注：整行是「为什么是 90 分钟」的入口。
    与结果面「分享给朋友」/正面主按钮拉开呼吸距离：原 24rpx 在 4 行结果时几乎贴在一起。 */
 .calc-note {
+  position: relative;
   margin-top: 48rpx;
   padding: 0 18rpx;
   text-align: center;
@@ -1108,6 +1116,16 @@
   line-height: 1.9;
   color: rgba(255, 255, 255, 0.58);
   transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+/* 整行是“为什么是 90 分钟”入口：文字只有约 40rpx 高，上下各扩 24rpx 到 88rpx */
+.calc-note::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -24rpx;
+  bottom: -24rpx;
 }
 
 .calc-note:active,

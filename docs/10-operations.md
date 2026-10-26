@@ -308,6 +308,8 @@ docker compose up -d --build --no-deps api
 curl -fsS http://127.0.0.1:3004/api/ready
 ```
 
+> **`001_init.sql` 不负责现有库升级。** compose 把它挂到 Postgres 的 `docker-entrypoint-initdb.d`，只在数据库卷为空、首次初始化时执行；已有 `index_pgdata` 不会因为覆盖该文件而重跑。现有库的增量由 API 启动时 `server/src/db/index.js` 的 `SCHEMA` 执行（`CREATE TABLE IF NOT EXISTS` / `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`）。因此改 SQL 时必须同步 `SCHEMA`；本仓库当前 `sleep_records` / `sleep_reminders` 新增列两边一致，覆盖后重启 api 即可。若未来只改 SQL、不改 `SCHEMA`，覆盖部署不会生效。
+
 #### 备份产物（建议再同步一份到本地/对象存储）
 
 | 类型 | 服务器路径 | 生成方式 |

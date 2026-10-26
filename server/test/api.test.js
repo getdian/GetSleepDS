@@ -171,6 +171,15 @@ test('audio_error 在事件白名单内，target 保留 trackId|错误码', asyn
   assert.equal(res.body.accepted, 1)
 })
 
+test('audio_unlock_fail 在事件白名单内，保留失败原因', async () => {
+  const res = await post('/api/events', {
+    code: 'dev-code',
+    events: [{ type: 'audio_unlock_fail', target: 'unavailable|sleep-10001', ts: FIXED_NOW + 150 * 1000 }]
+  })
+  assert.equal(res.status, 200)
+  assert.equal(res.body.accepted, 1)
+})
+
 test('一条脏事件只丢自己，不带走同批有效事件', async () => {
   const res = await post('/api/events', {
     code: 'dev-code',

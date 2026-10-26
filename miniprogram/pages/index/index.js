@@ -131,7 +131,10 @@ Page({
   onShow() {
     this._alive = true
     const tabBar = this.getTabBar && this.getTabBar()
-    if (tabBar) tabBar.setData({ selected: 0 })
+    if (tabBar) {
+      // custom-tab-bar 在独立 root，wx:if 不能可靠移除它；单页模式必须显式隐藏
+      tabBar.setData({ selected: 0, hidden: !!this.data.singlePage })
+    }
     // 偏好可能被外部改过（「清除全部数据」会重置 prefs）：只在值真的变化时回写，
     // 避免把用户本次手动拨动的时间轮覆盖掉。
     const prefs = storage.getPrefs()
@@ -689,6 +692,10 @@ Page({
   },
 
   openBgPicker() {
+    if (this.data.singlePage) {
+      wx.showToast({ title: '请在微信中打开「睡点」更换背景', icon: 'none' })
+      return
+    }
     if (!this.data.backgrounds.length) {
       // 首帧配置还在路上时不能断言“后台没有配置”，否则弱网下会给出错误结论。
       if (!this._cfgLoaded) {

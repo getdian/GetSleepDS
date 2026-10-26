@@ -166,7 +166,9 @@
 3. **中断可观测**：`audio-session.setReporter(fn)` 由 `app.js` 接 `events.track`；`audio_interrupt` 的 target 为 `begin|trackId` 与 `end|<秒>s|resume|skip`。服务端 `TYPES` 放行该类型，`analytics` 只把 `begin` 计入 `today/week/trend.interrupts`，后台播放卡副标显示「本周 N · 中断 M」，趋势 tooltip 追加中断数。
 4. **坏源黑名单下沉到 `audio-cache`**：`markBad/isBad/clearBad` 为模块级会话状态，`peek()` 命中坏源返回空 → 组件回退远程、`audio-session` 续播与 `warmup/ensure` 不再反复命中；重新下载成功、`remove()`、`cleanAll()` 自动解禁。`audio-dock` 删除私有 `_badUrls`。
 5. **单测/验证**：`tests/audio-session.test.js` 新增中断上报（resume/skip 两态）；`tests/audio-cache.test.js` 新增坏源标记/peek/重下解禁/remove 解禁；`tests/player-state.test.js` 按 1.2s 调整；`server/test/api.test.js` 放行 `audio_interrupt`；`server/test/analytics.test.js` 只统计 begin。模拟器实测：抽屉首点 `stopArmed=true` 且仍在播、二点停止；迷你条停止方块首点变红不停止、二点停止且 `lastTrackActive=false`。
-6. **非代码项**：多音源内容供给（需运营素材）、定时到点淡出（`BackgroundAudioManager` 无 `volume`，平台不支持）。
+6. **解锁失败可观测**：`audio-dock` 在激励视频 `skipped/busy/error/unavailable` 时上报 `audio_unlock_fail`，target=`原因|trackId`；服务端白名单放行，`analytics` 汇总今日/本周失败、原因排行与加载失败率（`error+unavailable / 成功+两者`，排除用户跳过/忙碌）。后台概览「音频解锁观测」展示。没有 `rewarded + adUnitId` 时不产生该事件，不能拿旧版本/免费模式数据判断填充质量。
+7. **配置刷新**：`audio-dock` 回入睡页使用 `loadConfig(true)`（3 秒 force 去重），后台新增/改名音轨后不必等 10 分钟缓存；请求失败仍回退缓存，离线/域名覆盖场景以 Storage 排查。
+8. **非代码项**：多音源内容供给（需运营素材）、定时到点淡出（`BackgroundAudioManager` 无 `volume`，平台不支持）。
 
 ## 10. 音频播放铁律（2026-10-25 定稿，改音频前必读）
 
@@ -214,6 +216,7 @@
 - `onError` 时若 `!audio.paused`（仍在出声）：只收 loading，不清会话、不删缓存。
 - 缓存源报错：`cache.isUsable(url)` 为假才删文件；无论删没删都 `cache.markBad(url)`。用户主动点播时 `cache.clearBad(url)` 重新验证；下载成功/`remove`/`cleanAll` 自动解禁。
 - 中断上报 `audio_interrupt`：`begin|trackId`、`end|<秒>s|resume|skip`。新增事件类型必须同步 `server/src/routes/events.js` 的 `TYPES` 与 `analytics` 计数，否则整批事件会被 400 拒绝。
+- 解锁失败上报 `audio_unlock_fail`：`skipped|trackId`、`busy|trackId`、`error|trackId`、`unavailable|trackId`。看板把 `error + unavailable` 计入加载失败率，`skipped/busy` 只做原因排行，不算广告填充失败。
 - 看板口径：只把 `begin` 计入 `today/week/trend.interrupts`；`end` 只用于时长/恢复率。
 
 ### 10.7 回归门禁（每次改音频都要跑）

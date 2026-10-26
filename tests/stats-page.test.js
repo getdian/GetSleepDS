@@ -24,6 +24,8 @@ global.wx = {
   },
   showToast() {},
   showModal() {},
+  showLoading() {},
+  hideLoading() {},
   vibrateShort() {},
   getAccountInfoSync() {
     return { miniProgram: { envVersion: 'develop' } }
@@ -179,6 +181,45 @@ test('云端删除失败（lastSyncAt=0）仍保留删除入口的状态', () =>
   assert.equal(page.data.cloudPendingErase, true)
   assert.equal(page.data.hasCloudCopy, false, 'lastSyncAt=0 不能当作"没有待删副本"')
   assert.match(page.data.syncText, /云端副本尚未删除/)
+})
+
+test('未开启云备份：服务端清理失败仍保留待删除出口，不静默成功', async () => {
+  resetStore()
+  storage.setSyncEnabled(false)
+  const api = require('../miniprogram/utils/api')
+  const originalErase = api.eraseRecords
+  const originalLogin = global.wx.login
+  const page = makePage()
+  page.clearLocalData = () => true
+  api.eraseRecords = () => Promise.reject(new Error('network'))
+  global.wx.login = (opts) => opts.success({ code: 'test-code' })
+  try {
+    page.eraseThenClear()
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    assert.equal(storage.getMeta().cloudPendingErase, true)
+  } finally {
+    api.eraseRecords = originalErase
+    global.wx.login = originalLogin
+  }
+})
+
+test('删除云端副本后：本地计划提醒与进行中提醒标记一起收敛', () => {
+  resetStore()
+  storage.setPending({
+    id: 'sleep-cloud',
+    bedAt: NOW - 20 * 60 * 1000,
+    expectedWakeAt: NOW + 6 * 3600 * 1000,
+    reminderOptIn: true
+  })
+  storage.patchMeta({
+    planReminder: { kind: 'wake', at: NOW + 3600 * 1000, id: 'plan-w-' + (NOW + 3600 * 1000) }
+  })
+  const page = makePage()
+  page.clearLocalCloudReminderState()
+  const meta = storage.getMeta()
+  assert.equal(meta.planReminder, null)
+  assert.equal(storage.getPending().reminderOptIn, false)
+  assert.equal(storage.getPending().id, 'sleep-cloud', '本机睡眠会话不能因删云端提醒被清掉')
 })
 
 test('空态：0 数据时支持从 empty-state 触发补记与去入睡', () => {

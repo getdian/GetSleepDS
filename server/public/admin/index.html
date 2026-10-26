@@ -176,6 +176,33 @@
       <section class="panel">
         <div class="panel-head">
           <div>
+            <h2>音频解锁观测</h2>
+            <p class="hint">成功来自 audio_unlock，失败来自 audio_unlock_fail；加载失败率 =（error + unavailable）/（成功 + error + unavailable），不把用户主动关掉视频或广告忙碌算作填充失败。</p>
+          </div>
+        </div>
+        <section class="stats ad-stats">
+          <div class="stat">
+            <span>今日解锁成功</span>
+            <strong id="stat-audio-unlocks">–</strong>
+            <small id="stat-audio-unlocks-sub">本周 –</small>
+          </div>
+          <div class="stat">
+            <span>今日解锁失败</span>
+            <strong id="stat-audio-fails">–</strong>
+            <small id="stat-audio-fails-sub">本周 –</small>
+          </div>
+          <div class="stat">
+            <span>广告加载失败率</span>
+            <strong id="stat-audio-fail-rate">–</strong>
+            <small>本周 · 排除用户跳过</small>
+          </div>
+        </section>
+        <ol id="unlock-fail-reasons" class="top-tracks"><li class="empty-line">还没有解锁失败数据</li></ol>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
             <h2>近 14 天</h2>
             <p class="hint">打开 / 打卡 / 播放来自小程序上报的匿名事件，只带 openid 与类型。</p>
           </div>

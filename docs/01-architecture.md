@@ -195,7 +195,7 @@ CREATE INDEX IF NOT EXISTS idx_events_created_at ON events (created_at);
 | POST | `/api/summary` | 无 | 由记录生成本周事实描述 |
 | POST | `/api/records/sync` | code | 上传记录/删除墓碑；服务端重算 day、丢弃单条脏数据，返回云端剩余记录 |
 | POST | `/api/records/erase` | code | 合规删除：默认删除记录/解锁/事件并写 erasure 水位；`cloudOnly:true` 只删云端副本、不写水位（3 次/分钟/IP）；`cloudOnly` 非布尔返回 400 |
-| POST | `/api/events` | code | 上报轻量事件（app_open / checkin / audio_play / audio_unlock / ad_show / ad_error） |
+| POST | `/api/events` | code | 上报轻量事件（app_open / checkin / audio_play / audio_unlock / audio_unlock_fail / audio_interrupt / manual_sleep / share / ad_show / ad_error） |
 | POST | `/api/admin/login` | 密码 | 后台登录，写 HttpOnly + SameSite=Strict Cookie |
 | POST | `/api/admin/logout` | Cookie | 清除后台会话 |
 | GET | `/api/admin/session` | 无 | 当前是否已登录 |

@@ -672,6 +672,26 @@ test('提醒落地：打卡会话 end=1 行为不变', () => {
   assert.equal(done.data.notice, '这次入睡已经结束过了')
 })
 
+test('热启动：页面从 App 暂存意图取 consumeLaunchIntent，不依赖 onLoad', () => {
+  const launchIntent = require('../miniprogram/utils/launch-intent')
+  resetStore()
+  seedPending()
+  launchIntent.reset()
+  launchIntent.capture({ query: { remind: 'wake' } }, Date.now())
+  const page = makePage()
+  page._autoEnd = false
+  page._remindKind = ''
+  page._opened = 0
+  page.openEndSheet = function () {
+    this._opened += 1
+  }
+  page.applyLaunchIntent()
+  page.consumeLaunchIntent()
+  assert.equal(page._opened, 1)
+  assert.equal(page._remindKind, '', '消费后必须清空，普通回前台不重复开面板')
+  launchIntent.reset()
+})
+
 const fs = require('node:fs')
 const path = require('node:path')
 

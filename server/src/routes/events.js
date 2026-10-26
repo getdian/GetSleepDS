@@ -9,6 +9,8 @@ const TYPES = [
   'checkin',
   'audio_play',
   'audio_unlock',
+  // 激励视频解锁失败：target = skipped|busy|error|unavailable|<trackId>
+  'audio_unlock_fail',
   'audio_error',
   // 外部中断（来电/闹钟/其他 App）：target = begin|trackId 或 end|秒|resume|skip
   'audio_interrupt',

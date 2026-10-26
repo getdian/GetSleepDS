@@ -396,7 +396,7 @@
 - [x] 单页模式：`singlePage=true` 后 `onShow`，底栏隐藏、顶栏「换背景」隐藏；console 无 error。
 - [x] 云副本删除后的本地提醒状态：`planReminder=null`、pending `reminderOptIn=false`，本机会话保留。
 - [x] 未开启云备份时 erase 失败：`cloudPendingErase=true`，统计页保留重试入口。
-- [x] 门禁：`npm test` 403 / 402 通过 / 0 失败 / 1 skip；`npm run check` 641.6 KB。
+- [x] 门禁：`npm test` 405 / 404 通过 / 0 失败 / 1 skip；`npm run check` 642.1 KB。
 - [ ] 真机：订阅消息冷/热启动、单页模式朋友圈打开、提醒授权后实际送达。
 
 ### 1.32 文档配图清理与检查（2026-10-26）
@@ -404,6 +404,15 @@
 - [x] 清理 13 张未被引用的中间态截图（657KB）；保留 69 张被文档引用的验收证据图。
 - [x] 新增 `tools/check-docs-assets.mjs` 并挂进 `npm run check`：文档图片死链 + `docs/assets` 孤儿图双向检查（口径含 markdown 嵌入 / 反引号路径 / 裸文件名，通配写法不误判）。
 - [x] 门禁：`npm run check` 通过（42 文档、69 张被引用、无死链无孤儿）；`npm test` 394/0 fail/1 skip。
+
+### 1.33 音频解锁失败埋点与环境音刷新（2026-10-26）
+
+- [x] 客户端：`audio-dock` 对激励视频 `skipped/busy/error/unavailable` 上报 `audio_unlock_fail`，target 带原因与音轨 id。
+- [x] 服务端：`/api/events` 白名单放行；`analytics` 聚合今日/本周 `unlockFails` 与 `unlockFailReasons`；新增单测覆盖原因排序和本周累计。
+- [x] 后台：概览新增「音频解锁观测」面板（今日/本周成功、失败、失败原因）；DOM 与 JS 选择器已静态核对。
+- [x] 本地环境音：`http://127.0.0.1:3100/api/config` 返回 6 条；模拟器 drawer 运行态也是 6 条。当前开发者工具设置了 `sleep:dev-api=https://sleep.qfmaster.com` 覆盖，且模拟器请求线上失败，因此出现旧缓存 `version 13` 与历史标题；移除该覆盖并清 `sleep:config:v1` 后重编译即可回到本地 3100 配置。
+- [ ] 浏览器：后台「音频解锁观测」面板视觉点击验收（本机未起浏览器自动化）。
+- [ ] 真机：真实激励视频跳过/失败/不可用时事件落库与后台计数。
 
 ## 2. 待真机验收（代码就绪，模拟器不可替代）
 

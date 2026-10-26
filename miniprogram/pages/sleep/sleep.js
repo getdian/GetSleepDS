@@ -8,6 +8,7 @@ const X = require('../../utils/sessions')
 // 补记编排（默认时间/错误文案/保存入参）：与统计页同一真源
 const MS = require('../../utils/manual-sleep')
 const reminder = require('../../utils/reminder')
+const launchIntent = require('../../utils/launch-intent')
 const tabbar = require('../../utils/tabbar')
 const storage = require('../../utils/storage')
 const { syncNow } = require('../../utils/sync')
@@ -67,14 +68,14 @@ Page({
     footerText: '愿这一觉安稳'
   },
 
-  onLoad(options) {
+  onLoad() {
     this._alive = true
     this._busy = false
     this._pending = null
-    this._autoEnd = !!(options && options.end === '1')
-    // 结果面计划提醒（该睡了/该起床了）点进来：与 end=1 分开处理，见 consumeLaunchIntent
-    this._remindKind =
-      options && (options.remind === 'sleep' || options.remind === 'wake') ? options.remind : ''
+    // 订阅消息意图统一由 App.onLaunch/onShow 暂存，页面 onShow 消费：
+    // 热启动到缓存 tab 时不会重新执行 onLoad，不能在这里只读 options。
+    this._autoEnd = false
+    this._remindKind = ''
     this._lightsTimer = null
     this._noticeTimer = null
     this._clockTimer = null
@@ -100,6 +101,7 @@ Page({
     this.startClock()
     adSlots.apply(this)
     this.openPendingAudio()
+    this.applyLaunchIntent()
     this.consumeLaunchIntent()
     // 统计页点空格子补记：带日期跳过来，直接打开补记面板
     this.openPendingManual()
@@ -108,6 +110,14 @@ Page({
     // pageLifetimes.show 重新翻出来（与生命周期先后无关）。
     this.syncTabbar()
     if (!this.data.dim && !this.data.endShow) this.scheduleLightsOut()
+  },
+
+  /** 把 App 暂存的热启动意图搬到本次 onShow，紧接着交给 consumeLaunchIntent 消费 */
+  applyLaunchIntent() {
+    const intent = launchIntent.take()
+    if (!intent) return
+    this._autoEnd = !!intent.end
+    this._remindKind = intent.remind || ''
   },
 
   /**

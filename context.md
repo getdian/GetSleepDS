@@ -112,8 +112,8 @@ tests/            Node 纯逻辑测试
 
 ## 5. 当前验证基线
 
-- `npm test`：**403 项 / 402 通过 / 0 失败 / 1 skip**（2026-10-26 复核收口轮实测；PG 集成用例在未设置 `PG_TEST_URL` 时跳过）。
-- `npm run check`：3 页面 / 22 JSON / 17 WXML / 19 WXSS，主包约 641.6 KB（以最新输出为准）。
+- `npm test`：**405 项 / 404 通过 / 0 失败 / 1 skip**（2026-10-26 复核收口 + 音频解锁埋点轮实测；PG 集成用例在未设置 `PG_TEST_URL` 时跳过）。
+- `npm run check`：3 页面 / 22 JSON / 17 WXML / 19 WXSS，主包约 642.1 KB（以最新输出为准）。
 - `npm run verify:web`：11 页 / 3 条内链，无 404（2026-10-26 批次 D）。
 - **验收清单（2026-10-22 建）**：全部待验收项已合并至 [docs/13-acceptance-checklist.md](docs/13-acceptance-checklist.md)，分三区——本机已验收（CLI 模拟器 390×844 实测，含入睡页 10-22 改版与统计页 10-21 改版全状态截图、console 无 error）/ 待真机（音频锁屏、中断、定时、手势手感）/ 待外部输入（部署、AppSecret、COS 防盗链、流量主）。续作新增"未验收"项一律先落该表再写代码。
 - 交付包：以 `release-artifacts/` 下最新 `getsleep-<label>.zip` 为准（`npm run pack` 生成，含 `RELEASE-MANIFEST.json` 与逐文件 sha256，同时留 `.sha256` 校验文件）；打包前会强制跑 `npm test` + `npm run check`。
@@ -192,6 +192,8 @@ tests/            Node 纯逻辑测试
     - **验证**：333 项测试通过（332 pass / 1 skip）、check 检查通过（主包约 561.9 KB）。
 
 36. **双报告合并审查后的正确性收口（2026-10-26）**：①**同步 trailing**——`utils/sync.js` 在途期间的修改会被旧轮误报“已同步”且云端缺最新段；现在 `resyncRequested` 触发补跑（≤4 轮），`lastSyncAt` 只在无 trailing 时落，`whenIdle()` 覆盖 trailing 轮。②**提醒可信**——入睡页改为服务端排上后才写 `reminderOptIn`（原先写本地再请求，断网/配置关闭会留下“已开启但无提醒且无法重试”）；结果面“已设提醒”点击改为取消；结束打卡撤销匹配的 `plan-w-*`；服务端 `saveReminder` 允许 cancelled/failed/expired 恢复 pending（sent 幂等），路由校验真实写入后才回 ok。③**音频回环熔断**——`audio-dock.replay()` 原调 `markUserPlay()` 清零预算，8 次上限永远不触发；拆出 `markAutoReplay()`，并用 `player-state.setLoopGuard()` 让 `seamlessLoop` 也纳入同一预算。④**P2**：`wx.login` 10s 超时（防整条身份队列挂死）、`lastTrackActive` 写入口收敛回 `audio-session`、解锁到期巡检不再依赖页面可见、`/api/events` 按条跳过脏数据并回 `dropped`。⑤**交互/视觉**：圆环中心与统计提示提亮、6 处热区补到 88rpx、假禁用点击给 toast、`--c-primary-soft` 拼写修正、迷你条层级改 `--z-player`、首页 onShow 对齐外部偏好变更。门禁：`npm test` 367/366/0 fail/1 skip、`npm run check` 通过（603.0 KB）、音频四件套 47/47。**未机验**：对比度/热区视觉、提醒 cold/hot start、锁屏到期收口。详见 changelog 2026-10-26。
+
+37. **复核收口：音频解锁失败埋点 + 热启动 + 单页模式 + 清除数据余量（2026-10-26）**：①`audio_unlock_fail` 上报 skipped/busy/error/unavailable；服务端白名单放行，analytics 汇总今日/本周失败、原因排行与加载失败率（`error+unavailable / 成功+两者`，排除跳过/忙碌），后台概览新增「音频解锁观测」。②`audio-dock` 回入睡页改 `loadConfig(true)`（3 秒 force 去重），后台新增音轨不必等 10 分钟缓存。③删除云端副本后同步清本地 `planReminder` 与 pending `reminderOptIn`；未开云备份时服务端 erase 失败保留 `cloudPendingErase` 重试入口。④订阅消息热启动由 App 捕获 `end/remind`，入睡页每次 onShow 消费一次（2 分钟 TTL）；单页模式显式隐藏 custom tabBar 与「换背景」；`app_open` 不再等配置成功才上报。⑤dense 结果面 pill 与首页脚注补 88rpx 命中区。门禁：`npm test` 405/404/0 fail/1 skip、`npm run check` 642.1 KB；模拟器热启动与单页模式已验，console 无 error。**本地环境音排查**：开发者工具 Storage 的 `sleep:dev-api` 覆盖到线上时，本地 3100 后台新增曲目不会下发；线上请求失败会回退 `sleep:config:v1` 旧缓存。移除覆盖并清配置缓存后重编译。**未验**：后台新面板浏览器点击、真实激励视频失败事件。
 
 37. **环境音专项：播放条常驻（2026-10-26，产品口径）**：新增 `utils/player-surface.js` 统一 `audio-dock`/`now-playing` 的可见性判定——①只有用户在小程序内点停止（`lastTrackActive=false`）才隐藏入口；②有 `lastTrackId` 且未显式停止就一直显示，**冷启动/退出微信/悬浮 X 停止后都是“已暂停”的条**，点按可续播；③冷启动残影只归零 `lastTrackPlaying`，不再 `markStopped()`（旧实现会让重进小程序时条子消失）。切歌竞态：`onError` 用 `_srcSetAt` 挡切歌 1.5s 内的迟到错误，缓存回退远程后补 `safePlay + armLoadingGuard`。熄灯一键结束与提醒取消补偿见第 36 条与 changelog。**待真机**：冷启动保留条、悬浮 X 停止后续播、来电/切 App 恢复、锁屏多轮回环、熄灯按钮手感。
 

@@ -9,13 +9,15 @@
 - **朋友圈单页模式**：首页底栏改用显式 `tabBar.hidden`（custom-tab-bar 独立 root，`wx:if` 不足以保证隐藏）；「换背景」在单页模式/无背景配置时不渲染；`custom-tab-bar` 的 `switchTab` 补失败 toast，点当前 tab 回顶。
 - **启动事件**：`app_open` 从「配置加载成功回调内」移到启动即上报，弱网/新用户首启不再因配置失败漏掉获客分母。
 - **触控热区**：dense 结果面两个次级 pill 与首页脚注整行补到 88rpx 命中区，不改变视觉高度。
-- **验证**：`npm test` **403 项 / 402 通过 / 0 失败 / 1 skip**；`npm run check` 通过（主包约 **641.6 KB**）。模拟器 390×844 实测热启动 `remind=sleep` 落在入睡页并显示提示（截图 `docs/assets/l4-hotstart-remind.png`）；单页模式 `singlePage=true` 时底栏隐藏、顶栏「换背景」隐藏，console 无 error。真机订阅点击/冷热启动仍待复测。
+- **音频解锁可观测**：新增 `audio_unlock_fail` 事件（target=`skipped|busy|error|unavailable|<trackId>`），服务端白名单放行；`analytics.overview` 增加今日/本周 `unlockFails`、`unlockFailReasons` 与 `unlockLoadFailureRate`（`error+unavailable / 成功+两者`，排除用户跳过/广告忙碌）；后台概览新增「音频解锁观测」面板。广告失败仍按 `onAdError` 配置决定是否放行，但放行不再等于不可观测。
+- **环境音刷新**：`audio-dock` 回入睡页改为 `loadConfig(true)`（内部 3 秒 force 去重），后台新增/改名音轨后不必等 10 分钟缓存。**本地若看不到后台新增曲目，先检查开发者工具 Storage 是否有 `sleep:dev-api` 覆盖到线上**；有覆盖时本地 3100 后台的数据不会下发，且线上请求失败会落到旧配置缓存。
+- **验证**：`npm test` **405 项 / 404 通过 / 0 失败 / 1 skip**；`npm run check` 通过（主包约 **642.1 KB**）。模拟器 390×844 实测热启动 `remind=sleep` 落在入睡页并显示提示（截图 `docs/assets/l4-hotstart-remind.png`）；单页模式 `singlePage=true` 时底栏隐藏、顶栏「换背景」隐藏；本地 3100 `/api/config` 已下发 6 条环境音，drawer 运行态为 6 条（旧缓存仍可能显示历史标题，清 `sleep:config:v1` 后重拉）。真机订阅点击/冷热启动仍待复测。
 
 ## 2026-10-26 · 文档配图清理 + 配图检查工具（防止孤儿图与死链）
 
 - **清理 13 张未被引用的截图**（657KB）：`docs/assets` 共 82 张 → 69 张，全部被文档（changelog / 验收清单）以路径形式引用；被删的是改前/改后中间态与无引用遗留（如 `l4-audio-visual-v3.png` 圆框版、`l4-lights-out-done.png`、`design-preview.png`）。**保留的 69 张是 L4 交付证据**（真机复测、回归对照、评审追溯都靠它们），不是冗余资源；`docs/assets` 不在小程序包内，不影响主包体积。
 - **新增 `tools/check-docs-assets.mjs` 并挂进 `npm run check`**：①文档里写出的 `docs/assets/...` 路径必须真实存在（防"删图留死链"——上一轮误删 `calendar-strip` 组件导致 1 年视图整块空白，同类问题要有工具兜住）；②`docs/assets` 下不得存在未被任何文档提及的图（防中间态截图越积越多）。
-  - 引用口径按本项目实际写法：markdown 嵌入 ``![](x.png)``、反引号路径 `` `docs/assets/x.png` ``、裸文件名都算；通配/枚举写法（`l4-*.png`、`tab-home(-active).png`）属设计文档的规格描述，不判死链。
+  - 引用口径按本项目实际写法：markdown 嵌入写法、反引号包住的带 `docs/assets/` 前缀的路径、裸文件名都算；通配/枚举写法（`l4-*.png`、`tab-home(-active).png`）属设计文档的规格描述，不判死链。
 - **验证**：`npm run check` 通过（静态检查 + 文档配图检查：42 个文档、69 张被引用图片、无死链、无孤儿图）；`npm test` 394 通过 / 0 失败 / 1 skip。
 
 ## 2026-10-26 · 部署前 code-review（1b1371d..ade0da5）：修 1 个 P0 + 5 项一致性问题

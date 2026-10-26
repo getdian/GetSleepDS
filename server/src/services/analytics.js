@@ -13,6 +13,7 @@ function emptyBucket(day) {
     checkins: 0,
     plays: 0,
     unlocks: 0,
+    unlockFails: 0,
     adShows: 0,
     adErrors: 0,
     // 外部中断次数：只统计 begin（end 只是时长与恢复结果，不计频次）
@@ -55,6 +56,7 @@ function createAnalytics(options) {
     let weekCheckins = 0
     let weekPlays = 0
     let weekUnlocks = 0
+    let weekUnlockFails = 0
     let weekAdShows = 0
     let weekAdErrors = 0
     let weekInterrupts = 0
@@ -63,6 +65,7 @@ function createAnalytics(options) {
     const top = new Map()
     const sources = new Map()
     const adSlots = new Map()
+    const unlockFailReasons = new Map()
 
     events.forEach((event) => {
       const bucket = days.get(dayKey(event.ts))
@@ -83,6 +86,11 @@ function createAnalytics(options) {
         top.set(key, (top.get(key) || 0) + 1)
       }
       if (event.type === 'audio_unlock') bucket.unlocks += 1
+      if (event.type === 'audio_unlock_fail') {
+        bucket.unlockFails += 1
+        const reason = String(event.target || 'unknown').split('|')[0] || 'unknown'
+        unlockFailReasons.set(reason, (unlockFailReasons.get(reason) || 0) + 1)
+      }
       if (event.type === 'audio_interrupt' && String(event.target || '').indexOf('begin') === 0) {
         bucket.interrupts += 1
       }
@@ -107,6 +115,7 @@ function createAnalytics(options) {
         if (event.type === 'checkin') weekCheckins += 1
         if (event.type === 'audio_play') weekPlays += 1
         if (event.type === 'audio_unlock') weekUnlocks += 1
+        if (event.type === 'audio_unlock_fail') weekUnlockFails += 1
         if (event.type === 'audio_interrupt' && String(event.target || '').indexOf('begin') === 0) {
           weekInterrupts += 1
         }
@@ -138,6 +147,16 @@ function createAnalytics(options) {
     })
     const adShows = adBySlot.reduce((sum, item) => sum + item.shows, 0)
     const adErrors = adBySlot.reduce((sum, item) => sum + item.errors, 0)
+    const unlockFailByReason = Array.from(unlockFailReasons.entries())
+      // 同频时按原因名稳定排序，后台不会因 Map 插入顺序不同而跳来跳去
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map((entry) => ({ reason: entry[0], count: entry[1] }))
+    const unlockLoadErrors =
+      (unlockFailReasons.get('error') || 0) + (unlockFailReasons.get('unavailable') || 0)
+    const unlockAttempts = weekUnlocks + unlockLoadErrors
+    const unlockLoadFailureRate = unlockAttempts
+      ? Math.round((unlockLoadErrors / unlockAttempts) * 100)
+      : null
 
     return {
       totals: Object.assign({}, totals, {
@@ -148,6 +167,7 @@ function createAnalytics(options) {
         checkins: todayBucket.checkins,
         plays: todayBucket.plays,
         unlocks: todayBucket.unlocks,
+        unlockFails: todayBucket.unlockFails,
         adShows: todayBucket.adShows,
         adErrors: todayBucket.adErrors,
         interrupts: todayBucket.interrupts,
@@ -159,6 +179,7 @@ function createAnalytics(options) {
         checkins: weekCheckins,
         plays: weekPlays,
         unlocks: weekUnlocks,
+        unlockFails: weekUnlockFails,
         adShows: weekAdShows,
         adErrors: weekAdErrors,
         interrupts: weekInterrupts,
@@ -185,6 +206,8 @@ function createAnalytics(options) {
       })),
       topTracks,
       topSources,
+      unlockFailReasons: unlockFailByReason,
+      unlockLoadFailureRate,
       // listEvents 在 memory/PG 两端都硬上限 20000；达到上限时趋势与 Top 榜可能偏低
       truncated: events.length >= 20000
     }

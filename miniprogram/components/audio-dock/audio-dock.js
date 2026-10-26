@@ -226,9 +226,10 @@ Component({
       // 而 tabBar 是独立 root，页面遮罩压不住它。
       if (this.data.open) tabbar.hide()
       // 配置自愈：首拉失败时 _cfg 会一直是内置兜底（只有 1 条雨声），
-      // 且 tab 页常驻不会重建组件。这里按 10 分钟 TTL 复用缓存，
-      // 后台改了音轨/解锁时长/文案，最迟下一次回到本页就生效。
-      loadConfig(false).then((cfg) => {
+      // 且 tab 页常驻不会重建组件。切回本页时 force 拉一次，
+      // 后台改了音轨/解锁时长/文案，下一次回到本页就生效。
+      // loadConfig 内部有 3 秒 force 去重，不会在连续切 tab 时放大请求。
+      loadConfig(true).then((cfg) => {
         if (!cfg || configSignature(cfg) === this._cfgSig) return
         this.applyRemoteConfig(cfg)
       })
@@ -416,15 +417,21 @@ Component({
       if (unlock.mode !== 'rewarded' || !unlock.adUnitId) return Promise.resolve(true)
 
       return ad.show().then((result) => {
+        const trackId = this.data.currentId || 'unknown'
         if (result === 'skipped') {
+          events.track('audio_unlock_fail', 'skipped|' + trackId)
           wx.showToast({ title: '视频没看完，先不解锁', icon: 'none' })
           return false
         }
         if (result === 'busy') {
+          events.track('audio_unlock_fail', 'busy|' + trackId)
           wx.showToast({ title: '广告正在播放，请稍后再试', icon: 'none' })
           return false
         }
         if (result === 'error' || result === 'unavailable') {
+          // onAdError=grant 时仍放行，但必须留下失败原因：
+          // 否则后台只能看到 audio_unlock 成功数，无法判断真实填充/加载质量。
+          events.track('audio_unlock_fail', result + '|' + trackId)
           if (unlock.onAdError === 'deny') {
             wx.showToast({ title: '广告暂不可用，稍后再试', icon: 'none' })
             return false
