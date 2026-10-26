@@ -1,5 +1,13 @@
 # 睡点 · 关键更新记录
 
+## 2026-10-26 · 提醒瞬时失败限次重试（加法迁移 attempts/retry_at）
+
+- **缺口**：`services/reminders.js` 原来把非 43101 的发送失败一律标 `failed`——微信接口抖动、access_token 竞态、网络超时等瞬时故障会让**已到点的提醒永久丢失**，用户只看到“没响”。
+- **修复**：`sleep_reminders` 加法迁移 `attempts INTEGER DEFAULT 0`、`retry_at BIGINT DEFAULT 0`（SCHEMA 与 `001_init.sql` 同源）；发送失败时 `attempts+1` 并按 `attempts×60s`（1/2 分钟）退避，**最多 3 次后标 failed**；43101（用户未订阅）仍直接 `cancelled`；用户重建任务（cancelled/failed/expired → pending）时预算重置；发送成功清零。`dueReminders`（memory + PG）都尊重 `retry_at`，退避期内不会重复发送。
+- **测试**：`reminders.test.js` 新增「连续三次失败 → failed；退避期内不重复发送；attempts 递增可见」（14/14）。
+- **注意**：线上 PG 需要跑一次 `001_init.sql`（或重启服务端让 `init()` 自动 `ALTER ADD COLUMN`）后新列才存在。
+- **验证**：`npm test` **392 项 / 391 通过 / 0 失败 / 1 skip**；`npm run check` 通过（主包 **635.0 KB**）。
+
 ## 2026-10-26 · 音源链路诊断 · 标题收缩 · 分享归因校验
 
 - **「后台多条、模拟器只显示 1 条」定位并恢复**：此前调试时给模拟器写入过一次性覆盖 `sleep:dev-api = https://sleep.qfmaster.com`，但开发者工具走系统代理对该域请求失败（`status 0`）→ 降级到 fallback（仅 1 条）。清除该覆盖、重启后回退本地 `127.0.0.1:3100`，抽屉恢复 **6 条**。**注意**：`sleep:dev-api` 是仅 develop 读取的调试开关，指向线上时会被系统代理拦截，本地联调不要设置它。

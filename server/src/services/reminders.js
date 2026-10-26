@@ -134,9 +134,23 @@ function createReminderService(options) {
           })
           await db.markReminder(item.openid, item.sessionId, 'sent', current)
         } catch (error) {
-          // 43101=用户未订阅/已取消；其余失败标记为 failed，避免无限重试
-          const status = error && Number(error.errcode) === 43101 ? 'cancelled' : 'failed'
-          await db.markReminder(item.openid, item.sessionId, status, current)
+          // 43101=用户未订阅/已取消：不再重试，直接撤销。
+          if (error && Number(error.errcode) === 43101) {
+            await db.markReminder(item.openid, item.sessionId, 'cancelled', current)
+          } else {
+            // 微信/网络瞬时故障不再永久标 failed：最多 3 次，按 1/2 分钟退避。
+            // 仍受 MAX_LATE_MS 约束：超过 15 分钟的旧任务直接 expired，不会无限重发。
+            const attempts = (Number(item.attempts) || 0) + 1
+            if (attempts >= 3 || !db.scheduleReminderRetry) {
+              await db.markReminder(item.openid, item.sessionId, 'failed', current)
+            } else {
+              await db.scheduleReminderRetry(item.openid, item.sessionId, {
+                attempts,
+                retryAt: current + attempts * 60 * 1000,
+                at: current
+              })
+            }
+          }
           logger.error('[reminder] send failed', item.sessionId, error && error.errcode)
         }
       }

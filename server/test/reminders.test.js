@@ -416,3 +416,52 @@ test('已排队任务使用创建时的模板字段快照（运营换模板后�
   assert.ok(sends[0].data.time2, '必须使用创建时的 time2')
   assert.equal(sends[0].data.thing3, undefined, '不能把新配置字段套在旧任务上')
 })
+
+test('瞬时失败：进入退避保留 pending，第三次失败才标 failed', async () => {
+  const db = createMemoryDb()
+  const now = Date.now()
+  await db.saveReminder('openid-retry', {
+    sessionId: 'sleep-retry-1',
+    fireAt: now - 1000,
+    templateId: 'tmpl-retry',
+    page: 'pages/sleep/sleep?end=1',
+    thingKey: 'thing1',
+    timeKey: 'time2'
+  })
+
+  // 微信侧持续返回"系统繁忙"（errcode=-1），模拟瞬时故障
+  const fetchImpl = async (url) => {
+    if (url.indexOf('stable_token') >= 0) {
+      return { json: async () => ({ access_token: 'token-test', expires_in: 7200 }) }
+    }
+    return { json: async () => ({ errcode: -1 }) }
+  }
+  let current = now
+  const service = createReminderService({
+    db,
+    wx: { appid: 'appid-test', secret: 'secret-test', fetchImpl },
+    templateId: 'tmpl-retry',
+    now: () => current
+  })
+
+  await service.tick()
+  let due = await db.dueReminders(current, 10)
+  assert.equal(due.length, 0, '失败后进入退避，不应立刻重发')
+
+  // 退避到期：允许重试，attempts=1
+  current += 61 * 1000
+  due = await db.dueReminders(current, 10)
+  assert.equal(due.length, 1, '退避到期后应允许重试')
+  assert.equal(due[0].attempts, 1)
+
+  // 第二次失败 → attempts=2，退避拉长到 2 分钟；第三次失败 → failed（不再出现在 due）
+  current += 61 * 1000
+  await service.tick()
+  current += 121 * 1000
+  due = await db.dueReminders(current, 10)
+  assert.equal(due.length, 1, '第二次退避（2 分钟）到期后允许重试')
+  assert.equal(due[0].attempts, 2)
+  await service.tick()
+  due = await db.dueReminders(current, 10)
+  assert.equal(due.length, 0, '第三次失败后标 failed，不再重试')
+})

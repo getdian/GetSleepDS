@@ -361,6 +361,16 @@
 - [x] 门禁：`npm test` 391/390/0 fail/1 skip；`check` 635.0 KB。
 - [ ] 待真机：分享卡片冷启动落地（预填 + 直接展示结果面）、`app_open` 的 `from=share` 是否按预期上报（需真机转发一次后看后台看板）。
 
+### 1.29 提醒瞬时失败限次重试（2026-10-26，单测 14/14）
+
+- [x] 加法迁移：`sleep_reminders` 加 `attempts INTEGER DEFAULT 0`、`retry_at BIGINT DEFAULT 0`（`db/index.js` SCHEMA + `001_init.sql` 同源）。
+- [x] 重试语义：非 43101 失败 → `attempts+1`、`retry_at = now + attempts×60s`（1/2 分钟退避）；`attempts>=3` → failed；43101 → cancelled；重建任务重置预算；发送成功清零。
+- [x] `dueReminders`（memory + PG）过滤 `retry_at`，退避期内不重复发送；`MAX_LATE_MS`（15 分钟）仍然生效，不会无限重发旧任务。
+- [x] 单测：`reminders.test.js`「瞬时失败：进入退避保留 pending，第三次失败才标 failed」（含 attempts 递增与退避时长断言）。
+- [x] 门禁：`npm test` 392/391/0 fail/1 skip；`check` 635.0 KB。
+- [ ] **部署注意**：线上 PG 需执行 `001_init.sql` 或重启服务端（`init()` 自动 `ALTER ADD COLUMN`）后新列才存在；否则 `scheduleReminderRetry` 的 UPDATE 会因列不存在而失败（已按 `!db.scheduleReminderRetry` 兜底降级为 failed，但 PG 实现存在，列缺失时 SQL 报错——**上线前必须先迁移**）。
+- [ ] 待真机/线上：人为断网触发一次发送失败，观察 1 分钟后自动重发成功、看板无 failed 残留。
+
 ## 2. 待真机验收（代码就绪，模拟器不可替代）
 
 > 按风险排序。每项都曾在 changelog 标注"未真机验证"；本机 CLI 已把可截图的全部截完，剩余必须真机。

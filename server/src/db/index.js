@@ -61,11 +61,17 @@ CREATE TABLE IF NOT EXISTS sleep_reminders (
     -- 否则“旧模板 + 新字段”会被微信以 47003 拒绝，提醒永久发不出去。
     thing_key    TEXT NOT NULL DEFAULT '',
     time_key     TEXT NOT NULL DEFAULT '',
+    -- 瞬时失败重试预算：attempts 是已失败次数，retry_at 是下一次允许发送的时刻（毫秒）。
+    -- 没有这两列时，微信/网络一次抖动就会把提醒永久标成 failed，用户收不到。
+    attempts     INTEGER NOT NULL DEFAULT 0,
+    retry_at     BIGINT NOT NULL DEFAULT 0,
     PRIMARY KEY (openid, session_id)
 );
 
 ALTER TABLE sleep_reminders ADD COLUMN IF NOT EXISTS thing_key TEXT NOT NULL DEFAULT '';
 ALTER TABLE sleep_reminders ADD COLUMN IF NOT EXISTS time_key TEXT NOT NULL DEFAULT '';
+ALTER TABLE sleep_reminders ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE sleep_reminders ADD COLUMN IF NOT EXISTS retry_at BIGINT NOT NULL DEFAULT 0;
 CREATE INDEX IF NOT EXISTS idx_sleep_reminders_due
     ON sleep_reminders (status, fire_at);
 
@@ -190,7 +196,8 @@ function createMemoryDb() {
       // cancelled/failed/expired 是“用户主动重新创建”，必须能恢复为 pending，
       // 否则「设 A → 改 B → 再改回 A」会静默没有任何待发送任务。
       if (previous && previous.status === 'sent') return true
-      const next = Object.assign({}, reminder, { openid, status: 'pending' })
+      // 用户主动重建（cancelled/failed/expired → pending）时重置重试预算
+      const next = Object.assign({}, reminder, { openid, status: 'pending', attempts: 0, retryAt: 0 })
       delete next.cancelledAt
       bucket.set(reminder.sessionId, next)
       return true
@@ -209,7 +216,11 @@ function createMemoryDb() {
       const out = []
       reminders.forEach((bucket, openid) => {
         bucket.forEach((item) => {
-          if (item.status === 'pending' && item.fireAt <= nowTs) {
+          if (
+            item.status === 'pending' &&
+            item.fireAt <= nowTs &&
+            (!item.retryAt || item.retryAt <= nowTs)
+          ) {
             out.push(Object.assign({}, item, { openid }))
           }
         })
@@ -223,8 +234,22 @@ function createMemoryDb() {
       const item = bucket && bucket.get(sessionId)
       if (!item) return false
       item.status = status
-      if (status === 'sent') item.sentAt = atTs || Date.now()
-      else item.cancelledAt = atTs || Date.now()
+      if (status === 'sent') {
+        item.sentAt = atTs || Date.now()
+        item.attempts = 0
+        item.retryAt = 0
+      } else item.cancelledAt = atTs || Date.now()
+      return true
+    },
+
+    /** 瞬时失败：保留 pending，累加 attempts 并推后下一次发送时刻（退避） */
+    async scheduleReminderRetry(openid, sessionId, options) {
+      const bucket = reminders.get(openid)
+      const item = bucket && bucket.get(sessionId)
+      if (!item || item.status !== 'pending') return false
+      item.attempts = Number(options && options.attempts) || 1
+      item.retryAt = Number(options && options.retryAt) || 0
+      item.lastErrorAt = Number(options && options.at) || Date.now()
       return true
     },
 
@@ -559,7 +584,9 @@ function createPostgresDb(connectionString) {
              status = 'pending',
              cancelled_at = NULL,
              thing_key = EXCLUDED.thing_key,
-             time_key = EXCLUDED.time_key
+             time_key = EXCLUDED.time_key,
+             attempts = 0,
+             retry_at = 0
            WHERE sleep_reminders.status <> 'sent'
            RETURNING session_id
          )
@@ -592,9 +619,10 @@ function createPostgresDb(connectionString) {
 
     async dueReminders(nowTs, limit) {
       const result = await pool.query(
-        `SELECT openid, session_id, fire_at, template_id, page, thing_key, time_key
+        `SELECT openid, session_id, fire_at, template_id, page, thing_key, time_key, attempts
          FROM sleep_reminders
          WHERE status = 'pending' AND fire_at <= $1
+           AND (retry_at = 0 OR retry_at <= $1)
          ORDER BY fire_at
          LIMIT $2`,
         [nowTs, Math.max(1, Number(limit) || 50)]
@@ -606,7 +634,8 @@ function createPostgresDb(connectionString) {
         templateId: row.template_id,
         page: row.page,
         thingKey: row.thing_key || '',
-        timeKey: row.time_key || ''
+        timeKey: row.time_key || '',
+        attempts: Number(row.attempts) || 0
       }))
     },
 
@@ -615,9 +644,25 @@ function createPostgresDb(connectionString) {
         `UPDATE sleep_reminders
          SET status = $3,
              sent_at = CASE WHEN $3 = 'sent' THEN to_timestamp($4::bigint / 1000.0) ELSE sent_at END,
-             cancelled_at = CASE WHEN $3 <> 'sent' THEN to_timestamp($4::bigint / 1000.0) ELSE cancelled_at END
+             cancelled_at = CASE WHEN $3 <> 'sent' THEN to_timestamp($4::bigint / 1000.0) ELSE cancelled_at END,
+             attempts = CASE WHEN $3 = 'sent' THEN 0 ELSE attempts END,
+             retry_at = CASE WHEN $3 = 'sent' THEN 0 ELSE retry_at END
          WHERE openid = $1 AND session_id = $2`,
         [openid, sessionId, status, atTs || Date.now()]
+      )
+      return result.rowCount > 0
+    },
+
+    /** 瞬时失败：保留 pending，累加 attempts 并推后下一次发送时刻（退避） */
+    async scheduleReminderRetry(openid, sessionId, options) {
+      const attempts = Number(options && options.attempts) || 1
+      const retryAt = Number(options && options.retryAt) || 0
+      const at = Number(options && options.at) || Date.now()
+      const result = await pool.query(
+        `UPDATE sleep_reminders
+            SET attempts = $3, retry_at = $4, cancelled_at = to_timestamp($5::bigint / 1000.0)
+          WHERE openid = $1 AND session_id = $2 AND status = 'pending'`,
+        [openid, sessionId, attempts, retryAt, at]
       )
       return result.rowCount > 0
     },

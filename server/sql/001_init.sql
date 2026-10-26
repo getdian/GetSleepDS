@@ -54,6 +54,9 @@ CREATE TABLE IF NOT EXISTS sleep_reminders (
     cancelled_at TIMESTAMPTZ,
     thing_key    TEXT NOT NULL DEFAULT '',
     time_key     TEXT NOT NULL DEFAULT '',
+    -- 瞬时失败重试预算：attempts 是失败次数，retry_at 是下一次允许发送的时刻（毫秒）
+    attempts     INTEGER NOT NULL DEFAULT 0,
+    retry_at     BIGINT NOT NULL DEFAULT 0,
     PRIMARY KEY (openid, session_id)
 );
 
@@ -74,6 +77,8 @@ ALTER TABLE sleep_records ADD COLUMN IF NOT EXISTS night_duration_min INTEGER;
 ALTER TABLE sleep_records ADD COLUMN IF NOT EXISTS total_duration_min INTEGER;
 ALTER TABLE sleep_reminders ADD COLUMN IF NOT EXISTS thing_key TEXT NOT NULL DEFAULT '';
 ALTER TABLE sleep_reminders ADD COLUMN IF NOT EXISTS time_key TEXT NOT NULL DEFAULT '';
+ALTER TABLE sleep_reminders ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE sleep_reminders ADD COLUMN IF NOT EXISTS retry_at BIGINT NOT NULL DEFAULT 0;
 
 -- 全量清除水位：清除/后台删除后，早于 erased_at 的记录不能再写回
 CREATE TABLE IF NOT EXISTS user_erasures (
