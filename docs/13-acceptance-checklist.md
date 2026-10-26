@@ -371,6 +371,14 @@
 - [ ] **部署注意**：线上 PG 需执行 `001_init.sql` 或重启服务端（`init()` 自动 `ALTER ADD COLUMN`）后新列才存在；否则 `scheduleReminderRetry` 的 UPDATE 会因列不存在而失败（已按 `!db.scheduleReminderRetry` 兜底降级为 failed，但 PG 实现存在，列缺失时 SQL 报错——**上线前必须先迁移**）。
 - [ ] 待真机/线上：人为断网触发一次发送失败，观察 1 分钟后自动重发成功、看板无 failed 残留。
 
+### 1.30 1 年视图渲染懒加载（2026-10-26，模拟器已验）
+
+- [x] `calendar-strip` 初始只渲染最近 6 个月（`visibleMonths`），滑到最左（`bindscrolltoupper`，阈值 80px）渲染全部 12 个月。
+- [x] 追加后视口钉回追加前最旧可见月份（`scroll-into-view = cs-2026-05`），**不跳位**；同月份数据更新只刷新可见格子、不重置滚动位置；切周期/月份范围变化才重置窗口并滚回最新月份。
+- [x] 模拟器实测：`months=12 / visibleBefore=6 / visibleAfter=12 / target=cs-2026-05`；截图 `docs/assets/l4-stats-year-lazy.png`。
+- [x] 门禁：`npm test` 392/391/0 fail/1 skip；`check` 636.4 KB。
+- [ ] 待真机：横向滑动加载更早月份的流畅度与无跳位确认。
+
 ## 2. 待真机验收（代码就绪，模拟器不可替代）
 
 > 按风险排序。每项都曾在 changelog 标注"未真机验证"；本机 CLI 已把可截图的全部截完，剩余必须真机。

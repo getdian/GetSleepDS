@@ -5,9 +5,11 @@
   show-scrollbar="{{false}}"
   scroll-into-view="{{scrollTarget}}"
   scroll-with-animation="{{false}}"
+  bindscrolltoupper="onLoadEarlier"
+  upper-threshold="80"
 >
   <view class="cs-track">
-    <view wx:for="{{months}}" wx:key="key" class="cs-month" id="cs-{{item.key}}">
+    <view wx:for="{{visibleMonths}}" wx:key="key" class="cs-month" id="cs-{{item.key}}">
       <text class="cs-month-label">{{item.label}}</text>
       <view class="cs-week">
         <text wx:for="{{weekLabels}}" wx:key="*this" class="cs-week-cell">{{item}}</text>
