@@ -408,6 +408,9 @@
       '本周 ' + (week.plays || 0) + ' · 中断 ' + (week.interrupts || 0)
     $('#stat-users').textContent = totals.users || 0
     $('#stat-users-sub').textContent = '有效解锁 ' + (totals.activeUnlocks || 0)
+    // 分享是“分享 → 打开 → 首次打卡”漏斗的分母：没有它无法判断分享动作是否有效
+    $('#stat-shares').textContent = today.shares || 0
+    $('#stat-shares-sub').textContent = '本周 ' + (week.shares || 0)
 
     const ads = data.ads || {}
     $('#stat-ad-shows').textContent = ads.todayShows || 0

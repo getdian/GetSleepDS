@@ -21,7 +21,22 @@ try {
   }
 }
 
+// 仅开发版可覆盖：便于在模拟器里直接用线上配置联调（线上素材/解锁设置都在服务端），
+// 体验版/正式版永远忽略这个键，避免把调试地址带到用户端。
+let devOverride = ''
+if (envVersion === 'develop') {
+  try {
+    const saved = wx.getStorageSync('sleep:dev-api')
+    if (typeof saved === 'string') devOverride = saved.trim()
+  } catch (e) {
+    devOverride = ''
+  }
+}
+const overrideValid = /^https:\/\/[^\s]+$/.test(devOverride)
+
 module.exports = {
-  apiBase: envVersion === 'develop' ? DEV_API : PROD_API,
-  envVersion
+  apiBase: overrideValid ? devOverride : envVersion === 'develop' ? DEV_API : PROD_API,
+  envVersion,
+  // 供调试页/日志判断当前是否走了线上覆盖
+  devOverride: overrideValid
 }

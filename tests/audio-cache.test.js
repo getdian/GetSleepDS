@@ -114,11 +114,11 @@ test('缓存替换不 unlink 正在播放的 dest：先备份再换入', async (
   }
 })
 
-test('播放后自动缓存：Wi-Fi 立即，移动网络延迟 15 秒', () => {
-  assert.equal(cache.autoCacheDelay('wifi'), 0)
-  assert.equal(cache.autoCacheDelay('4g'), 15000)
-  assert.equal(cache.autoCacheDelay('5g'), 15000)
-  assert.equal(cache.autoCacheDelay(''), 15000)
+test('播放后自动缓存：Wi-Fi 也让起播 8 秒，移动网络 20 秒（避免抢带宽导致“播几秒暂停”）', () => {
+  assert.equal(cache.autoCacheDelay('wifi'), 8000)
+  assert.equal(cache.autoCacheDelay('4g'), 20000)
+  assert.equal(cache.autoCacheDelay('5g'), 20000)
+  assert.equal(cache.autoCacheDelay(''), 20000)
 })
 
 test('自动缓存容量闸：占用达到 maxMB 后不再自动下载', () => {

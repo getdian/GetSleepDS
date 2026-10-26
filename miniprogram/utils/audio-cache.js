@@ -414,7 +414,9 @@ function cleanAll(exceptUrl) {
  * 并行（约多耗 1 倍流量），换来之后每次播放都走本地、不再重复下载。
  */
 function autoCacheDelay(networkType) {
-  return networkType === 'wifi' ? 0 : 15 * 1000
+  // 即使 Wi-Fi 也要先给起播让路：首次是流式播放，若同时下整首（后台已有 1.5–11MB 的素材），
+  // 两条连接抢带宽会表现为“播几秒突然暂停”。8s 后才开始后台缓存，移动网络 20s。
+  return networkType === 'wifi' ? 8000 : 20000
 }
 
 /**

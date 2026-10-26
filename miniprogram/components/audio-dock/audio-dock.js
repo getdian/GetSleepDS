@@ -200,6 +200,7 @@ Component({
       }
       this.clearAutoCacheTimer()
       clearTimeout(this._waitRetryTimer)
+      clearTimeout(this._pauseRetryTimer)
       this.offAudio()
     }
   },
@@ -487,7 +488,9 @@ Component({
           this.disarmLoadingGuard()
           // 真正起播：清掉缓冲标记与重试定时器
           this._waitingAt = 0
+          this._pauseRetry = 0
           clearTimeout(this._waitRetryTimer)
+          clearTimeout(this._pauseRetryTimer)
           playerState.clearFallback()
           // 任何来源的起播都算会话存活（含系统通知栏/锁屏续播）
           audioSession.onPlay()
@@ -505,8 +508,26 @@ Component({
           if (!this._alive) return
           // BAM 缓冲时会自动 pause：这不是用户暂停，不能冻结定时、也不能收成“已暂停”条，
           // 否则弱网首播会表现为“刚点播放就暂停，定时也停了”。
-          const buffering = Date.now() - (this._waitingAt || 0) < 8000
+          const buffering = Date.now() - (this._waitingAt || 0) < 30 * 1000
+          const userPaused = audioSession.isUserPaused()
           this.disarmLoadingGuard()
+          // 缓冲期内且不是用户暂停：保持“连接中”，3s 后补一次 play（最多 2 次）。
+          // 没有这一层时，真机上点新歌播几秒被缓冲打断，会直接停在“已暂停，点击继续”。
+          const retry =
+            buffering && !userPaused && !this._stopRequested && !!this.data.currentId && (this._pauseRetry || 0) < 2
+          if (retry) {
+            this._pauseRetry = (this._pauseRetry || 0) + 1
+            this.setData({ playing: false, loading: true, miniExpanded: true })
+            this.armLoadingGuard()
+            this.syncPlayerText()
+            clearTimeout(this._pauseRetryTimer)
+            this._pauseRetryTimer = setTimeout(() => {
+              if (!this._alive || this._stopRequested) return
+              if (!this._audio || !this._audio.paused) return
+              this.safePlay()
+            }, 3000)
+            return
+          }
           if (buffering) this.armLoadingGuard()
           else audioTimer.pause()
           // 只有用户在小程序内暂停才阻止自动恢复；来电/其他 App 造成的暂停留给
@@ -1223,7 +1244,9 @@ Component({
       this.clearStopArm()
       this._stopRequested = true
       this._waitingAt = 0
+      this._pauseRetry = 0
       clearTimeout(this._waitRetryTimer)
+      clearTimeout(this._pauseRetryTimer)
       this.disarmLoadingGuard()
       // 停止本次播放即结束这一段会话：定时偏好回到“关”，下次播放需明确重新选择
       audioTimer.clear(undefined, true)

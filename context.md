@@ -112,8 +112,8 @@ tests/            Node 纯逻辑测试
 
 ## 5. 当前验证基线
 
-- `npm test`：**386 项 / 385 通过 / 0 失败 / 1 skip**（2026-10-26 批次 D；PG 集成用例在未设置 `PG_TEST_URL` 时跳过）。
-- `npm run check`：3 页面 / 21 JSON / 16 WXML / 18 WXSS，主包约 618.6 KB（以最新输出为准）。
+- `npm test`：**386 项 / 385 通过 / 0 失败 / 1 skip**（2026-10-26 真机反馈修复轮；PG 集成用例在未设置 `PG_TEST_URL` 时跳过）。
+- `npm run check`：3 页面 / 21 JSON / 16 WXML / 18 WXSS，主包约 620.6 KB（以最新输出为准）。
 - `npm run verify:web`：11 页 / 3 条内链，无 404（2026-10-26 批次 D）。
 - **验收清单（2026-10-22 建）**：全部待验收项已合并至 [docs/13-acceptance-checklist.md](docs/13-acceptance-checklist.md)，分三区——本机已验收（CLI 模拟器 390×844 实测，含入睡页 10-22 改版与统计页 10-21 改版全状态截图、console 无 error）/ 待真机（音频锁屏、中断、定时、手势手感）/ 待外部输入（部署、AppSecret、COS 防盗链、流量主）。续作新增"未验收"项一律先落该表再写代码。
 - 交付包：以 `release-artifacts/` 下最新 `getsleep-<label>.zip` 为准（`npm run pack` 生成，含 `RELEASE-MANIFEST.json` 与逐文件 sha256，同时留 `.sha256` 校验文件）；打包前会强制跑 `npm test` + `npm run check`。
@@ -200,6 +200,8 @@ tests/            Node 纯逻辑测试
 39. **L4 模拟器实测轮（2026-10-26）**：①**P0 工具链**——新增 `utils/player-queue.js`/`player-surface.js` 后仅 `simulator_refresh` 不编译新文件，`audio-dock` 报 `module not defined` + `Component is not found` 整块不渲染；**必须 close + open 项目窗口**（已写入 docs/13 §1.20）。②**P0 播放状态**——实测 `paused:false` 但 `playing:false`/「已暂停」：`waiting` 后基础库不补发 `play`；已改为 waiting 只进连接态、canplay/12s 守卫/4s 补播按真实 `paused` 自愈（dock + now-playing）。③**超期态**——删除与常驻卡片重复的 8s notice；标题改「这一觉还没结束」、副标一行；熄灯「结束入睡」<5 分钟二次确认。④**视觉**——日历空格「补记」→「+」；结果面 compact 副标补「已扣 N 分钟入睡」、已过行 opacity 0.88、返回按钮 152rpx。门禁 385/384/0 fail/1 skip、check 623.8 KB、console 0 error；截图 `docs/assets/l4-*.png` 9 张。**未真机**：弱网首播、悬浮 X 续播、收藏连播切歌、继续上次、熄灯短时长确认。
 
 40. **批次 D（2026-10-26，增长/后台/工程）**：①**分享深链**——`onShareAppMessage` path 带 `mode/fall/wake|sleep`，`applyShareQuery` 只读预填并直接展示结果面（不写偏好、不弹权限）；②**share 事件**——客户端 track + 服务端白名单 + `analytics` 的 `today/week/trend.shares`（漏斗分母）；③**演示页回流**——`site-qr.js` + demo 尾部小程序码 CTA（无码回退微信搜索）；④**后台**——保存失败按钮滞留「保存失败 · 重试」、409 自动 `loadAll()`、清除二维码二次确认；⑤**统计页**——`loadConfig` 回调按 `version+features.sync` 签名决定是否重算（进页不再算两遍 420 格）；⑥**提醒模板快照**——`sleep_reminders` 加 `thing_key/time_key`（memory+PG+001_init 同步），发送优先任务快照；⑦**死码**——删 `regularity.js`+测试、`calendar-strip` 组件（含 stats.json 注册）、`fetchSummary`、`streak` 字段；主包 623.8→618.6 KB；⑧**国际站**——`legalStatus` 未发布时过滤法务死链，重建 11 页 + `verify:web` OK。门禁 386/385/0 fail/1 skip。**未做**：D1 真机、音源补齐（需素材）、后台 shares UI、国际站真实域名（需输入）。
+
+41. **真机反馈：切歌播几秒变「已暂停」（2026-10-26）**：线上 8 条音源全部 `206/audio/mpeg`（1.5–11.5MB），排除坏源。两处代码成因已修：①`autoCacheDelay` 从 Wi-Fi 立即下载改为 8s（移动 20s），避免后台整首缓存与流式播放抢带宽；②`pause` 在 30s 缓冲窗口内且非用户暂停时保持连接态并 3s 重连（最多 2 次），不再直接显示「已暂停」；用户暂停/锁屏暂停不受影响。新增 **仅 develop** 的 `sleep:dev-api` 覆盖便于模拟器联调线上配置（release 不读）。后台看板加「今日分享/本周」卡。**未复现**：DevTools 走系统代理，`/api/config` 返回 status 0，真机带宽场景需真机复测；若仍复现看 `audio_error` 的 errCode（onError vs pause）。
 
 ## 8. 快速命令
 
