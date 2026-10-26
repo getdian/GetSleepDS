@@ -44,4 +44,17 @@ function resolvePlayerSurface(input) {
   return { visible: true, playing, cold, reason: '' }
 }
 
-module.exports = { resolvePlayerSurface }
+/**
+ * 播放器是否真的在出声。
+ * 必须同时满足「有 src」与「paused === false」：BAM 没有音源时 paused 是 undefined，
+ * 调用方写 `!audio.paused` 会把它误判成正在播放（体验版“幽灵播放态”的根因）。
+ * 迷你条内部所有“当前是否出声”的判断统一走这里，避免再出现第二套口径。
+ *
+ * @param {object} audio BackgroundAudioManager 实例（可为空）
+ * @returns {boolean}
+ */
+function isReallyPlaying(audio) {
+  return !!(audio && audio.src && audio.paused === false)
+}
+
+module.exports = { resolvePlayerSurface, isReallyPlaying }

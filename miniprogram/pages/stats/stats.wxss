@@ -32,6 +32,33 @@
   margin-top: 4rpx;
 }
 
+/* 指标周期：本周还没打卡时会回退到最近 7 天，周期与区间必须在首屏可见，
+   否则回退后用户会把 7 天数据读成"本周"，或者以为历史记录丢了 */
+.metrics-period {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10rpx;
+}
+
+.metrics-period-label {
+  font-size: 21rpx;
+  font-weight: 600;
+  letter-spacing: 1rpx;
+  color: var(--text-secondary);
+}
+
+.metrics-period-range {
+  font-size: 20rpx;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.metrics-period-note {
+  font-size: 20rpx;
+  color: var(--text-muted);
+}
+
 /* 3 列核心指标：大数字 + 短标签 + 一行变化；点击展开说明。
    层级只用字号/颜色/留白表达，不加底不加框 */
 .metrics {
@@ -268,35 +295,45 @@
   color: var(--text-muted);
 }
 
-/* 日历图例：居中排布，适当降低透明度，优雅不抢格子本身 */
+/* 日历图例：4 段连成一条色阶（弱 → 强），下方对齐标区间。
+   分开的 4 个小方块读不出"连续强度"，也容易被当成 4 个独立图例 */
 .cal-legend {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 20rpx;
+  flex-direction: column;
+  gap: 10rpx;
   margin-top: 22rpx;
+  padding: 0 44rpx;
 }
 
-.cal-legend-item {
+.cal-legend-scale {
   display: flex;
-  align-items: center;
-  gap: 8rpx;
+  align-items: stretch;
+  height: 14rpx;
+  border-radius: 999rpx;
+  overflow: hidden;
+}
+
+.cal-swatch {
+  flex: 1;
+  height: 100%;
+}
+
+.cal-swatch.lv-1 { background: #5A57C8; }
+.cal-swatch.lv-2 { background: #6C68E8; }
+.cal-swatch.lv-3 { background: #8A90FF; }
+.cal-swatch.lv-4 { background: #A5B4FC; }
+
+.cal-legend-labels {
+  display: flex;
+}
+
+.cal-legend-lab {
+  flex: 1;
+  text-align: center;
   font-size: 19rpx;
   color: var(--text-muted);
   opacity: 0.8;
 }
-
-.cal-swatch {
-  width: 14rpx;
-  height: 14rpx;
-  border-radius: 4rpx;
-}
-
-.cal-swatch.lv-1 { background: #3F3C9E; }
-.cal-swatch.lv-2 { background: #5B57D6; }
-.cal-swatch.lv-3 { background: #B4BEFF; }
-.cal-swatch.lv-4 { background: #E0E7FF; }
 
 /* 点格子后的固定详情卡 */
 .day-detail {
@@ -345,7 +382,7 @@
   color: var(--text-secondary);
 }
 
-/* 已记录日的补记入口：多段模型下“这天再加一段”不该只藏在入睡页 */
+/* 已记录日的补记入口：多段模型下"这天再加一段"不该只藏在入睡页 */
 .dd-add {
   margin-top: 8rpx;
   min-height: 56rpx;

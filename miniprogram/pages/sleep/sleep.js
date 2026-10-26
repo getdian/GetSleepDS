@@ -14,6 +14,8 @@ const storage = require('../../utils/storage')
 const { syncNow } = require('../../utils/sync')
 const events = require('../../utils/events')
 const adSlots = require('../../utils/ads')
+// 完成态「每日一句」：纯函数，按日历日固定（同一天不跳句）
+const Q = require('../../utils/sleep-quotes')
 
 const MAX_SLEEP_MS = 24 * 60 * 60 * 1000
 // 超过 24h 不静默清除，只标记为“需要校准”；用户可手动结束/编辑
@@ -35,7 +37,7 @@ Page({
     orbKicker: '当前时间',
     orbTime: '--:--',
     orbMeta: '等待入睡',
-    orbCaption: '轻触圆环，记录入睡',
+    orbCaption: '点击圆环，记录入睡',
     buttonTitle: '入睡',
     buttonSub: '',
     record: null,
@@ -53,11 +55,15 @@ Page({
     endStale: false,
     endToday: '',
     endBedTime: '',
+    // 真实入睡时刻（HH:MM，空=未记录）：只有打卡结束面板用，补记/编辑为两格
+    endSleepTime: '',
     endWakeTime: '',
     endDayText: '',
     endDurationText: '',
     endHint: '',
     endError: '',
+    // 结束面板的入睡耗时说明（仅打卡结束且默认值真的后移时非空）
+    endFallNote: '',
     // 这次入睡已超过 24 小时：显示常驻提示与「丢弃这段」
     staleLong: false,
     dim: false,
@@ -65,7 +71,9 @@ Page({
     weekCount: 0,
     streak: 0,
     canAddSession: false,
-    footerText: '愿这一觉安稳'
+    footerText: '愿这一觉安稳',
+    // 完成态语录出处；为空表示当天没有语录，页脚走固定文案
+    footerSource: ''
   },
 
   onLoad() {
@@ -315,6 +323,21 @@ Page({
     const recordView = record ? this.buildRecordView(record) : null
     // 超过 24h 的进行中会话：标题/副标必须换口径，不能再说“这一觉开始了”
     const staleLong = !!(sleeping && pending && now - pending.bedAt > STALE_PENDING_MS)
+    // 完成态用「每日一句」：按 dateKey（设备本地日历日，仅用于 UI 文案）固定，
+    // 同一天反复进入不跳句；语录不可用时才回落到按时段的收尾句。
+    const quote = done ? Q.quoteOf(T.dateKey(now)) : null
+    let footerText = '愿这一觉安稳'
+    if (done) {
+      footerText = quote
+        ? quote.text
+        : daypart === 'morning'
+          ? '早安，新的一天。'
+          : daypart === 'late'
+            ? '夜深了，明天见。'
+            : '今天也辛苦了。'
+    } else if (sleeping) {
+      footerText = '放轻松，慢慢睡。'
+    }
     this.setData({
       staleLong,
       dateText: F.fmtDateCN(now),
@@ -352,7 +375,7 @@ Page({
         ? overdue
           ? '已超过预计起床，轻触结束并校准'
           : '点击圆环、结束入睡'
-        : '轻触圆环，记录入睡',
+        : '点击圆环，记录入睡',
       reminderOn: this.reminderCovered(pending, now),
       overdue,
       overdueText,
@@ -370,16 +393,8 @@ Page({
       weekCount: weekly.current.count,
       streak: weekly.streak,
       // 页脚只描述“此刻”，不假设用户此刻要睡：深夜刚醒时不再出现“晚安”
-      footerText:
-        state === 'done'
-          ? daypart === 'morning'
-            ? '早安，新的一天。'
-            : daypart === 'late'
-              ? '夜深了，明天见。'
-              : '今天也辛苦了。'
-          : state === 'sleeping'
-            ? '放轻松，慢慢睡。'
-            : '愿这一觉安稳'
+      footerText,
+      footerSource: quote ? quote.source : ''
     })
     // 熄灯态随状态收敛：只有睡梦中允许熄灯；完成/空闲时唤醒并停表，
     // 睡梦中且当前亮屏则重新起 30s 倒计时（markSleep 之后这里不会覆盖熄灯）
@@ -465,6 +480,29 @@ Page({
         segmentsText = sessions.length + ' 段 · 相隔 ' + F.fmtDuration(gapMin)
       }
     }
+    // 大数字是「在床」而不是「睡着」：endAt - startAt 含躺下到睡着的那段清醒，
+    // 叫「总睡眠」会和下面的睡眠效率自相矛盾（中文里“在床”是睡眠医学 TIB 的常用译法）。
+    const durationK = multi ? '当天在床（含午休/间断）' : '在床时长'
+    // 真实入睡时刻只在主段上展示：补记/午休没有「躺下到睡着」的过程。
+    // 取「有 sleepAt 的段里最长的一段」——与统计页的「主段=最长段」同口径；
+    // 直接用 sessions[0] 会在夜班、先睡午觉的场景里把标签和数字对错人。
+    // 它是用户标记/预估的值，不是监测数据；效率由它派生，只陈述数字不做评价。
+    const sleepSession = sessions
+      .filter((item) => Number(item.sleepAt) > 0)
+      .sort((a, b) => b.endAt - b.startAt - (a.endAt - a.startAt))[0]
+    const sleepAt = sleepSession ? Number(sleepSession.sleepAt) : 0
+    const bedMs = sleepSession ? Math.max(0, sleepSession.endAt - sleepSession.startAt) : 0
+    const sleepMs = sleepSession ? Math.max(0, sleepSession.endAt - sleepAt) : 0
+    // 睡眠效率 = 睡着 / 在床；sleepAt 严格落在区间内，所以 0 < 效率 < 100
+    const efficiency = sleepAt && bedMs > 0 ? Math.round((sleepMs / bedMs) * 100) : 0
+    const sleepNote = sleepAt
+      ? (multi ? '主段' : '') +
+        '入睡 ' +
+        F.fmtClockTs(sleepAt) +
+        ' · 睡着 ' +
+        F.fmtDuration(Math.round(sleepMs / 60000)) +
+        (efficiency > 0 ? ' · 效率 ' + efficiency + '%' : '')
+      : ''
     return {
       bed: F.fmtClockTs(Number.isFinite(Number(record.bedAt)) ? record.bedAt : sessions[0].startAt),
       wake: F.fmtClockTs(
@@ -472,8 +510,9 @@ Page({
           ? record.wakeAt
           : sessions[sessions.length - 1].endAt
       ),
-      // 当天总睡眠含午休/间断段；时间轴显示总睡眠的首末时刻
+      // 当天在床时长含午休/间断段；时间轴显示同一口径的首末时刻
       duration: F.fmtDuration(S.totalDurationOf(record)),
+      durationK,
       total: F.fmtDuration(S.totalDurationOf(record)),
       mainId: (sessions[0] || {}).id || '',
       firstBed: F.fmtClockTs(sessions[0].startAt),
@@ -482,7 +521,9 @@ Page({
       timeline,
       // 段数与段间说明：解释“首末跨度”和“总睡眠”为什么对不上
       segmentsText,
-      timelineFirstK: multi ? '当天首段入睡' : '入睡',
+      // startAt 是「上床」：真实睡着时刻单独一条，见 sleepNote
+      sleepNote,
+      timelineFirstK: multi ? '当天首段上床' : '上床',
       timelineLastK: multi ? '当天末段起床' : '起床',
       sessions: sessions.map((item) => ({
         id: item.id,
@@ -518,12 +559,26 @@ Page({
     }
   },
 
-  /** 预计起床：夜间按用户起床偏好，白天小睡默认 90 分钟 */
-  defaultExpectedWake(now) {
+  /**
+   * 本次入睡耗时（分钟）：打卡快照 > 计算器本次会话所选 > 默认 15。
+   * 优先级不能反：pending 是打卡那一刻的承诺，之后在计算器再改档位不该回头改已开始的这一段。
+   */
+  fallMinutesOf(pending) {
+    const fromPending = pending ? Number(pending.fallMinutes) : 0
+    if (fromPending >= 5 && fromPending <= 30) return fromPending
+    const app = getApp()
+    const fromSession = app && app.globalData ? Number(app.globalData.fallMinutes) : 0
+    if (fromSession >= 5 && fromSession <= 30) return fromSession
+    return 15
+  },
+
+  /** 预计起床：夜间按用户起床偏好（并留出入睡耗时），白天小睡默认 90 分钟 */
+  defaultExpectedWake(now, fallMinutes) {
     const prefs = storage.getPrefs()
     const wakeMinutes = T.parseClock(prefs.wakeTime || '07:30')
     const hour = new Date(now).getHours()
-    if (hour >= 18 || hour < 6) return P.nextWakeAt(now, wakeMinutes, 15)
+    const fall = Number(fallMinutes) >= 5 ? Number(fallMinutes) : this.fallMinutesOf(null)
+    if (hour >= 18 || hour < 6) return P.nextWakeAt(now, wakeMinutes, fall)
     return now + 90 * 60 * 1000
   },
 
@@ -610,12 +665,16 @@ Page({
   markSleep(options) {
     this._busy = true
     const now = Date.now()
+    // 打卡这一刻把入睡耗时快照进 pending：睡前打卡、第二天才结束是常态，
+    // 会话级变量那时早已丢失，只有落盘才能让结束面板的默认值仍是当时那个档位。
+    const fallMinutes = this.fallMinutesOf(null)
     const pending = {
       bedAt: now,
       // 从计算器结果面过来：用算出的起床时刻（只消费一次、过期丢弃），否则按偏好推算
-      expectedWakeAt: reminder.takePlanTarget(now) || this.defaultExpectedWake(now),
+      expectedWakeAt: reminder.takePlanTarget(now) || this.defaultExpectedWake(now, fallMinutes),
       reminderOptIn: false,
-      id: 'sleep-' + now
+      id: 'sleep-' + now,
+      fallMinutes
     }
     if (!storage.setPending(pending)) {
       this._busy = false
@@ -737,8 +796,19 @@ Page({
     let wakeTime = stale ? storage.getPrefs().wakeTime || '07:30' : F.fmtClockTs(now)
     // 常用起床时间可能还没到（凌晨刚过 24h 时），不能默认一个未来时间
     if (T.clockTs(wakeDay, T.parseClock(wakeTime)) > now) wakeTime = F.fmtClockTs(now)
+    // 打卡记的是「上床」，面板默认值按入睡耗时后移到「可能已睡着」的时刻。
+    // 两个边界：段太短时必须给这段留满 1 分钟（否则 computeEndSheet 会按跨天解释）；
+    // 后移跨过午夜时，入睡日要跟着走，否则 rangeBetween 会算出 20+ 小时的假段。
+    // startAt 记「上床」，入睡时刻单独一条（sleepAt）：两者分开存，完成态才能
+    // 同时说清「几点躺下」和「几点睡着」。面板这里的入睡时刻只是预填值。
+    const fall = this.fallMinutesOf(pending)
+    const wakeGuess = T.clockTs(wakeDay, T.parseClock(wakeTime))
+    const wantedSleepAt = pending.bedAt + fall * T.MINUTE_MS
+    // 放得下才预填：段太短（刚点就结束）时留空，不要切出“只睡 4 分钟”的假入睡点
+    const defaultSleepAt =
+      wantedSleepAt <= wakeGuess - T.MINUTE_MS && wantedSleepAt <= now ? wantedSleepAt : 0
     this._endBaseDay = wakeDay
-    this._endStartDay = bedDay
+    this._endStartDay = T.startOfDay(pending.bedAt)
     // 自定义 tabBar 可能由微信渲染在页面之上，仅靠 z-index 压不住；
     // 打开结束面板时主动隐藏，关闭后恢复（与抽屉/背景选择器同一套机制）。
     this.hideTabbarForSheet()
@@ -750,10 +820,14 @@ Page({
         endDate: T.dateKey(wakeDay),
         endDateText: this.dateTextOf(T.dateKey(wakeDay)),
         endDateMin: T.dateKey(bedDay),
-        endStartDateText: stale ? F.fmtDayCN(T.dateKey(bedDay)) : '',
+        endStartDateText: stale ? F.fmtDayCN(T.dateKey(pending.bedAt)) : '',
         endBedTime: F.fmtClockTs(pending.bedAt),
+        endSleepTime: defaultSleepAt ? F.fmtClockTs(defaultSleepAt) : '',
         endWakeTime: wakeTime,
-        endError: ''
+        endError: '',
+        endFallNote: defaultSleepAt
+          ? '入睡按 ' + fall + ' 分钟入睡耗时预估，可改成你真正睡着的时刻'
+          : ''
       },
       () => this.computeEndSheet()
     )
@@ -797,7 +871,10 @@ Page({
         endStartDateText: '',
         endBedTime: F.fmtClock(times.bedMinutes),
         endWakeTime: F.fmtClock(times.wakeMinutes),
-        endError: ''
+        endError: '',
+        // 补记是“已经发生的一段”，没有打卡时刻可后移，也没有真实入睡时刻
+        endSleepTime: '',
+        endFallNote: ''
       },
       () => this.computeEndSheet()
     )
@@ -924,6 +1001,20 @@ Page({
     // 有错误时不保留可保存区间：避免某条路径只看 endError 被清掉后误落库
     this._endBedAt = error ? 0 : range.bedAt
     this._endWakeAt = error ? 0 : range.wakeAt
+    // 真实入睡时刻（可选）：只认「上床 < 入睡 < 起床」内的值，越界视为未记录。
+    // 入睡可能跨午夜，上床日与次日各试一次再校验。
+    this._endSleepAt = 0
+    if (!error && this.data.endMode === 'pending' && this.data.endSleepTime) {
+      const sleepMinutes = T.parseClock(this.data.endSleepTime)
+      const days = [this._endStartDay, this._endStartDay + T.DAY_MS]
+      for (let i = 0; i < days.length; i += 1) {
+        const at = T.clockTs(days[i], sleepMinutes)
+        if (at > range.bedAt && at < range.wakeAt) {
+          this._endSleepAt = at
+          break
+        }
+      }
+    }
     // 只给中性出口，不判定“异常”：夜班/白天补觉/中途醒来/长睡都可能出现。
     // 仅“结束本次入睡”时提示；补记/编辑历史时不打扰。
     let endHint = ''
@@ -947,7 +1038,7 @@ Page({
   onEndTimeChange(event) {
     const field = event.currentTarget.dataset.field
     const value = event.detail.value
-    if (field !== 'endBedTime' && field !== 'endWakeTime') return
+    if (field !== 'endBedTime' && field !== 'endSleepTime' && field !== 'endWakeTime') return
     this.setData({ [field]: value }, () => this.computeEndSheet())
   },
 
@@ -992,7 +1083,9 @@ Page({
         endStartDateText: '',
         endBedTime: F.fmtClockTs(session.startAt),
         endWakeTime: F.fmtClockTs(session.endAt),
-        endError: ''
+        endError: '',
+        // 编辑面板只有入睡/起床两格；原 sleepAt 由 updateSession 原样保留
+        endSleepTime: ''
       },
       () => this.computeEndSheet()
     )
@@ -1041,6 +1134,8 @@ Page({
       startAt: this._endBedAt,
       endAt: this._endWakeAt,
       durationMin: Math.round((this._endWakeAt - this._endBedAt) / 60000),
+      // 真实入睡时刻（可选）：统计口径不变（仍是 startAt→endAt），只用于展示
+      sleepAt: this._endSleepAt || 0,
       // 与“补记”区分：这一段是点过入睡、计时结束的真实打卡
       source: 'checkin',
       editedAt: Date.now()
@@ -1088,6 +1183,8 @@ Page({
     this.setData({
       endShow: false,
       endError: '',
+      endFallNote: '',
+      endSleepTime: '',
       endMode: 'pending',
       endStale: false,
       endHint: '',
@@ -1349,7 +1446,8 @@ Page({
     // 多段记录用首段入睡/末段起床，与页面时间线同口径；主段首尾会漏掉午休。
     return {
       title: view
-        ? '我 ' + view.firstBed + ' 入睡、' + view.lastWake + ' 起床，一起好好睡'
+        ? // firstBed 是上床时刻（真实入睡另存 sleepAt），文案跟着改，别把上床说成入睡
+          '我 ' + view.firstBed + ' 上床、' + view.lastWake + ' 起床，一起好好睡'
         : '我在「睡点」记录睡眠，一起好好睡',
       path: '/pages/sleep/sleep?from=share'
     }

@@ -24,7 +24,13 @@ function normalizeSession(session) {
   if (!Number.isFinite(startAt) || !Number.isFinite(endAt)) return null
   if (endAt <= startAt || endAt - startAt > MAX_SESSION_MS) return null
   const durationMin = Math.max(1, Math.round((endAt - startAt) / T.MINUTE_MS))
-  return {
+  // 真实入睡时刻（可选）：startAt 是「上床」，sleepAt 是「睡着」。
+  // 越界（<= startAt 或 >= endAt）只丢弃这个字段，不丢整段——
+  // 老记录没有、手改时间后也可能越界，都不该让一段睡眠消失。
+  const rawSleepAt = Number(session.sleepAt)
+  const sleepAt =
+    Number.isFinite(rawSleepAt) && rawSleepAt > startAt && rawSleepAt < endAt ? rawSleepAt : 0
+  const out = {
     id: sessionId(session),
     startAt,
     endAt,
@@ -32,6 +38,8 @@ function normalizeSession(session) {
     source: session.source || 'manual',
     editedAt: Number(session.editedAt) || endAt
   }
+  if (sleepAt) out.sleepAt = sleepAt
+  return out
 }
 
 /**

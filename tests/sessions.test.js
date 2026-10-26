@@ -159,3 +159,22 @@ test('跨天重叠：只看醒来日会漏，查全表才拦得住', () => {
     null
   )
 })
+
+test('sleepAt：合法保留，越界只丢字段不丢整段', () => {
+  const start = at(2026, 10, 27, 23, 45)
+  const end = at(2026, 10, 28, 7, 0)
+  const sleep = at(2026, 10, 28, 0, 0)
+
+  const ok = X.normalizeSession({ id: 'a', startAt: start, endAt: end, sleepAt: sleep })
+  assert.equal(ok.sleepAt, sleep)
+
+  const none = X.normalizeSession({ id: 'b', startAt: start, endAt: end })
+  assert.equal('sleepAt' in none, false, '没有标记时不要凭空造一个 0')
+
+  // 等于上床 / 等于起床 都算越界：只丢字段，段本身必须留下
+  const atBed = X.normalizeSession({ id: 'c', startAt: start, endAt: end, sleepAt: start })
+  assert.equal('sleepAt' in atBed, false)
+  const atWake = X.normalizeSession({ id: 'd', startAt: start, endAt: end, sleepAt: end })
+  assert.equal('sleepAt' in atWake, false)
+  assert.equal(atWake.durationMin, 7 * 60 + 15)
+})

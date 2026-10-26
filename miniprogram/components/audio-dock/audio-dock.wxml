@@ -61,6 +61,20 @@
         <view class="dock-ico-play"></view>
       </block>
     </view>
+    <view
+      class="dmc-btn dock-next"
+      catchtap="onNextTap"
+      hover-class="dmc-btn--tap"
+      hover-stay-time="100"
+      aria-role="button"
+      aria-label="下一首"
+    >
+      <view class="dock-ico-next">
+        <view class="dock-next-tri"></view>
+        <view class="dock-next-tri"></view>
+        <view class="dock-next-bar"></view>
+      </view>
+    </view>
   </view>
 </view>
 

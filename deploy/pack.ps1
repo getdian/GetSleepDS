@@ -1,7 +1,8 @@
 ﻿[CmdletBinding()]
 param(
   [string]$Label = (Get-Date -Format 'yyyyMMdd-HHmmss'),
-  [switch]$SkipChecks
+  [switch]$SkipChecks,
+  [switch]$ServerOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -27,9 +28,11 @@ if (-not $scriptDir) { throw '无法定位 deploy 目录；请用 -File deploy/p
 $root = [IO.Path]::GetFullPath((Join-Path $scriptDir '..'))
 if ($Label -notmatch '^[A-Za-z0-9_-]+$') { throw 'Label 只能包含字母、数字、下划线和短横线' }
 
+$pkgPrefix = if ($ServerOnly) { 'getsleep-server-' } else { 'getsleep-' }
+$stagePrefix = if ($ServerOnly) { 'stage-server-' } else { 'stage-' }
 $artifactDir = Join-Path $root 'release-artifacts'
-$stage = Join-Path $artifactDir ('stage-' + $Label)
-$zipPath = Join-Path $artifactDir ('getsleep-' + $Label + '.zip')
+$stage = Join-Path $artifactDir ($stagePrefix + $Label)
+$zipPath = Join-Path $artifactDir ($pkgPrefix + $Label + '.zip')
 $shaPath = $zipPath + '.sha256'
 if ((Test-Path -LiteralPath $stage) -or (Test-Path -LiteralPath $zipPath)) {
   throw "发布目录或 zip 已存在：$Label；请换一个 Label"
@@ -54,13 +57,17 @@ try {
   $allowed = @()
   foreach ($relative in ($paths | Sort-Object -Unique)) {
     $p = $relative.Replace('\', '/')
-    $ok = $p -match '^(README\.md|context\.md|DECISIONS\.md|package\.json|project\.config\.json|docker-compose\.yml|\.env\.example)$' -or
-      $p -match '^deploy/' -or
-      $p -match '^docs/' -or
-      $p -match '^miniprogram/' -or
-      $p -match '^server/' -or
-      $p -match '^tests/' -or
-      $p -match '^tools/(check\.mjs|gen_assets\.py|gen_demo_audio\.py)$'
+    if ($ServerOnly) {
+      $ok = $p -match '^server/' -or $p -match '^deploy/(update\.sh|1panel-up\.sh)$'
+    } else {
+      $ok = $p -match '^(README\.md|context\.md|DECISIONS\.md|package\.json|project\.config\.json|docker-compose\.yml|\.env\.example)$' -or
+        $p -match '^deploy/' -or
+        $p -match '^docs/' -or
+        $p -match '^miniprogram/' -or
+        $p -match '^server/' -or
+        $p -match '^tests/' -or
+        $p -match '^tools/(check\.mjs|gen_assets\.py|gen_demo_audio\.py)$'
+    }
     if (-not $ok) { continue }
     if ($p -match '(^|/)(node_modules|dist|release-artifacts|backups?|logs?|coverage|\.git)(/|$)') { continue }
     if ($p -match '(^|/)project\.private\.config\.json$') { continue }
@@ -72,19 +79,30 @@ try {
     $allowed += $p
   }
 
-  $required = @(
-    'docker-compose.yml',
-    '.env.example',
-    'server/Dockerfile',
-    'server/package.json',
-    'server/package-lock.json',
-    'server/sql/001_init.sql',
-    'server/public/admin/index.html',
-    'miniprogram/app.json',
-    'miniprogram/pages/index/index.wxml',
-    'project.config.json',
-    'deploy/1panel-up.sh'
-  )
+  if ($ServerOnly) {
+    $required = @(
+      'server/Dockerfile',
+      'server/package.json',
+      'server/package-lock.json',
+      'server/sql/001_init.sql',
+      'server/public/admin/index.html',
+      'deploy/update.sh'
+    )
+  } else {
+    $required = @(
+      'docker-compose.yml',
+      '.env.example',
+      'server/Dockerfile',
+      'server/package.json',
+      'server/package-lock.json',
+      'server/sql/001_init.sql',
+      'server/public/admin/index.html',
+      'miniprogram/app.json',
+      'miniprogram/pages/index/index.wxml',
+      'project.config.json',
+      'deploy/1panel-up.sh'
+    )
+  }
   New-Item -ItemType Directory -Path $stage -Force | Out-Null
   foreach ($p in $required) {
     if ($allowed -notcontains $p) { throw "缺少发布依赖：$p" }

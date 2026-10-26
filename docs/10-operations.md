@@ -1,6 +1,6 @@
 # 常用操作：极客混跑、打包、1Panel 部署
 
-> 这是“说一句话就能执行”的标准入口。用户说「启动极客混跑模式」= 执行 `npm run dev:geek`；说「打包部署」= 执行 `npm run pack`，再按本文第 3 节上传 1Panel。
+> 这是“说一句话就能执行”的标准入口。用户说「启动极客混跑模式」= 执行 `npm run dev:geek`；说「打包部署」/「迭代打包」= 执行 `npm run pack:server`（仅服务端轻量包，推荐）或 `npm run pack`（全量归档包），再按本文第 3 节上传 1Panel。
 
 ## 1. 启动极客混跑模式
 
@@ -63,17 +63,29 @@ docker stop getsleepds-dev-db
 
 ## 2. 打包
 
+提供两种打包模式：
+
+1. **服务端迭代包（推荐）**：仅打包服务端与部署脚本（`server/`、`deploy/`），约 600KB。**不包含** `.env`、`docker-compose.yml` 与前端 `miniprogram/`，在 1Panel 文件管理器中可直接右键覆盖解压，绝对不会破坏线上现有环境配置与端口。
+2. **全量归档包**：打包全工程（含小程序前端、测试、文档、服务端），用于版本发布留痕与本地完整交付。
+
 **命令（项目根目录）：**
 
 ```powershell
+# 1. 迭代包（仅服务端，推荐）：
+npm run pack:server
+# 指定标签：
+npm run pack:server -- -Label 20261027-v1
+
+# 2. 全量包（前后端与文档全归档）：
 npm run pack
-# 指定标签
+# 指定标签：
 npm run pack -- -Label 20261019-l4
 ```
 
 等价于：
 
 ```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File deploy/pack.ps1 -ServerOnly
 powershell -NoProfile -ExecutionPolicy Bypass -File deploy/pack.ps1
 ```
 
@@ -82,26 +94,23 @@ powershell -NoProfile -ExecutionPolicy Bypass -File deploy/pack.ps1
 - `npm test`
 - `npm run check`
 
-任一失败就拒绝出包。确认要跳过时：
-
-```powershell
-npm run pack -- -Label 20261019-l4 -SkipChecks
-```
+任一失败就拒绝出包。确认要跳过测试时加 `-SkipChecks`。
 
 产物：
 
 ```
-release-artifacts/getsleep-<label>.zip
+release-artifacts/getsleep-server-<label>.zip      # 服务端专用迭代包（约 600KB）
+release-artifacts/getsleep-server-<label>.zip.sha256
+release-artifacts/getsleep-<label>.zip             # 全量归档包
 release-artifacts/getsleep-<label>.zip.sha256
-release-artifacts/stage-<label>/RELEASE-MANIFEST.json
 ```
 
 压缩包只收源码/文档/部署文件：
 
-- ✅ `miniprogram/`、`server/`、`docs/`、`deploy/`、`tests/`、`tools/check.mjs`、根配置
+- ✅ `server/`、`deploy/`（服务端包仅收这两处；全量包另收 `miniprogram/`、`docs/`、`tests/`、根配置）
 - ❌ `.env`、`node_modules/`、`dist/`、`release-artifacts/`、`project.private.config.json`、日志/数据库/预览图
 
-> 不要上传 `stage-*` 或旧 `dist/`；只上传 `getsleep-<label>.zip`。
+> 只上传 `release-artifacts/` 下生成的 `.zip` 包；不要上传 `stage-*` 临时目录。
 
 ## 3. 1Panel 部署
 
@@ -129,12 +138,23 @@ release-artifacts/stage-<label>/RELEASE-MANIFEST.json
 
 1. 禁止 `docker compose down`、禁止 `up --remove-orphans` —— Compose 按项目名操作，会连带停掉 fde / mmreen。
 2. 禁止给 compose 加 `name:` 或改项目名 —— 命名卷会从 `index_pgdata` 换成新名字，等于连到空库。
-3. 禁止整包 `unzip` 覆盖到根目录 —— 会覆盖服务器上的 `docker-compose.yml`（生产版本）与 `.env`。
+3. 禁止全量包整包 `unzip` 覆盖到根目录 —— 会覆盖服务器上的 `docker-compose.yml`（生产版本）与 `.env`。
 
-### 3.1 上传与覆盖代码
+### 3.1 上传与覆盖代码（推荐路径）
 
-1. 上传 `getsleep-<label>.zip` 到 `/opt/1panel/www/sites/sleepDS/index`。
-2. 解压到临时目录，再按目录覆盖（跳过 compose 与 `.env`）：
+#### 路径 A：服务端迭代包（最简、安全）
+1. 本地执行 `npm run pack:server` 生成 `getsleep-server-<label>.zip`。
+2. 在 1Panel 网站文件管理器进入 `/opt/1panel/www/sites/sleepDS/index`，上传该压缩包。
+3. 直接在 1Panel 界面右键点击压缩包选择 **“解压”**（覆盖当前目录）：
+   - 该包**不含**根目录 `.env` 和 `docker-compose.yml`，绝不会破坏线上配置；
+   - 该包**不含** `miniprogram/`（小程序前端只在微信开发者工具上传提审，服务器不需要前端代码）。
+4. 在 1Panel 终端根目录下执行：
+   ```bash
+   bash deploy/update.sh
+   ```
+
+#### 路径 B：全量归档包（兼容模式）
+若上传的是全量包 `getsleep-<label>.zip`，必须通过临时目录排除 `.env` 与 compose 覆盖：
 
 ```bash
 cd /opt/1panel/www/sites/sleepDS/index
@@ -143,9 +163,6 @@ rm -rf /tmp/getsleep-release && mkdir -p /tmp/getsleep-release
 unzip -oq getsleep-<label>.zip -d /tmp/getsleep-release
 cp -a /tmp/getsleep-release/server/. ./server/
 cp -a /tmp/getsleep-release/deploy/. ./deploy/
-cp -a /tmp/getsleep-release/miniprogram/. ./miniprogram/
-cp -a /tmp/getsleep-release/tests/. ./tests/
-cp -a /tmp/getsleep-release/tools/. ./tools/ 2>/dev/null || true
 ```
 
 3. 覆盖后确认版本标记（以 2026-10-23 轮为例，可用包内 `RELEASE-MANIFEST.json` 的 head 反查）：
@@ -236,18 +253,24 @@ HOST_PORT=3004
 
 ### 3.3 启动 / 迭代部署
 
+在 `/opt/1panel/www/sites/sleepDS/index` 根目录下，执行专用的更新脚本：
+
 ```bash
 cd /opt/1panel/www/sites/sleepDS/index
+bash deploy/update.sh
+```
+
+等价于原生命令：
+
+```bash
 docker compose up -d --build --no-deps api
 ```
 
-只点名单服务 api：`--no-deps` 不会动 db，也不会碰同项目名下另外两个站点的容器。
-
-`deploy/1panel-up.sh` 内部是 `docker compose up -d --build`（全项目口径）。多站点同机时优先用上面这条；脚本仍可用于校验 `.env` 必填项与等待 `/api/ready`。
-
-出现 `Found orphan containers ([fde-system mmreen-web-prod])` 属正常提示，**不要**据此加 `--remove-orphans`。
-
-判定成功：构建日志里 `COPY . .` 不是 `CACHED`；`docker compose ps` 中 `index-api-1` 的 `CREATED` 变成 `seconds ago`，而另两个站点的创建时间不变。
+- 只点名单服务 api：`--no-deps` 不会动 db，也不会碰同项目名下另外两个站点的容器。
+- `deploy/update.sh` 会自动触发增量构建，并轮询等待 `/api/ready` 输出成功状态。
+- `deploy/1panel-up.sh` 内部是 `docker compose up -d --build`（全项目口径，用于首次上线）；日常迭代升级优先用 `deploy/update.sh`。
+- 出现 `Found orphan containers ([fde-system mmreen-web-prod])` 属正常提示，**不要**据此加 `--remove-orphans`。
+- 判定成功：构建日志里 `COPY . .` 不是 `CACHED`；`docker compose ps` 中 `index-api-1` 的 `CREATED` 变成 `seconds ago`，而另两个站点的创建时间不变。
 
 ### 3.4 1Panel 反向代理 + HTTPS
 
@@ -293,7 +316,19 @@ curl -fsS https://sleep.qfmaster.com/api/ready
 
 ### 3.8 升级、备份与还原
 
-#### 升级（先备份，再覆盖代码，只重建 api）
+#### 升级（首选迭代包升级；先备份，覆盖后只重建 api）
+
+**方式 A：服务端迭代包升级（推荐）**
+
+1. 本地执行 `npm run pack:server` 生成 `release-artifacts/getsleep-server-<label>.zip`；
+2. 上传到服务器 `/opt/1panel/www/sites/sleepDS/index`；
+3. 1Panel 文件管理器直接解压覆盖当前目录（包内无 `.env` / `docker-compose.yml`，绝不破坏现有生产配置）；
+4. 根目录下执行一句 Bash：
+   ```bash
+   bash deploy/update.sh
+   ```
+
+**方式 B：全量归档包升级（兼容）**
 
 ```bash
 cd /opt/1panel/www/sites/sleepDS/index
@@ -303,12 +338,13 @@ rm -rf /tmp/getsleep-release && mkdir -p /tmp/getsleep-release
 unzip -oq getsleep-<label>.zip -d /tmp/getsleep-release
 cp -a /tmp/getsleep-release/server/. ./server/
 cp -a /tmp/getsleep-release/deploy/. ./deploy/
-cp -a /tmp/getsleep-release/miniprogram/. ./miniprogram/
-docker compose up -d --build --no-deps api
-curl -fsS http://127.0.0.1:3004/api/ready
+bash deploy/update.sh
 ```
 
-> **`001_init.sql` 不负责现有库升级。** compose 把它挂到 Postgres 的 `docker-entrypoint-initdb.d`，只在数据库卷为空、首次初始化时执行；已有 `index_pgdata` 不会因为覆盖该文件而重跑。现有库的增量由 API 启动时 `server/src/db/index.js` 的 `SCHEMA` 执行（`CREATE TABLE IF NOT EXISTS` / `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`）。因此改 SQL 时必须同步 `SCHEMA`；本仓库当前 `sleep_records` / `sleep_reminders` 新增列两边一致，覆盖后重启 api 即可。若未来只改 SQL、不改 `SCHEMA`，覆盖部署不会生效。
+> **`001_init.sql` 与数据保留机制：**
+> - **数据安全**：线上 Postgres 数据存放在命名卷 `index_pgdata` 中，重建 API 不会删除任何已有记录或配置，原有数据 100% 保留。
+> - **SQL 执行时机**：compose 把 `001_init.sql` 挂到 `docker-entrypoint-initdb.d`，仅在数据库卷初次创建（卷为空）时执行；已有卷不会重新执行该 SQL。
+> - **增量迁移自动生效**：线上增量列由 API 启动代码 `server/src/db/index.js` 的 `SCHEMA` 自动执行（`ALTER TABLE ... ADD COLUMN IF NOT EXISTS`）。因此覆盖后启动 API，新字段自动无损加列，旧数据 100% 完好。
 
 #### 备份产物（建议再同步一份到本地/对象存储）
 
@@ -318,7 +354,8 @@ curl -fsS http://127.0.0.1:3004/api/ready
 | 生产 compose | `/root/sleepDS-compose-<时间戳>.yml` | `cp docker-compose.yml /root/...` |
 | 密钥 | `/root/sleepDS-env-<时间戳>.bak`（`chmod 600`） | `cp .env /root/...` |
 | 源码 | `/root/sleepDS-src-<时间戳>.tgz` | `tar czf ... --exclude=backups --exclude=node_modules .` |
-| 发版包 | `release-artifacts/getsleep-<label>.zip` + `.sha256` | 本地 `npm run pack` |
+| 服务端发版包 | `release-artifacts/getsleep-server-<label>.zip` + `.sha256` | 本地 `npm run pack:server` |
+| 全量发版包 | `release-artifacts/getsleep-<label>.zip` + `.sha256` | 本地 `npm run pack` |
 
 `backup.sh` 不可用时手工 dump：
 
@@ -379,6 +416,9 @@ docker compose logs --tail=200 api | grep -iE "error|failed" || echo "no error"
 | 你说 | 执行 |
 |---|---|
 | 启动极客混跑模式 | `npm run dev:geek` |
-| 打包 / 打包部署 | `npm run pack` |
+| 打包 / 迭代打包（服务端轻量包，推荐） | `npm run pack:server` |
+| 全量归档打包 | `npm run pack` |
 | 检查部署配置 | `npm run deploy:check` |
-| 1Panel 上线 | 上传最新 zip → `bash deploy/1panel-up.sh` → 1Panel 反代 |
+| 1Panel 首次部署 | 上传最新 zip → `bash deploy/1panel-up.sh` → 1Panel 反代 |
+| 1Panel 迭代更新 | 解压 `getsleep-server-*.zip` → `bash deploy/update.sh` |
+

@@ -1,7 +1,7 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 
-const { resolvePlayerSurface } = require('../miniprogram/utils/player-surface')
+const { resolvePlayerSurface, isReallyPlaying } = require('../miniprogram/utils/player-surface')
 
 function input(overrides) {
   return Object.assign(
@@ -82,4 +82,17 @@ test('本次进程内用户主动暂停：显示已暂停，但不判冷启动',
   const surface = resolvePlayerSurface(input({ hasSrc: true, playingNow: false, sessionLive: true }))
   assert.equal(surface.playing, false)
   assert.equal(surface.cold, false, '不能把用户暂停当残影重复归零')
+})
+
+test('isReallyPlaying：没有音源时 paused=undefined 不算在播', () => {
+  // 迷你条内部所有“是否在出声”的判断都走这个函数，避免各处再写 !paused
+  assert.equal(isReallyPlaying(null), false)
+  assert.equal(isReallyPlaying({ paused: undefined }), false)
+  assert.equal(isReallyPlaying({ src: '', paused: false }), false)
+})
+
+test('isReallyPlaying：有音源且 paused 严格为 false 才算在播', () => {
+  assert.equal(isReallyPlaying({ src: 'https://img.example/a.mp3', paused: false }), true)
+  assert.equal(isReallyPlaying({ src: 'https://img.example/a.mp3', paused: true }), false)
+  assert.equal(isReallyPlaying({ src: 'https://img.example/a.mp3' }), false)
 })

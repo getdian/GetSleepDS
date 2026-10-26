@@ -20,8 +20,8 @@
 ## 2. 门禁（提交前必须跑，数字如实转述）
 
 ```bash
-npm test          # 2026-10-26 基线：385 项 / 384 通过 / 0 失败 / 1 skip（PG 用例无 PG_TEST_URL 时 skip）
-npm run check     # 3 页面 / 22 JSON / 17 WXML / 19 WXSS，主包约 621.1 KB
+npm test          # 2026-10-27 基线：435 项 / 434 通过 / 0 失败 / 1 skip（PG 用例无 PG_TEST_URL 时 skip）
+npm run check     # 3 页面 / 22 JSON / 17 WXML / 19 WXSS，主包约 679.6 KB
 ```
 
 - 数字会随改动变化：**以本次输出为准**，不要照抄历史数字宣称通过。
@@ -72,7 +72,7 @@ npm run check     # 3 页面 / 22 JSON / 17 WXML / 19 WXSS，主包约 621.1 KB
 | 统计口径 | `utils/stats.js`、`pages/stats/*`、`utils/manual-sleep.js` |
 | 音频 / 广告 / 解锁 | **先读 §5 铁律**；`components/audio-dock/*`、`components/now-playing/*`、`utils/audio-session.js`、`utils/player-state.js`、`utils/ad.js`、`server/src/routes/audio.js` |
 | 运营后台 | `server/public/admin/admin.js`（`PANEL_META` / `collect` / `render` / `validatePayload`） |
-| 部署 / 备份还原 | `docs/10-operations.md` §3.0 与 §3.8、`deploy/1panel-up.sh`、`deploy/backup.sh` |
+| 部署 / 备份还原 | `docs/10-operations.md` §3.0 与 §3.8、`deploy/update.sh`、`deploy/1panel-up.sh`、`deploy/backup.sh` |
 | 国际站（Web/SEO） | `docs/14-intl-prd.md`、`web/content/*`、`tools/build-web.mjs`、`web/assets/*` |
 
 ## 7. 各工具的文件名（都只指向本文件）

@@ -28,6 +28,14 @@ Page({
     hasData: false,
     // 首屏 3 个核心指标：平均睡眠 / 平均入睡 / 平均起床
     metrics: [],
+    // 指标周期（本周 / 最近 7 天 / 全部记录）与区间：必须显示，
+    // 否则回退到最近 7 天后用户会把 7 天数据读成"本周"
+    periodLabel: '',
+    periodRange: '',
+    // 回退注脚已含"是否回退"信息（空串=没回退），不再单独存布尔
+    periodFallbackNote: '',
+    // 「按均值定今晚上床点」整句：周期变了主语必须跟着变
+    planLabel: '',
     metricKey: '',
     metricDetail: null,
     weekCount: 0,
@@ -154,7 +162,24 @@ Page({
     const list = S.completedList(records)
     const metricData = S.metricsOf(records, now)
     // 供 onPlanFromAverage 使用：只保留分钟数，null 表示本周时间分散算不出
-    this._avgBedMin = metricData.avgBedMin === null || metricData.avgBedMin === undefined ? null : metricData.avgBedMin
+    const bedPrefill =
+      metricData.avgBedMin === null || metricData.avgBedMin === undefined
+        ? ''
+        : F.fmtClock(metricData.avgBedMin)
+    this._avgBedMin = bedPrefill ? metricData.avgBedMin : null
+    // 周期回退时主语必须跟着变（本周 / 最近 7 天 / 全部记录），
+    // 否则会出现「按本周均值」却给的是最近 7 天数据
+    // avgBedMin 是上床时刻（startAt），入口文案跟着说「上床点」，不要写「入睡点」
+    const planLabel = bedPrefill
+      ? '按' + (metricData.periodLabel || '本周') + '均值（' + bedPrefill + '）定今晚上床点'
+      : ''
+    // 回退注脚必须说清是哪一级回退：全部记录周期时只写「本周还没有记录」，
+    // 用户看到的是一个月前的数据，会以为注脚在说别的事
+    const periodFallbackNote = !metricData.isFallback
+      ? ''
+      : metricData.periodKey === 'all'
+        ? '本周与最近 7 天都没有记录'
+        : '本周还没有记录'
     const pending = storage.getPending()
     const partialDay = pending ? T.dateKey(now) : ''
     const monthOffset = Number(this.data.monthOffset) || 0
@@ -231,6 +256,12 @@ Page({
       hasData ? 1 : 0,
       metrics.map((item) => item.value + '/' + item.sub + '/' + item.detail.join('|')).join('|'),
       metricData.count,
+      // 周期换词也必须进签名：本周 0 天 → 最近 7 天命中时，
+      // 数字可能恰好相同（如都是 1 天），只拼 metrics 会漏刷周期标签
+      metricData.periodKey,
+      metricData.rangeText,
+      planLabel,
+      periodFallbackNote,
       // 月份偏移必须进签名：空月之间格子数与色阶序列完全相同，
       // 缺了它切月会被去重跳过（标题/格子/canNextMonth 都不更新，且 monthOffset 已变 → 双向卡死）。
       monthOffset,
@@ -259,11 +290,13 @@ Page({
       this.setData({
         hasData,
         metrics,
-        // 平均入睡时间：有值才显示「按本周均值定今晚入睡点」入口
-        bedPrefill:
-          metricData.avgBedMin === null || metricData.avgBedMin === undefined
-            ? ''
-            : F.fmtClock(metricData.avgBedMin),
+        // 周期与区间：本周没记录时这里会变成「最近 7 天 10.20–10.26」
+        periodLabel: metricData.periodLabel || '',
+        periodRange: metricData.rangeText || '',
+        periodFallbackNote,
+        // 平均上床时间：有值才显示「按均值定今晚上床点」入口
+        bedPrefill,
+        planLabel,
         weekCount: metricData.count,
         calendarSpan,
         calendarCells: calendar ? calendar.cells : [],
@@ -302,13 +335,13 @@ Page({
   },
 
   /**
-   * 按本周均值定今晚入睡点：把「回顾」变成「下一晚的行动」。
+   * 按本周均值定今晚上床点：把「回顾」变成「下一晚的行动」。
    * 只写一个本机预填值（不上传），计算器 onShow 消费后立即清掉，避免重复触发。
    */
   onPlanFromAverage() {
     const minutes = this._avgBedMin
     if (minutes === null || minutes === undefined) {
-      wx.showToast({ title: '本周还没有可用的平均入睡时间', icon: 'none' })
+      wx.showToast({ title: '这段时间还没有可用的平均上床时间', icon: 'none' })
       return
     }
     storage.patchMeta({ prefillSleepMin: minutes })
@@ -553,20 +586,21 @@ Page({
     const last = sessions[sessions.length - 1]
     const pending = storage.getPending()
     const inProgress = pending && day === T.dateKey(now) ? ' · 另有进行中的一段' : ''
-    // 主行必须与总时长同口径：区间取「首段入睡 → 末段起床」，时长取当天总睡眠。
+    // 主行必须与总时长同口径：区间取「首段上床 → 末段起床」，时长取当天在床时长。
     // 之前用主段（最长一段）的 bedAt/wakeAt 拼 totalDurationMin，会出现
     // 「23:00 → 06:00 · 7 小时 40 分」这种区间与时长自相矛盾的表达。
+    // startAt 是上床（真实睡着时刻另存 sleepAt），所以精确时刻一律说「上床」。
     const rangeText =
       first && last
-        ? F.fmtClockTs(first.startAt) + ' 入睡 → ' + F.fmtClockTs(last.endAt) + ' 起床'
-        : F.fmtClockTs(record.bedAt) + ' 入睡 → ' + F.fmtClockTs(record.wakeAt) + ' 起床'
+        ? F.fmtClockTs(first.startAt) + ' 上床 → ' + F.fmtClockTs(last.endAt) + ' 起床'
+        : F.fmtClockTs(record.bedAt) + ' 上床 → ' + F.fmtClockTs(record.wakeAt) + ' 起床'
     // 主行必须与总时长同口径：多段日用「首段 / 末段」而不是箭头区间，
     // 否则「23:00 → 13:30 · 共 7 小时 30 分」会被读成 14.5 小时的连续睡眠。
     const main =
       sessions.length > 1
         ? '首段 ' +
           F.fmtClockTs(first.startAt) +
-          ' 入睡 · 末段 ' +
+          ' 上床 · 末段 ' +
           F.fmtClockTs(last.endAt) +
           ' 起床 · 共 ' +
           F.fmtDuration(totalMin)
@@ -1075,7 +1109,15 @@ Page({
 
     const W = 300
     const H = 480
-    const colors = ['rgba(255,255,255,0.05)', '#3F3C9E', '#5B57D6', '#B4BEFF', '#E0E7FF']
+    // 与页面日历同一套色阶：实色品牌紫由弱到强（半透明会在深底上被空格吃掉对比），
+    // 最高档停在浅紫、不接近白
+    const colors = [
+      'rgba(255,255,255,0.05)',
+      '#5A57C8',
+      '#6C68E8',
+      '#8A90FF',
+      '#A5B4FC'
+    ]
 
     ctx.setFillStyle('#080B14')
     ctx.fillRect(0, 0, W, H)
@@ -1094,7 +1136,7 @@ Page({
     ctx.fillText(T.dateKey(start).slice(5) + ' ~ ' + T.dateKey(T.startOfDay(now)).slice(5) + ' · 打卡 ' + digest.count + ' 天', 24, 78)
 
     const values = [
-      { k: '平均入睡', v: digest.avgBedMin === null ? '—' : F.fmtClock(digest.avgBedMin) },
+      { k: '平均上床', v: digest.avgBedMin === null ? '—' : F.fmtClock(digest.avgBedMin) },
       { k: '平均结束', v: digest.avgWakeMin === null ? '—' : F.fmtClock(digest.avgWakeMin) },
       { k: '平均睡眠', v: digest.avgTotalMin === null ? '—' : F.fmtHours(digest.avgTotalMin) }
     ]
@@ -1125,7 +1167,7 @@ Page({
     ctx.setFillStyle('#94A3B8')
     ctx.setFontSize(11)
     ctx.setTextAlign('left')
-    ctx.fillText('其中 ' + digest.afterMidnightDays + ' 天在凌晨入睡', 24, y0 + 5 * (cell + gap) + 18)
+    ctx.fillText('其中 ' + digest.afterMidnightDays + ' 天在凌晨上床', 24, y0 + 5 * (cell + gap) + 18)
 
     if (qrPath) {
       // 底部左侧：白底衬托小程序码 + 扫码引导
@@ -1199,12 +1241,12 @@ Page({
     const avgDuration = digest.avgTotalMin === null ? '—' : F.fmtHours(digest.avgTotalMin)
     ctx.setFillStyle('#A5B4FC')
     ctx.setFontSize(22)
-    ctx.fillText(avgBed + ' 入睡', 20, 108)
+    ctx.fillText(avgBed + ' 上床', 20, 108)
     ctx.fillText(avgWake + ' 结束', 150, 108)
     ctx.setFillStyle('#94A3B8')
     ctx.setFontSize(10)
     ctx.fillText('平均 ' + avgDuration, 20, 128)
-    ctx.fillText('其中 ' + digest.afterMidnightDays + ' 天在凌晨入睡', 150, 128)
+    ctx.fillText('其中 ' + digest.afterMidnightDays + ' 天在凌晨上床', 150, 128)
 
     if (qrPath) {
       ctx.setFillStyle('#FFFFFF')
@@ -1245,9 +1287,12 @@ Page({
     // 分享漏斗分母：统计页的分享也必须计入，否则看板系统性低估
     events.track('share', 'stats')
     const duration = this.data.metrics.filter((item) => item.key === 'duration')[0]
+    // 主语必须跟随指标周期：本周为空时会回退到最近 7 天/全部记录，
+    // 这里若写死「本周打卡 N 天」，分享出去的数字就是另一个周期的
+    const scope = this.data.periodLabel || '本周'
     const payload = {
       title: duration
-        ? '本周打卡 ' + this.data.weekCount + ' 天 · 平均睡 ' + duration.value + '，来「睡点」记录睡眠'
+        ? scope + '打卡 ' + this.data.weekCount + ' 天 · 平均睡 ' + duration.value + '，来「睡点」记录睡眠'
         : '睡点 · 只看数据、不做评价的睡眠记录',
       path: '/pages/stats/stats?from=share'
     }

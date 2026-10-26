@@ -66,23 +66,25 @@
   background: transparent;
 }
 
+/* 与 month-calendar 同一套色阶：实色品牌紫由弱到强（对空格约 3.1 / 4.1 / 6.6 / 9.2 比 1），
+   最高档停在浅紫、不接近白，避免 40rpx 小格被读成空格 */
 .lv-1 {
-  background: #3F3C9E;
+  background: #5A57C8;
   color: #EDEEFF;
 }
 
 .lv-2 {
-  background: #5B57D6;
+  background: #6C68E8;
   color: #F8FAFC;
 }
 
 .lv-3 {
-  background: #B4BEFF;
+  background: #8A90FF;
   color: #1E1B4B;
 }
 
 .lv-4 {
-  background: #E0E7FF;
+  background: #A5B4FC;
   color: #1E1B4B;
 }
 

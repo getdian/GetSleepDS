@@ -338,12 +338,23 @@ Page({
     // “用现在的时间”是瞬时动作，不写入偏好
   },
 
+  /**
+   * 把本次会话选的入睡耗时交给入睡页：打卡时用它推「预计起床」，
+   * 结束面板再用它把默认入睡时刻从「上床」后移到「睡着」。
+   * 只写 globalData（会话级），不落 prefs——见 app.js 的说明。
+   */
+  syncFallMinutes(minutes) {
+    const app = getApp()
+    if (app && app.globalData) app.globalData.fallMinutes = minutes
+  },
+
   onFallAsleepTap(event) {
     const minutes = Number(event.currentTarget.dataset.min)
     if (!minutes || minutes === this.data.fallAsleep) return
     // 只改“入睡耗时”不换计算锚点：锚点代表这一次计算会话的“现在”，
     // 清零会让结果面停留跨过 30 分钟宽限后，整组推荐静默推后一天。
     this.setData({ fallAsleep: minutes })
+    this.syncFallMinutes(minutes)
     if (this.data.mode === 'wake') this.refreshWakeContext(this.data.wakeTime, minutes)
     if (this.data.flipped) this.calc(true)
   },
@@ -355,6 +366,7 @@ Page({
     const minutes = options[(index + 1) % options.length]
     // 同上：改耗时不是一次新的计算时刻，锚点必须沿用。
     this.setData({ fallAsleep: minutes })
+    this.syncFallMinutes(minutes)
     if (this.data.mode === 'wake') this.refreshWakeContext(this.data.wakeTime, minutes)
     if (wx.vibrateShort) wx.vibrateShort({ type: 'light' })
     if (this.data.flipped) this.calc(true)
@@ -417,6 +429,8 @@ Page({
 
       view = {
         label: main ? '推荐入睡时间' : '现在睡',
+        // 翻转后页头回显的前缀：与时间轮下的上下文同源（今天/明天 + 时段），翻日规则一致
+        echoPrefix: P.dayLabel(plan.wakeAt, now) + ' ' + F.periodLabel(plan.wakeAt),
         mainTime: main ? F.fmtClockTs(main.at) : F.fmtDuration(plan.availableMin),
         // 跨天后必须写“明天 早晨”：只给时段词会让用户把次日时间读成今天。
         mainDay: main ? this.dayLabelPrefix(main.at, now) + F.periodLabel(main.at) : '',
@@ -452,6 +466,8 @@ Page({
 
       view = {
         label: '推荐起床时间',
+        // 入睡模式的前缀同样跟 sleepAtOf 的翻日口径，不能用「现在」的日期
+        echoPrefix: P.dayLabel(plan.sleepAt, now) + ' ' + F.periodLabel(plan.sleepAt),
         mainTime: F.fmtClockTs(main.at),
         mainDay: this.dayLabelPrefix(main.at, now) + F.periodLabel(main.at),
         mainMeta: main.cycles + ' 个周期 · ' + F.fmtDuration(main.durationMin),

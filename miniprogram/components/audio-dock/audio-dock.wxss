@@ -153,6 +153,33 @@
   gap: 6rpx;
 }
 
+/* 下一首：双三角 + 竖条，与 now-playing 同一套几何 */
+.dock-ico-next {
+  display: flex;
+  align-items: center;
+  height: 26rpx;
+}
+
+.dock-next-tri {
+  width: 0;
+  height: 0;
+  border-top: 10rpx solid transparent;
+  border-bottom: 10rpx solid transparent;
+  border-left: 13rpx solid currentColor;
+}
+
+.dock-next-tri + .dock-next-tri {
+  margin-left: -4rpx;
+}
+
+.dock-next-bar {
+  width: 4rpx;
+  height: 20rpx;
+  margin-left: 3rpx;
+  border-radius: 2rpx;
+  background: currentColor;
+}
+
 .dmc-btn {
   position: relative;
   width: 76rpx;

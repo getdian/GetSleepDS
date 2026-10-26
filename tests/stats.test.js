@@ -23,7 +23,7 @@ const RECORDS = {
   '2026-10-17': record('2026-10-17', local(2026, 10, 17, 23, 55), local(2026, 10, 18, 7, 30))
 }
 
-test('圆均值无解时不拼病句：说“算不出平均”，而不是“平均 --:-- 入睡”', () => {
+test('圆均值无解时不拼病句：说“算不出平均”，而不是“平均 --:-- 上床”', () => {
   // 同周两天恰好相隔 12 小时：向量抵消，circularMeanMinutes 返回 null
   const records = {
     '2026-10-19': record('2026-10-19', local(2026, 10, 19, 0, 0), local(2026, 10, 19, 8, 0)),
@@ -36,7 +36,7 @@ test('圆均值无解时不拼病句：说“算不出平均”，而不是“�
   assert.equal(bed.value, '--:--')
   assert.match(bed.sub, /算不出平均/)
   assert.match(bed.detail[0], /算不出平均/)
-  assert.ok(!/平均 --:--/.test(bed.detail[0]), '不能出现“平均 --:-- 入睡”')
+  assert.ok(!/平均 --:--/.test(bed.detail[0]), '不能出现“平均 --:-- 上床”')
   assert.ok(!/平均 --:--/.test(bed.detail.join(' ')))
 
   const wake = metrics.metrics.filter((item) => item.key === 'wake')[0]
@@ -45,7 +45,7 @@ test('圆均值无解时不拼病句：说“算不出平均”，而不是“�
 
   const facts = S.factsOf(records, now)
   const schedule = facts.items.filter((item) => item.key === 'schedule')[0]
-  assert.match(schedule.note, /算不出平均入睡/)
+  assert.match(schedule.note, /算不出平均上床/)
   assert.ok(!/平均 --:--/.test(schedule.note))
 })
 
@@ -245,4 +245,84 @@ test('月对齐图板：起点恒为 3 个月前的 1 号（跨年同样成立�
   const marSpan = S.monthsSpan(mar, 3)
   const marHeat = S.heatmapCells({}, mar, marSpan.days, '', marSpan.endOffsetDays)
   assert.equal(marHeat.startKey, '2026-12-01')
+})
+
+// 指标周期口径：默认本周，本周 0 天时回退最近 7 天 → 全部记录
+test('周一还没打卡：回退最近 7 天，不把首屏做成空白', () => {
+  const now = local(2026, 10, 26, 9, 0) // 周一 09:00，本周必然 0 天
+  const records = {
+    '2026-10-25': record('2026-10-25', local(2026, 10, 24, 23, 0), local(2026, 10, 25, 7, 0)),
+    '2026-10-24': record('2026-10-24', local(2026, 10, 23, 23, 0), local(2026, 10, 24, 7, 0))
+  }
+  assert.equal(S.weekly(records, now).current.count, 0, '本周口径仍是 0 天')
+
+  const result = S.metricsOf(records, now)
+  assert.equal(result.has, true, '有历史记录时首屏不应该空白')
+  assert.equal(result.count, 2)
+  assert.equal(result.periodKey, 'last_7')
+  assert.equal(result.isFallback, true)
+  assert.equal(result.periodLabel, '最近 7 天')
+  assert.equal(result.rangeText, '10.20–10.26')
+  assert.match(result.metrics[0].detail[0], /^最近 7 天共 2 天/)
+  assert.ok(!/本周/.test(result.metrics[0].detail[0]), '回退后不能再说本周')
+})
+
+test('最近 7 天的对比基线是前 7 天，不是上周同期', () => {
+  const now = local(2026, 10, 26, 9, 0)
+  const records = {
+    '2026-10-20': record('2026-10-20', local(2026, 10, 19, 23, 0), local(2026, 10, 20, 5, 0)), // 6h
+    '2026-10-13': record('2026-10-13', local(2026, 10, 12, 23, 0), local(2026, 10, 13, 7, 0)) // 8h
+  }
+  const result = S.metricsOf(records, now)
+  assert.equal(result.periodKey, 'last_7')
+  assert.equal(result.baselineLabel, '前 7 天')
+  assert.equal(result.metrics[0].value, '6h')
+  assert.equal(result.metrics[0].sub, '比前 7 天少 2h')
+})
+
+test('本周有记录时仍按本周口径，行为与改动前一致', () => {
+  const result = S.metricsOf(RECORDS, NOW)
+  assert.equal(result.periodKey, 'this_week')
+  assert.equal(result.isFallback, false)
+  assert.equal(result.periodLabel, '本周')
+  assert.equal(result.rangeText, '10.12–10.18')
+  assert.equal(result.count, 3)
+  assert.match(result.metrics[0].detail[0], /^本周 3 天平均/)
+})
+
+test('最近 7 天也没有记录时回退全部记录，且不编造对比', () => {
+  const now = local(2026, 10, 26, 9, 0)
+  const records = {
+    // 一个月前的一条：本周与最近 7 天都没有
+    '2026-09-01': record('2026-09-01', local(2026, 9, 1, 9, 0), local(2026, 9, 1, 17, 0))
+  }
+  const result = S.metricsOf(records, now)
+  assert.equal(result.periodKey, 'all')
+  assert.equal(result.isFallback, true)
+  assert.equal(result.baselineLabel, '')
+  assert.equal(result.rangeText, '09.01–10.26')
+  // 三项副标都为空：走的是同一个 subOf，不能只挡住 duration 一项
+  result.metrics.forEach((item) => assert.equal(item.sub, '', item.key + ' 不应有对比副标'))
+  assert.match(result.metrics[0].detail[1], /全部记录平均/)
+  assert.match(result.metrics[1].detail[1], /没有可对比的上一段/)
+})
+
+test('显式指定周期时不算回退（后续做周期切换的接口）', () => {
+  const result = S.metricsOf(RECORDS, NOW, { period: 'last_7' })
+  assert.equal(result.periodKey, 'last_7')
+  assert.equal(result.periodLabel, '最近 7 天')
+  assert.equal(result.baselineLabel, '前 7 天')
+  assert.equal(result.isFallback, false, '显式指定不是自动回退，页面不该加注脚')
+  assert.ok(result.count > 0)
+})
+
+test('区间文案跨年正确：本周起点在去年 12 月', () => {
+  // 2027-01-02 是周六，本周起点 2026-12-28（周一）
+  const now = local(2027, 1, 2, 9, 0)
+  const records = {
+    '2026-12-29': record('2026-12-29', local(2026, 12, 28, 23, 0), local(2026, 12, 29, 7, 0))
+  }
+  const result = S.metricsOf(records, now)
+  assert.equal(result.periodKey, 'this_week')
+  assert.equal(result.rangeText, '12.28–01.03')
 })

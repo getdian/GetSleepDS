@@ -14,12 +14,12 @@ const WXML = fs.readFileSync(path.join(ROOT, 'miniprogram', 'pages', 'index', 'i
 const PAGE_JS = fs.readFileSync(path.join(ROOT, 'miniprogram', 'pages', 'index', 'index.js'), 'utf8')
 const SITE = fs.readFileSync(path.join(ROOT, 'server', 'public', 'site', 'index.html'), 'utf8')
 
-/** 取标记行及其后两行（多行标签的文案在下一行，如 .calc-action） */
-function lineWith(source, marker, label) {
+/** 取标记行及其后若干行（默认 3 行；多行块如 hero-echo 可传更多） */
+function lineWith(source, marker, label, count) {
   const lines = source.split(/\r?\n/)
   const index = lines.findIndex((item) => item.indexOf(marker) >= 0)
   assert.ok(index >= 0, label + ' 未找到（' + marker + '）')
-  return lines.slice(index, index + 3).join('\n')
+  return lines.slice(index, index + (count || 3)).join('\n')
 }
 
 test('Hero 标题跟输入：选起床时间→「想几点起？」，选入睡时间→「想几点睡？」', () => {
@@ -29,6 +29,17 @@ test('Hero 标题跟输入：选起床时间→「想几点起？」，选入睡
   const sub = lineWith(WXML, 'class="hero-sub"', 'hero-sub')
   assert.ok(sub.indexOf("'选一个起床时间，找到适合你的睡点。'") >= 0, sub)
   assert.ok(sub.indexOf("'选一个入睡时间，找到适合你的起床时间。'") >= 0, sub)
+})
+
+test('翻转后页头回显所选时间：问句只在正面出现，背面陈述输入', () => {
+  const title = lineWith(WXML, 'class="hero-title"', 'hero-title')
+  assert.ok(title.indexOf('wx:if="{{!flipped}}"') >= 0, 'hero-title 应只在未翻转时渲染：' + title)
+
+  // 背面页头必须是「你选的那个时间」，不是结果；结果由卡内「推荐…时间」承担
+  const echo = lineWith(WXML, 'class="hero-echo"', 'hero-echo', 5)
+  assert.ok(echo.indexOf('{{view.echoPrefix}}') >= 0, '回显必须带今天/明天前缀：' + echo)
+  assert.ok(echo.indexOf("mode === 'wake' ? wakeTime : sleepTime") >= 0, echo)
+  assert.ok(echo.indexOf("mode === 'wake' ? '起床' : '入睡'") >= 0, echo)
 })
 
 test('胶囊 / 主按钮 / 结果面切换与 Hero 同一口径（输入→输出）', () => {

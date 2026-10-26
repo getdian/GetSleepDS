@@ -12,6 +12,7 @@
     "serve": "node server/src/index.js",
     "dev:geek": "powershell -NoProfile -ExecutionPolicy Bypass -File deploy/dev.ps1",
     "pack": "powershell -NoProfile -ExecutionPolicy Bypass -File deploy/pack.ps1",
+    "pack:server": "powershell -NoProfile -ExecutionPolicy Bypass -File deploy/pack.ps1 -ServerOnly",
     "deploy:check": "docker compose --env-file .env.example config --quiet"
   }
 }

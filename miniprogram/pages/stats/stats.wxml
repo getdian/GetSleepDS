@@ -22,6 +22,12 @@
 
   <block wx:else>
     <!-- 3 个核心指标：平均睡眠 / 平均入睡 / 平均起床 -->
+    <!-- 周期必须写出来：本周还没打卡时会回退到最近 7 天，不标注会被读成"本周" -->
+    <view wx:if="{{metrics.length}}" class="metrics-period fade-up">
+      <text class="metrics-period-label">{{periodLabel}}</text>
+      <text class="metrics-period-range">{{periodRange}}</text>
+      <text wx:if="{{periodFallbackNote}}" class="metrics-period-note">{{periodFallbackNote}}</text>
+    </view>
     <view wx:if="{{metrics.length}}" class="metrics fade-up">
       <view
         wx:for="{{metrics}}"
@@ -40,8 +46,8 @@
       </view>
     </view>
     <view wx:else class="metrics-empty fade-up">
-      <text class="metrics-empty-title">本周还没有完整记录</text>
-      <text class="metrics-empty-sub">本周打一次卡，这里就会出现 3 个核心数字（下方是本月日历）。</text>
+      <text class="metrics-empty-title">还没有完整记录</text>
+      <text class="metrics-empty-sub">打完一次卡，这里就会出现 3 个核心数字（下方是本月日历）。</text>
     </view>
 
     <!-- 点指标展开的事实说明：3 行以内，口径与对比都在这里 -->
@@ -57,7 +63,7 @@
       <text class="week-hint">点上方↑数字看说明</text>
     </view>
 
-    <!-- 回顾 → 行动：把本周平均入睡时间直接填进计算器 -->
+    <!-- 回顾 → 行动：把均值入睡时间直接填进计算器（主语随周期变化） -->
     <view
       wx:if="{{bedPrefill}}"
       class="week-plan fade-up"
@@ -65,9 +71,9 @@
       hover-class="week-plan--tap"
       hover-stay-time="120"
       aria-role="button"
-      aria-label="按本周平均入睡时间 {{bedPrefill}} 定今晚入睡点"
+      aria-label="{{planLabel}}"
     >
-      <text class="week-plan-k">按本周均值（{{bedPrefill}}）定今晚入睡点</text>
+      <text class="week-plan-k">{{planLabel}}</text>
       <text class="week-plan-arrow">→</text>
     </view>
 
@@ -105,22 +111,20 @@
         bind:daytap="onStripTap"
       />
 
+      <!-- 图例：4 段连成一条色阶（弱 → 强），下方对齐标区间；
+           4 个分开的小方块读不出"连续强度"，也容易被当成 4 个独立图例 -->
       <view class="cal-legend">
-        <view class="cal-legend-item">
+        <view class="cal-legend-scale">
           <view class="cal-swatch lv-1"></view>
-          <text>＜4h</text>
-        </view>
-        <view class="cal-legend-item">
           <view class="cal-swatch lv-2"></view>
-          <text>4–6h</text>
-        </view>
-        <view class="cal-legend-item">
           <view class="cal-swatch lv-3"></view>
-          <text>6–8h</text>
-        </view>
-        <view class="cal-legend-item">
           <view class="cal-swatch lv-4"></view>
-          <text>8h+</text>
+        </view>
+        <view class="cal-legend-labels">
+          <text class="cal-legend-lab">＜4h</text>
+          <text class="cal-legend-lab">4–6h</text>
+          <text class="cal-legend-lab">6–8h</text>
+          <text class="cal-legend-lab">8h+</text>
         </view>
       </view>
 

@@ -16,7 +16,11 @@ App({
     // 计算器/统计页点迷你播放条后，切到入睡页并打开环境声抽屉
     openAudioSheet: false,
     // 本次启动是否创建过音频会话：冷启动时 meta 可能残留，避免画出幽灵播放条
-    audioSession: false
+    audioSession: false,
+    // 本次会话在计算器选的「入睡耗时」（分钟，0=未选）。
+    // 刻意不落存储：PRD 定的是「入睡耗时每次默认 15、会话内可调」，
+    // 跨启动记忆会让隔天打卡莫名沿用上次的 30 分钟。
+    fallMinutes: 0
   },
 
   onLaunch(options) {

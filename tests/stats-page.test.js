@@ -146,7 +146,7 @@ test('日详情：主行区间与总时长同口径，单段午睡不再写「�
     storage.saveSession({ id: 'nap', startAt: at(5, 13, 0), endAt: at(5, 13, 40), source: 'manual' })
     page.refresh()
     page.showDetail('2026-10-05')
-    assert.equal(page.data.detail.main, '首段 23:00 入睡 · 末段 13:40 起床 · 共 7 小时 40 分')
+    assert.equal(page.data.detail.main, '首段 23:00 上床 · 末段 13:40 起床 · 共 7 小时 40 分')
     assert.match(
       page.data.detail.sub,
       /2 段 · 最长一段 7 小时 00 分 · 其余 40 分钟 · 按醒来日归档/
@@ -164,7 +164,7 @@ test('日详情：主行区间与总时长同口径，单段午睡不再写「�
     storage.saveSession({ id: 'nap-only', startAt: at(6, 13, 0), endAt: at(6, 13, 30), source: 'manual' })
     page2.refresh()
     page2.showDetail('2026-10-06')
-    assert.equal(page2.data.detail.main, '13:00 入睡 → 13:30 起床 · 共 30 分钟')
+    assert.equal(page2.data.detail.main, '13:00 上床 → 13:30 起床 · 共 30 分钟')
     assert.equal(page2.data.detail.sub, '1 段 · 按醒来日归档')
     assert.ok(!/夜间/.test(page2.data.detail.sub))
   } finally {
@@ -252,7 +252,7 @@ test('空态：0 数据时支持从 empty-state 触发补记与去入睡', () =>
   }
 })
 
-test('按本周均值定今晚入睡点：写入一次性预填并跳计算器', () => {
+test('按本周均值定今晚上床点：写入一次性预填并跳计算器', () => {
   resetStore()
   const page = makePage()
   const calls = []

@@ -8,8 +8,8 @@ const events = require('../../utils/events')
 const audioTimer = require('../../utils/audio-timer')
 const playerState = require('../../utils/player-state')
 const audioSession = require('../../utils/audio-session')
-const { resolvePlayerSurface } = require('../../utils/player-surface')
-const { nextTrackInQueue } = require('../../utils/player-queue')
+const { resolvePlayerSurface, isReallyPlaying } = require('../../utils/player-surface')
+const { nextTrackInQueue, nextTrackManual } = require('../../utils/player-queue')
 const tabbar = require('../../utils/tabbar')
 
 const ICONS = ['rain', 'wave', 'fire', 'noise', 'night']
@@ -112,6 +112,7 @@ Component({
       this._cfgSig = configSignature(this._cfg)
       this._sheetTrackId = ''
       this._collapseTimer = null
+      this._peekTimer = null
       this._stopRequested = false
       this._playingFromCache = false
       this._currentTrack = null
@@ -189,6 +190,10 @@ Component({
         clearTimeout(this._collapseTimer)
         this._collapseTimer = null
       }
+      if (this._peekTimer) {
+        clearTimeout(this._peekTimer)
+        this._peekTimer = null
+      }
       cache.offChange(this._onCacheChange)
       if (this._unsubTimer) {
         this._unsubTimer()
@@ -252,7 +257,7 @@ Component({
         this._loadingTimer = null
         if (!this._alive || !this.data.loading) return
         // 超时前已实际起播：不能判失败（play 事件可能丢失）
-        if (this._audio && !this._audio.paused) {
+        if (isReallyPlaying(this._audio)) {
           this.setData({ playing: true, loading: false })
           return
         }
@@ -530,7 +535,7 @@ Component({
             clearTimeout(this._pauseRetryTimer)
             this._pauseRetryTimer = setTimeout(() => {
               if (!this._alive || this._stopRequested) return
-              if (!this._audio || !this._audio.paused) return
+              if (isReallyPlaying(this._audio)) return
               this.safePlay()
             }, 3000)
             return
@@ -561,7 +566,7 @@ Component({
           this._waitRetryTimer = setTimeout(() => {
             if (!this._alive || !this._audio || this._stopRequested) return
             if (!this.data.currentId) return
-            if (!this._audio.paused) {
+            if (isReallyPlaying(this._audio)) {
               // 实际已在播，只是 play 事件没到：以真实状态为准自愈
               this.setData({ playing: true, loading: false })
               return
@@ -575,7 +580,7 @@ Component({
           this.disarmLoadingGuard()
           // canplay 比 play 事件更可靠：部分基础库起播时不补发 play。
           // 以播放器真实状态自愈，避免“声音在播、UI 显示已暂停”。
-          const live = !!(this._audio && !this._audio.paused)
+          const live = isReallyPlaying(this._audio)
           if (this.data.loading || (live && !this.data.playing)) {
             this.setData({ loading: false, playing: live || this.data.playing })
           }
@@ -677,7 +682,7 @@ Component({
           // 播放器仍在出声：网络/解码类错误可能只是当前分片抖动，底层会自行重连。
           // 这时绝不能清会话——否则会出现“音乐还在播，首页/统计页迷你条已经消失、
           // 入睡页回到空闲态”。只把 loading 收掉，等真实的 pause/stop 再判定。
-          if (this._audio && !this._audio.paused) {
+          if (isReallyPlaying(this._audio)) {
             this.setData({ loading: false })
             return
           }
@@ -839,8 +844,8 @@ Component({
         loading: false,
         // 已经有当前曲目时不再显示「继续上次」：否则与上方播放条重复讲同一首
         resumeLabel: '',
-        // 播放中收成音符；已暂停则直接展开播放条，方便继续
-        miniExpanded: !playing
+        // 播放中收成音符（除非用户把条钉开）；已暂停则直接展开播放条，方便继续
+        miniExpanded: !playing || this.expandedPreferred()
       })
       this.syncPlayerText()
     },
@@ -978,7 +983,8 @@ Component({
         currentTitle: track.title,
         currentCategory: track.category || '',
         playing: true,
-        miniExpanded: false,
+        // 自动连播（advance）不该弹条：只按用户的“记忆展开”偏好决定
+        miniExpanded: this.expandedPreferred(),
         collapsed: false,
         collapsing: false,
         // 已经在播了，不再显示「继续上次」
@@ -1080,6 +1086,28 @@ Component({
       )
     },
 
+    /**
+     * 迷你条「下一首」：与跨页迷你条同一套候选（收藏连播优先，其余列表循环）。
+     * 切歌必须走 play()：meta、缓存、埋点、定时偏好都在那里收口，避免两个入口两套行为。
+     */
+    onNextTap() {
+      const meta = storage.getMeta()
+      const track = nextTrackManual(
+        this.data.tracks,
+        this.data.currentId || meta.lastTrackId,
+        storage.getFavorites(),
+        meta.audioQueueMode
+      )
+      if (!track) {
+        wx.showToast({ title: '只有一个音源', icon: 'none' })
+        return
+      }
+      this.play(track)
+      // 手动切歌才亮相：自动连播（advance）仍保持音符，避免半夜自己弹出播放条
+      if (!this.expandedPreferred()) this.setData({ miniExpanded: true, collapsed: false })
+      this.peekMiniBar()
+    },
+
     onToggleQueueMode() {
       const favorites = storage.getFavorites() || []
       const next = this.data.queueMode === 'favorites' ? 'single' : 'favorites'
@@ -1160,7 +1188,7 @@ Component({
       this._toggleAt = now
       // 以 BackgroundAudioManager 的真实 paused 为准；不能用 data.playing，
       // 页面隐藏期间系统侧暂停时 data 可能滞后，导致“点暂停没反应”。
-      if (!this._audio.paused) {
+      if (isReallyPlaying(this._audio)) {
         this.clearCollapseTimer()
         this.setData({ playing: false, miniExpanded: true, collapsed: false, collapsing: false })
         storage.patchMeta({ lastTrackPlaying: false })
@@ -1187,7 +1215,7 @@ Component({
         this._currentTrack = track
         this._playingFromCache = !!cached
         this.clearCollapseTimer()
-        this.setData({ loading: true, playing: true, miniExpanded: false, collapsed: false, collapsing: false })
+        this.setData({ loading: true, playing: true, miniExpanded: true, collapsed: false, collapsing: false })
         this.armLoadingGuard()
         this._audio.title = '睡点 · ' + track.title
         this._audio.epname = '环境音'
@@ -1205,6 +1233,7 @@ Component({
         // 系统侧 stop 后重设 src 不会自动起播：必须显式 play，否则首次点击无声、
         // 需要再点一次（与同函数末尾的正常恢复分支一致）。
         this.safePlay()
+        this.peekMiniBar()
         return
       }
 
@@ -1212,13 +1241,51 @@ Component({
       storage.patchMeta({ lastTrackPlaying: true })
       audioSession.markUserPlay()
       this.clearCollapseTimer()
-      this.setData({ playing: true, miniExpanded: false, collapsed: false, collapsing: false })
+      this.setData({ playing: true, miniExpanded: true, collapsed: false, collapsing: false })
       this.safePlay()
+      this.peekMiniBar()
+    },
+
+    /**
+     * 跨页“记忆展开”：与 now-playing 共用 app.globalData.playerBarExpanded。
+     * 用户在任一页把播放条点开，另外两页也保持展开；点外部收起则三页一起收。
+     */
+    expandedPreferred() {
+      const app = getApp()
+      return !!(app && app.globalData && app.globalData.playerBarExpanded)
+    },
+
+    rememberExpanded(value) {
+      const app = getApp()
+      if (app && app.globalData) app.globalData.playerBarExpanded = !!value
     },
 
     expandMini() {
+      clearTimeout(this._peekTimer)
+      this._peekTimer = null
       this.clearCollapseTimer()
+      this.rememberExpanded(true)
       this.setData({ miniExpanded: true, collapsed: false, collapsing: false })
+    },
+
+    /**
+     * 手动切歌/续播后让迷你条停留 3 秒，避免刚点完控件就缩成音符。
+     * 到点只收形态、不标记“用户折叠”；用户已把条钉开时不再自动收。
+     */
+    peekMiniBar() {
+      clearTimeout(this._peekTimer)
+      if (this.expandedPreferred()) return
+      this._peekTimer = setTimeout(() => {
+        this._peekTimer = null
+        if (!this._alive || !this.data.playing || !this.data.miniExpanded) return
+        if (this.data.loading) return
+        this.clearCollapseTimer()
+        this.setData({ collapsing: true })
+        this._collapseTimer = setTimeout(() => {
+          this._collapseTimer = null
+          if (this._alive) this.setData({ collapsing: false, miniExpanded: false })
+        }, 210)
+      }, 3000)
     },
 
     clearCollapseTimer() {
@@ -1228,8 +1295,11 @@ Component({
       }
     },
 
-    /** 点击播放条外部：向右收缩回音符，不停止播放 */
+    /** 点击播放条外部：向右收缩回音符，不停止播放（这次收起算用户手动折叠） */
     collapseMini() {
+      clearTimeout(this._peekTimer)
+      this._peekTimer = null
+      this.rememberExpanded(false)
       if (this.data.collapsed || this.data.collapsing) return
       this.clearCollapseTimer()
       this.setData({ collapsing: true })
@@ -1474,7 +1544,7 @@ Component({
     onTimerTap(event) {
       const minutes = Number(event.currentTarget.dataset.value)
       // 页面隐藏期间系统侧暂停/恢复会让 data.playing 滞后，起表判断必须用真实播放器状态
-      const playing = !!(this._audio && !this._audio.paused)
+      const playing = isReallyPlaying(this._audio)
       if (minutes === this.data.timerMinutes) {
         // 重复点当前项时，若计时已结束，重新启用；不改变偏好
         if (minutes && playing && !audioTimer.remaining()) {

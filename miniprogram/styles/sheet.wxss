@@ -178,6 +178,16 @@
   color: var(--color-primary-soft);
 }
 
+/* 打卡结束面板：默认入睡时刻按入睡耗时后移的说明（补记/编辑不出现） */
+.end-fall-note {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 20rpx;
+  line-height: 1.6;
+  color: var(--color-primary-soft);
+  opacity: 0.88;
+}
+
 .end-hint {
   display: block;
   margin-top: 10rpx;

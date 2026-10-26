@@ -38,4 +38,34 @@ function nextTrackInQueue(tracks, currentId, favorites, mode) {
   return next
 }
 
-module.exports = { normalizeQueueMode, nextTrackInQueue }
+/**
+ * 手动“下一首”：按配置里的音源顺序循环。
+ * 与自动推进（advance）不同——自动换曲只在收藏连播下发生，手动切歌是用户显式操作，
+ * 单曲循环模式下也应该能换到别的音源，否则迷你条上的“下一首”等于没反应。
+ *
+ * @param {Array<{id:string}>} tracks 配置里的全部音源（已过滤非法项）
+ * @param {string} currentId 当前曲目 id
+ * @returns {object|null} 下一首；不足 2 首时返回 null（调用方提示“只有一个音源”）
+ */
+function nextTrackInList(tracks, currentId) {
+  const list = (tracks || []).filter((track) => track && track.id)
+  if (list.length < 2) return null
+  let index = -1
+  for (let i = 0; i < list.length; i += 1) {
+    if (list[i].id === currentId) index = i
+  }
+  // 当前曲目已下架/不在列表：从第一首开始
+  if (index < 0) return list[0]
+  const next = list[(index + 1) % list.length]
+  return next && next.id !== currentId ? next : null
+}
+
+/**
+ * 手动切歌的统一口径：收藏连播模式下走收藏队列，其余情况按列表顺序。
+ * 迷你条与抽屉（如果以后加同类按钮）都用它，避免两个入口切出不同结果。
+ */
+function nextTrackManual(tracks, currentId, favorites, mode) {
+  return nextTrackInQueue(tracks, currentId, favorites, mode) || nextTrackInList(tracks, currentId)
+}
+
+module.exports = { normalizeQueueMode, nextTrackInQueue, nextTrackInList, nextTrackManual }

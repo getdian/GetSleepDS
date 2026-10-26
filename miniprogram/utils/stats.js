@@ -97,7 +97,7 @@ function digest(list) {
     avgDurationMin: Math.round(sum(list, durationOf) / list.length),
     // 统计页主口径：当天总睡眠（夜间 + 午休/间断段），与用户“我睡了多久”一致
     avgTotalMin: Math.round(sum(list, totalDurationOf) / list.length),
-    // 0 点后入睡 = 入睡时刻在 [00:00, 06:00)
+    // 0 点后上床 = 上床时刻（startAt）在 [00:00, 06:00)
     afterMidnightDays: bedValues.filter((m) => m < 6 * 60).length,
     longestMin: Math.max.apply(null, totals),
     shortestMin: Math.min.apply(null, totals)
@@ -194,6 +194,120 @@ function weekly(records, now) {
   }
 }
 
+/**
+ * 统计页可用的周期口径。
+ * 默认仍是自然周（周一 00:00 起，行为与历史一致），
+ * 但本周还没有记录时依次回退「最近 7 天」→「全部记录」：
+ * 周一刚过零点时本周必然 0 天，而下方日历是「当月」口径仍满屏有记录，
+ * 若不回退，首屏会出现「上面说没记录、下面满屏记录」的自相矛盾。
+ */
+const PERIODS = {
+  this_week: { label: '本周', baselineLabel: '上周同期' },
+  last_7: { label: '最近 7 天', baselineLabel: '前 7 天' },
+  all: { label: '全部记录', baselineLabel: '' }
+}
+
+/** 10.26 这种紧凑月日（补零，保证区间两端等宽）；跟随设备本地时区，与 startOfWeek / dateKey 同源 */
+function monthDayText(timestamp) {
+  const key = T.dateKey(timestamp)
+  return key.slice(5, 7) + '.' + key.slice(8, 10)
+}
+
+/** 区间文案：窗口是左闭右开，显示时把右端退一天 */
+function rangeTextOf(start, end) {
+  return monthDayText(start) + '–' + monthDayText(T.addDays(end, -1))
+}
+
+function deltaOf(current, previous, hasBaseline) {
+  if (!hasBaseline) return { bed: null, wake: null, duration: null, total: null }
+  return {
+    bed:
+      current.avgBedMin === null || previous.avgBedMin === null
+        ? null
+        : T.clockDelta(current.avgBedMin, previous.avgBedMin),
+    wake:
+      current.avgWakeMin === null || previous.avgWakeMin === null
+        ? null
+        : T.clockDelta(current.avgWakeMin, previous.avgWakeMin),
+    duration:
+      current.avgDurationMin === null || previous.avgDurationMin === null
+        ? null
+        : current.avgDurationMin - previous.avgDurationMin,
+    total:
+      current.avgTotalMin === null || previous.avgTotalMin === null
+        ? null
+        : current.avgTotalMin - previous.avgTotalMin
+  }
+}
+
+/**
+ * 某个周期的均值与对比基线。对比必须与周期匹配：
+ * 本周比「上周同期」（只取等长天数），最近 7 天比「前 7 天」（完整 7 天），
+ * 全部记录没有基线（不编造对比）；直接复用上一周的同期口径会让周一显示失真。
+ */
+function periodStats(records, now, period) {
+  const key = PERIODS[period] ? period : 'this_week'
+  const list = completedList(records)
+  const todayStart = T.startOfDay(now)
+  let start
+  let curEnd
+  let displayEnd
+  let prevStart = null
+  let prevEnd = null
+
+  if (key === 'this_week') {
+    start = T.startOfWeek(now)
+    const weekEnd = T.addDays(start, 7)
+    // 本周只取已过去的一段；展示区间仍写完整一周（周一 → 周日）
+    const elapsed = Math.max(0, Math.min(Number(now) || Date.now(), weekEnd) - start)
+    curEnd = start + elapsed
+    displayEnd = weekEnd
+    prevStart = T.addDays(start, -7)
+    prevEnd = Math.min(prevStart + elapsed, start)
+  } else if (key === 'last_7') {
+    // 含今天的 7 天，与日历格子对齐
+    start = T.addDays(todayStart, -6)
+    curEnd = T.addDays(todayStart, 1)
+    displayEnd = curEnd
+    prevStart = T.addDays(start, -7)
+    prevEnd = start
+  } else {
+    start = list.length ? T.parseDateKey(list[0].day) : todayStart
+    curEnd = T.addDays(todayStart, 1)
+    displayEnd = curEnd
+  }
+
+  const current = digest(inRange(list, start, curEnd))
+  const hasBaseline = prevStart !== null
+  const previous = hasBaseline ? digest(inRange(list, prevStart, prevEnd)) : emptyDigest()
+
+  return {
+    periodKey: key,
+    periodLabel: PERIODS[key].label,
+    baselineLabel: PERIODS[key].baselineLabel,
+    rangeText: rangeTextOf(start, displayEnd),
+    start,
+    end: displayEnd,
+    hasBaseline,
+    current,
+    previous,
+    delta: deltaOf(current, previous, hasBaseline),
+    streak: streakDays(records, now)
+  }
+}
+
+/** 首屏周期选择：本周有记录就用本周，否则回退最近 7 天，再否则全部记录 */
+function latestPeriodStats(records, now) {
+  const order = ['this_week', 'last_7', 'all']
+  let first = null
+  for (let i = 0; i < order.length; i += 1) {
+    const stats = periodStats(records, now, order[i])
+    if (stats.current.count) return stats
+    if (!first) first = stats
+  }
+  return first
+}
+
 function durationText(minutes) {
   const total = Math.max(0, Math.round(minutes))
   if (total < 60) return total + ' 分钟'
@@ -240,16 +354,16 @@ function factsOf(records, now) {
     },
     {
       key: 'schedule',
-      label: '平均入睡',
+      label: '平均上床',
       value: clockText(cur.avgBedMin),
       // 圆均值在记录分散到表盘两端时无解（如一天 00:00、一天 12:00）。
-      // 此时不能输出「平均 --:-- 入睡」这种病句，要说明是“算不出来”。
+      // 此时不能输出「平均 --:-- 上床」这种病句，要说明是“算不出来”。
       note:
         cur.avgBedMin === null
-          ? '记录分散在表盘两端，算不出平均入睡'
+          ? '记录分散在表盘两端，算不出平均上床'
           : cur.afterMidnightDays > 0
-            ? '有 ' + cur.afterMidnightDays + ' 天在 0 点后入睡'
-            : '没有 0 点后入睡的记录'
+            ? '有 ' + cur.afterMidnightDays + ' 天在 0 点后上床'
+            : '没有 0 点后上床的记录'
     },
     {
       key: 'record',
@@ -287,40 +401,71 @@ function deltaAmount(minutes) {
 const REFERENCE_LOW_MIN = 7.5 * 60
 const REFERENCE_HIGH_MIN = 8 * 60
 
-function durationNoteOf(cur) {
+function durationNoteOf(cur, subject) {
   const total = cur.avgTotalMin || 0
+  const who = subject || '本周'
   if (total < REFERENCE_LOW_MIN) {
-    return '本周平均比常见 7.5–8 小时少 ' + durationText(REFERENCE_LOW_MIN - total)
+    return who + '平均比常见 7.5–8 小时少 ' + durationText(REFERENCE_LOW_MIN - total)
   }
   if (total > REFERENCE_HIGH_MIN) {
-    return '本周平均比常见 7.5–8 小时多 ' + durationText(total - REFERENCE_HIGH_MIN)
+    return who + '平均比常见 7.5–8 小时多 ' + durationText(total - REFERENCE_HIGH_MIN)
   }
-  return '本周平均在常见 7.5–8 小时内'
+  return who + '平均在常见 7.5–8 小时内'
 }
 
 /**
- * 统计页首屏的 3 个核心指标：平均睡眠 / 平均入睡 / 平均起床。
+ * 统计页首屏的 3 个核心指标：平均睡眠 / 平均上床 / 平均起床。
  * 每项只给「大数字 + 短标签 + 一行变化」，细节事实放在点击后的 detail 里。
+ *
+ * 周期默认取「本周」；本周还没有记录时自动回退最近 7 天 / 全部记录，
+ * 并在返回值里带上周期与区间（periodLabel / rangeText / isFallback），
+ * 页面必须把周期显示出来，否则回退后用户会把 7 天数据读成"本周"。
+ * options.period 可强制指定周期（后续做周期切换时复用）。
  */
-function metricsOf(records, now) {
-  const w = weekly(records, now)
+function metricsOf(records, now, options) {
+  const opt = options || {}
+  const w = opt.period ? periodStats(records, now, opt.period) : latestPeriodStats(records, now)
   const cur = w.current
+  const period = {
+    periodKey: w.periodKey,
+    periodLabel: w.periodLabel,
+    baselineLabel: w.baselineLabel,
+    rangeText: w.rangeText,
+    // 只有"没指定周期却没用上本周"才算回退，页面据此加一句解释
+    isFallback: !opt.period && w.periodKey !== 'this_week'
+  }
   if (!cur.count) {
-    return { has: false, count: 0, streak: 0, metrics: [], avgBedMin: null, avgWakeMin: null }
+    return Object.assign(
+      { has: false, count: 0, streak: 0, metrics: [], avgBedMin: null, avgWakeMin: null },
+      period
+    )
   }
 
-  const prev = w.previous
   const d = w.delta
+  const label = w.periodLabel
+  const baseline = w.baselineLabel
+  const hasBaseline = w.hasBaseline
   const total = cur.avgTotalMin || 0
-  const reference = durationNoteOf(cur)
+  const reference = durationNoteOf(cur, w.periodKey === 'this_week' ? '本周' : label)
   // 圆均值可能无解（记录分散到表盘两端），此时 value 仍是 '--:--'，
-  // 但说明文字必须讲清“算不出来”，不能拼成「平均 --:-- 入睡」。
+  // 但说明文字必须讲清“算不出来”，不能拼成「平均 --:-- 上床」。
   const bedSpread = cur.avgBedMin === null
   const wakeSpread = cur.avgWakeMin === null
-  const clockCompare = (diff) => {
-    if (diff === null) return '上周同期没有记录，暂时无法对比'
-    if (diff === 0) return '与上周同期持平'
-    return '比上周同期' + (diff > 0 ? '晚 ' : '早 ') + durationText(Math.abs(diff))
+  // 主语随周期换词：回退后仍写「本周」会让用户以为数据穿越了
+  const scope =
+    w.periodKey === 'this_week' ? label + ' ' + cur.count + ' 天' : label + '共 ' + cur.count + ' 天'
+  const compareLine = (diff, timeDelta) => {
+    if (!hasBaseline) return '统计范围 ' + w.rangeText + '，没有可对比的上一段'
+    if (diff === null) return baseline + '没有记录，暂时无法对比'
+    if (diff === 0) return '与' + baseline + '持平'
+    if (timeDelta) return '比' + baseline + (diff > 0 ? '晚 ' : '早 ') + durationText(Math.abs(diff))
+    return '比' + baseline + (diff > 0 ? '多 ' : '少 ') + durationText(Math.abs(diff))
+  }
+  const subOf = (diff, timeDelta) => {
+    if (diff === null) return ''
+    if (diff === 0) return hasBaseline ? '与' + baseline + '持平' : ''
+    if (timeDelta) return '比' + baseline + (diff > 0 ? '晚 ' : '早 ') + deltaAmount(diff)
+    return '比' + baseline + (diff > 0 ? '多 ' : '少 ') + deltaAmount(diff)
   }
 
   const metrics = [
@@ -329,14 +474,10 @@ function metricsOf(records, now) {
       label: '平均睡眠',
       value: compactDuration(total),
       // 一行变化必须带主语：单独"少 5h42"读不出是和谁比
-      sub:
-        d.total === null
-          ? ''
-          : d.total === 0
-            ? '与上周同期持平'
-            : '比上周同期' + (d.total > 0 ? '多 ' : '少 ') + deltaAmount(d.total),
+      sub: subOf(d.total, false),
       detail: [
-        '本周 ' + cur.count + ' 天平均 ' + durationText(total) + '，含午休与间断段',
+        // 口径写在说明里：「平均睡眠」是用户语言，实际是在床时长（含躺下到睡着的清醒）
+        scope + '平均 ' + durationText(total) + '，按上床到起床算，含午休与间断段',
         reference,
         cur.longestMin === cur.shortestMin
           ? '每天都是 ' + durationText(cur.longestMin)
@@ -345,60 +486,51 @@ function metricsOf(records, now) {
     },
     {
       key: 'bed',
-      label: '平均入睡',
+      label: '平均上床',
       value: clockText(cur.avgBedMin),
-      sub: bedSpread
-        ? '时间分散，算不出平均'
-        : d.bed === null
-          ? ''
-          : d.bed === 0
-            ? '与上周同期持平'
-            : '比上周同期' + (d.bed > 0 ? '晚 ' : '早 ') + deltaAmount(d.bed),
+      sub: bedSpread ? '时间分散，算不出平均' : subOf(d.bed, true),
       detail: [
         bedSpread
-          ? '本周 ' + cur.count + ' 天入睡时间分散在表盘两端，算不出平均值'
-          : '本周 ' + cur.count + ' 天平均 ' + clockText(cur.avgBedMin) + ' 入睡',
-        bedSpread ? '记录更集中在同一时段后，才能比较早晚' : clockCompare(d.bed),
+          ? scope + '上床时间分散在表盘两端，算不出平均值'
+          : scope + '平均 ' + clockText(cur.avgBedMin) + ' 上床',
+        bedSpread ? '记录更集中在同一时段后，才能比较早晚' : compareLine(d.bed, true),
         (cur.afterMidnightDays > 0
-          ? '有 ' + cur.afterMidnightDays + ' 天在 0 点后入睡'
-          : '没有 0 点后入睡的记录') + ' · 按醒来日归档'
+          ? '有 ' + cur.afterMidnightDays + ' 天在 0 点后上床'
+          : '没有 0 点后上床的记录') + ' · 按醒来日归档'
       ]
     },
     {
       key: 'wake',
       label: '平均起床',
       value: clockText(cur.avgWakeMin),
-      sub: wakeSpread
-        ? '时间分散，算不出平均'
-        : d.wake === null
-          ? ''
-          : d.wake === 0
-            ? '与上周同期持平'
-            : '比上周同期' + (d.wake > 0 ? '晚 ' : '早 ') + deltaAmount(d.wake),
+      sub: wakeSpread ? '时间分散，算不出平均' : subOf(d.wake, true),
       detail: [
         wakeSpread
-          ? '本周 ' + cur.count + ' 天起床时间分散在表盘两端，算不出平均值'
-          : '本周 ' + cur.count + ' 天平均 ' + clockText(cur.avgWakeMin) + ' 起床（主睡眠）',
-        wakeSpread ? '记录更集中在同一时段后，才能比较早晚' : clockCompare(d.wake),
+          ? scope + '起床时间分散在表盘两端，算不出平均值'
+          : scope + '平均 ' + clockText(cur.avgWakeMin) + ' 起床（主睡眠）',
+        wakeSpread ? '记录更集中在同一时段后，才能比较早晚' : compareLine(d.wake, true),
         '这是你记录起床的时刻，不是闹钟'
       ]
     }
   ]
 
-  return {
-    has: true,
-    count: cur.count,
-    streak: w.streak,
-    // 供「按本周均值定今晚入睡点」使用：分钟数，null 表示时间分散算不出
-    avgBedMin: cur.avgBedMin,
-    avgWakeMin: cur.avgWakeMin,
-    metrics
-  }
+  return Object.assign(
+    {
+      has: true,
+      count: cur.count,
+      streak: w.streak,
+      // 供「按均值定今晚上床点」使用：分钟数，null 表示时间分散算不出
+      avgBedMin: cur.avgBedMin,
+      avgWakeMin: cur.avgWakeMin,
+      metrics
+    },
+    period
+  )
 }
 
 /**
  * 本地事实回顾：与服务端模板同口径（ADR-007），未开启云备份时使用，零上传。
- * 只陈述均值、差值、0 点后入睡天数，不做任何评价或建议。
+ * 只陈述均值、差值、0 点后上床天数，不做任何评价或建议。
  */
 /** 事实回顾缓存指纹：同周内新增记录也必须触发重新生成 */
 function factSignature(weekly) {
@@ -424,18 +556,19 @@ function localFact(records, now) {
   const avgWake = T.pad2(Math.floor(cur.avgWakeMin / 60)) + ':' + T.pad2(cur.avgWakeMin % 60)
   const avgDurationText = durationText(cur.avgDurationMin)
   const sentences = [
-    '本周你记录了 ' + cur.count + ' 次睡眠，平均 ' + avgBed + ' 入睡、' + avgWake + ' 起床，平均 ' + avgDurationText + '。',
-    '本周 ' + cur.count + ' 次记录里，平均 ' + avgBed + ' 入睡、' + avgWake + ' 起床，平均 ' + avgDurationText + '。',
-    '本周共 ' + cur.count + ' 次打卡：平均 ' + avgBed + ' 入睡、' + avgWake + ' 起床，平均 ' + avgDurationText + '。'
+    '本周你记录了 ' + cur.count + ' 次睡眠，平均 ' + avgBed + ' 上床、' + avgWake + ' 起床，平均 ' + avgDurationText + '。',
+    '本周 ' + cur.count + ' 次记录里，平均 ' + avgBed + ' 上床、' + avgWake + ' 起床，平均 ' + avgDurationText + '。',
+    '本周共 ' + cur.count + ' 次打卡：平均 ' + avgBed + ' 上床、' + avgWake + ' 起床，平均 ' + avgDurationText + '。'
   ]
 
   let second = ''
   if (w.delta.bed !== null) {
-    if (w.delta.bed === 0) second = '平均入睡时间与上周持平'
-    else second = '平均入睡时间比上周' + (w.delta.bed > 0 ? '晚' : '早') + '了 ' + Math.abs(w.delta.bed) + ' 分钟'
+    // 指标时刻按「上床」口径（startAt）；「入睡」留给真实睡着时刻（sleepAt），两者不再混用
+    if (w.delta.bed === 0) second = '平均上床时间与上周持平'
+    else second = '平均上床时间比上周' + (w.delta.bed > 0 ? '晚' : '早') + '了 ' + Math.abs(w.delta.bed) + ' 分钟'
   }
   if (cur.afterMidnightDays > 0) {
-    second += (second ? '，' : '') + '有 ' + cur.afterMidnightDays + ' 天在 0 点后入睡'
+    second += (second ? '，' : '') + '有 ' + cur.afterMidnightDays + ' 天在 0 点后上床'
   }
 
   return {
@@ -665,6 +798,7 @@ module.exports = {
   heatLevelOf,
   digest,
   weekly,
+  periodStats,
   metricsOf,
   factsOf,
   localFact,

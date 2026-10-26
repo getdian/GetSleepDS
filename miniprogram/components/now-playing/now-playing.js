@@ -12,11 +12,14 @@ const playerState = require('../../utils/player-state')
 const cache = require('../../utils/audio-cache')
 const events = require('../../utils/events')
 const audioSession = require('../../utils/audio-session')
-const { resolvePlayerSurface } = require('../../utils/player-surface')
+const { resolvePlayerSurface, isReallyPlaying } = require('../../utils/player-surface')
+const { nextTrackManual } = require('../../utils/player-queue')
 const { getConfig } = require('../../utils/config')
 
 const TOGGLE_GUARD_MS = 220
 const EXPIRY_TOAST_WINDOW_MS = 2000
+// 续播后播放条停留时长：用户刚点完播放，控件立刻缩回音符会让人以为没点上
+const RESUME_PEEK_MS = 3000
 
 Component({
   data: {
@@ -49,6 +52,7 @@ Component({
       this._lastToggleAt = 0
       this._enterTimer = null
       this._collapseTimer = null
+      this._peekTimer = null
       this._loadingTimer = null
       this._unsubTimer = null
       this._onPlay = () => this.handlePlay()
@@ -75,6 +79,7 @@ Component({
         clearTimeout(this._collapseTimer)
         this._collapseTimer = null
       }
+      this.clearPeek()
       this.disarmLoadingGuard()
       // 组件销毁时清掉“停止上膛”的定时器（_alive 已置 false，不会再 setData）
       this.clearStopArm()
@@ -92,6 +97,10 @@ Component({
       // 切回页面时按墙钟校准定时；到点会立即停止并折叠
       audioTimer.restore()
       this.setup()
+      // 另一页已经把“记忆展开”关掉时，本页不能还停在展开态（两页必须同一个形态）
+      if (!this.expandedPreferred() && this.data.miniExpanded) {
+        this.setData({ miniExpanded: false })
+      }
       this.sync(false)
     },
     hide() {
@@ -149,7 +158,7 @@ Component({
         this._loadingTimer = null
         if (!this._alive || !this.data.loading) return
         const audio = this._audio
-        const playing = !!(audio && audio.src && !audio.paused)
+        const playing = isReallyPlaying(audio)
         this.setData({ loading: false, playing })
         if (!playing && this._pageVisible) {
           wx.showToast({ title: '音频加载超时，请重试', icon: 'none' })
@@ -216,6 +225,8 @@ Component({
 
     handlePause() {
       if (!this._alive) return
+      // 任何来源的暂停都要保住“已暂停”条：不能正好卡在续播亮相的 3 秒里被收走
+      this.clearPeek()
       this.disarmLoadingGuard()
       // 与 audio-dock 同口径：通知栏/锁屏/耳机暂停也必须冻结倒计时。
       audioTimer.pause()
@@ -231,7 +242,7 @@ Component({
       this.disarmLoadingGuard()
       // 部分基础库起播时不补发 play 事件：以播放器真实状态自愈，
       // 否则会“声音在播、迷你条显示已暂停”。
-      const live = !!(this._audio && !this._audio.paused)
+      const live = isReallyPlaying(this._audio)
       if (this.data.loading || (live && !this.data.playing)) {
         this.setData({ loading: false, playing: live || this.data.playing })
       }
@@ -245,7 +256,7 @@ Component({
       const now = Date.now()
       if (now - (this._entitlementAt || 0) > 15000) {
         this._entitlementAt = now
-        if (this._audio && !this._audio.paused && !this.canPlay()) {
+        if (isReallyPlaying(this._audio) && !this.canPlay()) {
           try {
             this._audio.pause()
           } catch (e) {}
@@ -378,8 +389,8 @@ Component({
       const playing = surface.playing
       const title = meta.lastTrackTitle || '环境音'
       const category = meta.lastTrackCategory || ''
-      // 播放中保留用户手动展开的状态，避免 play/pause 事件把条瞬间收回
-      const miniExpanded = playing ? this.data.miniExpanded : true
+      // 播放中保留用户手动展开的状态（含跨页记忆），避免 play/pause 事件把条瞬间收回
+      const miniExpanded = playing ? this.data.miniExpanded || this.expandedPreferred() : true
 
       if (!this.data.visible) {
         // 先落地隐藏态，再在下一帧加 is-in，跨页首次出现也能走同一段入场动效
@@ -392,7 +403,7 @@ Component({
             // 入场延迟期间恰好停止播放时不要再弹出来；
             // 但“外部中断把 lastTrackActive 误清、播放器仍在出声”不算停止
             const latest = storage.getMeta()
-            const stillPlaying = !!(this._audio && !this._audio.paused)
+            const stillPlaying = isReallyPlaying(this._audio)
             if (!this._audio || (latest.lastTrackActive === false && !stillPlaying)) return
             this.setData({ visible: true })
           }, 32)
@@ -414,8 +425,25 @@ Component({
       this.setData({ playing, title, category, miniExpanded })
     },
 
+    /**
+     * 跨页记忆：用户点开播放条后，切到别的 tab 仍保持展开。
+     * 只存在 globalData（本次启动有效），不落磁盘——下次冷启动默认还是音符，
+     * 避免每次进小程序都被一条播放条挡住页面底部。
+     */
+    expandedPreferred() {
+      const app = getApp()
+      return !!(app && app.globalData && app.globalData.playerBarExpanded)
+    },
+
+    rememberExpanded(value) {
+      const app = getApp()
+      if (app && app.globalData) app.globalData.playerBarExpanded = !!value
+    },
+
     expandMini() {
+      this.clearPeek()
       this.clearCollapseTimer()
+      this.rememberExpanded(true)
       this.setData({ miniExpanded: true, collapsed: false, collapsing: false })
     },
 
@@ -426,20 +454,56 @@ Component({
       }
     },
 
-    /** 点击播放条外部：向右收缩回音符，不停止播放 */
+    /** 点击播放条外部：向右收缩回音符，不停止播放（这次收起算用户手动折叠） */
     collapseMini() {
+      this.runCollapse(true)
+    },
+
+    /**
+     * 续播后短暂保留播放条：用户刚点完播放，控件立刻消失会以为没点上。
+     * 到点只收成音符、不记为“手动折叠”，所以之后暂停仍会自动展开播放条。
+     */
+    armResumePeek() {
+      this.clearPeek()
+      // 用户已经把播放条“钉”在展开态：续播后不要再自动收回
+      if (this.expandedPreferred()) return
+      this._peekTimer = setTimeout(() => {
+        this._peekTimer = null
+        if (!this._alive || !this.data.playing) return
+        // 缓冲中先不收（此时用户最需要看到“缓冲中”和暂停键），起播后再看一轮；
+        // 加载守卫 12 秒必结算，不会无限续期
+        if (this.data.loading) {
+          this.armResumePeek()
+          return
+        }
+        this.runCollapse(false)
+      }, RESUME_PEEK_MS)
+    },
+
+    clearPeek() {
+      if (this._peekTimer) {
+        clearTimeout(this._peekTimer)
+        this._peekTimer = null
+      }
+    },
+
+    runCollapse(sticky) {
+      this.clearPeek()
+      // 用户主动收起才改“记忆展开”；续播亮相的自动收起不算用户意图
+      if (sticky !== false) this.rememberExpanded(false)
       if (this.data.collapsed || this.data.collapsing) return
       this.clearCollapseTimer()
       this.setData({ collapsing: true })
       this._collapseTimer = setTimeout(() => {
         this._collapseTimer = null
         if (!this._alive) return
-        this.setData({ collapsing: false, miniExpanded: false, collapsed: true })
+        this.setData({ collapsing: false, miniExpanded: false, collapsed: sticky !== false })
       }, 210)
     },
 
     /** 点击播放条：切到入睡页并打开环境声音抽屉 */
     openAudio() {
+      this.clearPeek()
       const app = getApp()
       if (app && app.globalData) app.globalData.openAudioSheet = true
       wx.switchTab({
@@ -464,6 +528,7 @@ Component({
     },
 
     collapse() {
+      this.clearPeek()
       this.disarmLoadingGuard()
       // 即使还没真正展示，也要取消待执行的入场/折叠，避免“已停止后又弹出来”
       if (this._enterTimer) {
@@ -478,6 +543,7 @@ Component({
 
     handleStop() {
       if (!this._alive) return
+      this.clearPeek()
       this.disarmLoadingGuard()
       // 系统 stop（微信浮窗 X / 系统回收）只取消自动续播意图，不结束会话
       audioSession.onStop()
@@ -520,7 +586,7 @@ Component({
       if (this.data.loading) this.setData({ loading: false })
       // 仍在出声：网络/解码抖动交给底层重连，不能清会话。
       // 否则会出现“音乐还在播，首页/统计页迷你条已经消失”的状态错位。
-      if (this._audio && !this._audio.paused) {
+      if (isReallyPlaying(this._audio)) {
         this.sync(true)
         return
       }
@@ -568,7 +634,7 @@ Component({
           return
         }
         const audio = this._audio
-        if (audio && audio.src && !audio.paused) {
+        if (isReallyPlaying(audio)) {
           this.sync(true)
           return
         }
@@ -588,6 +654,8 @@ Component({
     toggle() {
       // 用户改按播放/暂停：取消未完成的“停止上膛”
       this.clearStopArm()
+      // 用户接管了播放条：取消待执行的“续播亮相”收起
+      this.clearPeek()
       const audio = this._audio
       if (!audio) return
       const now = Date.now()
@@ -612,12 +680,12 @@ Component({
         next = true
         this.sync(true)
       }
-      // 先反馈再调底层：播放中收回音符，暂停时展开播放条
+      // 先反馈再调底层：续播时先保住播放条（3 秒后再收成音符），暂停时保持展开
       this.clearCollapseTimer()
       this.setData({
         playing: next,
         loading: next,
-        miniExpanded: !next,
+        miniExpanded: true,
         collapsed: false,
         collapsing: false
       })
@@ -632,11 +700,14 @@ Component({
           this.applyTimerPreference(audioTimer.total())
           this.armLoadingGuard()
           audio.play()
+          // 续播成功后再起表：失败/立刻暂停都不该触发“3 秒后收起”
+          this.armResumePeek()
         } else {
           audio.pause()
           audioTimer.pause()
         }
       } catch (e) {
+        this.clearPeek()
         this.disarmLoadingGuard()
         this.setData({ playing: !next, loading: false })
         storage.patchMeta({ lastTrackPlaying: !next })
@@ -647,10 +718,80 @@ Component({
     },
 
     /**
+     * 手动下一首：收藏连播时按收藏队列，其余按配置列表循环。
+     * 切歌后立刻续播并同步 meta —— 入睡页抽屉、三个页面的迷你条必须看到同一首，
+     * 所以这里不维护第二份“当前曲目”，只认 meta + 播放器。
+     */
+    next() {
+      this.clearStopArm()
+      this.clearPeek()
+      if (!this.canPlay()) {
+        this.rejectLocked()
+        return
+      }
+      const audio = this._audio
+      if (!audio) return
+      const cfg = getConfig()
+      const tracks = (cfg.audio || []).filter((track) => track && track.id && track.url)
+      const meta = storage.getMeta()
+      const track = nextTrackManual(tracks, meta.lastTrackId, storage.getFavorites(), meta.audioQueueMode)
+      if (!track) {
+        if (this._pageVisible) wx.showToast({ title: '只有一个音源', icon: 'none' })
+        return
+      }
+      // 用户主动点播即视为重试：先解黑名单再取缓存，避免上一轮失败后一直走远程
+      cache.clearBad(track.url)
+      const cached = cache.peek(track.url, (cfg.cache && cfg.cache.ttlDays) || 7, track.url)
+      playerState.clearFallback()
+      // 主动切歌允许中断后自动恢复；倒计时按当前档位继续跑
+      audioSession.markUserPlay()
+      audio.title = '睡点 · ' + track.title
+      audio.epname = '环境音'
+      audio.singer = '睡点'
+      this.setData({
+        playing: true,
+        loading: true,
+        title: track.title,
+        category: track.category || '',
+        miniExpanded: true,
+        collapsed: false,
+        collapsing: false
+      })
+      storage.patchMeta({
+        lastTrackId: track.id,
+        lastTrackTitle: track.title,
+        lastTrackCategory: track.category || '',
+        lastTrackActive: true,
+        lastTrackPlaying: true
+      })
+      this.setAudioSrc(cached || track.url)
+      this.armLoadingGuard()
+      try {
+        audio.play()
+        // 切歌后同样保住播放条 3 秒，让用户看到曲名已经换了
+        this.armResumePeek()
+      } catch (e) {
+        this.clearPeek()
+        this.disarmLoadingGuard()
+        this.setData({ playing: false, loading: false })
+        storage.patchMeta({ lastTrackPlaying: false })
+        if (this._pageVisible) wx.showToast({ title: '切换失败，请重试', icon: 'none' })
+        return
+      }
+      this.applyTimerPreference(audioTimer.total())
+      events.track('audio_play', track.id)
+      this.syncTimer()
+      // play 事件不保证到达（部分基础库/自动化环境）：切歌后主动把入口拉起来，
+      // 否则「停止→再切歌」会留在隐藏态，用户以为没反应。
+      if (!this.data.visible) this.setData({ visible: true })
+    },
+
+    /**
      * 停止二次确认：首点只上膛 3 秒（图标转暖红 + toast 提示），再点才真正停止。
      * 迷你条上的停止方块与播放键相邻，睡前误触一次就整夜没声音，成本太高。
      */
     requestStop() {
+      this.clearPeek()
       if (this._stopArmTimer) {
         this.close()
         return

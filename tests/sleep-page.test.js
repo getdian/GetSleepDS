@@ -46,6 +46,9 @@ require('../miniprogram/pages/sleep/sleep')
 const storage = require('../miniprogram/utils/storage')
 const T = require('../miniprogram/utils/time')
 const F = require('../miniprogram/utils/format')
+const P = require('../miniprogram/utils/plan')
+const S = require('../miniprogram/utils/sessions')
+const Q = require('../miniprogram/utils/sleep-quotes')
 
 function resetStore() {
   Object.keys(store).forEach((key) => delete store[key])
@@ -240,7 +243,7 @@ test('完成态时间线用总睡眠口径：首段入睡 → 末段起床', () 
   assert.equal(view.firstBed, '23:00')
   assert.equal(view.lastWake, '13:30')
   assert.equal(view.sessionCount, 2)
-  assert.equal(view.timelineFirstK, '当天首段入睡')
+  assert.equal(view.timelineFirstK, '当天首段上床')
   assert.equal(view.timelineLastK, '当天末段起床')
   // 大数字仍是当天总睡眠（含午休），与时间线同口径
   assert.equal(view.duration, F.fmtDuration(510))
@@ -264,7 +267,7 @@ test('单段记录时间线保持「入睡 / 起床」，不引入新概念', ()
   assert.equal(view.firstBed, '23:00')
   assert.equal(view.lastWake, '07:00')
   assert.equal(view.sessionCount, 1)
-  assert.equal(view.timelineFirstK, '入睡')
+  assert.equal(view.timelineFirstK, '上床')
   assert.equal(view.timelineLastK, '起床')
   // 单段：整条填满，不显示段数/间断摘要
   assert.equal(view.timeline.length, 1)
@@ -319,6 +322,7 @@ test('文案中性：睡梦中/空闲态都不出现「夜色/明早/今晚/今�
   assert.equal(page.data.state, 'sleeping')
   assert.equal(page.data.heroTitle, '这一觉开始了')
   assert.equal(page.data.heroSub, '醒来后记得回来记录起床。')
+  assert.equal(page.data.orbCaption, '点击圆环、结束入睡')
   assert.match(page.data.orbMeta, /^已睡 /)
   const sleepingText =
     page.data.heroTitle + page.data.heroSub + page.data.footerText + page.data.orbMeta
@@ -331,7 +335,14 @@ test('文案中性：睡梦中/空闲态都不出现「夜色/明早/今晚/今�
   assert.equal(page.data.orbMeta, '等待入睡')
   assert.equal(page.data.heroSub, '记录入睡这一刻，醒来后再记起床。')
   assert.equal(page.data.footerText, '愿这一觉安稳')
-  const idleText = page.data.heroTitle + page.data.heroSub + page.data.footerText + page.data.orbMeta
+  assert.equal(page.data.orbCaption, '点击圆环，记录入睡', '空闲态与睡梦中的动作词统一为「点击」')
+  assert.equal(page.data.footerSource, '', '空闲页脚不是语录，不该带出处')
+  const idleText =
+    page.data.heroTitle +
+    page.data.heroSub +
+    page.data.footerText +
+    page.data.orbMeta +
+    page.data.orbCaption
   assert.ok(!/夜色|明早|今晚|今夜/.test(idleText), '空闲文案不能预设夜间：' + idleText)
 })
 
@@ -353,11 +364,18 @@ test('文案中性：完成态不写「今晚」，页脚深夜不再说「晚�
     // 标题只按“此刻”分早安/其他，不假设这一觉发生在夜里
     assert.ok(!/今晚/.test(page.data.heroTitle))
     assert.equal(page.data.heroSub, '入睡与起床时间都已保存。')
-    assert.ok(!/晚安/.test(page.data.footerText))
+    // 完成态页脚是「每日一句」：当天固定（按 dateKey 取句），带出处，且不写夜间词
+    const quote = Q.quoteOf('2026-10-22')
+    assert.deepEqual(
+      { text: page.data.footerText, source: page.data.footerSource },
+      quote
+    )
+    assert.ok(!/晚安|今晚|今夜|夜色/.test(page.data.footerText + page.data.footerSource))
     // 分享文案：白天补觉分享也成立
     const share = page.onShareAppMessage()
     assert.ok(!/昨晚|早睡/.test(share.title), share.title)
-    assert.match(share.title, /入睡/)
+    // firstBed 是上床时刻（真实入睡另存 sleepAt），分享文案不能把上床说成入睡
+    assert.match(share.title, /上床/)
     assert.ok(saved)
   } finally {
     Date.now = originalNow
@@ -843,4 +861,219 @@ test('提醒：预计起床时间已过时不申请订阅授权', () => {
   } finally {
     reminderUtil.requestOptIn = original
   }
+})
+
+/* ---------------- 入睡耗时：打卡快照 → 结束面板默认入睡时刻 ---------------- */
+
+test('入睡耗时：快照优先于会话，缺省回 15', () => {
+  const originalGetApp = global.getApp
+  try {
+    global.getApp = () => ({ globalData: { fallMinutes: 30 } })
+    const page = makePage()
+    assert.equal(page.fallMinutesOf({ fallMinutes: 10 }), 10, '打卡快照优先于会话档位')
+    assert.equal(page.fallMinutesOf({ fallMinutes: 0 }), 30, '没有快照时用本次会话所选')
+    assert.equal(page.fallMinutesOf({ fallMinutes: 99 }), 30, '越界快照不采用')
+    global.getApp = () => ({ globalData: { fallMinutes: 0 } })
+    assert.equal(page.fallMinutesOf(null), 15, '都没有时默认 15')
+  } finally {
+    global.getApp = originalGetApp
+  }
+})
+
+test('入睡耗时：打卡把会话档位快照进 pending，预计起床同步留白', () => {
+  const originalNow = Date.now
+  const originalGetApp = global.getApp
+  Date.now = () => ts(2026, 10, 27, 23, 45)
+  global.getApp = () => ({ globalData: { fallMinutes: 30 } })
+  try {
+    resetStore()
+    const page = makePage()
+    page.selectComponent = () => null
+    assert.equal(page.markSleep(), true)
+    const pending = storage.getPending()
+    // pending 白名单必须放行 fallMinutes，否则存进去就被 normalize 丢掉
+    assert.equal(pending.fallMinutes, 30)
+    assert.equal(pending.bedAt, ts(2026, 10, 27, 23, 45))
+    const wakeMinutes = T.parseClock(storage.getPrefs().wakeTime || '07:30')
+    assert.equal(
+      pending.expectedWakeAt,
+      P.nextWakeAt(pending.bedAt, wakeMinutes, 30),
+      '预计起床要按 30 分钟留白，不能写死 15'
+    )
+    page.clearLightsTimer()
+  } finally {
+    Date.now = originalNow
+    global.getApp = originalGetApp
+  }
+})
+
+test('入睡耗时：结束面板默认入睡时刻 = 上床 + 档位（跨午夜也对）', () => {
+  const originalNow = Date.now
+  Date.now = () => ts(2026, 10, 28, 7, 0)
+  try {
+    resetStore()
+    storage.setPending({
+      id: 'shift-1',
+      bedAt: ts(2026, 10, 27, 23, 45),
+      expectedWakeAt: 0,
+      reminderOptIn: false,
+      fallMinutes: 15
+    })
+    const page = makePage()
+    page.selectComponent = () => null
+    page.refreshAll()
+    page.openEndSheet()
+    assert.equal(page.data.endBedTime, '23:45', '上床格必须是打卡时刻本身')
+    assert.equal(page.data.endSleepTime, '00:00', '入睡格默认后移 15 分钟')
+    assert.equal(page.data.endWakeTime, '07:00')
+    assert.match(page.data.endFallNote, /15 分钟/)
+    assert.equal(page._endStartDay, T.startOfDay(ts(2026, 10, 27, 23, 45)))
+    assert.equal((page._endWakeAt - page._endBedAt) / 3600000, 7.25, '总时长口径不变：仍从上床算')
+    assert.equal(page._endSleepAt, ts(2026, 10, 28, 0, 0), '入睡跨午夜要落到次日')
+    assert.equal(page.data.endError, '')
+  } finally {
+    Date.now = originalNow
+  }
+})
+
+test('入睡耗时：旧 pending 没有快照时按默认 15 后移', () => {
+  const originalNow = Date.now
+  Date.now = () => ts(2026, 10, 28, 7, 0)
+  try {
+    resetStore()
+    // 模拟升级前写入的 pending：白名单外的字段会被丢掉，等价于没有快照
+    storage.setPending({
+      id: 'shift-legacy',
+      bedAt: ts(2026, 10, 27, 23, 50),
+      expectedWakeAt: 0,
+      reminderOptIn: false
+    })
+    assert.equal(storage.getPending().fallMinutes, 0)
+    const page = makePage()
+    page.selectComponent = () => null
+    page.refreshAll()
+    page.openEndSheet()
+    assert.equal(page.data.endBedTime, '23:50')
+    assert.equal(page.data.endSleepTime, '00:05')
+  } finally {
+    Date.now = originalNow
+  }
+})
+
+test('入睡耗时：段太短时不后移，也不给说明', () => {
+  const originalNow = Date.now
+  Date.now = () => ts(2026, 10, 27, 23, 50)
+  try {
+    resetStore()
+    storage.setPending({
+      id: 'shift-short',
+      bedAt: ts(2026, 10, 27, 23, 45),
+      expectedWakeAt: 0,
+      reminderOptIn: false,
+      fallMinutes: 15
+    })
+    const page = makePage()
+    page.selectComponent = () => null
+    page.refreshAll()
+    page.openEndSheet()
+    assert.equal(page.data.endBedTime, '23:45', '上床格始终是打卡时刻')
+    assert.equal(page.data.endSleepTime, '', '放不下 15 分钟时不预填入睡时刻')
+    assert.equal(page.data.endFallNote, '')
+  } finally {
+    Date.now = originalNow
+  }
+})
+
+test('入睡展示：结束保存把 sleepAt 写进这一段，总时长仍按上床算', () => {
+  const originalNow = Date.now
+  Date.now = () => ts(2026, 10, 28, 7, 0)
+  try {
+    resetStore()
+    storage.setPending({
+      id: 'shift-save',
+      bedAt: ts(2026, 10, 27, 23, 45),
+      expectedWakeAt: 0,
+      reminderOptIn: false,
+      fallMinutes: 15
+    })
+    const page = makePage()
+    page.selectComponent = () => null
+    page.refreshAll()
+    page.openEndSheet()
+    page.onEndConfirm()
+    page.clearLightsTimer()
+    const day = T.calendarDayKey(ts(2026, 10, 28, 7, 0))
+    const record = storage.getRecords()[day]
+    assert.ok(record, '记录应落在醒来日')
+    const session = S.sessionsOf(record)[0]
+    assert.equal(session.startAt, ts(2026, 10, 27, 23, 45), 'startAt 是上床')
+    assert.equal(session.sleepAt, ts(2026, 10, 28, 0, 0), 'sleepAt 是入睡')
+    assert.equal(session.durationMin, 7 * 60 + 15, '统计口径不变：仍按上床到起床')
+  } finally {
+    Date.now = originalNow
+  }
+})
+
+test('入睡展示：有 sleepAt 才出「这一段睡着」，时间轴左标签是「上床」', () => {
+  resetStore()
+  const page = makePage()
+  const withSleep = page.buildRecordView({
+    day: '2026-10-28',
+    sessions: [
+      {
+        id: 'a',
+        startAt: ts(2026, 10, 27, 23, 45),
+        endAt: ts(2026, 10, 28, 7, 0),
+        sleepAt: ts(2026, 10, 28, 0, 0)
+      }
+    ]
+  })
+  assert.equal(withSleep.timelineFirstK, '上床')
+  assert.equal(withSleep.timelineLastK, '起床')
+  // 大数字是在床口径；睡着与效率是更细的一层，三者在同一行里互相解释
+  assert.equal(withSleep.durationK, '在床时长')
+  assert.equal(
+    withSleep.sleepNote,
+    '入睡 00:00 · 睡着 7 小时 00 分 · 效率 97%',
+    withSleep.sleepNote
+  )
+
+  const plain = page.buildRecordView({
+    day: '2026-10-28',
+    sessions: [{ id: 'b', startAt: ts(2026, 10, 27, 23, 45), endAt: ts(2026, 10, 28, 7, 0) }]
+  })
+  assert.equal(plain.sleepNote, '', '没有标记入睡时刻的老记录不显示这一行')
+  assert.equal(plain.durationK, '在床时长')
+
+  // 多段：标签要带上「含午休/间断」，入睡明细标注是主段
+  const multi = page.buildRecordView({
+    day: '2026-10-28',
+    sessions: [
+      {
+        id: 'c',
+        startAt: ts(2026, 10, 27, 23, 45),
+        endAt: ts(2026, 10, 28, 7, 0),
+        sleepAt: ts(2026, 10, 28, 0, 0)
+      },
+      { id: 'd', startAt: ts(2026, 10, 28, 13, 0), endAt: ts(2026, 10, 28, 13, 40) }
+    ]
+  })
+  assert.equal(multi.durationK, '当天在床（含午休/间断）')
+  assert.match(multi.sleepNote, /^主段入睡 00:00 · 睡着 7 小时 00 分 · 效率 97%$/)
+
+  // 午休补记在前、夜间打卡在后（同一天归档）：不能因为 sessions[0] 是午休就不显示，
+  // 也不能拿午休的区间当分母——必须取「有 sleepAt 的最长段」
+  const napFirst = page.buildRecordView({
+    day: '2026-10-28',
+    sessions: [
+      { id: 'nap', startAt: ts(2026, 10, 27, 13, 0), endAt: ts(2026, 10, 27, 13, 40) },
+      {
+        id: 'night',
+        startAt: ts(2026, 10, 27, 23, 0),
+        endAt: ts(2026, 10, 28, 7, 0),
+        sleepAt: ts(2026, 10, 27, 23, 15)
+      }
+    ]
+  })
+  assert.match(napFirst.sleepNote, /^主段入睡 23:15 · 睡着 7 小时 45 分 · 效率 97%$/)
 })

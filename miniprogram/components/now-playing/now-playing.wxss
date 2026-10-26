@@ -46,7 +46,8 @@
   gap: 8rpx;
   /* 展开条比通栏窄，右缘直接吸附屏幕边；
      外壳改为按内容撑宽后，这里必须给确定宽度（百分比在 shrink-to-fit 父级里不可靠） */
-  width: 480rpx;
+  /* 三个控制键（播放/下一首/停止）后加宽到 560rpx，信息区仍保留约 226rpx */
+  width: 560rpx;
   max-width: calc(100vw - 24rpx);
   min-height: 88rpx;
   margin-left: auto;
@@ -143,7 +144,7 @@
 
 /* 暂停后折叠：音符降亮度，避免误以为还在播 */
 .np-float.is-paused .np-float-note {
-  opacity: 0.58;
+  opacity: 0.68;
   text-shadow: none;
 }
 
@@ -195,6 +196,28 @@
 
 .np-status.is-on {
   color: var(--color-primary);
+}
+
+/* 缓冲中：用转圈替掉均衡器，避免“看起来已经在播” */
+.np-status.is-loading {
+  color: var(--color-primary);
+}
+
+.np-spinner {
+  flex: none;
+  width: 20rpx;
+  height: 20rpx;
+  border-radius: 50%;
+  border: 3rpx solid currentColor;
+  border-top-color: transparent;
+  opacity: 0.85;
+  animation: npSpin 0.8s linear infinite;
+}
+
+@keyframes npSpin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .np-status-text {
@@ -274,7 +297,8 @@
   flex: none;
   display: flex;
   align-items: center;
-  gap: 6rpx;
+  /* 停止是破坏性操作，和播放键拉开一档距离，降低睡前误触 */
+  gap: 16rpx;
 }
 
 .np-icon {
@@ -303,6 +327,12 @@
   opacity: 0.55;
 }
 
+/* 暂停时把播放键垫一层弱底：一眼看出“点这里继续”，停止键保持无底不抢注意力 */
+.np-toggle.is-paused {
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+}
+
 /* 暂停图标：两根细竖条（对齐参考图，不用胶囊圆角） */
 .np-ico-pause {
   display: flex;
@@ -328,12 +358,48 @@
   background: currentColor;
 }
 
+/* 未上膛的停止键压暗一档：播放/暂停是主操作，停止只在真的要点时才显眼 */
+.np-stop {
+  opacity: 0.72;
+}
+
+.np-stop.is-armed {
+  opacity: 1;
+}
+
 /* 停止二次确认：首点后 3 秒内暖红 + 放大，再点才真正停止（防睡前误触） */
 .np-stop.is-armed .np-ico-stop {
   background: #F87171;
   transform: scale(1.24);
   box-shadow: 0 0 0 8rpx rgba(248, 113, 113, 0.16);
   transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* 下一首：双三角 + 竖条，与播放/暂停同一套纯图形语言 */
+.np-ico-next {
+  display: flex;
+  align-items: center;
+  height: 26rpx;
+}
+
+.np-next-tri {
+  width: 0;
+  height: 0;
+  border-top: 10rpx solid transparent;
+  border-bottom: 10rpx solid transparent;
+  border-left: 13rpx solid currentColor;
+}
+
+.np-next-tri + .np-next-tri {
+  margin-left: -4rpx;
+}
+
+.np-next-bar {
+  width: 4rpx;
+  height: 20rpx;
+  margin-left: 3rpx;
+  border-radius: 2rpx;
+  background: currentColor;
 }
 
 .np-ico-play {

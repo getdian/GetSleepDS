@@ -70,7 +70,7 @@
       <text class="done-kicker">{{greeting}} · SLEEP LOG</text>
       <block wx:if="{{recordView}}">
         <text class="done-duration">{{recordView.duration}}</text>
-        <text class="done-duration-k">当天总睡眠（含午休/间断）</text>
+        <text class="done-duration-k">{{recordView.durationK}}</text>
         <view class="done-timeline">
           <view class="done-time">
             <text class="done-time-k">{{recordView.timelineFirstK}}</text>
@@ -93,6 +93,7 @@
             <text class="done-time-v">{{recordView.lastWake}}</text>
           </view>
         </view>
+        <text wx:if="{{recordView.sleepNote}}" class="done-sleep-note">{{recordView.sleepNote}}</text>
         <text wx:if="{{recordView.segmentsText}}" class="done-segments-text">{{recordView.segmentsText}}</text>
         <view wx:if="{{recordView.sessionCount > 0}}" class="done-sessions">
           <view class="done-sessions-head">
@@ -135,7 +136,8 @@
     <share-btn text="分享这一段睡眠" variant="icon" />
   </view>
 
-  <text class="sleep-quote font-poetic fade-up">{{footerText}}</text>
+  <text class="sleep-quote font-poetic fade-up {{footerSource ? 'is-quote' : ''}}">{{footerText}}</text>
+  <text wx:if="{{footerSource}}" class="sleep-quote-source fade-up">{{footerSource}}</text>
 </view>
 
 <audio-dock id="dock" bind:sheetclose="onDockSheetClose" />
@@ -174,11 +176,18 @@
     <view class="end-times">
       <picker mode="time" value="{{endBedTime}}" data-field="endBedTime" bindchange="onEndTimeChange">
         <view class="end-time-item" hover-class="end-time-item--tap" hover-stay-time="100">
-          <text class="end-time-k">入睡</text>
+          <text class="end-time-k">{{endMode === 'pending' ? '上床' : '入睡'}}</text>
           <text class="end-time-v">{{endBedTime}}</text>
         </view>
       </picker>
       <text class="end-arrow">→</text>
+      <picker wx:if="{{endMode === 'pending'}}" mode="time" value="{{endSleepTime || endBedTime}}" data-field="endSleepTime" bindchange="onEndTimeChange">
+        <view class="end-time-item" hover-class="end-time-item--tap" hover-stay-time="100">
+          <text class="end-time-k">入睡</text>
+          <text class="end-time-v">{{endSleepTime || '—'}}</text>
+        </view>
+      </picker>
+      <text wx:if="{{endMode === 'pending'}}" class="end-arrow">→</text>
       <picker mode="time" value="{{endWakeTime}}" data-field="endWakeTime" bindchange="onEndTimeChange">
         <view class="end-time-item" hover-class="end-time-item--tap" hover-stay-time="100">
           <text class="end-time-k">起床</text>
@@ -186,6 +195,7 @@
         </view>
       </picker>
     </view>
+    <text wx:if="{{endFallNote}}" class="end-fall-note">{{endFallNote}}</text>
     <view class="end-summary">
       <text wx:if="{{endStartDateText}}">入睡 {{endStartDateText}}</text>
       <text wx:if="{{endStartDateText}}">·</text>

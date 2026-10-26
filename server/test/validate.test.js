@@ -36,3 +36,37 @@ test('删除墓碑拒绝不存在的日历日，避免 PG 503', () => {
     ['2026-10-18', '2026-02-28']
   )
 })
+
+test('sleepAt：白名单放行合法值，越界只丢字段不丢记录', () => {
+  const { validateRecords } = require('../src/lib/validate')
+  const now = Date.now()
+  const endAt = now - 60 * 60000
+  const startAt = endAt - 7 * 3600000
+  const sleepAt = startAt + 15 * 60000
+  const base = {
+    dayRule: 'wake-v1',
+    schemaVersion: 2,
+    bedAt: startAt,
+    wakeAt: endAt,
+    updatedAt: endAt,
+    sessions: [{ id: 's1', startAt, endAt, sleepAt, source: 'checkin' }]
+  }
+
+  const ok = validateRecords([base], { now })
+  assert.equal(ok.dropped, 0)
+  assert.equal(ok.records[0].sessions[0].sleepAt, sleepAt)
+
+  // 越界（等于起床时刻）：只丢 sleepAt，段本身必须还在
+  const bad = {
+    dayRule: 'wake-v1',
+    schemaVersion: 2,
+    bedAt: startAt,
+    wakeAt: endAt,
+    updatedAt: endAt,
+    sessions: [{ id: 's1', startAt, endAt, sleepAt: endAt, source: 'checkin' }]
+  }
+  const res = validateRecords([bad], { now })
+  assert.equal(res.dropped, 0)
+  assert.equal('sleepAt' in res.records[0].sessions[0], false)
+  assert.ok(res.records[0].sessions[0].durationMin > 0)
+})

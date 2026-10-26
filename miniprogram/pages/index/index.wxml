@@ -17,7 +17,14 @@
     <!-- Hero 与卡顶胶囊同侧：标题问「你要选的那个时间」（输入），副标说明会算出什么（输出）。
          此前标题问结果、胶囊问输入，用户会把该选的时间读反。
          两个方向都不写「今晚/明早」：白天小睡时结果可能落在当天，陈述必须始终成立。 -->
-    <text class="hero-title">{{mode === 'wake' ? '想几点起？' : '想几点睡？'}}</text>
+    <!-- 翻转后回显「你选的时间」：背面已经给出结果，页头再问一次会显得没跟上；
+         只陈述输入，与结果卡的「推荐…时间」形成 输入→输出 的阅读顺序。 -->
+    <text wx:if="{{!flipped}}" class="hero-title">{{mode === 'wake' ? '想几点起？' : '想几点睡？'}}</text>
+    <view wx:else class="hero-echo">
+      <text class="hero-echo-day">{{view.echoPrefix}}</text>
+      <text class="hero-echo-time">{{mode === 'wake' ? wakeTime : sleepTime}}</text>
+      <text class="hero-echo-unit">{{mode === 'wake' ? '起床' : '入睡'}}</text>
+    </view>
     <text class="hero-sub">{{mode === 'wake' ? '选一个起床时间，找到适合你的睡点。' : '选一个入睡时间，找到适合你的起床时间。'}}</text>
   </view>
 

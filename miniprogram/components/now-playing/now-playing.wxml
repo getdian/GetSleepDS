@@ -25,8 +25,9 @@
             <text class="np-cat">{{category}}</text>
           </block>
         </view>
-        <view class="np-status {{playing ? 'is-on' : 'is-off'}}">
-          <view class="np-seq" aria-hidden="true">
+        <view class="np-status {{loading ? 'is-loading' : (playing ? 'is-on' : 'is-off')}}">
+          <view wx:if="{{loading}}" class="np-spinner" aria-hidden="true"></view>
+          <view wx:else class="np-seq" aria-hidden="true">
             <view class="np-sbar np-s1"></view>
             <view class="np-sbar np-s2"></view>
             <view class="np-sbar np-s3"></view>
@@ -40,7 +41,7 @@
 
     <view class="np-ctrls">
       <view
-        class="np-icon np-toggle"
+        class="np-icon np-toggle {{playing ? '' : 'is-paused'}}"
         catchtap="toggle"
         hover-class="np-icon--tap"
         hover-stay-time="100"
@@ -56,6 +57,21 @@
         <block wx:else>
           <view class="np-ico-play"></view>
         </block>
+      </view>
+
+      <view
+        class="np-icon np-next"
+        catchtap="next"
+        hover-class="np-icon--tap"
+        hover-stay-time="100"
+        aria-role="button"
+        aria-label="下一首"
+      >
+        <view class="np-ico-next">
+          <view class="np-next-tri"></view>
+          <view class="np-next-tri"></view>
+          <view class="np-next-bar"></view>
+        </view>
       </view>
 
       <view

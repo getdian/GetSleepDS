@@ -397,7 +397,7 @@
   margin: 0 18rpx;
 }
 
-/* 分段轨道：底色是“首段入睡 → 末段起床”的总跨度，亮条是真正睡着的段，
+/* 分段轨道：底色是"首段入睡 → 末段起床"的总跨度，亮条是真正睡着的段，
    中间留空即清醒间断。单段时是一整条，视觉与旧版一致。 */
 .done-rail-track {
   position: relative;
@@ -420,7 +420,7 @@
   box-shadow: 0 0 10rpx rgba(167, 164, 255, 0.35);
 }
 
-/* 段数 / 间断摘要：解释“首末跨度”与“总睡眠”为什么对不上 */
+/* 段数 / 间断摘要：解释"首末跨度"与"总睡眠"为什么对不上 */
 .done-segments-text {
   display: block;
   margin-top: 12rpx;
@@ -428,6 +428,17 @@
   font-size: 20rpx;
   letter-spacing: 1rpx;
   color: rgba(255, 255, 255, 0.52);
+}
+
+/* 真实入睡时刻：与「总睡眠」区分，用主色提示这是更细的一层信息 */
+.done-sleep-note {
+  display: block;
+  margin-top: 10rpx;
+  text-align: center;
+  font-size: 20rpx;
+  letter-spacing: 1rpx;
+  color: var(--color-primary-soft);
+  opacity: 0.9;
 }
 
 .done-rail-dot {
@@ -558,6 +569,23 @@
   opacity: 0.9;
 }
 
+/* 每日一句比固定短句长：收窄字距、放宽行高，允许自然折行不撑破舞台 */
+.sleep-quote.is-quote {
+  padding: 0 40rpx;
+  letter-spacing: 2rpx;
+  line-height: 1.9;
+}
+
+.sleep-quote-source {
+  display: block;
+  margin-top: 10rpx;
+  text-align: center;
+  font-size: 22rpx;
+  letter-spacing: 1rpx;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
 /* 熄灯（睡前模式）：毛玻璃压暗整页，只留熄灭态的入睡时间 */
 .dim-mask {
   position: fixed;
@@ -572,7 +600,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  /* 0.84 深底：不支持 backdrop-filter 的机型自动退回“接近关灯”，
+  /* 0.84 深底：不支持 backdrop-filter 的机型自动退回"接近关灯"，
      而不是半透明花屏；支持时 blur 让背景只剩一层毛玻璃轮廓 */
   background: rgba(4, 7, 15, 0.84);
   -webkit-backdrop-filter: blur(20rpx) saturate(120%);
@@ -799,7 +827,7 @@
 
 .done-sessions-hint {
   flex: none;
-  /* 17rpx + 0.3 白在深底上约 2.3:1，属于“可修正”入口提示，必须可读 */
+  /* 17rpx + 0.3 白在深底上约 2.3:1，属于"可修正"入口提示，必须可读 */
   font-size: 20rpx;
   color: rgba(255, 255, 255, 0.5);
 }

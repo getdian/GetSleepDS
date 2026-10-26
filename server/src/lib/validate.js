@@ -29,7 +29,11 @@ function normalizeSession(raw) {
   if (endAt <= startAt || endAt - startAt > MAX_SLEEP_MS) return null
   const id = String(raw.id || 's-' + startAt + '-' + endAt).slice(0, 64)
   if (!/^[a-zA-Z0-9_-]+$/.test(id)) return null
-  return {
+  // 真实入睡时刻（可选）：startAt 是上床、sleepAt 是睡着；越界只丢字段不丢整段。
+  // 白名单重建：不在这里放行，客户端上传的 sleepAt 会被静默剥掉（云备份后回拉即丢失）。
+  const rawSleepAt = Number(raw.sleepAt)
+  const sleepAt = Number.isFinite(rawSleepAt) && rawSleepAt > startAt && rawSleepAt < endAt ? rawSleepAt : 0
+  const out = {
     id,
     startAt,
     endAt,
@@ -37,6 +41,8 @@ function normalizeSession(raw) {
     source: String(raw.source || 'manual').slice(0, 16),
     editedAt: Number(raw.editedAt) || endAt
   }
+  if (sleepAt) out.sleepAt = sleepAt
+  return out
 }
 
 function validSessions(list, now) {

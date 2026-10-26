@@ -75,6 +75,33 @@ test('结果面改入睡耗时不清计算锚点（防止推荐静默推后一�
   }
 })
 
+test('翻转后页头回显的前缀与所选时间同源（今天/明天 + 时段）', () => {
+  const originalNow = Date.now
+  Date.now = () => NOW
+  try {
+    const page = makePage()
+    page.setData({ mode: 'wake', wakeTime: '07:30', fallAsleep: 15 })
+    page._anchorAt = NOW
+    page.calc(true)
+    assert.equal(page.data.flipped, true)
+    assert.equal(page.data.view.echoPrefix, '今天 早晨')
+
+    // 凌晨 2 点看 00:30 的起床点已经过时，必须顺延到明天，与时间轮下的上下文同口径
+    page.setData({ mode: 'wake', wakeTime: '00:30' })
+    page._anchorAt = NOW
+    page.calc(true)
+    assert.equal(page.data.view.echoPrefix, '明天 凌晨')
+
+    // 入睡模式：01:00 已超 30 分钟宽限 → 明天凌晨
+    page.setData({ mode: 'sleep', sleepTime: '01:00' })
+    page._anchorAt = NOW
+    page.calc(true)
+    assert.equal(page.data.view.echoPrefix, '明天 凌晨')
+  } finally {
+    Date.now = originalNow
+  }
+})
+
 test('切换付费背景前提示剩余时长，确认后才覆盖解锁', () => {
   storage.setBackgroundUnlock(null)
   backgrounds.unlock('bg-a', 24)

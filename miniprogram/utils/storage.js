@@ -296,11 +296,15 @@ function getPending() {
 function setPending(value) {
   const data = typeof value === 'number' ? { bedAt: value } : value
   if (!data || !Number.isFinite(Number(data.bedAt))) return false
+  const fall = Number(data.fallMinutes)
   return safeSet(KEYS.pending, {
     bedAt: Number(data.bedAt),
     expectedWakeAt: Number(data.expectedWakeAt) || 0,
     reminderOptIn: data.reminderOptIn === true,
-    id: data.id ? String(data.id) : ''
+    id: data.id ? String(data.id) : '',
+    // 打卡瞬间的入睡耗时快照（分钟，0=未知）：只用于结束面板默认入睡时刻与预计起床。
+    // 必须随 pending 落盘——用户睡前打卡、第二天早上才结束，会话级变量早已丢失。
+    fallMinutes: Number.isFinite(fall) && fall >= 0 && fall <= 60 ? Math.round(fall) : 0
   })
 }
 
