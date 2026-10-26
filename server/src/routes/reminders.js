@@ -2,8 +2,7 @@ const express = require('express')
 const { wrap } = require('../lib/http')
 const { invalidBody, rateLimited, apiError, dbUnavailable } = require('../lib/errors')
 const { pageFor } = require('../services/reminders')
-
-const DEFAULT_PAGE = 'pages/sleep/sleep?end=1'
+const { reminderConfigOf, DEFAULT_PAGE } = require('../lib/reminder-config')
 
 function createRemindersRoute(options) {
   const { config, db, codeToOpenid, limitIp, now, store, logger } = options
@@ -23,14 +22,11 @@ function createRemindersRoute(options) {
         appConfig = loaded && loaded.config
       } catch (e) {}
     }
-    const reminder =
-      (appConfig && appConfig.reminder) || (config.app && config.app.reminder) || {}
-    return {
-      enabled: reminder.enabled !== false,
+    const reminder = (appConfig && appConfig.reminder) || (config.app && config.app.reminder) || {}
+    return reminderConfigOf(reminder, {
       // env 兜底：兼容只有 WX_REMINDER_TEMPLATE_ID 的历史部署
-      templateId: reminder.templateId || (config.wx && config.wx.reminderTemplateId) || '',
-      page: reminder.page || DEFAULT_PAGE
-    }
+      fallbackTemplateId: config.wx && config.wx.reminderTemplateId
+    })
   }
 
   router.post(

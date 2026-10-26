@@ -1,5 +1,17 @@
 # 睡点 · 关键更新记录
 
+## 2026-10-26 · 部署前 code-review（1b1371d..ade0da5）：修 1 个 P0 + 5 项一致性问题
+
+- **P0：提醒模板字段快照在路由层断链**。`routes/reminders.js` 的 `currentReminder()` 只返回 `{enabled, templateId, page}`，而落库时传的是 `reminderConfig.thingKey/timeKey` → 恒为 `undefined` → 落库空串 → 发送端永远回退到**当前**配置的字段名。也就是说"运营换模板后旧任务仍按创建时字段发送"的保护**完全没生效**，旧任务仍会被微信以 47003 拒绝。此前单测直接调 `db.saveReminder`（绕过路由），所以测试全绿也没暴露。
+  - 修复：抽出 `server/src/lib/reminder-config.js`（`reminderConfigOf` 纯函数），**路由层与服务层共用同一份归一化**，从结构上消除"两处各拼一次、漏一处"的问题；新增 `server/test/reminder-config.test.js` 3 条（缺省补 `thing1/time2`、后台自定义字段原样带出、空配置与 env 兜底）。
+- **分享漏斗补齐**：此前只有计算器页 `onShareAppMessage` 上报 `share`，统计页与入睡页的分享**完全没有计入分母**，看板会系统性低估分享量 → 两页补 `events.track('share', 'stats'|'sleep')`（只记来源页，不带任何睡眠数据）。
+- **AGENTS.md 五处同改**：`miniprogram/config/fallback.js` 的 reminder 块补 `thingKey/timeKey`（此前缺这两键，与 `server/config/app.config.json` 不同构）。
+- **AGENTS.md §5.1**：`audio-dock` 缓存读失败的回退分支里那句冗余 `patchMeta({lastTrackActive:true})` 删除——播放错误路径只应改 `lastTrackPlaying`，会话复活由 `audio-session.onPlay()` 统一负责。
+- **重试字段两端统一**：`scheduleReminderRetry` 不再把"最后失败时刻"写进 `cancelled_at`（PG）/ `lastErrorAt`（memory），只写 `attempts/retry_at`——pending 行不该带取消时间，两端语义也要一致。
+- **注释漂移修正**：`audio-dock` 与 `audio-cache` 三处仍写"移动网络延迟 15s / Wi-Fi 立即"，与实际的 `autoCacheDelay`（Wi-Fi 8s / 移动 20s）矛盾，已改正。
+- **审查判定为"不修"的两项**：①统计页首次进页确实会算两次——第一次用兜底配置、配置回来后必须用线上配置重算，属刻意设计（且日历部分已被缓存兜住）；②`admin.js` 与 `config-schema.js` 的字段名校验重复且长度限制已漂移（20 字符 vs 不限），重构风险大于收益，改为记录待办。
+- **验证**：`npm test` **395 项 / 394 通过 / 0 失败 / 1 skip**；`npm run check` 通过（主包 **636.8 KB**）。
+
 ## 2026-10-26 · wxss 重复核实（不合并）· 真机复测单
 
 - **`audio-dock.wxss`「两套定义」核实为不需要合并**：脚本统计全文件 173 个选择器，重复定义仅 **29 个（约 64 行）**，其中 27 处是"不同值、后者覆盖"的演进式写法（如 `.dock-fav` 在 654/1160 两处）。合并收益约 60 行，风险却是逐屏视觉回归——**收益/风险不成立，保持现状**；此前“双套定义可减 500 行”的估计来自目测，作废。

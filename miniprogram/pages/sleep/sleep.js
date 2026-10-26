@@ -1332,6 +1332,8 @@ Page({
   },
 
   onShareAppMessage() {
+    // 分享漏斗分母：入睡页分享同样计入（只记来源，不带任何睡眠数据）
+    events.track('share', 'sleep')
     const view = this.data.recordView
     // 不写“昨晚/早睡”：白天补觉分享时也要成立。
     // 多段记录用首段入睡/末段起床，与页面时间线同口径；主段首尾会漏掉午休。

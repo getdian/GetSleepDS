@@ -1,4 +1,5 @@
 const { sendSubscribeMessage } = require('./wx')
+const { reminderConfigOf } = require('../lib/reminder-config')
 
 // 允许的最大迟到：超过这个窗口的任务只标记 expired、不调用微信接口。
 // 停机/后台关闭期间 pending 会累积，恢复后不能把几小时前的“结束入睡”补发出去。
@@ -79,14 +80,10 @@ function createReminderService(options) {
         current = null
       }
     }
-    return {
-      enabled: !current || current.enabled !== false,
-      templateId: (current && current.templateId) || fallbackTemplateId,
-      page: (current && current.page) || fallbackPage,
-      // 字段名跟随模板：公共模板库的“睡觉到点提醒”就是 time1 + thing2
-      thingKey: (current && current.thingKey) || 'thing1',
-      timeKey: (current && current.timeKey) || 'time2'
-    }
+    return reminderConfigOf(current, {
+      fallbackTemplateId,
+      fallbackPage
+    })
   }
 
   async function tick() {

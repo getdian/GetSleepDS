@@ -379,6 +379,17 @@
 - [x] 门禁：`npm test` 392/391/0 fail/1 skip；`check` 636.4 KB。
 - [ ] 待真机：横向滑动加载更早月份的流畅度与无跳位确认。
 
+### 1.31 部署前 code-review 修复（2026-10-26，范围 1b1371d..ade0da5）
+
+- [x] **P0 提醒字段快照断链**：`routes/reminders.js` 的 `currentReminder()` 少返回 `thingKey/timeKey` → 落库空串 → “换模板后旧任务按创建时字段发送”实际失效（旧任务仍会 47003）。修复：抽出 `server/src/lib/reminder-config.js`（`reminderConfigOf`），route 与 service 共用；新增 3 条单测（缺省 `thing1/time2`、后台自定义原样带出、空配置与 env 兜底）。
+- [x] 分享漏斗补齐：统计页、入睡页的 `onShareAppMessage` 补 `events.track('share', …)`（此前只有计算器页上报，看板系统性低估）。
+- [x] `fallback.js` 补 `reminder.thingKey/timeKey`（AGENTS.md 五处同改）。
+- [x] 删除 `audio-dock` 错误路径冗余 `lastTrackActive` 写入（AGENTS.md §5.1：播放错误只改 `lastTrackPlaying`）。
+- [x] `scheduleReminderRetry` 两端统一：只写 `attempts/retry_at`，不再写 `cancelled_at`/`lastErrorAt`。
+- [x] 注释漂移修正：`audio-dock` ×2 + `audio-cache` ×1（15s → Wi-Fi 8s / 移动 20s）。
+- [x] 门禁：`npm test` 395/394/0 fail/1 skip；`check` 636.8 KB。
+- [ ] 部署后验证：后台改一次提醒模板的字段名（如 `thing3/time4`）→ 用旧模板创建的提醒仍能发出（查 `sleep_reminders.thing_key` 非空）。
+
 ## 2. 待真机验收（代码就绪，模拟器不可替代）
 
 > 按风险排序。每项都曾在 changelog 标注"未真机验证"；本机 CLI 已把可截图的全部截完，剩余必须真机。

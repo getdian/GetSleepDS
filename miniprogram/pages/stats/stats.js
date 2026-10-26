@@ -1222,6 +1222,8 @@ Page({
   },
 
   onShareAppMessage() {
+    // 分享漏斗分母：统计页的分享也必须计入，否则看板系统性低估
+    events.track('share', 'stats')
     const duration = this.data.metrics.filter((item) => item.key === 'duration')[0]
     const payload = {
       title: duration

@@ -44,7 +44,11 @@ module.exports = {
   reminder: {
     enabled: true,
     templateId: '',
-    page: 'pages/sleep/sleep?end=1'
+    page: 'pages/sleep/sleep?end=1',
+    // 与 server/config/app.config.json 保持同构（AGENTS.md 五处同改）；
+    // 小程序端不消费，服务端发送时使用。
+    thingKey: 'thing1',
+    timeKey: 'time2'
   },
   // 国际站（Web）配置：小程序不消费，仅保持与 server/config/app.config.json 同构
   web: {

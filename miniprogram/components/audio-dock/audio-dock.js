@@ -695,7 +695,6 @@ Component({
             if (playerState.isFallbacking(badUrl)) return
             // 标记“正在回退”，让同时监听的 now-playing 不要把这次错误当终态。
             playerState.markFallback(badUrl)
-            storage.patchMeta({ lastTrackActive: true })
             // 与 play/replay 同口径：赋值 src 不保证自动起播，且要重新挂 loading 兜底，
             // 否则回退远程后可能停在“正在连接”直到 12s 超时。
             this.armLoadingGuard()
@@ -884,7 +883,7 @@ Component({
      * 用户主动播放后的自动缓存。
      * 小程序无法复用 BackgroundAudioManager 的流缓存，所以首次会与流式播放并行
      * （约多耗 1 倍流量），换来之后每次播放都走本地、不再重复下载；
-     * 移动网络延迟 15s，避免“点开听两秒”也下整首。
+     * 移动网络延迟 20s，避免“点开听两秒”也下整首。
      */
     scheduleAutoCache(track) {
       this.clearAutoCacheTimer()
@@ -1001,7 +1000,7 @@ Component({
       // 存储满时播放本身仍可用，但下次进入无法恢复曲目，必须让用户知道
       if (!savedMeta) wx.showToast({ title: '播放状态保存失败', icon: 'none' })
       events.track('audio_play', track.id)
-      // 播放即排队缓存：移动网络等 15s（避免试听浪费），Wi-Fi 立即
+      // 播放即排队缓存：移动网络等 20s（避免试听浪费），Wi-Fi 等 8s 让首播先稳
       this.scheduleAutoCache(track)
 
       this.applyTimerPreference(this.data.timerMinutes)

@@ -249,7 +249,6 @@ function createMemoryDb() {
       if (!item || item.status !== 'pending') return false
       item.attempts = Number(options && options.attempts) || 1
       item.retryAt = Number(options && options.retryAt) || 0
-      item.lastErrorAt = Number(options && options.at) || Date.now()
       return true
     },
 
@@ -657,12 +656,11 @@ function createPostgresDb(connectionString) {
     async scheduleReminderRetry(openid, sessionId, options) {
       const attempts = Number(options && options.attempts) || 1
       const retryAt = Number(options && options.retryAt) || 0
-      const at = Number(options && options.at) || Date.now()
       const result = await pool.query(
         `UPDATE sleep_reminders
-            SET attempts = $3, retry_at = $4, cancelled_at = to_timestamp($5::bigint / 1000.0)
+            SET attempts = $3, retry_at = $4
           WHERE openid = $1 AND session_id = $2 AND status = 'pending'`,
-        [openid, sessionId, attempts, retryAt, at]
+        [openid, sessionId, attempts, retryAt]
       )
       return result.rowCount > 0
     },
