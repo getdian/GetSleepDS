@@ -1,5 +1,14 @@
 # 睡点 · 关键更新记录
 
+## 2026-10-26 · 音源链路诊断 · 标题收缩 · 分享归因校验
+
+- **「后台多条、模拟器只显示 1 条」定位并恢复**：此前调试时给模拟器写入过一次性覆盖 `sleep:dev-api = https://sleep.qfmaster.com`，但开发者工具走系统代理对该域请求失败（`status 0`）→ 降级到 fallback（仅 1 条）。清除该覆盖、重启后回退本地 `127.0.0.1:3100`，抽屉恢复 **6 条**。**注意**：`sleep:dev-api` 是仅 develop 读取的调试开关，指向线上时会被系统代理拦截，本地联调不要设置它。
+- **三端一致性验证**（本地 server + 后台账号）：`GET /api/admin/login`（Cookie 会话）→ `GET /api/admin/config` 返回 **6 条**，与 `GET /api/config`（version 13→14）和小程序抽屉完全一致。
+- **顺手修正一条数据**：本地第 1 条音源标题被误填成了后台密码（`getsleep-local-admin-2026`），已通过后台 API 改回「雨声」并补齐副标；`/api/config` 已返回新值。
+- **结果面标题收缩（视觉 A 项）**：翻面后 Hero 标题 `72rpx → 40rpx`、副标折叠（max-height 0 + opacity 0），给结果卡让出约 90px；截图 `docs/assets/l4s-result-hero.png`（23:45 主卡 + 3 行完整可见）。回正面有 0.2–0.28s 过渡。
+- **分享归因链路校验（D 项）**：`utils/launch-source.js` 把冷启动 `query.from` 归一化进 `app_open` 的 target（`scene|pages/index/index|share`）；配合分享方的 `events.track('share')`，看板 `topSources` 可见 share 来源；`tests/launch-source.test.js` 已覆盖。链路完整，无需新代码。
+- **验证**：`npm test` 391 项 / 390 通过 / 0 失败 / 1 skip；`npm run check` 通过（**635.0 KB**）。
+
 ## 2026-10-26 · 逐页视觉巡检（首页/入睡页/统计页/结果面）
 
 - 巡检范围：首页默认态、入睡页 A 态、统计页当月、结果面正常态（截图 `docs/assets/l4s-*.png`）；共发现 2 处值得修的问题，其余（时间轮、圆球、日历色阶、结果面 3 行布局）未溢出、层级正常。

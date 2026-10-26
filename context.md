@@ -112,8 +112,8 @@ tests/            Node 纯逻辑测试
 
 ## 5. 当前验证基线
 
-- `npm test`：**391 项 / 390 通过 / 0 失败 / 1 skip**（2026-10-26 1 年视图缓存轮；PG 集成用例在未设置 `PG_TEST_URL` 时跳过）。
-- `npm run check`：3 页面 / 22 JSON / 17 WXML / 19 WXSS，主包约 634.3 KB（以最新输出为准）。
+- `npm test`：**391 项 / 390 通过 / 0 失败 / 1 skip**（2026-10-26 音源链路/标题收缩轮；PG 集成用例在未设置 `PG_TEST_URL` 时跳过）。
+- `npm run check`：3 页面 / 22 JSON / 17 WXML / 19 WXSS，主包约 635.0 KB（以最新输出为准）。
 - `npm run verify:web`：11 页 / 3 条内链，无 404（2026-10-26 批次 D）。
 - **验收清单（2026-10-22 建）**：全部待验收项已合并至 [docs/13-acceptance-checklist.md](docs/13-acceptance-checklist.md)，分三区——本机已验收（CLI 模拟器 390×844 实测，含入睡页 10-22 改版与统计页 10-21 改版全状态截图、console 无 error）/ 待真机（音频锁屏、中断、定时、手势手感）/ 待外部输入（部署、AppSecret、COS 防盗链、流量主）。续作新增"未验收"项一律先落该表再写代码。
 - 交付包：以 `release-artifacts/` 下最新 `getsleep-<label>.zip` 为准（`npm run pack` 生成，含 `RELEASE-MANIFEST.json` 与逐文件 sha256，同时留 `.sha256` 校验文件）；打包前会强制跑 `npm test` + `npm run check`。
@@ -202,6 +202,8 @@ tests/            Node 纯逻辑测试
 40. **统计页 → 计算器（2026-10-26）**：新增「按本周均值定今晚入睡点」入口——`stats.metricsOf` 输出 `avgBedMin`，统计页写一次性 `meta.prefillSleepMin` 并 `switchTab`；首页 `onShow` 消费（`mode=sleep`、预填时间、直接展示结果面）后立刻清空。时间分散（`avgBedMin=null`）时入口不渲染、点击兜底提示。**测试挂起教训**：页面用例调用 `onShow()` 会启动 60s 时钟 `setInterval`，必须 `page.onHide()` + `events.clearQueue()` 收尾，否则 `node --test` 不退出（本轮两次“卡住”即此）。门禁 390/389/0 fail/1 skip、check 627.2 KB。
 
 41. **1 年视图缓存 + 误删更正（2026-10-26）**：①上一轮把 `calendar-strip` 误判零引用删除，导致 3/6/12 月视图空白——根因是 `Select-String -Path miniprogram` 未递归；已从 `dd4cceb` 恢复并在 `stats.json` 注册。②`utils/stats.js` 八个函数经递归复查仍被测试/页面使用，**不是死码**（上轮结论作废）；`fetchSummary`/`regularity` 复查确认零引用。③`stats.refresh` 增加日历缓存（`recordsStamp` + span/monthOffset/todayKey/partialDay），模拟器实测第二次 refresh 1ms。**教训**：判断“零引用”必须 `Get-ChildItem -Recurse` 或明确递归 glob，目录级 Select-String 会静默漏检。门禁 391/390/0 fail/1 skip、check 634.3 KB。
+
+42. **音源链路 + 标题收缩（2026-10-26）**：①模拟器“只显示 1 条”根因是 `sleep:dev-api` 调试覆盖指向线上（被系统代理拦 → 降级 fallback）；清除后本地 6 条，后台/`/api/config`/前端三端一致（用本地后台 Cookie 会话验证）；本地第 1 条音源标题曾被误填为后台密码，已改回「雨声」。②结果面 Hero 标题收缩（72→40rpx、副标折叠），给结果卡让出约 90px。③分享归因链路：`launchSourceOf` 把 `query.from` 归入 `app_open.target`（`scene|pages/index/index|share`），配合分享方 `track('share')`，看板 topSources 可见——链路完整无需新代码。**注意**：`sleep:dev-api` 仅 develop 读取，本地联调勿设为线上域名（会被代理拦截导致降级）。
 
 39. **L4 模拟器实测轮（2026-10-26）**：①**P0 工具链**——新增 `utils/player-queue.js`/`player-surface.js` 后仅 `simulator_refresh` 不编译新文件，`audio-dock` 报 `module not defined` + `Component is not found` 整块不渲染；**必须 close + open 项目窗口**（已写入 docs/13 §1.20）。②**P0 播放状态**——实测 `paused:false` 但 `playing:false`/「已暂停」：`waiting` 后基础库不补发 `play`；已改为 waiting 只进连接态、canplay/12s 守卫/4s 补播按真实 `paused` 自愈（dock + now-playing）。③**超期态**——删除与常驻卡片重复的 8s notice；标题改「这一觉还没结束」、副标一行；熄灯「结束入睡」<5 分钟二次确认。④**视觉**——日历空格「补记」→「+」；结果面 compact 副标补「已扣 N 分钟入睡」、已过行 opacity 0.88、返回按钮 152rpx。门禁 385/384/0 fail/1 skip、check 623.8 KB、console 0 error；截图 `docs/assets/l4-*.png` 9 张。**未真机**：弱网首播、悬浮 X 续播、收藏连播切歌、继续上次、熄灯短时长确认。
 

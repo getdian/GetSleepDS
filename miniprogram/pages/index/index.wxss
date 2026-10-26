@@ -48,6 +48,19 @@
   margin-bottom: 28rpx;
 }
 
+/* 结果态：标题缩小、副标收起，把竖向空间让给结果卡（72rpx 的问句在结果面已无信息量） */
+.calc-hero.is-result .hero-title {
+  font-size: 40rpx;
+  letter-spacing: 1rpx;
+}
+
+.calc-hero.is-result .hero-sub {
+  margin-top: 0;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+}
+
 .hero-title {
   display: block;
   font-family: var(--font-sans);
@@ -57,6 +70,7 @@
   letter-spacing: 2rpx;
   color: #FFFFFF;
   text-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.5);
+  transition: font-size 0.24s ease;
 }
 
 .hero-sub {
@@ -65,6 +79,7 @@
   font-size: 26rpx;
   line-height: 1.5;
   color: rgba(220, 230, 255, 0.78);
+  transition: opacity 0.2s ease, max-height 0.28s ease, margin-top 0.28s ease;
 }
 
 /* 极简无框外壳：去掉边框和厚重背景，让时钟滚轮自然漂浮在夜空中 */

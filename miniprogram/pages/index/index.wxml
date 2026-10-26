@@ -13,7 +13,7 @@
 <top-bar brand-only="{{true}}" action-text="换背景" bind:action="openBgPicker" />
 
 <view class="page calc-page">
-  <view class="calc-hero">
+  <view class="calc-hero {{flipped ? 'is-result' : ''}}">
     <!-- Hero 与卡顶胶囊同侧：标题问「你要选的那个时间」（输入），副标说明会算出什么（输出）。
          此前标题问结果、胶囊问输入，用户会把该选的时间读反。
          两个方向都不写「今晚/明早」：白天小睡时结果可能落在当天，陈述必须始终成立。 -->

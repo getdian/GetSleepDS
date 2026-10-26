@@ -352,6 +352,15 @@
 - [x] 已知瞬态（非缺陷）：重编译后立即 `onCalc` 会短暂空白页（页面栈为空、console 无 error），`reLaunch` 恢复。
 - [ ] 仍可优化（未改）：结果面顶部仍保留「想几点起？」标题，占约 120px；如需给结果更多空间可做成结果态标题收缩——涉及翻转动画，留待设计确认。
 
+### 1.28 音源链路三端一致 + 标题收缩（2026-10-26，模拟器已验）
+
+- [x] 音源三端一致：`/api/admin/config`（后台 Cookie 会话）= `/api/config` = 小程序抽屉 = **6 条**；截图与 evaluate 返回值均已核对。
+- [x] 数据修正：本地第 1 条音源标题由误填的后台密码改回「雨声」（后台 API PUT，version 13→14）。
+- [x] 结果面标题收缩：翻面后 `72rpx → 40rpx`、副标折叠；截图 `docs/assets/l4s-result-hero.png`（23:45 主卡 + 3 行完整可见）；回正面有过渡。
+- [x] 分享归因：`launchSourceOf({query:{from:'share'}})` → `app_open.target` 含 `|share`（`tests/launch-source.test.js` 通过）；分享方 `track('share', mode)` 已上报；看板 `topSources` 可见。
+- [x] 门禁：`npm test` 391/390/0 fail/1 skip；`check` 635.0 KB。
+- [ ] 待真机：分享卡片冷启动落地（预填 + 直接展示结果面）、`app_open` 的 `from=share` 是否按预期上报（需真机转发一次后看后台看板）。
+
 ## 2. 待真机验收（代码就绪，模拟器不可替代）
 
 > 按风险排序。每项都曾在 changelog 标注"未真机验证"；本机 CLI 已把可截图的全部截完，剩余必须真机。
