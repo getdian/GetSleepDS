@@ -1172,16 +1172,17 @@
 
 .dock-play {
   position: relative;
-  width: 76rpx;
-  height: 76rpx;
+  width: 72rpx;
+  height: 72rpx;
   flex: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1.5rpx solid rgba(255, 255, 255, 0.18);
-  border-radius: 50%;
-  color: rgba(240, 243, 255, 0.92);
+  /* 与迷你播放条右侧图标一致：只用粗符号，不加圆形描边框 */
+  color: rgba(240, 243, 255, 0.9);
 }
+
+
 
 /* 列表主播放键：76rpx 视觉 + 6rpx 外扩 = 88rpx 热区，并补按压反馈 */
 .dock-play::after {
@@ -1211,9 +1212,10 @@
   width: 0;
   height: 0;
   margin-left: 5rpx;
-  border-top: 11rpx solid transparent;
-  border-bottom: 11rpx solid transparent;
-  border-left: 18rpx solid currentColor;
+  /* 去掉圆框后，三角形/双竖线要略大一点才撑得住识别度 */
+  border-top: 12rpx solid transparent;
+  border-bottom: 12rpx solid transparent;
+  border-left: 20rpx solid currentColor;
 }
 
 .dock-play-pause {
@@ -1224,7 +1226,7 @@
 
 .dock-play-bar {
   width: 4rpx;
-  height: 22rpx;
+  height: 24rpx;
   border-radius: 2rpx;
   background: currentColor;
 }
@@ -1555,19 +1557,19 @@
   background: rgba(145, 175, 255, 0.18);
 }
 
-/* 已缓存的曲目：可点的 ⤓ 标记（比“只能长按”更可发现） */
+/* 已缓存的曲目：可点的 ⤓ 标记（比"只能长按"更可发现） */
 .dock-cached {
   position: relative;
   flex: none;
-  width: 56rpx;
-  height: 56rpx;
+  width: 52rpx;
+  min-height: 72rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
-  border: 1rpx solid rgba(52, 211, 153, 0.32);
-  color: rgba(110, 231, 183, 0.9);
-  font-size: 26rpx;
+  /* 只留一个粗箭头：与播放/暂停图标同一套“无框、够粗、够简约”的语言 */
+  color: rgba(110, 231, 183, 0.95);
+  font-size: 34rpx;
+  font-weight: 700;
   line-height: 1;
 }
 

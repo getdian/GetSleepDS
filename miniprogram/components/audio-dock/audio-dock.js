@@ -805,7 +805,8 @@ Component({
         lastTrackActive: meta.lastTrackActive,
         lastTrackPlaying: meta.lastTrackPlaying,
         hasSrc: !!this._audio.src,
-        playingNow: !this._audio.paused,
+        // 必须严格 false 才算在播：BAM 无 src 时 paused 是 undefined，!paused 会是 true
+        playingNow: !!this._audio.src && this._audio.paused === false,
         sessionLive: !!(app && app.globalData && app.globalData.audioSession)
       })
       if (!surface.visible) {

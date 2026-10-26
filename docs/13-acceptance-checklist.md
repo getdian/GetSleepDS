@@ -314,6 +314,16 @@
 - [ ] 待浏览器点验：分类标签点击后 `collect()` 是否写入、图标下拉渲染、趋势分享柱（需起服务 + 后台账号）。
 - [ ] 待真机：点 ⤓ 删除缓存的确认弹窗与删除后列表刷新。
 
+### 1.24 体验版 P1：迷你条假播放（2026-10-26，模拟器已复现并修复）
+
+- [x] 根因复现（模拟器）：`wx.getBackgroundAudioManager().stop()` 后 `src=false`、`paused=undefined`；调用方 `!paused` 得 `true` → 修复前 `dockPlaying=true / sub="正在播放"`。
+- [x] 修复：`resolvePlayerSurface` 严格布尔（`playingNow===true && hasSrc===true`）；`cold = !playing && !sessionLive`；dock/now-playing 传参 `!!audio.src && audio.paused === false`。
+- [x] 复验（同一场景）：`dockPlaying=false / sub="已暂停" / currentId=sleep-10001`（入口保留，点按可续播）。
+- [x] 单测：新增「无音源时 playingNow 传 true 也必须暂停」「本次进程用户暂停不判冷启动」；`player-surface` 9/9。
+- [x] 视觉：已缓存 `⤓+圆框` → 纯粗箭头 ↓；列表播放/暂停去掉圆形描边、三角形与双竖线放大一档；截图 `docs/assets/l4-audio-visual-v4.png`。
+- [x] 门禁：`npm test` 388/387/0 fail/1 skip；`check` 通过（624.3 KB）。
+- [ ] 待真机：体验版冷启动、锁屏 3 分钟、来电/切 App 恢复、悬浮 X 停止后点续播、收藏连播切歌。
+
 ## 2. 待真机验收（代码就绪，模拟器不可替代）
 
 > 按风险排序。每项都曾在 changelog 标注"未真机验证"；本机 CLI 已把可截图的全部截完，剩余必须真机。

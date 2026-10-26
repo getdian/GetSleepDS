@@ -192,7 +192,7 @@
         catchtap="onRemoveCacheTap"
         aria-role="button"
         aria-label="删除这首的缓存"
-      >⤓</view>
+      >↓</view>
       <view class="dock-fav {{item.favorite ? 'is-on' : ''}}" data-id="{{item.id}}" catchtap="onToggleFavorite">
         {{item.favorite ? '♥' : '♡'}}
       </view>

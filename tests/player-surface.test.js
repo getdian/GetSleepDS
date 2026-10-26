@@ -60,7 +60,26 @@ test('没有 lastTrackId：不渲染任何入口', () => {
   assert.equal(surface.reason, 'no_track')
 })
 
-test('有 src 但 pause 事件丢失：用持久化标记兜底为播放中', () => {
-  const surface = resolvePlayerSurface(input({ playingNow: false, lastTrackPlaying: true }))
-  assert.equal(surface.playing, true)
+test('有 src 但实际暂停（冷启动残留 src）：必须显示已暂停，不能假装播放中', () => {
+  // 体验版真机复现：BAM 冷启动保留上次 src、paused=true，
+  // 旧逻辑用 lastTrackPlaying 兜底 → 条子显示“正在播放”却没有声音。
+  const surface = resolvePlayerSurface(
+    input({ hasSrc: true, playingNow: false, sessionLive: false, lastTrackPlaying: true })
+  )
+  assert.equal(surface.visible, true, '入口仍要在，用户能点继续')
+  assert.equal(surface.playing, false, '没在出声就不能显示正在播放')
+  assert.equal(surface.cold, true, '调用方据此把 lastTrackPlaying 归零')
+})
+
+test('没有音源时即使调用方传 playingNow=true 也必须判为暂停（BAM paused=undefined 陷阱）', () => {
+  // 体验版真机：无 src 时 audio.paused 是 undefined，调用方 !paused 恒为 true
+  const surface = resolvePlayerSurface(input({ hasSrc: false, playingNow: true, sessionLive: false }))
+  assert.equal(surface.playing, false, '没有音源不可能在播放')
+  assert.equal(surface.visible, true, '入口保留，用户点继续时会重建音源')
+})
+
+test('本次进程内用户主动暂停：显示已暂停，但不判冷启动', () => {
+  const surface = resolvePlayerSurface(input({ hasSrc: true, playingNow: false, sessionLive: true }))
+  assert.equal(surface.playing, false)
+  assert.equal(surface.cold, false, '不能把用户暂停当残影重复归零')
 })

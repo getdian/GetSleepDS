@@ -32,12 +32,15 @@ function resolvePlayerSurface(input) {
   if (options.lastTrackActive === false) {
     return { visible: false, playing: false, cold: false, reason: 'stopped' }
   }
-  const playingNow = !!options.playingNow
-  const hasSrc = !!options.hasSrc
-  // paused 优先；只有“有 src 但 pause 事件丢失”时才用持久化标记兜底
-  const playing = playingNow || (hasSrc && options.lastTrackPlaying !== false)
-  // 冷启动/进程重启：没有 src、本进程没播过、也没出声
-  const cold = !hasSrc && !playingNow && !options.sessionLive
+  // 严格布尔：无 src 时 BAM 的 paused 是 undefined，调用方写 !paused 会得到 true，
+  // 于是“没有音源”被显示成“正在播放”（体验版真机复现的根因）。
+  const playingNow = options.playingNow === true
+  const hasSrc = options.hasSrc === true
+  // 只信播放器的真实状态，且必须真的有音源：
+  // BAM 冷启动/杀进程重进会保留上次的 src，但 paused=true、并没有出声。
+  const playing = hasSrc && playingNow
+  // 冷启动/进程重启：没在出声，且本进程没有起播会话（有无残留 src 都算）
+  const cold = !playing && !options.sessionLive
   return { visible: true, playing, cold, reason: '' }
 }
 
