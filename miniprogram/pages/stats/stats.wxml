@@ -41,7 +41,7 @@
     </view>
     <view wx:else class="metrics-empty fade-up">
       <text class="metrics-empty-title">本周还没有完整记录</text>
-      <text class="metrics-empty-sub">打一次卡，这里就会出现 3 个核心数字。</text>
+      <text class="metrics-empty-sub">本周打一次卡，这里就会出现 3 个核心数字（下方是本月日历）。</text>
     </view>
 
     <!-- 点指标展开的事实说明：3 行以内，口径与对比都在这里 -->

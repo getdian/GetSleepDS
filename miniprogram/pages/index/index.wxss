@@ -1102,7 +1102,9 @@
 }
 
 .calc-note-more {
-  margin-left: 8rpx;
+  /* 8rpx 在真机上两段几乎贴在一起；给到 16rpx 并用内联块保证换行时也有间距 */
+  display: inline-block;
+  margin-left: 16rpx;
   color: rgba(167, 164, 255, 0.9);
 }
 
