@@ -1,0 +1,54 @@
+/**
+ * 连续多月打卡日历：横向滑动查看 3/6/12 个月。
+ * 格子 48rpx（24px）是该视图的最小尺寸，日号仍可读；
+ * 点击只上报 day，详情与补记由页面处理，避免组件持有业务状态。
+ */
+Component({
+  properties: {
+    months: {
+      type: Array,
+      value: []
+    },
+    selectedKey: {
+      type: String,
+      value: ''
+    }
+  },
+
+  data: {
+    weekLabels: ['一', '二', '三', '四', '五', '六', '日'],
+    scrollTarget: ''
+  },
+
+  observers: {
+    months: function (months) {
+      const list = months || []
+      if (!list.length) {
+        this.setData({ scrollTarget: '' })
+        return
+      }
+      // 默认滚到最新月份（最右）
+      const target = 'cs-' + list[list.length - 1].key
+      // 去重键必须含周期与月份范围：3→12 个月切换时最后一个月不变，
+      // 只看 target 会提前 return，scroll-view 保留旧 scrollLeft（停在最旧月份）。
+      const signature = list.length + '|' + list[0].key + '|' + list[list.length - 1].key
+      if (signature === this._scrollSignature) return
+      this._scrollSignature = signature
+      this.setData({ scrollTarget: '' }, () => {
+        setTimeout(() => {
+          if (this.data.months && this.data.months.length) {
+            this.setData({ scrollTarget: target })
+          }
+        }, 30)
+      })
+    }
+  },
+
+  methods: {
+    onTap(e) {
+      const day = e.currentTarget.dataset.day
+      if (!day) return
+      this.triggerEvent('daytap', { day })
+    }
+  }
+})

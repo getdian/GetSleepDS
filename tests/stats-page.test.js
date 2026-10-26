@@ -156,7 +156,7 @@ test('日详情：主行区间与总时长同口径，单段午睡不再写「�
     assert.equal(page.data.manualWakeTime, '14:30')
     assert.equal(page.data.manualError, '', '已记录日的补记默认值不能一打开就重叠')
 
-    // 只有一段午睡时，主段不是“夜间”
+    // 只有一段午睡时，主段不是"夜间"
     resetStore()
     const page2 = makePage()
     storage.saveSession({ id: 'nap-only', startAt: at(6, 13, 0), endAt: at(6, 13, 30), source: 'manual' })
@@ -177,7 +177,7 @@ test('云端删除失败（lastSyncAt=0）仍保留删除入口的状态', () =>
   const page = makePage()
   page.refresh()
   assert.equal(page.data.cloudPendingErase, true)
-  assert.equal(page.data.hasCloudCopy, false, 'lastSyncAt=0 不能当作“没有待删副本”')
+  assert.equal(page.data.hasCloudCopy, false, 'lastSyncAt=0 不能当作"没有待删副本"')
   assert.match(page.data.syncText, /云端副本尚未删除/)
 })
 
@@ -229,5 +229,48 @@ test('按本周均值定今晚入睡点：写入一次性预填并跳计算器',
     assert.equal(calls.length, 1)
   } finally {
     global.wx.switchTab = original
+  }
+})
+
+test('1 年视图：数据未变时复用日历网格，数据变化后必须重算', () => {
+  resetStore()
+  const page = makePage()
+  const statsUtil = require('../miniprogram/utils/stats')
+  const time = require('../miniprogram/utils/time')
+  const now = Date.now()
+  const day = time.dateKey(now)
+  storage.saveRecord({
+    day,
+    bedAt: now - 8 * 3600 * 1000,
+    wakeAt: now - 3600 * 1000,
+    durationMin: 420,
+    updatedAt: 1
+  })
+  page.setData({ calendarSpan: 12 })
+
+  const original = statsUtil.calendarMonths
+  let calls = 0
+  statsUtil.calendarMonths = function patched(...args) {
+    calls += 1
+    return original.apply(null, args)
+  }
+  try {
+    page.refresh()
+    assert.equal(calls, 1, '首次必须计算')
+    page.refresh()
+    assert.equal(calls, 1, '同参数同数据必须命中缓存')
+
+    // 新增一天 → 指纹变化 → 必须重算，否则日历会停留在旧数据
+    storage.saveRecord({
+      day: time.dateKey(now - 2 * 86400000),
+      bedAt: now - 56 * 3600 * 1000,
+      wakeAt: now - 49 * 3600 * 1000,
+      durationMin: 420,
+      updatedAt: 2
+    })
+    page.refresh()
+    assert.equal(calls, 2, '数据变化必须重算')
+  } finally {
+    statsUtil.calendarMonths = original
   }
 })

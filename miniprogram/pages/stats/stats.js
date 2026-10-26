@@ -147,15 +147,32 @@ Page({
     const partialDay = pending ? T.dateKey(now) : ''
     const monthOffset = Number(this.data.monthOffset) || 0
     const calendarSpan = Number(this.data.calendarSpan) || 1
-    const calendar =
-      calendarSpan === 1 ? S.calendarCells(records, now, monthOffset, partialDay) : null
-    const calendarMonths =
-      calendarSpan > 1 ? S.calendarMonths(records, now, calendarSpan, partialDay) : []
-    // 日历可翻 24 个月，但可补记只到云同步窗口（400 天）：
-    // 窗口外的补记会"只存本机、永远不上云"，所以空格子不提供补记入口
     const minEditableDay = MS.minDayKey(now)
-    if (calendar) MS.limitCanAdd(calendar.cells, minEditableDay)
-    calendarMonths.forEach((month) => MS.limitCanAdd(month.cells, minEditableDay))
+    // 1 年视图一次要算 12 个月 × ~35 格；同一份数据下（onShow + loadConfig 回调、
+    // 指标展开/收起都会 refresh）没必要重复算。数据指纹 + 视图参数相同就复用。
+    const cacheKey = [
+      calendarSpan,
+      monthOffset,
+      T.dateKey(now),
+      partialDay,
+      this.recordsStamp(records)
+    ].join('|')
+    let calendar = null
+    let calendarMonths = []
+    if (this._calCache && this._calCache.key === cacheKey) {
+      calendar = this._calCache.calendar
+      calendarMonths = this._calCache.months
+    } else {
+      calendar =
+        calendarSpan === 1 ? S.calendarCells(records, now, monthOffset, partialDay) : null
+      calendarMonths =
+        calendarSpan > 1 ? S.calendarMonths(records, now, calendarSpan, partialDay) : []
+      // 日历可翻 24 个月，但可补记只到云同步窗口（400 天）：
+      // 窗口外的补记会"只存本机、永远不上云"，所以空格子不提供补记入口
+      if (calendar) MS.limitCanAdd(calendar.cells, minEditableDay)
+      calendarMonths.forEach((month) => MS.limitCanAdd(month.cells, minEditableDay))
+      this._calCache = { key: cacheKey, calendar, months: calendarMonths }
+    }
     let calendarNote = ''
     if (calendarSpan === 1) {
       // 底注说明的是"这个月"，不写月份主语会被读成整段历史的记录数
@@ -254,6 +271,22 @@ Page({
         syncText
       })
     }
+  },
+
+  /** 记录指纹：天数 + 各段起止/更新时间和，任一编辑都会改变它 → 日历缓存失效 */
+  recordsStamp(records) {
+    const days = Object.keys(records || {})
+    let sum = 0
+    for (let i = 0; i < days.length; i += 1) {
+      const item = records[days[i]] || {}
+      const sessions = Array.isArray(item.sessions) ? item.sessions : []
+      sum +=
+        (Number(item.updatedAt) || 0) +
+        (Number(item.bedAt) || 0) +
+        (Number(item.wakeAt) || 0) +
+        sessions.length
+    }
+    return days.length + ':' + sum
   },
 
   /**

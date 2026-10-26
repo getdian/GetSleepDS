@@ -1,5 +1,13 @@
 # 睡点 · 关键更新记录
 
+## 2026-10-26 · 1 年视图缓存 + 更正上一轮的组件误删
+
+- **P0 更正（自引入缺陷）**：上一轮把 `components/calendar-strip` 当“零引用”删掉，实际 `stats.wxml` 仍在用（3/6/12 月视图），结果 1 年视图**整块空白**。根因是当时用 `Select-String -Path miniprogram` 扫目录**没有递归**，只匹配到根目录（无 js 文件）→ 恒为 0 命中。已从 `dd4cceb` 恢复组件并在 `stats.json` 重新注册；复验 12 个月 × 35 格正常渲染（截图 `docs/assets/l4-stats-year-view.png`）。
+- **同类复查**：`utils/stats.js` 的 `levelOf/heatLevelOf/factsOf/factSignature/localFact/heatmapCells/monthsSpan/summaryPayload` 经**递归**搜索确认仍被 `stats.test.js`、`stats-calendar.test.js` 与统计页使用，**不是死码，全部保留**（上一轮结论作废）；`fetchSummary`、`regularity` 复查确认确实零引用（保持删除）。
+- **1 年视图性能**：`stats.refresh` 增加日历缓存——`recordsStamp(records)`（天数 + 各段起止/更新时间和）+ 视图参数（span/monthOffset/todayKey/partialDay）组成 key，命中则复用 `calendarMonths`，数据一变自动失效。模拟器实测：同一数据下第二次 `refresh` **1ms**（此前每次都要重算 12 个月 × ~35 格）。
+- **测试**：`stats-page` 新增「同数据命中缓存 / 数据变化必须重算」（monkey-patch `calendarMonths` 计数）。
+- **验证**：`npm test` **391 项 / 390 通过 / 0 失败 / 1 skip**；`npm run check` 通过（22 JSON / 17 WXML / 19 WXSS，主包 **634.3 KB**，含恢复的组件）；截图 `l4-stats-year-view.png`（9/10 月网格、色阶与 23 天记录）。
+
 ## 2026-10-26 · 统计页 → 计算器：按本周均值定今晚入睡点
 
 - **把“回顾”变成“今晚的行动”**：统计页在指标下方新增「按本周均值（07:22）定今晚入睡点 →」。点击把本周平均入睡分钟数写入一次性 `meta.prefillSleepMin` 并 `switchTab` 计算器；首页 `onShow` 消费后立刻清空（不重复触发），切到「想几点睡」模式、预填时间并**直接展示结果面**——少一步点击。

@@ -8,6 +8,7 @@
     "hero-backdrop": "/components/hero-backdrop/hero-backdrop",
     "top-bar": "/components/top-bar/top-bar",
     "month-calendar": "/components/month-calendar/month-calendar",
+    "calendar-strip": "/components/calendar-strip/calendar-strip",
     "empty-state": "/components/empty-state/empty-state",
     "ad-slot": "/components/ad-slot/ad-slot",
     "share-btn": "/components/share-btn/share-btn",

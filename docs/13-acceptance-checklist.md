@@ -333,6 +333,15 @@
 - [x] 门禁：`npm test` 390/389/0 fail/1 skip；`check` 通过（627.2 KB）。
 - [ ] 待真机：点击后的翻面动画、时间轮是否准确停在预填时刻。
 
+### 1.26 1 年视图缓存 + calendar-strip 恢复（2026-10-26，模拟器已验）
+
+- [x] **误删恢复**：`components/calendar-strip` 曾被我误判零引用删除（`Select-String -Path miniprogram` 未递归），导致 3/6/12 月视图空白；已从 `dd4cceb` 恢复并在 `stats.json` 注册。模拟器复验：12 个月、每月 35 格、9/10 月网格与色阶正常（截图 `docs/assets/l4-stats-year-view.png`）。
+- [x] 同类复查：`utils/stats.js` 八个函数确实仍被测试/页面引用（不删）；`fetchSummary`、`regularity` 确认零引用。
+- [x] 缓存：`recordsStamp` + 视图参数为 key，命中复用 `calendarMonths`；模拟器实测同一数据第二次 `refresh` **1ms**。
+- [x] 单测：同数据命中缓存、数据变化重算（`stats-page` 9/9）。
+- [x] 门禁：`npm test` 391/390/0 fail/1 skip；`check` 通过（22 JSON / 17 WXML / 19 WXSS，634.3 KB）。
+- [ ] 待真机：1 年视图横向滚动流畅度、切月/切周期时缓存失效是否正确（单测已覆盖逻辑）。
+
 ## 2. 待真机验收（代码就绪，模拟器不可替代）
 
 > 按风险排序。每项都曾在 changelog 标注"未真机验证"；本机 CLI 已把可截图的全部截完，剩余必须真机。

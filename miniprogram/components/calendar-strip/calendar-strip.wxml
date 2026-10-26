@@ -1,0 +1,29 @@
+<scroll-view
+  class="cs"
+  scroll-x
+  enhanced
+  show-scrollbar="{{false}}"
+  scroll-into-view="{{scrollTarget}}"
+  scroll-with-animation="{{false}}"
+>
+  <view class="cs-track">
+    <view wx:for="{{months}}" wx:key="key" class="cs-month" id="cs-{{item.key}}">
+      <text class="cs-month-label">{{item.label}}</text>
+      <view class="cs-week">
+        <text wx:for="{{weekLabels}}" wx:key="*this" class="cs-week-cell">{{item}}</text>
+      </view>
+      <view class="cs-grid">
+        <view
+          wx:for="{{item.cells}}"
+          wx:for-item="cell"
+          wx:key="key"
+          class="cs-cell {{cell.pad ? 'is-pad' : 'lv-' + cell.level}} {{cell.isToday ? 'is-today' : ''}} {{cell.future ? 'is-future' : ''}} {{cell.partial ? 'is-partial' : ''}} {{cell.canAdd ? 'is-add' : ''}} {{selectedKey === cell.key ? 'is-selected' : ''}}"
+          data-day="{{cell.day}}"
+          bindtap="onTap"
+          aria-role="button"
+          aria-label="{{cell.pad ? '' : cell.dayNum + ' 日' + (cell.canAdd ? ' 可补记' : '')}}"
+        >{{cell.pad ? '' : cell.dayNum}}</view>
+      </view>
+    </view>
+  </view>
+</scroll-view>
