@@ -830,6 +830,8 @@ Component({
         currentCategory: track.category || '',
         playing,
         loading: false,
+        // 已经有当前曲目时不再显示「继续上次」：否则与上方播放条重复讲同一首
+        resumeLabel: '',
         // 播放中收成音符；已暂停则直接展开播放条，方便继续
         miniExpanded: !playing
       })
@@ -1103,24 +1105,40 @@ Component({
       this.play(track)
     },
 
-    /** 长按曲目：只删这一首的缓存（不喜欢/占空间），不影响其它已缓存音源 */
+    /** 点 ⤓：删除这首的缓存（不喜欢的、占空间的），不影响其它已缓存音源 */
+    onRemoveCacheTap(event) {
+      const id = event.currentTarget.dataset.id
+      const track = this.findTrack(id)
+      if (!track) return
+      this.confirmRemoveCache(track)
+    },
+
+    /** 长按曲目：与点 ⤓ 同一套确认口径 */
     onTrackLongPress(event) {
       const id = event.currentTarget.dataset.id
       const track = this.findTrack(id)
       if (!track) return
+      this.confirmRemoveCache(track)
+    },
+
+    confirmRemoveCache(track) {
       const size = cache.sizeOf(track.url)
       if (!size) {
         wx.showToast({ title: '这首还没缓存', icon: 'none' })
         return
       }
-      if (this.data.currentId === id && (this.data.loading || this.data.playing)) {
+      if (this.data.currentId === track.id && (this.data.loading || this.data.playing)) {
         wx.showToast({ title: '正在播放，先切歌再删除', icon: 'none' })
         return
       }
       const mb = (size / 1024 / 1024).toFixed(1)
-      wx.showActionSheet({
-        itemList: ['删除这首的缓存（' + mb + ' MB）'],
-        success: () => {
+      wx.showModal({
+        title: '删除这首的缓存？',
+        content: track.title + '（' + mb + ' MB）将从本机移除，下次播放需要重新下载。',
+        confirmText: '删除',
+        confirmColor: '#F87171',
+        success: (res) => {
+          if (!res.confirm) return
           cache.remove(track.url)
           this.refreshCache()
           wx.showToast({ title: '已删除该曲缓存', icon: 'none' })

@@ -185,6 +185,14 @@
         </view>
         <text class="dock-tstate">{{currentId === item.id ? (loading ? '正在连接音频…' : (playing ? '播放中 · 点击暂停' : '已暂停 · 点击继续')) : (item.cached ? '已缓存 · 点击播放' : '点击播放')}}</text>
       </view>
+      <view
+        wx:if="{{item.cached && currentId !== item.id}}"
+        class="dock-cached"
+        data-id="{{item.id}}"
+        catchtap="onRemoveCacheTap"
+        aria-role="button"
+        aria-label="删除这首的缓存"
+      >⤓</view>
       <view class="dock-fav {{item.favorite ? 'is-on' : ''}}" data-id="{{item.id}}" catchtap="onToggleFavorite">
         {{item.favorite ? '♥' : '♡'}}
       </view>
@@ -227,7 +235,7 @@
   <view class="dock-cache" catchtouchmove="noop">
     <view class="dock-cache-main">
       <text class="dock-cache-text">{{cacheText}}</text>
-      <text class="dock-cache-tip">长按已缓存曲目，可只删除该曲</text>
+      <text class="dock-cache-tip">点曲目右侧 ⤓ 或长按，可只删除该曲缓存</text>
     </view>
     <text wx:if="{{cacheCount}}" class="dock-cache-clean" bindtap="onCleanCache">清理</text>
   </view>

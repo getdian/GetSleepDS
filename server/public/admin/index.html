@@ -575,12 +575,12 @@
       <div class="audio-top">
         <span class="index"></span>
         <input class="title" placeholder="名称，如：雨声" maxlength="30">
-        <select class="icon" title="图标">
-          <option value="rain">雨</option>
-          <option value="wave">浪</option>
-          <option value="fire">火</option>
-          <option value="noise">噪</option>
-          <option value="night">夜</option>
+        <select class="icon" title="列表图标（小程序内使用对应内置图标）">
+          <option value="rain">🌧 雨声</option>
+          <option value="wave">🌊 海浪</option>
+          <option value="fire">🔥 炉火</option>
+          <option value="noise">🎚 白噪音</option>
+          <option value="night">🌙 深夜</option>
         </select>
         <button type="button" class="icon-btn up" title="上移">↑</button>
         <button type="button" class="icon-btn down" title="下移">↓</button>
@@ -588,8 +588,9 @@
       </div>
       <div class="audio-sub">
         <input class="subtitle" placeholder="副标题，如：循环播放 · 支持锁屏" maxlength="40">
-        <input class="category" list="category-options" placeholder="分类" maxlength="12">
+        <input class="category" list="category-options" placeholder="分类（点下方常用，或自己填）" maxlength="12">
       </div>
+      <div class="cat-suggests" aria-label="常用分类"></div>
       <div class="audio-url">
         <input class="url" placeholder="https://.../sleep/xxx.mp3" maxlength="500">
         <button type="button" class="ghost preview">试听</button>

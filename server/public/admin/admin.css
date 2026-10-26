@@ -1311,3 +1311,43 @@ button:disabled {
   opacity: 1;
   background: rgba(248, 113, 113, 0.24);
 }
+
+/* 常用分类标签：运营不用记分类名，点一下就填 */
+.cat-suggests {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 2px 0 2px;
+}
+
+.cat-suggests:empty {
+  display: none;
+}
+
+.cat-chip {
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: transparent;
+  color: var(--dim);
+  font-size: 12px;
+  line-height: 24px;
+  cursor: pointer;
+}
+
+.cat-chip:hover {
+  border-color: rgba(129, 140, 248, 0.5);
+  color: var(--text);
+}
+
+.cat-chip.is-on {
+  border-color: rgba(129, 140, 248, 0.65);
+  background: rgba(99, 102, 241, 0.16);
+  color: #C7D2FE;
+}
+
+/* 趋势图：分享柱与播放柱区分开 */
+.trend-bar.share {
+  background: #FBBF24;
+}

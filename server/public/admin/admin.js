@@ -226,11 +226,17 @@
     const list = trend || []
     let max = 1
     list.forEach(function (item) {
-      max = Math.max(max, item.opens, item.checkins, item.plays)
+      max = Math.max(max, item.opens, item.checkins, item.plays, item.shares || 0)
     })
 
     const allZero = list.every(function (item) {
-      return item.opens === 0 && item.checkins === 0 && item.plays === 0 && !item.interrupts
+      return (
+        item.opens === 0 &&
+        item.checkins === 0 &&
+        item.plays === 0 &&
+        !item.interrupts &&
+        !item.shares
+      )
     })
 
     if (!list.length || allZero) {
@@ -249,6 +255,7 @@
         ' 打开 ' + item.opens +
         ' · 打卡 ' + item.checkins +
         ' · 播放 ' + item.plays +
+        ' · 分享 ' + (item.shares || 0) +
         ' · 中断 ' + (item.interrupts || 0)
 
       const openCount = document.createElement('span')
@@ -261,7 +268,8 @@
       const series = [
         ['open', item.opens],
         ['checkin', item.checkins],
-        ['play', item.plays]
+        ['play', item.plays],
+        ['share', item.shares || 0]
       ]
 
       series.forEach(function (entry) {
@@ -428,7 +436,7 @@
 
   /* ---------- 环境音 ---------- */
 
-  function buildRow(item, index) {
+  function buildRow(item, index, categories) {
     const fragment = $('#audio-row').content.cloneNode(true)
     const row = fragment.querySelector('.audio-row')
 
@@ -436,9 +444,28 @@
     row.querySelector('.index').textContent = String(index + 1).padStart(2, '0')
     row.querySelector('.title').value = item.title || ''
     row.querySelector('.subtitle').value = item.subtitle || ''
-    row.querySelector('.category').value = item.category || '环境音'
+    const categoryInput = row.querySelector('.category')
+    categoryInput.value = item.category || '环境音'
     row.querySelector('.url').value = item.url || ''
     row.querySelector('.icon').value = item.icon || 'noise'
+
+    // 常用分类做成可直接点的标签：不用记名字，也不会因为输入法差异产生“环境音 ”这种脏分类
+    const suggestBox = row.querySelector('.cat-suggests')
+    ;(categories || []).forEach(function (name) {
+      const chip = document.createElement('button')
+      chip.type = 'button'
+      chip.className = 'cat-chip' + (categoryInput.value === name ? ' is-on' : '')
+      chip.textContent = name
+      chip.addEventListener('click', function () {
+        categoryInput.value = name
+        Array.prototype.forEach.call(suggestBox.children, function (node) {
+          node.classList.toggle('is-on', node.textContent === name)
+        })
+        setDirty(true)
+        updateJson()
+      })
+      suggestBox.appendChild(chip)
+    })
 
     return row
   }
@@ -449,13 +476,20 @@
     })
   }
 
+  // 常用分类：运营大多数时候只需要在这几个里选，避免每次手打、也避免同义分类分裂
+  var CATEGORY_PRESETS = ['自然之声', '环境音', '白噪音', '轻音乐', '助眠音乐', '冥想']
+
   function refreshCategoryOptions(list) {
     const datalist = $('#category-options')
     datalist.textContent = ''
     const seen = {}
 
-    ;(list || []).forEach(function (item) {
-      const category = String(item.category || '').trim()
+    CATEGORY_PRESETS.concat(
+      (list || []).map(function (item) {
+        return String((item && item.category) || '').trim()
+      })
+    ).forEach(function (name) {
+      const category = String(name || '').trim()
       if (!category || seen[category]) return
       seen[category] = true
       const option = document.createElement('option')
@@ -467,8 +501,13 @@
   function renderAudio(list) {
     audioList.textContent = ''
     const items = list || []
+    const categories = CATEGORY_PRESETS.slice()
+    items.forEach(function (item) {
+      const name = String((item && item.category) || '').trim()
+      if (name && categories.indexOf(name) < 0) categories.push(name)
+    })
     items.forEach(function (item, index) {
-      audioList.appendChild(buildRow(item, index))
+      audioList.appendChild(buildRow(item, index, categories))
     })
     $('#audio-empty').hidden = items.length > 0
     refreshCategoryOptions(items)
