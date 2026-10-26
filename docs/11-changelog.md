@@ -1,5 +1,18 @@
 # 睡点 · 关键更新记录
 
+## 2026-10-26 · 批次 D：增长闭环 · 后台稳健 · 提醒快照 · 死码清理
+
+- **分享深链（增长）**：`onShareAppMessage` 的 path 从只带 `from=share` 改为携带 `mode/fall/wake|sleep`；首页 `onLoad(options)` 新增 `applyShareQuery`——只读预填、直接算出并展示结果面，**不写本地偏好、不弹权限**。被分享者打开看到的就是分享者的推荐，不再是默认 07:30。
+- **share 事件**：首页分享时 `events.track('share', mode)`；服务端 `TYPES` 放行 `share`；看板 `analytics` 新增 `today.shares / week.shares / trend[].shares`，作为“分享 → 打开 → 首次打卡”漏斗的分母。测试覆盖：分享 path 参数、预填不写偏好、看板 shares=1。
+- **演示页回流 CTA**：新增 `server/public/site/site-qr.js`（通用 `[data-site-qr]`）与 demo 页尾部区块——有码显示小程序码，无码回退「微信搜索「睡点」」，把“试完就结束”接回小程序。
+- **后台稳健性**：配置保存失败时按钮持续显示「保存失败 · 重试」（toast 2.8s 消失后仍可见，`.primary.save-failed` 红色态）；409 冲突自动 `loadAll()` 载入最新版本并提示；「清除小程序码」补二次确认（与删除音频/用户同口径）。
+- **统计页性能**：进页不再无条件 `refresh()` 两次——`loadConfig` 回调只在 `version + features.sync` 签名变化时重算（1 年视图一次约 420 格，此前进页算两遍）。
+- **提醒模板字段快照**：`sleep_reminders` 加法迁移 `thing_key/time_key`（memory 与 PG 双实现、`001_init.sql` 同步）；创建提醒时写入后台配置的字段名，发送时**优先用任务快照**、缺省回退当前配置——运营换模板后，已排队任务不会因“旧模板 + 新字段”被微信 47003 拒绝。
+- **死码清理**：删除 `utils/regularity.js` + 其测试、零引用组件 `components/calendar-strip/`（含 `stats.json` 注册）、零调用 `api.fetchSummary`、统计页未消费的 `streak` 字段。主包 **623.8 KB → 618.6 KB**。
+- **国际站**：`site.json` 新增 `legalStatus`，`build-web.mjs` 在未发布时过滤 `/privacy|/terms|/about` 死链（宁可不显示，也不要上线 404）；重建 11 页并 `verify:web` 通过（internal-links=3，无 404）。
+- **验证**：`npm test` **386 项 / 385 通过 / 0 失败 / 1 skip**；`npm run check` 通过（3 页面 / 21 JSON / 16 WXML / 18 WXSS，**618.6 KB**）；`npm run verify:web` OK。
+- **未做（需你/运营输入或真机）**：D1 真机验收；音源补齐（仓库仍只有 1 条真实 URL，不能编造）；后台看板展示 shares（数据已聚合，UI 追加下批）；国际站真实域名（需你提供）；`utils/stats.js` 六个零引用纯函数与 `audio-dock.wxss` 双套定义保留待评估（删除风险高于收益）。
+
 ## 2026-10-26 · L4 模拟器实测：播放状态不一致（P0）· 超期文案 · 日历降噪
 
 - **P0 工具链事实（会阻断整页）**：新增 `utils/player-queue.js`、`utils/player-surface.js` 后只跑 `simulator_refresh` 不会把它们编进包，`audio-dock` 直接报 `module ... is not defined` + `Component is not found`，入睡页整块播放器不渲染。**新增文件后必须 `close_project_window` + `open_project_window` 触发完整编译**；已写入 `docs/13` §1.20 作为后续纪律。

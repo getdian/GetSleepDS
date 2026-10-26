@@ -39,6 +39,42 @@ CREATE TABLE IF NOT EXISTS sleep_record_deletions (
 CREATE INDEX IF NOT EXISTS idx_sleep_record_deletions_openid
     ON sleep_record_deletions (openid, deleted_at DESC);
 
+-- 到点提醒（一次性订阅消息）
+-- thing_key/time_key 是模板字段名快照：运营换模板后，已排队任务仍按创建时的字段发送，
+-- 否则“旧模板 + 新字段”会被微信以 47003 拒绝（服务端 SCHEMA 与 init() 同源，此处保持同步）。
+CREATE TABLE IF NOT EXISTS sleep_reminders (
+    openid       VARCHAR(64) NOT NULL,
+    session_id   VARCHAR(64) NOT NULL,
+    fire_at      BIGINT NOT NULL,
+    template_id  TEXT NOT NULL,
+    page         TEXT NOT NULL,
+    status       TEXT NOT NULL DEFAULT 'pending',
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    sent_at      TIMESTAMPTZ,
+    cancelled_at TIMESTAMPTZ,
+    thing_key    TEXT NOT NULL DEFAULT '',
+    time_key     TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (openid, session_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_sleep_reminders_due
+    ON sleep_reminders (status, fire_at);
+
+-- 全量清除水位：清除/后台删除后，早于 erased_at 的记录不能再写回
+CREATE TABLE IF NOT EXISTS user_erasures (
+    openid       VARCHAR(64) PRIMARY KEY,
+    erased_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 运行时增量列（与 db/index.js 的 ALTER 保持一致）
+ALTER TABLE sleep_records ADD COLUMN IF NOT EXISTS day_rule TEXT NOT NULL DEFAULT 'bed-v1';
+ALTER TABLE sleep_records ADD COLUMN IF NOT EXISTS schema_version INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE sleep_records ADD COLUMN IF NOT EXISTS sessions JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE sleep_records ADD COLUMN IF NOT EXISTS night_duration_min INTEGER;
+ALTER TABLE sleep_records ADD COLUMN IF NOT EXISTS total_duration_min INTEGER;
+ALTER TABLE sleep_reminders ADD COLUMN IF NOT EXISTS thing_key TEXT NOT NULL DEFAULT '';
+ALTER TABLE sleep_reminders ADD COLUMN IF NOT EXISTS time_key TEXT NOT NULL DEFAULT '';
+
 -- 全量清除水位：清除/后台删除后，早于 erased_at 的记录不能再写回
 CREATE TABLE IF NOT EXISTS user_erasures (
     openid       VARCHAR(64) PRIMARY KEY,

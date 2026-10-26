@@ -57,8 +57,15 @@ CREATE TABLE IF NOT EXISTS sleep_reminders (
     created_at   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     sent_at      TIMESTAMPTZ,
     cancelled_at TIMESTAMPTZ,
+    -- 模板字段名快照：运营换模板/改字段后，已排队任务仍按创建时的字段发送，
+    -- 否则“旧模板 + 新字段”会被微信以 47003 拒绝，提醒永久发不出去。
+    thing_key    TEXT NOT NULL DEFAULT '',
+    time_key     TEXT NOT NULL DEFAULT '',
     PRIMARY KEY (openid, session_id)
 );
+
+ALTER TABLE sleep_reminders ADD COLUMN IF NOT EXISTS thing_key TEXT NOT NULL DEFAULT '';
+ALTER TABLE sleep_reminders ADD COLUMN IF NOT EXISTS time_key TEXT NOT NULL DEFAULT '';
 CREATE INDEX IF NOT EXISTS idx_sleep_reminders_due
     ON sleep_reminders (status, fire_at);
 
@@ -543,14 +550,16 @@ function createPostgresDb(connectionString) {
       // 第二条 SELECT 让“已 sent”也返回成功，避免路由把幂等场景误判为写入失败。
       const result = await pool.query(
         `WITH ins AS (
-           INSERT INTO sleep_reminders (openid, session_id, fire_at, template_id, page, status)
-           VALUES ($1, $2, $3, $4, $5, 'pending')
+           INSERT INTO sleep_reminders (openid, session_id, fire_at, template_id, page, status, thing_key, time_key)
+           VALUES ($1, $2, $3, $4, $5, 'pending', $6, $7)
            ON CONFLICT (openid, session_id) DO UPDATE SET
              fire_at = EXCLUDED.fire_at,
              template_id = EXCLUDED.template_id,
              page = EXCLUDED.page,
              status = 'pending',
-             cancelled_at = NULL
+             cancelled_at = NULL,
+             thing_key = EXCLUDED.thing_key,
+             time_key = EXCLUDED.time_key
            WHERE sleep_reminders.status <> 'sent'
            RETURNING session_id
          )
@@ -559,7 +568,15 @@ function createPostgresDb(connectionString) {
          SELECT session_id FROM sleep_reminders
           WHERE openid = $1 AND session_id = $2 AND status = 'sent'
          LIMIT 1`,
-        [openid, reminder.sessionId, reminder.fireAt, reminder.templateId, reminder.page]
+        [
+          openid,
+          reminder.sessionId,
+          reminder.fireAt,
+          reminder.templateId,
+          reminder.page,
+          reminder.thingKey || '',
+          reminder.timeKey || ''
+        ]
       )
       return result.rowCount > 0
     },
@@ -575,7 +592,7 @@ function createPostgresDb(connectionString) {
 
     async dueReminders(nowTs, limit) {
       const result = await pool.query(
-        `SELECT openid, session_id, fire_at, template_id, page
+        `SELECT openid, session_id, fire_at, template_id, page, thing_key, time_key
          FROM sleep_reminders
          WHERE status = 'pending' AND fire_at <= $1
          ORDER BY fire_at
@@ -587,7 +604,9 @@ function createPostgresDb(connectionString) {
         sessionId: row.session_id,
         fireAt: Number(row.fire_at),
         templateId: row.template_id,
-        page: row.page
+        page: row.page,
+        thingKey: row.thing_key || '',
+        timeKey: row.time_key || ''
       }))
     },
 

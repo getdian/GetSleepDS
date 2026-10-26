@@ -118,9 +118,13 @@ function createReminderService(options) {
         try {
           // 字段名由后台按模板配置（thing1/time2、time1/thing2…），不能写死：
           // 写死时换一个关键词不同的模板，微信直接返回 47003，提醒永远发不出去。
+          // 任务上有快照就优先用快照：运营换模板后，已排队任务仍按创建时的字段发送，
+          // 否则“旧模板 + 新字段”会被微信拒绝（47003），提醒永久丢失。
+          const thingKey = item.thingKey || reminder.thingKey
+          const timeKey = item.timeKey || reminder.timeKey
           const data = {}
-          data[reminder.thingKey] = { value: thingTextOf(item.sessionId) }
-          data[reminder.timeKey] = { value: formatDateTime(item.fireAt) }
+          data[thingKey] = { value: thingTextOf(item.sessionId) }
+          data[timeKey] = { value: formatDateTime(item.fireAt) }
           await sendSubscribeMessage(wx, {
             openid: item.openid,
             // 任务上记录的模板优先：更换模板不应让已排队任务用错字段

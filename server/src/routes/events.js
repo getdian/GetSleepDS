@@ -14,7 +14,9 @@ const TYPES = [
   'audio_interrupt',
   'ad_show',
   'ad_error',
-  'manual_sleep'
+  'manual_sleep',
+  // 分享次数：分享 → 打开 → 首次打卡 漏斗的分母
+  'share'
 ]
 const MAX_EVENTS = 20
 const MAX_AGE = 7 * 24 * 60 * 60 * 1000

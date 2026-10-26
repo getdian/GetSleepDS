@@ -217,6 +217,12 @@ function renderPage(page) {
     <footer class="foot">
       <span>© ${new Date().getFullYear()} ${esc(site.brand)}</span>
       ${(site.footerLinks || [])
+        // 法务页未发布（legalStatus !== 'published'）时不渲染对应链接：
+        // 上线一个 404 的 Privacy / Terms 比没有链接更糟。
+        .filter((link) => {
+          if (site.legalStatus === 'published') return true
+          return !/^\/(privacy|terms|about)(\/|$)/.test(link.href)
+        })
         .map((link) => `<a href="${esc(link.href)}">${esc(link.label)}</a>`)
         .join('')}
     </footer>

@@ -8,6 +8,7 @@ const adSlots = require('../../utils/ads')
 const backgrounds = require('../../utils/backgrounds')
 const tabbar = require('../../utils/tabbar')
 const ad = require('../../utils/ad')
+const events = require('../../utils/events')
 const { getConfig, loadConfig, getConfigStatus } = require('../../utils/config')
 
 const CLOCK_INTERVAL = 60 * 1000
@@ -46,7 +47,7 @@ Page({
     singlePage: false
   },
 
-  onLoad() {
+  onLoad(options) {
     this._alive = true
     this._bgItems = []
     this._cfgLoaded = false
@@ -91,6 +92,40 @@ Page({
       .catch(() => {
         this._cfgLoaded = true
       })
+
+    this.applyShareQuery(options)
+  },
+
+  /**
+   * 分享深链：只读预填 + 直接展示结果面，不写存储、不弹权限。
+   * 被分享者看到的推荐与分享者当时看到的一致，避免“分享了一个时间、打开却是默认 07:30”。
+   */
+  applyShareQuery(options) {
+    const opts = options || {}
+    if (opts.from !== 'share' && opts.from !== 'timeline') return
+    const mode = opts.mode === 'sleep' ? 'sleep' : 'wake'
+    const fall = Number(opts.fall)
+    const fallAsleep = fall >= 5 && fall <= 30 ? fall : DEFAULT_FALL
+    const wake = CLOCK_RE.test(opts.wake || '') ? opts.wake : ''
+    const sleep = CLOCK_RE.test(opts.sleep || '') ? opts.sleep : ''
+    if (mode === 'wake' && !wake) return
+    if (mode === 'sleep' && !sleep) return
+    const now = Date.now()
+    const patch = { mode, fallAsleep }
+    if (wake) {
+      patch.wakeTime = wake
+      patch.wakeContext = this.wakeContextText(wake, fallAsleep, now)
+    }
+    if (sleep) {
+      patch.sleepTime = sleep
+      patch.sleepContext = this.sleepContextText(sleep, now)
+    }
+    this.setData(patch, () => {
+      // 分享进来的结果面用“此刻”作锚点，和点击主按钮同口径
+      this._anchorAt = now
+      this.calc(true)
+      if (this.data.view) this.setData({ flipped: true })
+    })
   },
 
   onShow() {
@@ -853,6 +888,8 @@ Page({
   /* ---------------- 分享 ---------------- */
 
   onShareAppMessage() {
+    // 分享 → 打开 → 首次打卡 漏斗的分母；只记模式，不带任何睡眠数据
+    events.track('share', this.data.mode)
     // 只在结果面可见时使用结果文案；回到正面/改时间后不能再转发旧结果。
     const view = this.data.flipped ? this.data.view : null
     const time = view && view.mainTime && view.mainTime.indexOf(':') >= 0 ? view.mainTime : ''
@@ -860,7 +897,15 @@ Page({
       title: time
         ? '按 90 分钟周期，' + time + (this.data.mode === 'wake' ? ' 入睡刚刚好' : ' 起床刚好')
         : '按 90 分钟睡眠周期，算出你的入睡点',
-      path: '/pages/index/index?from=share'
+      // 带上输入参数：被分享者打开后能直接看到同一个推荐（只读预填，不写存储）
+      path:
+        '/pages/index/index?from=share&mode=' +
+        this.data.mode +
+        '&fall=' +
+        this.data.fallAsleep +
+        (this.data.mode === 'wake'
+          ? '&wake=' + encodeURIComponent(this.data.wakeTime)
+          : '&sleep=' + encodeURIComponent(this.data.sleepTime))
     }
   },
 

@@ -78,7 +78,10 @@ function createRemindersRoute(options) {
           fireAt,
           templateId: reminderConfig.templateId,
           // 计划提醒（plan-s-/plan-w-）不能落到 end=1，见 services/reminders.pageFor
-          page: pageFor(sessionId, reminderConfig.page)
+          page: pageFor(sessionId, reminderConfig.page),
+          // 模板字段名快照：换模板后已排队任务仍能按原字段发送
+          thingKey: reminderConfig.thingKey,
+          timeKey: reminderConfig.timeKey
         })
       } catch (e) {
         log.error('[db] reminder save failed:', req.id || '', e.message)

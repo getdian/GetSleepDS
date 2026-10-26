@@ -18,7 +18,9 @@ function emptyBucket(day) {
     // 外部中断次数：只统计 begin（end 只是时长与恢复结果，不计频次）
     interrupts: 0,
     // 补记次数：只打卡不补记 vs 高补记率，是判断“打卡闭环是否成立”的关键信号
-    manualSleeps: 0
+    manualSleeps: 0,
+    // 分享次数：分享 → 打开 → 首次打卡 漏斗的第一段，没有它无法判断增长动作是否有效
+    shares: 0
   }
 }
 
@@ -57,6 +59,7 @@ function createAnalytics(options) {
     let weekAdErrors = 0
     let weekInterrupts = 0
     let weekManualSleeps = 0
+    let weekShares = 0
     const top = new Map()
     const sources = new Map()
     const adSlots = new Map()
@@ -84,6 +87,7 @@ function createAnalytics(options) {
         bucket.interrupts += 1
       }
       if (event.type === 'manual_sleep') bucket.manualSleeps += 1
+      if (event.type === 'share') bucket.shares += 1
 
       if (event.type === 'ad_show' || event.type === 'ad_error') {
         const key = event.target || 'unknown'
@@ -109,6 +113,7 @@ function createAnalytics(options) {
         if (event.type === 'ad_show') weekAdShows += 1
         if (event.type === 'ad_error') weekAdErrors += 1
         if (event.type === 'manual_sleep') weekManualSleeps += 1
+        if (event.type === 'share') weekShares += 1
       }
     })
 
@@ -146,7 +151,8 @@ function createAnalytics(options) {
         adShows: todayBucket.adShows,
         adErrors: todayBucket.adErrors,
         interrupts: todayBucket.interrupts,
-        manualSleeps: todayBucket.manualSleeps
+        manualSleeps: todayBucket.manualSleeps,
+        shares: todayBucket.shares
       },
       week: {
         opens: weekOpens.size,
@@ -156,7 +162,8 @@ function createAnalytics(options) {
         adShows: weekAdShows,
         adErrors: weekAdErrors,
         interrupts: weekInterrupts,
-        manualSleeps: weekManualSleeps
+        manualSleeps: weekManualSleeps,
+        shares: weekShares
       },
       ads: {
         todayShows: todayBucket.adShows,
@@ -173,7 +180,8 @@ function createAnalytics(options) {
         opens: bucket.opens.size,
         checkins: bucket.checkins,
         plays: bucket.plays,
-        interrupts: bucket.interrupts
+        interrupts: bucket.interrupts,
+        shares: bucket.shares
       })),
       topTracks,
       topSources,

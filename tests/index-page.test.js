@@ -65,7 +65,7 @@ test('结果面改入睡耗时不清计算锚点（防止推荐静默推后一�
 
     page.onFallAsleepTap({ currentTarget: { dataset: { min: 20 } } })
     assert.equal(page.data.fallAsleep, 20)
-    assert.equal(page._anchorAt, NOW, '改耗时不换计算会话的“现在”')
+    assert.equal(page._anchorAt, NOW, '改耗时不换计算会话的"现在"')
 
     page.cycleFall()
     assert.notEqual(page.data.fallAsleep, 20)
@@ -170,7 +170,7 @@ test('入睡模式时间轮下写「今天 晚上 22:30 入睡」，不再显示
     page.setData({ mode: 'sleep' })
     page.onTimeChange({ detail: { value: '22:30' } })
     assert.equal(page.data.sleepContext, '今天 晚上 22:30 入睡')
-    assert.equal(page.data.nowText, undefined, 'nowText 已移除，提示不能再漂回“当前时刻”')
+    assert.equal(page.data.nowText, undefined, 'nowText 已移除，提示不能再漂回"当前时刻"')
 
     page.onTimeChange({ detail: { value: '08:00' } })
     assert.equal(page.data.sleepContext, '明天 早晨 08:00 入睡', '已过 30 分钟宽限按次日，与结果面一致')
@@ -209,7 +209,7 @@ test('结果面锚点超过 30 分钟：重算必须回到当前时刻，不能�
     page.calc(true)
     assert.equal(page._anchorAt, night, '30 分钟内保留锚点，改耗时不整体漂移')
 
-    // 次日 09:00：旧锚点会把“今天 06:45”继续算成“明天”
+    // 次日 09:00：旧锚点会把"今天 06:45"继续算成"明天"
     now = new Date(2026, 9, 23, 9, 0, 0, 0).getTime()
     page.calc(true)
     assert.equal(page._anchorAt, 0, '超过 30 分钟必须清零，按当前时刻重算')
@@ -363,4 +363,36 @@ test('计划起床时刻：过期或不在 16 小时窗口内都丢弃', () => {
   assert.equal(reminder.takePlanTarget(now), 0, '已经过去的起床时刻')
   reminder.savePlanTarget(now + 20 * 3600000, now)
   assert.equal(reminder.takePlanTarget(now), 0, '超过 16 小时')
+})
+
+test('分享深链：预填参数并直接展示结果面，不写本地偏好', () => {
+  const originalNow = Date.now
+  Date.now = () => NOW
+  try {
+    Object.keys(store).forEach((key) => delete store[key])
+    const page = makePage()
+    page.applyShareQuery({ from: 'share', mode: 'wake', wake: '08:15', fall: '20' })
+    assert.equal(page.data.mode, 'wake')
+    assert.equal(page.data.wakeTime, '08:15')
+    assert.equal(page.data.fallAsleep, 20)
+    assert.equal(page.data.flipped, true)
+    assert.ok(page.data.view && page.data.view.mainTime, '必须直接算出结果')
+    assert.ok(!storage.getPrefs().wakeTime, '分享预填不得写本地偏好')
+  } finally {
+    Date.now = originalNow
+  }
+})
+
+test('分享路径携带输入参数（被分享者能看到同一推荐）', () => {
+  const page = makePage()
+  page.data.mode = 'wake'
+  page.data.wakeTime = '07:30'
+  page.data.fallAsleep = 15
+  const share = page.onShareAppMessage()
+  assert.match(share.path, /from=share/)
+  assert.match(share.path, /mode=wake/)
+  assert.match(share.path, /wake=07%3A30/)
+  assert.match(share.path, /fall=15/)
+  // 分享会上报事件：清掉队列与重试定时器，避免测试进程空等 15s
+  require('../miniprogram/utils/events').clearQueue()
 })

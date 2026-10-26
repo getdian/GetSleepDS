@@ -13,14 +13,6 @@ function unlockAudio(code) {
   })
 }
 
-function fetchSummary(records) {
-  return request({
-    path: '/api/summary',
-    method: 'POST',
-    data: { records }
-  })
-}
-
 function syncRecords(code, records, deletedDays, includeAll) {
   return request({
     path: '/api/records/sync',
@@ -104,7 +96,6 @@ function fetchPosterQr(code) {
 module.exports = {
   fetchConfig,
   unlockAudio,
-  fetchSummary,
   syncRecords,
   createReminder,
   cancelReminder,

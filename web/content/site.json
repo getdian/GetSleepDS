@@ -10,6 +10,7 @@
   "adsenseClient": "",
   "ctaUrl": "",
   "disclaimer": "SleepCycle is a planning tool, not medical advice. If you have a sleep disorder, talk to a clinician.",
+  "legalStatus": "draft",
   "footerLinks": [
     { "href": "/privacy", "label": "Privacy" },
     { "href": "/terms", "label": "Terms" },

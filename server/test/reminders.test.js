@@ -378,3 +378,41 @@ test('路由创建计划提醒时写入分流后的落地页', async () => {
     await new Promise((resolve) => server.close(resolve))
   }
 })
+
+test('已排队任务使用创建时的模板字段快照（运营换模板后仍能发送）', async () => {
+  const db = createMemoryDb()
+  const now = Date.now()
+  await db.saveReminder('openid-snap', {
+    sessionId: 'sleep-snap-1',
+    fireAt: now - 1000,
+    templateId: 'tmpl-old',
+    page: 'pages/sleep/sleep?end=1',
+    thingKey: 'thing1',
+    timeKey: 'time2'
+  })
+  const calls = []
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, body: options && options.body })
+    if (url.indexOf('stable_token') >= 0) {
+      return { json: async () => ({ access_token: 'token-test', expires_in: 7200 }) }
+    }
+    return { json: async () => ({ errcode: 0 }) }
+  }
+  const service = createReminderService({
+    db,
+    wx: { appid: 'appid-test', secret: 'secret-test', fetchImpl },
+    // 运营已换模板并把字段改成 thing3/time4：旧任务必须仍按创建时的字段发送
+    getReminder: () => ({ enabled: true, templateId: 'tmpl-new', thingKey: 'thing3', timeKey: 'time4' }),
+    now: () => now
+  })
+  await service.tick()
+
+  const sends = calls
+    .filter((item) => item.url.indexOf('subscribe/send') >= 0)
+    .map((item) => JSON.parse(item.body))
+  assert.equal(sends.length, 1)
+  assert.equal(sends[0].template_id, 'tmpl-old', '模板也要用任务快照')
+  assert.ok(sends[0].data.thing1, '必须使用创建时的 thing1')
+  assert.ok(sends[0].data.time2, '必须使用创建时的 time2')
+  assert.equal(sends[0].data.thing3, undefined, '不能把新配置字段套在旧任务上')
+})

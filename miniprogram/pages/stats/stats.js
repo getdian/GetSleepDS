@@ -31,7 +31,6 @@ Page({
     metricKey: '',
     metricDetail: null,
     weekCount: 0,
-    streak: 0,
     // 日历周期：1 = 当月，3/6/12 = 横向滑动的连续月
     calendarSpan: 1,
     calendarCells: [],
@@ -81,8 +80,15 @@ Page({
     this.retryPendingReminderCancel()
     adSlots.apply(this)
     loadConfig(true)
-      .then(() => {
-        if (this._alive) this.refresh()
+      .then((cfg) => {
+        if (!this._alive) return
+        // 配置拉回来时只在“会影响本页的配置”变化时重算：此前无条件 refresh，
+        // 进页一次会算两遍（1 年视图 ~420 格）。
+        const features = (cfg && cfg.features) || {}
+        const sig = (cfg && cfg.version) + '|' + (features.sync === false ? 'off' : 'on')
+        if (sig === this._cfgSig) return
+        this._cfgSig = sig
+        this.refresh()
       })
       .catch(() => {})
   },
@@ -194,7 +200,6 @@ Page({
       hasData ? 1 : 0,
       metrics.map((item) => item.value + '/' + item.sub + '/' + item.detail.join('|')).join('|'),
       metricData.count,
-      metricData.streak,
       // 月份偏移必须进签名：空月之间格子数与色阶序列完全相同，
       // 缺了它切月会被去重跳过（标题/格子/canNextMonth 都不更新，且 monthOffset 已变 → 双向卡死）。
       monthOffset,
@@ -224,7 +229,6 @@ Page({
         hasData,
         metrics,
         weekCount: metricData.count,
-        streak: metricData.streak,
         calendarSpan,
         calendarCells: calendar ? calendar.cells : [],
         calendarMonths,

@@ -282,6 +282,16 @@
 - [x] 结果面 compact（所有周期已过）：主卡「1 小时 45 分」+ 副标「距 07:30 起床 · 已扣 15 分钟入睡」；三行「已过」整行 opacity 0.55→0.88 且标签单独提亮；「‹ 返回」加宽 152rpx；截图 `docs/assets/l4-calc-result-final.png`。
 - [x] console 无 error（`grep -i error` 返回空）。
 
+### 1.21 批次 D（2026-10-26，单测/构建已验；模拟器与浏览器未点验）
+
+- [x] 分享深链：`tests/index-page.test.js` 断言 `applyShareQuery({from:'share',mode:'wake',wake:'08:15',fall:20})` 后 `mode/wakeTime/fallAsleep/flipped` 正确且未写本地偏好；分享 path 含 `from/mode/wake/fall`。
+- [x] share 事件：`server/test/admin.test.js` 发 `share` 后看板 `today.shares=1 / week.shares=1`；白名单放行。
+- [x] 提醒模板快照：`server/test/reminders.test.js` 断言换模板后旧任务仍用 `thing1/time2` 与 `template_id=tmpl-old`，新配置字段不出现。
+- [x] 死码清理后门禁：`npm test` 386/385/0 fail/1 skip；`check` 通过（21 JSON / 16 WXML / 18 WXSS，618.6 KB）。
+- [x] 国际站：`build:web` 11 页 + `verify:web` OK（内链 3 条，无 404）。
+- [ ] 待浏览器点验：后台保存失败按钮态、409 自动重载、清除二维码确认、demo 页小程序码 CTA（需要起服务 + 有后台账号/二维码）。
+- [ ] 待模拟器：分享卡片打开后结果面与分享者一致（需真机转发一次或在模拟器用「编译模式 → 启动参数」注入 `from=share&mode=wake&wake=08:15&fall=20`）。
+
 ## 2. 待真机验收（代码就绪，模拟器不可替代）
 
 > 按风险排序。每项都曾在 changelog 标注"未真机验证"；本机 CLI 已把可截图的全部截完，剩余必须真机。

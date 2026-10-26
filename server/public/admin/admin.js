@@ -1732,6 +1732,14 @@
   })
 
   $('#site-qr-clear').addEventListener('click', function () {
+    // 与删除音频/用户同一套确认口径：清除后落地页会立刻失去扫码入口
+    if (
+      !window.confirm(
+        '清除小程序码？\n保存后落地页与演示页都会回退为「微信搜索」，需要重新上传才能恢复。'
+      )
+    ) {
+      return
+    }
     applyQrUrl('')
     setDirty(true)
     updateJson()
@@ -1877,6 +1885,7 @@
       btn.textContent = '保存中…'
     })
 
+    let saveFailed = false
     try {
       const data = await api('/api/admin/config', { method: 'PUT', body: payload })
       state.config = data.config
@@ -1891,11 +1900,25 @@
         toast('看板加载失败：' + ((error && error.message) || '请稍后重试'), true)
       })
     } catch (e) {
-      toast(e.message || '保存失败', true)
+      saveFailed = true
+      // 409 = 别人刚保存过：继续在旧表单上重试只会连续失败，自动载入最新版本
+      const conflict = e && (e.status === 409 || e.code === 'CONFLICT')
+      if (conflict) {
+        toast('配置已被他人修改，正在载入最新版本，请确认后重试', true)
+        try {
+          await loadAll()
+        } catch (reloadError) {
+          toast('载入最新配置失败：' + ((reloadError && reloadError.message) || '请刷新页面'), true)
+        }
+      } else {
+        toast(e.message || '保存失败', true)
+      }
     } finally {
+      // 失败态留在按钮上（2.8s 的 toast 消失后用户仍能看到“失败了、可重试”）
       buttons.forEach(function (btn) {
         btn.disabled = false
-        btn.textContent = btn.dataset.label || '保存并生效'
+        btn.textContent = saveFailed ? '保存失败 · 重试' : btn.dataset.label || '保存并生效'
+        btn.classList.toggle('save-failed', saveFailed)
       })
     }
   })

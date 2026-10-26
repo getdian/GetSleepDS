@@ -423,12 +423,14 @@ test('事件上报与看板聚合', async () => {
     { type: 'checkin', target: '', ts: FIXED_NOW },
     { type: 'audio_play', target: 'rain', ts: FIXED_NOW },
     { type: 'ad_show', target: 'home', ts: FIXED_NOW },
-    { type: 'ad_error', target: 'sleep', ts: FIXED_NOW }
+    { type: 'ad_error', target: 'sleep', ts: FIXED_NOW },
+    // 分享漏斗的分母：没有它无法判断分享动作是否有效
+    { type: 'share', target: 'wake', ts: FIXED_NOW }
   ]
 
   const sent = await call('/api/events', { method: 'POST', body: { code: 'events-code', events } })
   assert.equal(sent.status, 200)
-  assert.equal(sent.body.accepted, 5)
+  assert.equal(sent.body.accepted, 6)
 
   // 补记事件：两个页面的补记成功都会 track('manual_sleep')。
   // 它曾不在白名单，导致整批事件被 400 拒绝后由客户端丢弃（静默丢数）。
@@ -457,6 +459,8 @@ test('事件上报与看板聚合', async () => {
   // 补记是独立指标：只打卡不补记 vs 高补记率决定产品动作，必须有出口
   assert.equal(board.body.today.manualSleeps, 1)
   assert.equal(board.body.week.manualSleeps, 1)
+  assert.equal(board.body.today.shares, 1)
+  assert.equal(board.body.week.shares, 1)
   assert.equal(board.body.trend.length, 14)
   assert.equal(board.body.topTracks[0].id, 'rain')
   assert.equal(board.body.topTracks[0].title, '雨声')
