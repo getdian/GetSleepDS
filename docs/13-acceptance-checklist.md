@@ -324,6 +324,15 @@
 - [x] 门禁：`npm test` 388/387/0 fail/1 skip；`check` 通过（624.3 KB）。
 - [ ] 待真机：体验版冷启动、锁屏 3 分钟、来电/切 App 恢复、悬浮 X 停止后点续播、收藏连播切歌。
 
+### 1.25 统计页「按本周均值定今晚入睡点」（2026-10-26，模拟器已验入口与跳转）
+
+- [x] 入口渲染：本周有记录时显示「按本周均值（HH:MM）定今晚入睡点 →」；截图 `docs/assets/l4-stats-plan-entry.png`（平均入睡 07:22 与入口同屏）。
+- [x] 跳转链路（模拟器实测）：`onPlanFromAverage` → `meta.prefillSleepMin` 写入 → `switchTab` → 首页 `onShow` 消费后 `mode=sleep / flipped=true / prefillSleepMin=null`（已消费）。
+- [x] 边界：`avgBedMin=null`（时间分散）时入口不渲染；强行点击给 toast，不跳转（单测覆盖）。
+- [x] 测试挂起修复：首页用例 `onShow()` 启动 60s `setInterval`，已补 `page.onHide()` + `events.clearQueue()`；`npm test` 13.9s 正常结束（此前两次“卡住”即此原因）。
+- [x] 门禁：`npm test` 390/389/0 fail/1 skip；`check` 通过（627.2 KB）。
+- [ ] 待真机：点击后的翻面动画、时间轮是否准确停在预填时刻。
+
 ## 2. 待真机验收（代码就绪，模拟器不可替代）
 
 > 按风险排序。每项都曾在 changelog 标注"未真机验证"；本机 CLI 已把可截图的全部截完，剩余必须真机。

@@ -1,5 +1,13 @@
 # 睡点 · 关键更新记录
 
+## 2026-10-26 · 统计页 → 计算器：按本周均值定今晚入睡点
+
+- **把“回顾”变成“今晚的行动”**：统计页在指标下方新增「按本周均值（07:22）定今晚入睡点 →」。点击把本周平均入睡分钟数写入一次性 `meta.prefillSleepMin` 并 `switchTab` 计算器；首页 `onShow` 消费后立刻清空（不重复触发），切到「想几点睡」模式、预填时间并**直接展示结果面**——少一步点击。
+- **数据来源**：`utils/stats.metricsOf` 新增 `avgBedMin/avgWakeMin` 输出（空数据返回 null）；本周时间分散、算不出圆均值时入口不渲染，点击兜底 toast「本周还没有可用的平均入睡时间」。
+- **测试**：`stats-page` 新增「写入 1395 并跳转 / 无法计算时不跳转」；`index-page` 新增「预填消费后 `mode=sleep`、`sleepTime` 正确、`flipped=true`、`prefillSleepMin` 清空」。
+- **顺带修掉一个测试挂起**：首页用例调用 `onShow()` 会启动 60s 时钟 `setInterval`，导致 `node --test` 不退出（本轮两次“卡住”的原因）。测试末尾补 `page.onHide()` + `events.clearQueue()`；验证 `npm test` 13.9s 正常结束。
+- **验证**：`npm test` **390 项 / 389 通过 / 0 失败 / 1 skip**；`npm run check` 通过（主包 **627.2 KB**）；模拟器截图 `docs/assets/l4-stats-plan-entry.png`（入口与指标同屏，平均入睡 07:22）；点击链路实测 `mode=sleep / flipped=true / prefillSleepMin=null`（已消费）。**未机验**：真机点击后的翻面动画与时间轮定位。
+
 ## 2026-10-26 · 体验版 P1：迷你条“显示正在播放却没有声音” · 列表图标去框
 
 - **根因（真机复现）**：`BackgroundAudioManager` 在**没有 src 时 `paused` 是 `undefined`**，调用方写 `!audio.paused` 得到 `true`；再叠加 `player-surface` 旧逻辑用 `lastTrackPlaying` 兜底，于是体验版一打开就显示「正在播放」，实际没有任何音频在播。

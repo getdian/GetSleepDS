@@ -141,6 +141,8 @@ Page({
     const records = storage.getRecords()
     const list = S.completedList(records)
     const metricData = S.metricsOf(records, now)
+    // 供 onPlanFromAverage 使用：只保留分钟数，null 表示本周时间分散算不出
+    this._avgBedMin = metricData.avgBedMin === null || metricData.avgBedMin === undefined ? null : metricData.avgBedMin
     const pending = storage.getPending()
     const partialDay = pending ? T.dateKey(now) : ''
     const monthOffset = Number(this.data.monthOffset) || 0
@@ -228,6 +230,11 @@ Page({
       this.setData({
         hasData,
         metrics,
+        // 平均入睡时间：有值才显示「按本周均值定今晚入睡点」入口
+        bedPrefill:
+          metricData.avgBedMin === null || metricData.avgBedMin === undefined
+            ? ''
+            : F.fmtClock(metricData.avgBedMin),
         weekCount: metricData.count,
         calendarSpan,
         calendarCells: calendar ? calendar.cells : [],
@@ -247,6 +254,20 @@ Page({
         syncText
       })
     }
+  },
+
+  /**
+   * 按本周均值定今晚入睡点：把「回顾」变成「下一晚的行动」。
+   * 只写一个本机预填值（不上传），计算器 onShow 消费后立即清掉，避免重复触发。
+   */
+  onPlanFromAverage() {
+    const minutes = this._avgBedMin
+    if (minutes === null || minutes === undefined) {
+      wx.showToast({ title: '本周还没有可用的平均入睡时间', icon: 'none' })
+      return
+    }
+    storage.patchMeta({ prefillSleepMin: minutes })
+    wx.switchTab({ url: '/pages/index/index' })
   },
 
   onMetricTap(e) {

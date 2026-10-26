@@ -143,6 +143,25 @@ Page({
         wakeContext: this.wakeContextText(prefWake, DEFAULT_FALL, Date.now())
       })
     }
+    // 统计页「按本周均值定今晚入睡点」：一次性预填，算完即清，避免每次进页都触发
+    const prefillMinutes = storage.getMeta().prefillSleepMin
+    if (Number.isInteger(prefillMinutes)) {
+      storage.patchMeta({ prefillSleepMin: null })
+      const clock = F.fmtClock(prefillMinutes)
+      const prefillNow = Date.now()
+      this._anchorAt = prefillNow
+      this.setData(
+        {
+          mode: 'sleep',
+          sleepTime: clock,
+          sleepContext: this.sleepContextText(clock, prefillNow)
+        },
+        () => {
+          this.calc(true)
+          if (this.data.view) this.setData({ flipped: true })
+        }
+      )
+    }
     // 提醒可能已到点或被「清除全部数据」撤销：按本机记录重新对齐按钮状态
     const planReminder = reminder.getPlanReminder()
     const remindAt = planReminder ? Number(planReminder.at) : 0

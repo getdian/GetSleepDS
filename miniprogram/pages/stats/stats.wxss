@@ -700,3 +700,32 @@
   width: 600px;
   height: 480px;
 }
+
+/* 回顾 → 行动：按本周均值定今晚入睡点 */
+.week-plan {
+  position: relative;
+  margin-top: 16rpx;
+  min-height: 88rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  padding: 0 26rpx;
+  border-radius: 999rpx;
+  background: rgba(145, 175, 255, 0.12);
+  border: 1rpx solid rgba(145, 175, 255, 0.26);
+}
+
+.week-plan-k {
+  font-size: 24rpx;
+  color: rgba(226, 235, 255, 0.92);
+}
+
+.week-plan-arrow {
+  font-size: 26rpx;
+  color: var(--color-primary-soft, #A7A4FF);
+}
+
+.week-plan--tap {
+  background: rgba(145, 175, 255, 0.2);
+}

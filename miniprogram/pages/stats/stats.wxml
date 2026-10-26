@@ -57,6 +57,20 @@
       <text class="week-hint">点上方↑数字看说明</text>
     </view>
 
+    <!-- 回顾 → 行动：把本周平均入睡时间直接填进计算器 -->
+    <view
+      wx:if="{{bedPrefill}}"
+      class="week-plan fade-up"
+      bindtap="onPlanFromAverage"
+      hover-class="week-plan--tap"
+      hover-stay-time="120"
+      aria-role="button"
+      aria-label="按本周平均入睡时间 {{bedPrefill}} 定今晚入睡点"
+    >
+      <text class="week-plan-k">按本周均值（{{bedPrefill}}）定今晚入睡点</text>
+      <text class="week-plan-arrow">→</text>
+    </view>
+
     <ad-slot wx:if="{{hasData}}" slot-name="stats" enabled="{{ads.stats.enabled}}" unit-id="{{ads.stats.unitId}}" type="{{ads.stats.type}}" />
 
     <!-- 打卡日历：当月可切月；3/6/12 个月改为横向滑动的紧凑月历 -->

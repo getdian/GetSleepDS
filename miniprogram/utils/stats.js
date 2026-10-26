@@ -306,7 +306,7 @@ function metricsOf(records, now) {
   const w = weekly(records, now)
   const cur = w.current
   if (!cur.count) {
-    return { has: false, count: 0, streak: 0, metrics: [] }
+    return { has: false, count: 0, streak: 0, metrics: [], avgBedMin: null, avgWakeMin: null }
   }
 
   const prev = w.previous
@@ -389,6 +389,9 @@ function metricsOf(records, now) {
     has: true,
     count: cur.count,
     streak: w.streak,
+    // 供「按本周均值定今晚入睡点」使用：分钟数，null 表示时间分散算不出
+    avgBedMin: cur.avgBedMin,
+    avgWakeMin: cur.avgWakeMin,
     metrics
   }
 }

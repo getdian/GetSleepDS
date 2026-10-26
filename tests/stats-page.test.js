@@ -210,3 +210,24 @@ test('空态：0 数据时支持从 empty-state 触发补记与去入睡', () =>
     Date.now = originalNow
   }
 })
+
+test('按本周均值定今晚入睡点：写入一次性预填并跳计算器', () => {
+  resetStore()
+  const page = makePage()
+  const calls = []
+  const original = global.wx.switchTab
+  global.wx.switchTab = (opts) => calls.push(opts && opts.url)
+  try {
+    page._avgBedMin = 23 * 60 + 15
+    page.onPlanFromAverage()
+    assert.equal(storage.getMeta().prefillSleepMin, 1395)
+    assert.deepEqual(calls, ['/pages/index/index'])
+
+    // 算不出平均（时间分散）时不能跳转，给明确提示
+    page._avgBedMin = null
+    page.onPlanFromAverage()
+    assert.equal(calls.length, 1)
+  } finally {
+    global.wx.switchTab = original
+  }
+})
