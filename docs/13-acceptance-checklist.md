@@ -390,6 +390,21 @@
 - [x] 门禁：`npm test` 395/394/0 fail/1 skip；`check` 636.8 KB。
 - [ ] 部署后验证：后台改一次提醒模板的字段名（如 `thing3/time4`）→ 用旧模板创建的提醒仍能发出（查 `sleep_reminders.thing_key` 非空）。
 
+### 1.32 复核后收口（2026-10-26，模拟器 + 单测）
+
+- [x] 热启动订阅意图：`getApp().onShow({query:{remind:'sleep'}})` 后切入睡页，`notice` 为「到点了，准备好就轻触圆环记录入睡」，`_autoEnd=false`、`_remindKind` 已清空；截图 `docs/assets/l4-hotstart-remind.png`。
+- [x] 单页模式：`singlePage=true` 后 `onShow`，底栏隐藏、顶栏「换背景」隐藏；console 无 error。
+- [x] 云副本删除后的本地提醒状态：`planReminder=null`、pending `reminderOptIn=false`，本机会话保留。
+- [x] 未开启云备份时 erase 失败：`cloudPendingErase=true`，统计页保留重试入口。
+- [x] 门禁：`npm test` 403 / 402 通过 / 0 失败 / 1 skip；`npm run check` 641.6 KB。
+- [ ] 真机：订阅消息冷/热启动、单页模式朋友圈打开、提醒授权后实际送达。
+
+### 1.32 文档配图清理与检查（2026-10-26）
+
+- [x] 清理 13 张未被引用的中间态截图（657KB）；保留 69 张被文档引用的验收证据图。
+- [x] 新增 `tools/check-docs-assets.mjs` 并挂进 `npm run check`：文档图片死链 + `docs/assets` 孤儿图双向检查（口径含 markdown 嵌入 / 反引号路径 / 裸文件名，通配写法不误判）。
+- [x] 门禁：`npm run check` 通过（42 文档、69 张被引用、无死链无孤儿）；`npm test` 394/0 fail/1 skip。
+
 ## 2. 待真机验收（代码就绪，模拟器不可替代）
 
 > 按风险排序。每项都曾在 changelog 标注"未真机验证"；本机 CLI 已把可截图的全部截完，剩余必须真机。

@@ -1,6 +1,6 @@
 # 睡点 · 当前上下文（context.md）
 
-> 最后更新：2026-10-23 · 这份文件是“当前代码事实”的速查，不替代 PRD/架构文档；重大改动先改这里，再同步 docs。
+> 最后更新：2026-10-26 · 这份文件是“当前代码事实”的速查，不替代 PRD/架构文档；重大改动先改这里，再同步 docs。
 >
 > **AI 工具入口**：[AGENTS.md](AGENTS.md)。任何工具的新会话先读它（阅读顺序 / 事实优先级 / 门禁期望值 / 生产红线），本文件是其中第 1 步的事实速查。
 
@@ -112,8 +112,8 @@ tests/            Node 纯逻辑测试
 
 ## 5. 当前验证基线
 
-- `npm test`：**392 项 / 391 通过 / 0 失败 / 1 skip**（2026-10-26 提醒重试轮；PG 集成用例在未设置 `PG_TEST_URL` 时跳过）。
-- `npm run check`：3 页面 / 22 JSON / 17 WXML / 19 WXSS，主包约 635.0 KB（以最新输出为准）。
+- `npm test`：**403 项 / 402 通过 / 0 失败 / 1 skip**（2026-10-26 复核收口轮实测；PG 集成用例在未设置 `PG_TEST_URL` 时跳过）。
+- `npm run check`：3 页面 / 22 JSON / 17 WXML / 19 WXSS，主包约 641.6 KB（以最新输出为准）。
 - `npm run verify:web`：11 页 / 3 条内链，无 404（2026-10-26 批次 D）。
 - **验收清单（2026-10-22 建）**：全部待验收项已合并至 [docs/13-acceptance-checklist.md](docs/13-acceptance-checklist.md)，分三区——本机已验收（CLI 模拟器 390×844 实测，含入睡页 10-22 改版与统计页 10-21 改版全状态截图、console 无 error）/ 待真机（音频锁屏、中断、定时、手势手感）/ 待外部输入（部署、AppSecret、COS 防盗链、流量主）。续作新增"未验收"项一律先落该表再写代码。
 - 交付包：以 `release-artifacts/` 下最新 `getsleep-<label>.zip` 为准（`npm run pack` 生成，含 `RELEASE-MANIFEST.json` 与逐文件 sha256，同时留 `.sha256` 校验文件）；打包前会强制跑 `npm test` + `npm run check`。

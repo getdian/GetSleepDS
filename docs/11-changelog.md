@@ -1,5 +1,23 @@
 # 睡点 · 关键更新记录
 
+## 2026-10-26 · 复核后收口：热启动界面、单页模式与清除数据余量
+
+- **先核验后动手**：上一轮报告的 3 组 P1（同步 trailing、提醒可信化/取消重建、音频回环熔断）已在 `e04cbb5` 修复，并用 `tests/sync-trailing.test.js`、`server/test/reminders.test.js`、`tests/audio-session.test.js` 逐项复核；本轮不重复改。
+- **删除云端副本后的提醒收敛**：`eraseCloudData()` 会一并删除服务端 `sleep_reminders`，但原成功后只清 `lastSyncAt/cloudPendingErase`，本地 `planReminder` 与 pending 的 `reminderOptIn` 仍保持已开启，用户无法重设。新增 `clearLocalCloudReminderState()`，成功后同时清计划提醒、把进行中会话的提醒标记复位，提示改为「云端副本与提醒已删除」。
+- **未开启云备份时服务端清除失败**：`eraseThenClear()` 的本机分支原本只在 `lastSyncAt>0` 时提示失败，且 `cloudPendingErase` 已为 false，用户既看不到重试入口，服务端提醒/事件也可能残留。现在失败统一保留 `cloudPendingErase`，始终提示可在统计页重试。
+- **订阅消息热启动**：新增 `utils/launch-intent.js`，由 `App.onLaunch/onShow` 捕获 `end/remind` 意图，入睡页每次 `onShow` 消费一次（2 分钟 TTL）。页面不再只依赖 `onLoad(options)`，解决缓存 tab 热启动丢失落地意图。
+- **朋友圈单页模式**：首页底栏改用显式 `tabBar.hidden`（custom-tab-bar 独立 root，`wx:if` 不足以保证隐藏）；「换背景」在单页模式/无背景配置时不渲染；`custom-tab-bar` 的 `switchTab` 补失败 toast，点当前 tab 回顶。
+- **启动事件**：`app_open` 从「配置加载成功回调内」移到启动即上报，弱网/新用户首启不再因配置失败漏掉获客分母。
+- **触控热区**：dense 结果面两个次级 pill 与首页脚注整行补到 88rpx 命中区，不改变视觉高度。
+- **验证**：`npm test` **403 项 / 402 通过 / 0 失败 / 1 skip**；`npm run check` 通过（主包约 **641.6 KB**）。模拟器 390×844 实测热启动 `remind=sleep` 落在入睡页并显示提示（截图 `docs/assets/l4-hotstart-remind.png`）；单页模式 `singlePage=true` 时底栏隐藏、顶栏「换背景」隐藏，console 无 error。真机订阅点击/冷热启动仍待复测。
+
+## 2026-10-26 · 文档配图清理 + 配图检查工具（防止孤儿图与死链）
+
+- **清理 13 张未被引用的截图**（657KB）：`docs/assets` 共 82 张 → 69 张，全部被文档（changelog / 验收清单）以路径形式引用；被删的是改前/改后中间态与无引用遗留（如 `l4-audio-visual-v3.png` 圆框版、`l4-lights-out-done.png`、`design-preview.png`）。**保留的 69 张是 L4 交付证据**（真机复测、回归对照、评审追溯都靠它们），不是冗余资源；`docs/assets` 不在小程序包内，不影响主包体积。
+- **新增 `tools/check-docs-assets.mjs` 并挂进 `npm run check`**：①文档里写出的 `docs/assets/...` 路径必须真实存在（防"删图留死链"——上一轮误删 `calendar-strip` 组件导致 1 年视图整块空白，同类问题要有工具兜住）；②`docs/assets` 下不得存在未被任何文档提及的图（防中间态截图越积越多）。
+  - 引用口径按本项目实际写法：markdown 嵌入 ``![](x.png)``、反引号路径 `` `docs/assets/x.png` ``、裸文件名都算；通配/枚举写法（`l4-*.png`、`tab-home(-active).png`）属设计文档的规格描述，不判死链。
+- **验证**：`npm run check` 通过（静态检查 + 文档配图检查：42 个文档、69 张被引用图片、无死链、无孤儿图）；`npm test` 394 通过 / 0 失败 / 1 skip。
+
 ## 2026-10-26 · 部署前 code-review（1b1371d..ade0da5）：修 1 个 P0 + 5 项一致性问题
 
 - **P0：提醒模板字段快照在路由层断链**。`routes/reminders.js` 的 `currentReminder()` 只返回 `{enabled, templateId, page}`，而落库时传的是 `reminderConfig.thingKey/timeKey` → 恒为 `undefined` → 落库空串 → 发送端永远回退到**当前**配置的字段名。也就是说"运营换模板后旧任务仍按创建时字段发送"的保护**完全没生效**，旧任务仍会被微信以 47003 拒绝。此前单测直接调 `db.saveReminder`（绕过路由），所以测试全绿也没暴露。

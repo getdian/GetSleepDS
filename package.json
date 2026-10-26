@@ -5,7 +5,7 @@
   "description": "睡点 · 微信小程序（睡眠时间计算 + 打卡 + 环境音）",
   "scripts": {
     "test": "node --test \"tests/*.test.js\" \"server/test/*.test.js\"",
-    "check": "node tools/check.mjs",
+    "check": "node tools/check.mjs && node tools/check-docs-assets.mjs",
     "build:web": "node tools/build-web.mjs",
     "verify:web": "node tools/verify-web.mjs",
     "assets": "python tools/gen_assets.py",
