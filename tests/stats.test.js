@@ -34,7 +34,6 @@ test('圆均值无解时不拼病句：说“算不出平均”，而不是“�
   const metrics = S.metricsOf(records, now)
   const bed = metrics.metrics.filter((item) => item.key === 'bed')[0]
   assert.equal(bed.value, '--:--')
-  assert.match(bed.sub, /算不出平均/)
   assert.match(bed.detail[0], /算不出平均/)
   assert.ok(!/平均 --:--/.test(bed.detail[0]), '不能出现“平均 --:-- 上床”')
   assert.ok(!/平均 --:--/.test(bed.detail.join(' ')))
@@ -84,7 +83,8 @@ test('上周对比取同期：周一不拿本周 1 天比上周 7 天', () => {
   assert.equal(w.previous.count, 1, '上一周只取同期（周一），不是完整 7 天')
 
   const metrics = S.metricsOf(records, now).metrics
-  assert.match(metrics[0].sub, /上周同期/)
+  // 对比只在点击后的说明卡里（卡面不再有副标）
+  assert.match(metrics[0].detail[1], /上周同期/)
   assert.match(metrics[1].detail[1], /上周同期/)
 })
 
@@ -277,7 +277,7 @@ test('最近 7 天的对比基线是前 7 天，不是上周同期', () => {
   assert.equal(result.periodKey, 'last_7')
   assert.equal(result.baselineLabel, '前 7 天')
   assert.equal(result.metrics[0].value, '6h')
-  assert.equal(result.metrics[0].sub, '比前 7 天少 2h')
+  assert.equal(result.metrics[0].detail[1], '比前 7 天少 2 小时 00 分')
 })
 
 test('本周有记录时仍按本周口径，行为与改动前一致', () => {
@@ -301,9 +301,14 @@ test('最近 7 天也没有记录时回退全部记录，且不编造对比', ()
   assert.equal(result.isFallback, true)
   assert.equal(result.baselineLabel, '')
   assert.equal(result.rangeText, '09.01–10.26')
-  // 三项副标都为空：走的是同一个 subOf，不能只挡住 duration 一项
-  result.metrics.forEach((item) => assert.equal(item.sub, '', item.key + ' 不应有对比副标'))
-  assert.match(result.metrics[0].detail[1], /全部记录平均/)
+  // 三项的对比行都不许编造「比…」：走的是同一个 compareLine，不能只挡住 duration 一项
+  result.metrics.forEach((item) => {
+    assert.ok(
+      !item.detail.some((line) => /^比/.test(line)),
+      item.key + ' 不应编造对比：' + item.detail.join(' | ')
+    )
+  })
+  assert.match(result.metrics[0].detail[2], /全部记录平均/)
   assert.match(result.metrics[1].detail[1], /没有可对比的上一段/)
 })
 

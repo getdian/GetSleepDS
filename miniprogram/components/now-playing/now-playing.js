@@ -14,6 +14,7 @@ const events = require('../../utils/events')
 const audioSession = require('../../utils/audio-session')
 const { resolvePlayerSurface, isReallyPlaying } = require('../../utils/player-surface')
 const { nextTrackManual } = require('../../utils/player-queue')
+const tabbar = require('../../utils/tabbar')
 const { getConfig } = require('../../utils/config')
 
 const TOGGLE_GUARD_MS = 220
@@ -54,6 +55,7 @@ Component({
       this._collapseTimer = null
       this._peekTimer = null
       this._loadingTimer = null
+      this._reconcileTimer = null
       this._unsubTimer = null
       this._onPlay = () => this.handlePlay()
       this._onPause = () => this.handlePause()
@@ -80,6 +82,10 @@ Component({
         this._collapseTimer = null
       }
       this.clearPeek()
+      if (this._reconcileTimer) {
+        clearTimeout(this._reconcileTimer)
+        this._reconcileTimer = null
+      }
       this.disarmLoadingGuard()
       // 组件销毁时清掉“停止上膛”的定时器（_alive 已置 false，不会再 setData）
       this.clearStopArm()
@@ -102,6 +108,8 @@ Component({
         this.setData({ miniExpanded: false })
       }
       this.sync(false)
+      // 系统/会话层续播可能比本页 show 晚一拍：800ms 后按真实状态再对一次账
+      this.scheduleReconcile()
     },
     hide() {
       this._pageVisible = false
@@ -251,6 +259,14 @@ Component({
 
     handleTimeUpdate() {
       if (!this._alive) return
+      // 真机反馈（2026-10-27）：关掉音乐再回小程序会自动续播，但条子仍写“已暂停”。
+      // play 事件早到/丢失时 UI 会停在旧态；timeupdate 只会在真正出声时触发，
+      // 所以这里按真实状态自愈一次（不是靠事件顺序）。
+      if (!this.data.playing && isReallyPlaying(this._audio)) {
+        this.setData({ playing: true, loading: false })
+        storage.patchMeta({ lastTrackPlaying: true })
+        this.sync(true)
+      }
       // 无缝回环绕过 onEnded，而首页/统计页没有 audio-dock 的 60s 到期扫描；
       // 低频复检一次权益，避免到期后一直循环播放。
       const now = Date.now()
@@ -440,6 +456,19 @@ Component({
       if (app && app.globalData) app.globalData.playerBarExpanded = !!value
     },
 
+    /**
+     * 回前台对账：系统/会话层续播可能比本页 show 晚一拍，
+     * 800ms 后按播放器真实状态再刷一次，避免“已在播却显示已暂停”。
+     */
+    scheduleReconcile() {
+      if (this._reconcileTimer) clearTimeout(this._reconcileTimer)
+      this._reconcileTimer = setTimeout(() => {
+        this._reconcileTimer = null
+        if (!this._alive) return
+        this.sync(true)
+      }, 800)
+    },
+
     expandMini() {
       this.clearPeek()
       this.clearCollapseTimer()
@@ -506,11 +535,9 @@ Component({
       this.clearPeek()
       const app = getApp()
       if (app && app.globalData) app.globalData.openAudioSheet = true
-      wx.switchTab({
-        url: '/pages/sleep/sleep',
-        fail: () => {
-          if (app && app.globalData) app.globalData.openAudioSheet = false
-        }
+      // 统一走 tabbar.switchTo：先落选中意图 + 旧条重绘，避免切页过渡残留旧高亮
+      tabbar.switchTo(1, '/pages/sleep/sleep', () => {
+        if (app && app.globalData) app.globalData.openAudioSheet = false
       })
     },
 
@@ -827,7 +854,7 @@ Component({
     },
 
     goSleep() {
-      wx.switchTab({ url: '/pages/sleep/sleep' })
+      tabbar.switchTo(1, '/pages/sleep/sleep')
     }
   }
 })

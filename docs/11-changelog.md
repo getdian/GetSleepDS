@@ -1,5 +1,60 @@
 # 睡点 · 关键更新记录
 
+## 2026-10-27 · 计算器结果面：翻面不再让整页上移 + 回显等比例放大 + 操作分两行
+
+背景（用户两轮反馈）：①翻面时结果态把副标 `max-height` 压成 0、标题又从 72rpx 缩到 40rpx，hero 一下矮约 90rpx，卡片与页脚整体上跳；②回显太小，且「去入睡打卡」与「换成…」的位置该互换、后者不该有按钮底。舞台高度本来就固定 712rpx，收副标换不来任何空间——只是位移。
+
+- **首行等高**：新增 `--calc-hero-line: 83rpx`（= 主字号 72rpx × 1.15）。正面问句与背面回显同高；回显外层 `align-items:center` 锁定高度、内层 `.hero-echo-line` 只做基线对齐。窄屏 `@media (max-width:360px)` 同步 `--calc-hero-size:64 / --calc-hero-side:38 / --calc-hero-line:74`。
+- **回显等比例放大**：时间 `40 → 72rpx`（与问句同号）、「今天/明天 时段」与「起床/入睡」`24 → 43rpx`（同比例 0.6），提问与回显形成「输入 → 输出」的对称。
+- **结果态副标**：由「收起（max-height:0）」改为「视觉隐藏但保留占位」（`visibility: hidden`）——提示文案去掉，高度不动。
+- **操作重排**：上行「提醒我入睡/起床 + 换成我想几点睡/起」，下行「‹ 返回 + 去入睡打卡」；`换成…` 去背景框（`background: transparent`、`padding: 0`、`margin-left: auto`），右缘与主按钮对齐；dense 规则拆成两条免得 `padding: 0 20rpx` 又把无框按钮撑回去；`.result-extra` 的 `margin-top` 24 → 16rpx，抵消主 CTA 换行后把该行从 72 撑到 80rpx 的 8rpx。
+- **singlePage（朋友圈单页）**：`singlePage` 条件从「整块隐藏」下放到按钮——「换成…」是页内动作，保留；提醒与去打卡是跨页动作，仍隐藏。
+- **验证**：模拟器实测翻面前后 `hero top/height = 91/77.5`、`card top = 182.5`、脚注 `top = 646.5` 完全一致；`result-share` 两态高度均 33px（未被 flex 压缩）；`tests/calc-copy.test.js` 9/9；`npm test` 438/437/0 fail/1 skip；`npm run check` 通过（695.8 KB）。
+
+## 2026-10-27 · 统计页详情卡补齐「改 / 删」：历史记录不再是单向门
+
+背景：用户点开 10-21 的格子，详情卡只有「补记一段」（只能加）。取证：入睡页的 `onEditSession` / `onDeleteSession` 都有 `day !== record.day` 守卫——只作用于当天；**历史日期在整个 App 里没有任何修正入口**，补记错了只能继续补记。底层 `storage.updateSession(day, id, ...)` / `removeSession(day, id)` 本来就接收任意 day，缺的只是 UI。
+
+- **详情卡逐段操作**：有记录日新增段列表（`13:00–14:30 · 1 小时 30 分` + `改 / 删`）；跨自然日的段标「次日」，否则 `22:58–18:23` 会被读成倒序；`canEdit` 与补记同窗口（400 天）。
+- **改**：复用页内补记面板的编辑态——标题「修改这一段」、醒来日只读、预填该段起止、按钮「保存修改」；保存走 `storage.updateSession`（内含重叠、24h 上限、跨天查重、v1 迁移）。
+- **校验排除自身**：`manual-sleep.evaluateManualRange` 新增 `excludeId`（同时透传给 `capacityErrorOf`），否则「只挪一分钟」会命中自己判成重叠、8 段日里编辑也会被当成「第 9 段」。
+- **删**：`wx.showModal` 确认 → `storage.removeSession`；删到最后一段时整天撤销并写墓碑（`tombstoneTime` 保证晚于记录 `updatedAt`，防云端回填），与入睡页删除语义完全一致。
+- **醒来日守卫**：多段日改到别天会把一段拆到另一个归档日（`updateSession` 内部会拒且无文案），面板先给可读提示「这天有多段：改醒来日会把记录拆到另一天，请先删除其它段」；单段日允许随起床时间迁移，成功后提示「已移到 X」并把选中态/详情卡落到实际的归档日。
+- **时序加固**：时间 picker 的 `setData` 回调是异步的，极快「选完就点保存」会用上一次的缓存区间（模拟器实测过 `_manualWakeAt` 仍为 0）。`saveManualSession` / `saveEditSession` 开头同步重算一次（`computeManualSheet`），有错误则 toast 不落库。
+- **测试**：`manual-sleep` 新增 2 条（排除自身不算重叠、8 段日编辑不按第 9 段拒）；`stats-page` 新增 2 条（改：段数不变且时长更新、详情卡跟着刷新；删：多段日只删该段 / 删光整日撤销）。
+- **验证**：`npm test` 438 项 / 436 通过 / 1 失败 / 1 skip（唯一失败是并行 tabbar 改动留下的 `wx.switchTab` 断言）；`npm run check` 通过（695.8 KB）；模拟器实测：10-21 两段 → 改起床 14:30→15:00 后详情与存储同步（1h30→2h）、删一段当天保留、删第二段整天撤销（`detail=null`）。
+
+## 2026-10-27 · 日历格内时长改为精确到分钟（与详情同源）
+
+背景：用户点开 10-21 的格子（格内 `6.1h`），详情却写「共 6 小时 05 分」，怀疑数据对不上。核实：同一份 365 分钟数据——格内 `fmtHoursShort` 按 0.1 小时四舍五入（`Math.round(365/6)/10` = `6.1h` ≈ 6 小时 6 分），详情 `fmtDuration` 精确到分钟。是精度不一致，不是数据错，但用户无从分辨。
+
+- `format.fmtHoursShort` 改为 `6h05 / 45m`（`Math.floor(min/60) + 'h' + pad2(min%60)`）：格内与详情数字逐位一致；不足 1 小时仍是 `45m`，无记录返回空串。
+- 宽度复核：格 92rpx、字号 19rpx，`6h05` 5 字符约 48rpx；`10.1h` 本来就是 5 字符，不挤（模拟器截图确认）。
+- 唯一消费方是 `components/month-calendar`（1 年视图 `calendar-strip` 不显示时长），海报/分享仍用 `fmtHours`（canvas 空间有限，保留一位小数）。
+- 测试：`tests/format.test.js` 新增 1 条（365→`6h05`、219→`3h39`、60→`1h00`、45→`45m`、0→`''`，并与 `fmtDuration(365)='6 小时 05 分'` 对齐）。
+- 验证：`node --test tests/format.test.js` 3/3；`npm run check` 通过（685.2 KB）；模拟器格内 `6h53` 与详情「6 小时 53 分」一致。
+
+## 2026-10-27 · 统计页移除标题区与「按均值定今晚」入口
+
+背景：用户要求两处一起移除（截图圈选）——①页面顶部整块标题区（REVIEW / 回顾 / 副标）；②指标下方的「按本周均值（HH:MM）定今晚上床点 →」入口。理由：标题区在只有三个数字的页面上是纯装饰，删掉后首屏直接从周期行开始；入口是统计页唯一的建议型入口，与「只陈述事实、不评价不建议」的产品立场冲突，且均值可能只由 1–3 天得出，用它定"今晚"代表性弱。
+
+- **标题区**：`stats.wxml` 的 `stats-hero`（eyebrow + 标题 + 副标）与 `stats.wxss` 的 `.stats-hero / .stats-hero .title-xl`（含 `margin-bottom: 34rpx`）整体删除；页面顶部只剩 `top-bar` 与周期行。上一轮刚改的副标「记录每一天的睡眠数据」随块一并移除。
+- **入口**：`stats.wxml` 的 `week-plan` 块、`stats.wxss` 的四组样式（`.week-plan/-k/-arrow/--tap`）删除；`stats.js` 删除 `planLabel/bedPrefill/_avgBedMin`、`onPlanFromAverage`、签名项与 setData 字段；首页 `onShow` 里消费 `meta.prefillSleepMin` 的整块删除（不再有写入方）。
+- **测试**：删除 `tests/stats-page.test.js`「按本周均值定今晚上床点」与 `tests/index-page.test.js`「首页消费统计页预填」两条用例。
+- **文档**：`docs/13` §1.25 改为「已移除」并附原因、§1.30/§1.32 里对入口与 `subOf` 的描述同步；`docs/14` 真机项 C3 删除；`context.md` 第 40 条改记为已移除、第 43 条去掉入口提及。
+- **验证**：`node --test tests/stats-page.test.js tests/index-page.test.js` 24 项 / 23 通过（唯一失败是并行 tabbar 改动的 `wx.switchTab` 断言）；`npm run check` 通过；模拟器实测首屏无标题区、无入口，指标与日历位置正常。
+
+## 2026-10-27 · 统计页首屏去噪：指标卡只留数字，对比下沉到说明卡
+
+背景：用户反馈指标卡下方的「比上周…」一行变化与点击后的说明卡重复，首屏显得吵；左上副标「只看数据，不做评价」是态度而非内容，读不出这一页是什么。
+
+- **副标**：`只看数据，不做评价` → `记录每一天的睡眠数据`（说明页面内容；"不评价/不建议"的立场仍由说明卡里的纯事实文案承担）。
+- **指标卡**：删除卡面副标（形如「比上周同期多 1h20m」），卡面只留「大数字 + 短标签」；三列等高、整体矮约 31rpx。
+- **说明卡**：`平均睡眠` 补一行 `compareLine`（原先只在卡面出现，`detail` 里没有）→ duration 4 行、bed/wake 仍 3 行；对比文案统一用全称（「比上周同期多 2 小时 50 分」），不再用 `h/m` 紧凑写法。
+- **清理**：`deltaAmount`、`subOf`、`metrics[].sub` 字段删除；页面刷新指纹改拼 `detail`（否则说明卡内容变但数字未变时会漏刷）；`.metric-sub` 与 `.metric--duration .metric-sub` 样式删除。
+- **测试契约同步**：`tests/stats.test.js`、`tests/stats-calendar.test.js` 里 6 处 `sub` 断言改为断言 `detail` 里的对比行；「上周无记录不编造对比」改为逐行 `/^比/` 统一校验。
+- **验证**：`node --test tests/stats.test.js tests/stats-calendar.test.js` 33/33；`npm run check` 通过（688.3 KB）；`npm test` 435/432 pass/2 fail/1 skip——两条失败是并行 tabbar 改动（`wx.switchTab` → `tabbar.switchTo`）留下的 `stats-page` 断言，与本轮无关。模拟器：首屏三列只有数字，点「平均睡眠」展开 4 行（含「比前 7 天少 59 分钟」）。
+
 ## 2026-10-27 · 统计页日历色阶：同色相由弱到强 + 图例连成色阶条
 
 背景：用户反馈「睡越短颜色越深、睡越久是白色背景」，怀疑色阶方向反了。核实：方向本就是「越久越亮」（`docs/09` 原文「颜色越亮 = 睡得越久」），真问题在两个端点——`#E0E7FF` 近白在夜墨底上像「空格/高亮」，格内文字被迫翻成深色、整格反相；`#3F3C9E` 与 `#5B57D6` 在深底上只差一档且贴近空格 `rgba(255,255,255,.045)`。

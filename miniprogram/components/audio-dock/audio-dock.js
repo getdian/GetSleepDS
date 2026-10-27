@@ -113,6 +113,7 @@ Component({
       this._sheetTrackId = ''
       this._collapseTimer = null
       this._peekTimer = null
+      this._reconcileTimer = null
       this._stopRequested = false
       this._playingFromCache = false
       this._currentTrack = null
@@ -194,6 +195,10 @@ Component({
         clearTimeout(this._peekTimer)
         this._peekTimer = null
       }
+      if (this._reconcileTimer) {
+        clearTimeout(this._reconcileTimer)
+        this._reconcileTimer = null
+      }
       cache.offChange(this._onCacheChange)
       if (this._unsubTimer) {
         this._unsubTimer()
@@ -224,6 +229,8 @@ Component({
       // 不能沿用隐藏前的 playing，否则会出现“已暂停却显示正在播放、点暂停无效”。
       this.syncFromAudio()
       this.syncPlayerText()
+      // 系统/会话层续播可能比本页 show 晚一拍：800ms 后按真实状态再对一次账
+      this.scheduleReconcile()
       // 隐藏期间解锁可能到期；回前台补一次，避免继续显示“已解锁”
       this.refreshUnlock()
       // tabBar 的显隐由页面 owner 统一负责：这里只保证“抽屉开着时必须隐藏”。
@@ -588,6 +595,12 @@ Component({
         },
         timeupdate: () => {
           if (!this._alive || this._stopRequested) return
+          // 与 now-playing 同口径：play 事件早到/丢失时，按真实出声状态自愈 UI
+          if (!this.data.playing && isReallyPlaying(this._audio)) {
+            this.setData({ playing: true, loading: false })
+            storage.patchMeta({ lastTrackPlaying: true })
+            this.syncPlayerText()
+          }
           // 无缝回环绕过 onEnded，而 60s 的 refreshUnlock 只在页面可见时跑；
           // 低频复检一次权益，避免切到首页/统计页后“看一次广告播整夜”。
           const now = Date.now()
@@ -848,6 +861,20 @@ Component({
         miniExpanded: !playing || this.expandedPreferred()
       })
       this.syncPlayerText()
+    },
+
+    /**
+     * 回前台对账：系统/会话层续播可能比本页 show 晚一拍，
+     * 800ms 后按播放器真实状态再对一次，避免“已在播却显示已暂停”。
+     */
+    scheduleReconcile() {
+      if (this._reconcileTimer) clearTimeout(this._reconcileTimer)
+      this._reconcileTimer = setTimeout(() => {
+        this._reconcileTimer = null
+        if (!this._alive) return
+        this.syncFromAudio()
+        this.syncPlayerText()
+      }, 800)
     },
 
     syncPlayerText() {

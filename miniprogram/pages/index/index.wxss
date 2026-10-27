@@ -6,6 +6,13 @@
      保留变量名兼容既有引用，值必须与 app.wxss 保持一致 */
   --c-primary-soft: var(--color-primary-soft, #A7A4FF);
   --c-text-3: rgba(255, 255, 255, 0.52);
+  /* 页头主字号：正面问句与背面回显的时间同号（翻转时页头不缩水） */
+  --calc-hero-size: 72rpx;
+  /* 回显的「今天/明天 时段」与「起床/入睡」：同比例 0.6 倍缩小，仍弱于时间 */
+  --calc-hero-side: 43rpx;
+  /* 页头首行高度 = 主字号 × 1.15 行高。正/背首行锁同一高度，
+     翻转前后 hero 总高不变，下方卡片与脚注不会整体上移（视觉差） */
+  --calc-hero-line: 83rpx;
   position: relative;
   z-index: var(--z-page, 1);
   padding-top: 8rpx;
@@ -48,18 +55,13 @@
   margin-bottom: 28rpx;
 }
 
-/* 结果态：问句已由「你选的时间」回显替代（见 wxml），副标收起，把竖向空间让给结果卡 */
-.calc-hero.is-result .hero-sub {
-  margin-top: 0;
-  max-height: 0;
-  opacity: 0;
-  overflow: hidden;
-}
-
+/* 结果态副标保持常驻：舞台高度固定 712rpx，收起副标换不来任何空间，
+   只会让整页内容在翻转时上移约 90rpx——那是肉眼可见的跳变，不是留白 */
 .hero-title {
   display: block;
+  height: var(--calc-hero-line, 83rpx);
   font-family: var(--font-sans);
-  font-size: 72rpx;
+  font-size: var(--calc-hero-size, 72rpx);
   font-weight: 700;
   line-height: 1.15;
   letter-spacing: 2rpx;
@@ -68,17 +70,23 @@
   transition: font-size 0.24s ease;
 }
 
-/* 翻转后的输入回显：时间用主字号，单位弱化一档，不与卡内「推荐…时间」抢层级 */
+/* 翻转后的输入回显：外层锁成与问句同高并垂直居中，内层只做基线对齐；
+   时间与问句同字号，日期/时段与单位按同比例缩小，不与卡内「推荐…时间」抢层级 */
 .hero-echo {
   display: flex;
-  align-items: baseline;
-  gap: 10rpx;
+  align-items: center;
+  height: var(--calc-hero-line, 83rpx);
   line-height: 1.15;
+}
+
+.hero-echo-line {
+  display: flex;
+  align-items: baseline;
 }
 
 /* 今天/明天 + 时段：与时间轮上下文同一口径，弱化到辅助层 */
 .hero-echo-day {
-  font-size: 24rpx;
+  font-size: var(--calc-hero-side, 43rpx);
   font-weight: 500;
   letter-spacing: 1rpx;
   color: rgba(220, 230, 255, 0.72);
@@ -86,15 +94,16 @@
 
 .hero-echo-time {
   font-family: var(--font-sans);
-  font-size: 40rpx;
+  font-size: var(--calc-hero-size, 72rpx);
   font-weight: 700;
+  line-height: 1.15;
   letter-spacing: 1rpx;
   color: #FFFFFF;
   text-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.5);
 }
 
 .hero-echo-unit {
-  font-size: 24rpx;
+  font-size: var(--calc-hero-side, 43rpx);
   font-weight: 500;
   letter-spacing: 1rpx;
   color: rgba(220, 230, 255, 0.6);
@@ -106,7 +115,12 @@
   font-size: 26rpx;
   line-height: 1.5;
   color: rgba(220, 230, 255, 0.78);
-  transition: opacity 0.2s ease, max-height 0.28s ease, margin-top 0.28s ease;
+}
+
+/* 结果态收起副标：只做视觉隐藏、保留占位——若连占位一起收掉，
+   hero 会矮 53rpx，整页内容又会在翻转时上跳（这正是上一轮修掉的视差） */
+.calc-hero.is-result .hero-sub {
+  visibility: hidden;
 }
 
 /* 极简无框外壳：去掉边框和厚重背景，让时钟滚轮自然漂浮在夜空中 */
@@ -153,7 +167,6 @@
 .mode-pill-active {
   display: flex;
   align-items: center;
-  gap: 10rpx;
   height: 76rpx;
   padding: 0 26rpx;
   border-radius: 999rpx;
@@ -365,7 +378,6 @@
   flex: none;
   display: flex;
   align-items: center;
-  gap: 10rpx;
 }
 
 /* 极简 CSS 时钟图标 */
@@ -411,7 +423,6 @@
 .fall-chips {
   flex: none;
   display: flex;
-  gap: 8rpx;
 }
 
 /* 未选中的档位只显示文字，不画底框；选中项才是一枚小标签 */
@@ -424,7 +435,6 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 2rpx;
   border-radius: 999rpx;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
   font-size: 23rpx;
@@ -474,7 +484,6 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12rpx;
   height: 104rpx;
   border-radius: 999rpx;
   background: var(--btn-primary-bg);
@@ -504,7 +513,6 @@
 .result-head {
   display: flex;
   align-items: center;
-  gap: 12rpx;
   margin-top: 6rpx;
   margin-bottom: 20rpx;
 }
@@ -585,7 +593,6 @@
 .result-line {
   display: flex;
   align-items: baseline;
-  gap: 10rpx;
   white-space: nowrap;
   flex-wrap: nowrap;
 }
@@ -650,7 +657,6 @@
   flex: none;
   display: flex;
   align-items: center;
-  gap: 6rpx;
   height: 48rpx;
   padding: 0 20rpx;
   border-radius: 999rpx;
@@ -667,7 +673,7 @@
   color: #FFFFFF;
 }
 
-/* 时长护栏：偏短用琥珀，不足用柔红，避免与“推荐”紫色混淆 */
+/* 时长护栏：偏短用琥珀，不足用柔红，避免与"推荐"紫色混淆 */
 .result-badge.guide-short {
   background: rgba(245, 194, 107, 0.14);
   border-color: rgba(245, 194, 107, 0.4);
@@ -707,13 +713,13 @@
   opacity: 0.88;
 }
 
-/* “已过”标签在弱化行里要单独提亮，否则信息层级塌陷 */
+/* "已过"标签在弱化行里要单独提亮，否则信息层级塌陷 */
 .result-row.is-passed .result-row-tag {
   border-color: rgba(255, 255, 255, 0.28);
   color: rgba(220, 232, 255, 0.85);
 }
 
-/* 6 个周期「充足/补觉」档：虚线分隔，避免读成第 4 个“推荐” */
+/* 6 个周期「充足/补觉」档：虚线分隔，避免读成第 4 个"推荐" */
 .result-row.is-extra {
   margin-top: 6rpx;
   border-top: 1rpx dashed rgba(45, 212, 191, 0.32);
@@ -722,7 +728,6 @@
 .result-row-left {
   display: flex;
   align-items: baseline;
-  gap: 10rpx;
 }
 
 .result-row-day {
@@ -747,7 +752,7 @@
   color: rgba(205, 220, 250, 0.72);
 }
 
-/* 补觉标签：薄荷色，与“已过”的灰标签区分 */
+/* 补觉标签：薄荷色，与"已过"的灰标签区分 */
 .result-row-tag.is-extra {
   border-color: rgba(45, 212, 191, 0.45);
   color: #2DD4BF;
@@ -756,7 +761,6 @@
 .result-row-right {
   display: flex;
   align-items: baseline;
-  gap: 8rpx;
   min-width: 0;
 }
 
@@ -840,11 +844,13 @@
 }
 
 .result-extra {
-  /* 与「去入睡打卡」同一行：提醒是次级动作，不额外占纵向预算 */
+  /* 提醒与「换成…」同一行：两者都是次级动作，不额外占纵向预算。
+     margin 比原先少 8rpx——主 CTA 换到下一行后把那一行从 72rpx 撑到 80rpx，
+     这里扣回来，保证 712rpx 舞台的内容总高不增（否则分享行会贴到舞台底边）。 */
   display: flex;
   align-items: center;
   gap: 10rpx;
-  margin-top: 24rpx;
+  margin-top: 16rpx;
   padding: 0 4rpx;
 }
 
@@ -854,7 +860,6 @@
   min-height: 80rpx;
   display: flex;
   align-items: center;
-  gap: 10rpx;
   /* 与右侧主 CTA 同一视觉重量：清晰明朗的尺寸与对比度 */
   padding: 0 16rpx 0 4rpx;
   font-size: 27rpx;
@@ -885,7 +890,7 @@
   transform: scale(0.96);
 }
 
-/* 已设提醒：薄荷色表示“已完成”，与补觉标签同一色系，不再像一个待点动作 */
+/* 已设提醒：薄荷色表示"已完成"，与补觉标签同一色系，不再像一个待点动作 */
 .result-remind.is-set {
   color: #2DD4BF;
 }
@@ -899,7 +904,6 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10rpx;
   height: 80rpx;
   border-radius: 999rpx;
   border: none;
@@ -978,8 +982,12 @@
   color: rgba(225, 238, 255, 0.88);
 }
 
+/* 换方向：无框文字入口，靠右与下一行的主 CTA 同一条右基准线
+   （padding 归零，右缘即文字右缘；热区仍由 min-height + ::after 保证） */
 .result-switch {
-  background: rgba(145, 175, 255, 0.10);
+  margin-left: auto;
+  padding: 0;
+  background: transparent;
   color: var(--c-primary-soft);
 }
 
@@ -992,9 +1000,8 @@
 
 .result-switch:active,
 .result-switch--tap {
-  opacity: 0.65;
+  opacity: 0.55;
   transform: scale(0.96);
-  background: rgba(145, 175, 255, 0.18);
 }
 
 .result-share {
@@ -1077,10 +1084,16 @@
 
 /* 压缩必须落在子项上：父级 min-height 不会缩小已有 min-height 的子元素，
    只改容器等于没生效（旧写法的 22rpx 余量实际不存在）。 */
-.calc-back.is-dense .result-reset,
-.calc-back.is-dense .result-switch {
+.calc-back.is-dense .result-reset {
   min-height: 64rpx;
   padding: 0 20rpx;
+  font-size: 23rpx;
+}
+
+/* 换方向无框：不留左右内距，右缘始终与主 CTA 对齐 */
+.calc-back.is-dense .result-switch {
+  min-height: 64rpx;
+  padding: 0;
   font-size: 23rpx;
 }
 
@@ -1115,8 +1128,15 @@
 /* 360 及以下窄屏：只缩 hero 字号；主推荐徽标必须保留（时长护栏），
    主卡一行保持 nowrap，由 meta 自身省略，避免徽标被隐藏或换行撑高背面。 */
 @media (max-width: 360px) {
+  /* 主字号缩到 64rpx：行高变 74rpx、旁注按 0.6 比例降为 38rpx，回显仍与问句同高 */
+  .calc-page {
+    --calc-hero-size: 64rpx;
+    --calc-hero-side: 38rpx;
+    --calc-hero-line: 74rpx;
+  }
+
   .hero-title {
-    font-size: 64rpx;
+    font-size: var(--calc-hero-size, 64rpx);
   }
 
   .result-badge {
@@ -1145,7 +1165,7 @@
   transition: opacity 0.16s ease, transform 0.16s ease;
 }
 
-/* 整行是“为什么是 90 分钟”入口：文字只有约 40rpx 高，上下各扩 24rpx 到 88rpx */
+/* 整行是"为什么是 90 分钟"入口：文字只有约 40rpx 高，上下各扩 24rpx 到 88rpx */
 .calc-note::after {
   content: '';
   position: absolute;
@@ -1221,4 +1241,57 @@
   font-size: 20rpx;
   line-height: 1.7;
   color: var(--text-muted, #94A3B8);
+}
+
+/* 老内核没有 flex gap（iOS < 14.5 / 老安卓 X5）：核心行用相邻兄弟 margin 还原同一组间距 */
+.hero-echo-line > text + text {
+  margin-left: 10rpx;
+}
+
+.mode-pill-active .mode-text {
+  margin-left: 10rpx;
+}
+
+.fall-head .fall-label {
+  margin-left: 10rpx;
+}
+
+.fall-chip + .fall-chip {
+  margin-left: 8rpx;
+}
+
+.fall-chip > text + text {
+  margin-left: 2rpx;
+}
+
+.calc-action .action-arrow {
+  margin-left: 12rpx;
+}
+
+.result-head .result-label {
+  margin-left: 12rpx;
+}
+
+.result-line > text + text {
+  margin-left: 10rpx;
+}
+
+.result-badge > text + text {
+  margin-left: 6rpx;
+}
+
+.result-row-left > text + text {
+  margin-left: 10rpx;
+}
+
+.result-row-right > text + text {
+  margin-left: 8rpx;
+}
+
+.result-remind > text + text {
+  margin-left: 10rpx;
+}
+
+.result-go > text + text {
+  margin-left: 10rpx;
 }

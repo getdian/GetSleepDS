@@ -17,3 +17,6 @@ logs/
 .agents/
 wechatide-tools/
 wechatide-skill/
+
+# IDE / Agent 会话产物（模拟器临时截图等），不入库
+.codebuddy/

@@ -126,7 +126,7 @@ test('结构化事实：总睡眠含午休，且与上周对比按总睡眠算',
   assert.match(facts.items[0].note, /比上周多 1 小时 40 分/)
 })
 
-test('3 列核心指标：大数字 + 短标签 + 一行变化，说明卡固定 3 行', () => {
+test('3 列核心指标：卡面只有大数字 + 短标签，对比与口径都在说明卡', () => {
   const records = {
     '2026-10-20': record('2026-10-20', local(2026, 10, 19, 23, 41), local(2026, 10, 20, 3, 20)),
     '2026-10-21': record('2026-10-21', local(2026, 10, 20, 23, 41), local(2026, 10, 21, 3, 20)),
@@ -142,17 +142,22 @@ test('3 列核心指标：大数字 + 短标签 + 一行变化，说明卡固定
   )
   assert.equal(result.metrics[0].label, '平均睡眠')
   assert.equal(result.metrics[0].value, '3h39')
-  assert.equal(result.metrics[0].sub, '与上周同期持平')
+  // 持平对比原先在卡面副标，现在只出现在说明卡第 2 行
+  assert.equal(result.metrics[0].detail[1], '与上周同期持平')
   assert.equal(result.metrics[2].label, '平均起床')
+  // duration 多一行对比（卡面副标下沉），bed/wake 仍 3 行
+  assert.deepEqual(
+    result.metrics.map((item) => item.detail.length),
+    [4, 3, 3]
+  )
   result.metrics.forEach((item) => {
-    assert.equal(item.detail.length, 3)
     assert.ok(item.detail.every((line) => typeof line === 'string' && line.length > 0))
   })
   // 常见 7.5–8 小时陈述只留在点击后的说明卡里，不再占首屏
-  assert.match(result.metrics[0].detail[1], /比常见 7.5–8 小时少 3 小时 51 分/)
+  assert.match(result.metrics[0].detail[2], /比常见 7.5–8 小时少 3 小时 51 分/)
   assert.match(result.metrics[1].detail[2], /按醒来日归档/)
   assert.match(result.metrics[2].detail[2], /不是闹钟/)
-  assert.match(result.metrics[0].detail[2], /每天都是|最长/)
+  assert.match(result.metrics[0].detail[3], /每天都是|最长/)
 })
 
 test('指标在 1 天记录时也给全 3 列；上周无记录不编造对比', () => {
@@ -163,8 +168,9 @@ test('指标在 1 天记录时也给全 3 列；上周无记录不编造对比',
   assert.equal(result.has, true)
   assert.equal(result.metrics.length, 3)
   assert.equal(result.metrics[0].value, '3h39')
-  assert.equal(result.metrics[0].sub, '')
-  assert.match(result.metrics[0].detail[1], /比常见 7.5–8 小时少 3 小时 51 分/)
+  // 卡面没有副标；对比行在说明卡里，上周无记录时只陈述「无法对比」
+  assert.match(result.metrics[0].detail[1], /没有记录|没有可对比的上一段/)
+  assert.match(result.metrics[0].detail[2], /比常见 7.5–8 小时少 3 小时 51 分/)
   assert.equal(S.metricsOf({}, NOW).has, false)
 })
 
@@ -174,14 +180,14 @@ test('满 3 天后按常见 7.5–8 小时给事实陈述（仅说明卡）', ()
     '2026-10-20': record('2026-10-20', local(2026, 10, 19, 23, 0), local(2026, 10, 20, 6, 50)),
     '2026-10-21': record('2026-10-21', local(2026, 10, 20, 23, 0), local(2026, 10, 21, 6, 50))
   }
-  assert.match(S.metricsOf(inRange, NOW).metrics[0].detail[1], /在常见 7.5–8 小时内/)
+  assert.match(S.metricsOf(inRange, NOW).metrics[0].detail[2], /在常见 7.5–8 小时内/)
 
   const short = {
     '2026-10-19': record('2026-10-19', local(2026, 10, 18, 23, 0), local(2026, 10, 19, 5, 0)),
     '2026-10-20': record('2026-10-20', local(2026, 10, 19, 23, 0), local(2026, 10, 20, 5, 0)),
     '2026-10-21': record('2026-10-21', local(2026, 10, 20, 23, 0), local(2026, 10, 21, 5, 0))
   }
-  assert.match(S.metricsOf(short, NOW).metrics[0].detail[1], /比常见 7.5–8 小时少 1 小时 30 分/)
+  assert.match(S.metricsOf(short, NOW).metrics[0].detail[2], /比常见 7.5–8 小时少 1 小时 30 分/)
 })
 
 test('连续多月日历：数量、顺序、精简字段与跨年', () => {

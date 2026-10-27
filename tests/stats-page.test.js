@@ -222,7 +222,7 @@ test('删除云端副本后：本地计划提醒与进行中提醒标记一起�
   assert.equal(storage.getPending().id, 'sleep-cloud', '本机睡眠会话不能因删云端提醒被清掉')
 })
 
-test('空态：0 数据时支持从 empty-state 触发补记与去入睡', () => {
+test('空态：0 数据时支持从 empty-state 触发补记与去入睡', async () => {
   const originalNow = Date.now
   Date.now = () => NOW
   let switchedUrl = ''
@@ -236,8 +236,10 @@ test('空态：0 数据时支持从 empty-state 触发补记与去入睡', () =>
     page.refresh()
     assert.equal(page.data.hasData, false, '初始无记录为 0 数据空态')
 
-    // 触发去入睡
+    // 触发去入睡：跳转统一走 tabbar.switchTo，它有一条 setTimeout(80) 兜底
+    // （页面栈里没有 tabBar 实例时才靠它落地），断言必须等这条兜底跑完
     page.goSleep()
+    await new Promise((resolve) => setTimeout(resolve, 150))
     assert.equal(switchedUrl, '/pages/sleep/sleep')
 
     // 触发补记
@@ -249,27 +251,6 @@ test('空态：0 数据时支持从 empty-state 触发补记与去入睡', () =>
   } finally {
     global.wx.switchTab = originalSwitchTab
     Date.now = originalNow
-  }
-})
-
-test('按本周均值定今晚上床点：写入一次性预填并跳计算器', () => {
-  resetStore()
-  const page = makePage()
-  const calls = []
-  const original = global.wx.switchTab
-  global.wx.switchTab = (opts) => calls.push(opts && opts.url)
-  try {
-    page._avgBedMin = 23 * 60 + 15
-    page.onPlanFromAverage()
-    assert.equal(storage.getMeta().prefillSleepMin, 1395)
-    assert.deepEqual(calls, ['/pages/index/index'])
-
-    // 算不出平均（时间分散）时不能跳转，给明确提示
-    page._avgBedMin = null
-    page.onPlanFromAverage()
-    assert.equal(calls.length, 1)
-  } finally {
-    global.wx.switchTab = original
   }
 })
 
@@ -313,5 +294,94 @@ test('1 年视图：数据未变时复用日历网格，数据变化后必须重
     assert.equal(calls, 2, '数据变化必须重算')
   } finally {
     statsUtil.calendarMonths = original
+  }
+})
+
+/* ---------------- 历史记录的修正入口（详情卡「改 / 删」） ---------------- */
+
+function localTs(year, month, day, hour, minute) {
+  return new Date(year, month - 1, day, hour, minute, 0, 0).getTime()
+}
+
+/** 10-21 两段：整夜 10-20 23:00 → 10-21 06:30 + 午睡 13:00 → 14:30 */
+function seedTwoSessions() {
+  storage.saveSession({
+    id: 's-1',
+    startAt: localTs(2026, 10, 20, 23, 0),
+    endAt: localTs(2026, 10, 21, 6, 30),
+    durationMin: 450,
+    source: 'manual',
+    editedAt: NOW
+  })
+  storage.saveSession({
+    id: 's-2',
+    startAt: localTs(2026, 10, 21, 13, 0),
+    endAt: localTs(2026, 10, 21, 14, 30),
+    durationMin: 90,
+    source: 'manual',
+    editedAt: NOW
+  })
+}
+
+test('详情卡「改」：编辑既有段只改时间，段数不变、不判成与自己重叠', () => {
+  const originalNow = Date.now
+  Date.now = () => NOW
+  try {
+    resetStore()
+    seedTwoSessions()
+    const page = makePage()
+    page.refresh()
+    page.openDay('2026-10-21')
+    assert.equal(page.data.detail.sessions.length, 2)
+    assert.equal(page.data.detail.canEdit, true)
+
+    page.openManualSheet('2026-10-21', { edit: { id: 's-2' } })
+    assert.equal(page.data.manualMode, 'edit')
+    assert.equal(page.data.manualBedTime, '13:00')
+    assert.equal(page.data.manualWakeTime, '14:30')
+    assert.equal(page.data.manualError, '')
+
+    // 只挪自己的结束时间：校验必须排除本段，否则会判成与自身重叠
+    page.onManualTimeChange({
+      currentTarget: { dataset: { field: 'manualWakeTime' } },
+      detail: { value: '15:00' }
+    })
+    assert.equal(page.data.manualError, '', '编辑时排除自身后不应报重叠')
+    page.onManualConfirm()
+
+    const record = storage.getRecords()['2026-10-21']
+    assert.equal(record.sessions.length, 2, '编辑不能增减段数')
+    assert.equal(record.sessions.filter((item) => item.id === 's-2')[0].durationMin, 120)
+    assert.equal(page.data.manualShow, false)
+    assert.equal(page.data.detail.sessions.length, 2, '保存后详情卡要跟着刷新')
+  } finally {
+    Date.now = originalNow
+  }
+})
+
+test('详情卡「删」：多段日删一段后当天保留，删光时整天撤销', () => {
+  const originalNow = Date.now
+  const originalModal = global.wx.showModal
+  Date.now = () => NOW
+  global.wx.showModal = (opts) => opts.success({ confirm: true })
+  try {
+    resetStore()
+    seedTwoSessions()
+    const page = makePage()
+    page.refresh()
+    page.openDay('2026-10-21')
+
+    page.onDetailDeleteSession({ currentTarget: { dataset: { id: 's-2' } } })
+    const left = storage.getRecords()['2026-10-21']
+    assert.equal(left.sessions.length, 1, '多段日只删被点的那一段')
+    assert.equal(page.data.detail.sessions.length, 1, '删完仍停在详情卡')
+
+    // 删最后一段：整条记录撤销（含墓碑，防云端回填）
+    page.onDetailDeleteSession({ currentTarget: { dataset: { id: 's-1' } } })
+    assert.equal(storage.getRecords()['2026-10-21'], undefined)
+    assert.equal(page.data.detail, null)
+  } finally {
+    Date.now = originalNow
+    global.wx.showModal = originalModal
   }
 })

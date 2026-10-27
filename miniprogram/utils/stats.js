@@ -389,14 +389,6 @@ function compactDuration(minutes) {
   return m ? h + 'h' + T.pad2(m) : h + 'h'
 }
 
-function deltaAmount(minutes) {
-  const abs = Math.abs(Math.round(minutes || 0))
-  const h = Math.floor(abs / 60)
-  const m = abs % 60
-  // 5h42 这种写法会被读成"5 点 42"，补 m 后缀消除歧义；纯分钟同样用 m
-  return h ? (m ? h + 'h' + T.pad2(m) + 'm' : h + 'h') : m + 'm'
-}
-
 // 统计页的「常见睡眠时长」参照：7.5–8 小时，只做事实陈述，不评价好坏
 const REFERENCE_LOW_MIN = 7.5 * 60
 const REFERENCE_HIGH_MIN = 8 * 60
@@ -415,7 +407,8 @@ function durationNoteOf(cur, subject) {
 
 /**
  * 统计页首屏的 3 个核心指标：平均睡眠 / 平均上床 / 平均起床。
- * 每项只给「大数字 + 短标签 + 一行变化」，细节事实放在点击后的 detail 里。
+ * 卡面只留「大数字 + 短标签」；与上一段的对比、口径、极值全部放在点击后的 detail 里
+ * （对比信息默认不占首屏，页面更干净；需要比较时点一下即可看到）。
  *
  * 周期默认取「本周」；本周还没有记录时自动回退最近 7 天 / 全部记录，
  * 并在返回值里带上周期与区间（periodLabel / rangeText / isFallback），
@@ -461,23 +454,16 @@ function metricsOf(records, now, options) {
     if (timeDelta) return '比' + baseline + (diff > 0 ? '晚 ' : '早 ') + durationText(Math.abs(diff))
     return '比' + baseline + (diff > 0 ? '多 ' : '少 ') + durationText(Math.abs(diff))
   }
-  const subOf = (diff, timeDelta) => {
-    if (diff === null) return ''
-    if (diff === 0) return hasBaseline ? '与' + baseline + '持平' : ''
-    if (timeDelta) return '比' + baseline + (diff > 0 ? '晚 ' : '早 ') + deltaAmount(diff)
-    return '比' + baseline + (diff > 0 ? '多 ' : '少 ') + deltaAmount(diff)
-  }
-
   const metrics = [
     {
       key: 'duration',
       label: '平均睡眠',
       value: compactDuration(total),
-      // 一行变化必须带主语：单独"少 5h42"读不出是和谁比
-      sub: subOf(d.total, false),
       detail: [
         // 口径写在说明里：「平均睡眠」是用户语言，实际是在床时长（含躺下到睡着的清醒）
         scope + '平均 ' + durationText(total) + '，按上床到起床算，含午休与间断段',
+        // 与上一段的对比：原先写在卡面副标，现在只在这里给（卡面留白）
+        compareLine(d.total, false),
         reference,
         cur.longestMin === cur.shortestMin
           ? '每天都是 ' + durationText(cur.longestMin)
@@ -488,7 +474,6 @@ function metricsOf(records, now, options) {
       key: 'bed',
       label: '平均上床',
       value: clockText(cur.avgBedMin),
-      sub: bedSpread ? '时间分散，算不出平均' : subOf(d.bed, true),
       detail: [
         bedSpread
           ? scope + '上床时间分散在表盘两端，算不出平均值'
@@ -503,7 +488,6 @@ function metricsOf(records, now, options) {
       key: 'wake',
       label: '平均起床',
       value: clockText(cur.avgWakeMin),
-      sub: wakeSpread ? '时间分散，算不出平均' : subOf(d.wake, true),
       detail: [
         wakeSpread
           ? scope + '起床时间分散在表盘两端，算不出平均值'
@@ -519,7 +503,7 @@ function metricsOf(records, now, options) {
       has: true,
       count: cur.count,
       streak: w.streak,
-      // 供「按均值定今晚上床点」使用：分钟数，null 表示时间分散算不出
+      // 供海报与分享摘要使用：分钟数，null 表示时间分散算不出
       avgBedMin: cur.avgBedMin,
       avgWakeMin: cur.avgWakeMin,
       metrics

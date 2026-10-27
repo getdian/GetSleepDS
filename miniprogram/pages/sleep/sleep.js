@@ -103,6 +103,7 @@ Page({
 
   onShow() {
     this._alive = true
+    // 全局 tab 意图只由 tabbar.switchTo 写（onShow 回写会在连点时覆盖最后一次点击）
     const tabBar = this.getTabBar && this.getTabBar()
     if (tabBar) tabBar.setData({ selected: 1 })
     this.refreshAll()
@@ -1435,7 +1436,7 @@ Page({
   },
 
   goStats() {
-    wx.switchTab({ url: '/pages/stats/stats' })
+    tabbar.switchTo(2, '/pages/stats/stats')
   },
 
   onShareAppMessage() {

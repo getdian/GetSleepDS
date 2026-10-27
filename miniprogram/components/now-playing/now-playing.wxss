@@ -43,7 +43,6 @@
 .now-playing {
   display: flex;
   align-items: center;
-  gap: 8rpx;
   /* 展开条比通栏窄，右缘直接吸附屏幕边；
      外壳改为按内容撑宽后，这里必须给确定宽度（百分比在 shrink-to-fit 父级里不可靠） */
   /* 三个控制键（播放/下一首/停止）后加宽到 560rpx，信息区仍保留约 226rpx */
@@ -84,7 +83,6 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 10rpx;
   border-radius: var(--radius-pill);
   transition: opacity 0.15s ease;
 }
@@ -99,7 +97,6 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 7rpx;
 }
 
 /* 播放中收起：右侧绿色音符，深色透明玻璃圆底，无边框 */
@@ -162,7 +159,6 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 8rpx;
 }
 
 .np-title {
@@ -189,7 +185,6 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 10rpx;
   color: var(--text-muted);
   transition: color 0.2s ease;
 }
@@ -297,8 +292,7 @@
   flex: none;
   display: flex;
   align-items: center;
-  /* 停止是破坏性操作，和播放键拉开一档距离，降低睡前误触 */
-  gap: 16rpx;
+  /* 停止是破坏性操作，和播放键拉开一档距离，降低睡前误触（用 margin，兼容老内核） */
 }
 
 .np-icon {
@@ -337,7 +331,6 @@
 .np-ico-pause {
   display: flex;
   align-items: center;
-  gap: 9rpx;
   height: 30rpx;
   animation: npIconIn 0.16s var(--ease-gentle);
 }
@@ -422,4 +415,31 @@
     opacity: 1;
     transform: scale(1);
   }
+}
+
+/* 老内核没有 flex gap（iOS < 14.5 / 老安卓 X5）：用相邻兄弟 margin 还原同一组间距 */
+.now-playing .np-ctrls {
+  margin-left: 8rpx;
+}
+
+.np-icon + .np-icon {
+  margin-left: 16rpx;
+}
+
+.np-info > .np-status {
+  margin-top: 7rpx;
+}
+
+.np-sep,
+.np-cat {
+  margin-left: 8rpx;
+}
+
+.np-status-text,
+.np-timer-text {
+  margin-left: 10rpx;
+}
+
+.np-pbar + .np-pbar {
+  margin-left: 9rpx;
 }

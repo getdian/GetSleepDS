@@ -169,16 +169,20 @@ function errorTextOf(code) {
 }
 
 /**
- * 补记面板的完整校验：时间区间 + 跨天重叠 + 进行中的睡眠。
+ * 补记/编辑面板的完整校验：时间区间 + 跨天重叠 + 进行中的睡眠 + 当天容量。
  * records 由调用方传入（页面持有 storage.getRecords()），保持本模块可单测。
  * pending 不在 records 里（它是独立的 storage key），不一起比对会出现
  * “补记一段与正在计时的那段相交、保存成功，之后结束计时反被这段挡住”的死结。
+ *
+ * options.excludeId：编辑既有段时传该段 id，重叠与容量判定都要先把它排除，
+ * 否则「只改一分钟」也会命中自己而被判成重叠。
  */
 function evaluateManualRange(options) {
   const opts = options || {}
   const range = X.rangeForDay(opts.dayTs, opts.bedMinutes, opts.wakeMinutes, opts.now)
   let code = range.error || ''
-  if (!code && X.findOverlap(opts.records || {}, range.bedAt, range.wakeAt)) {
+  const exclude = opts.excludeId ? { id: String(opts.excludeId) } : undefined
+  if (!code && X.findOverlap(opts.records || {}, range.bedAt, range.wakeAt, exclude)) {
     code = 'overlap'
   }
   if (!code && pendingOverlaps(opts.pending, range, opts.now)) {
@@ -189,7 +193,8 @@ function evaluateManualRange(options) {
       records: opts.records,
       // 归档日固定北京时间：与 storage.saveSession 写入的 day 同口径
       dayKey: T.calendarDayKey(range.wakeAt),
-      durationMin: range.durationMin
+      durationMin: range.durationMin,
+      excludeId: opts.excludeId
     })
   }
   return {

@@ -34,8 +34,6 @@ Page({
     periodRange: '',
     // 回退注脚已含"是否回退"信息（空串=没回退），不再单独存布尔
     periodFallbackNote: '',
-    // 「按均值定今晚上床点」整句：周期变了主语必须跟着变
-    planLabel: '',
     metricKey: '',
     metricDetail: null,
     weekCount: 0,
@@ -52,6 +50,9 @@ Page({
     selectedKey: '',
     // 页内补记面板（与入睡页同一套口径：醒来日 + 入睡/起床时间）
     manualShow: false,
+    // add = 补记新的一段；edit = 修改既有段（醒来日锁定，只改时间）
+    manualMode: 'add',
+    manualEditId: '',
     manualDay: '',
     manualDateText: '',
     manualDateMin: '',
@@ -82,6 +83,7 @@ Page({
 
   onShow() {
     this._alive = true
+    // 全局 tab 意图只由 tabbar.switchTo 写（onShow 回写会在连点时覆盖最后一次点击）
     const tabBar = this.getTabBar && this.getTabBar()
     if (tabBar) tabBar.setData({ selected: 2 })
     this.refresh()
@@ -161,18 +163,6 @@ Page({
     const records = storage.getRecords()
     const list = S.completedList(records)
     const metricData = S.metricsOf(records, now)
-    // 供 onPlanFromAverage 使用：只保留分钟数，null 表示本周时间分散算不出
-    const bedPrefill =
-      metricData.avgBedMin === null || metricData.avgBedMin === undefined
-        ? ''
-        : F.fmtClock(metricData.avgBedMin)
-    this._avgBedMin = bedPrefill ? metricData.avgBedMin : null
-    // 周期回退时主语必须跟着变（本周 / 最近 7 天 / 全部记录），
-    // 否则会出现「按本周均值」却给的是最近 7 天数据
-    // avgBedMin 是上床时刻（startAt），入口文案跟着说「上床点」，不要写「入睡点」
-    const planLabel = bedPrefill
-      ? '按' + (metricData.periodLabel || '本周') + '均值（' + bedPrefill + '）定今晚上床点'
-      : ''
     // 回退注脚必须说清是哪一级回退：全部记录周期时只写「本周还没有记录」，
     // 用户看到的是一个月前的数据，会以为注脚在说别的事
     const periodFallbackNote = !metricData.isFallback
@@ -254,13 +244,13 @@ Page({
     // 数据没变时跳过 setData，避免把日历整块重新过桥。
     const signature = [
       hasData ? 1 : 0,
-      metrics.map((item) => item.value + '/' + item.sub + '/' + item.detail.join('|')).join('|'),
+      // 卡面只有 value + label；对比与口径都在 detail 里，签名必须带上它
+      metrics.map((item) => item.value + '/' + item.detail.join('|')).join('|'),
       metricData.count,
       // 周期换词也必须进签名：本周 0 天 → 最近 7 天命中时，
       // 数字可能恰好相同（如都是 1 天），只拼 metrics 会漏刷周期标签
       metricData.periodKey,
       metricData.rangeText,
-      planLabel,
       periodFallbackNote,
       // 月份偏移必须进签名：空月之间格子数与色阶序列完全相同，
       // 缺了它切月会被去重跳过（标题/格子/canNextMonth 都不更新，且 monthOffset 已变 → 双向卡死）。
@@ -294,9 +284,6 @@ Page({
         periodLabel: metricData.periodLabel || '',
         periodRange: metricData.rangeText || '',
         periodFallbackNote,
-        // 平均上床时间：有值才显示「按均值定今晚上床点」入口
-        bedPrefill,
-        planLabel,
         weekCount: metricData.count,
         calendarSpan,
         calendarCells: calendar ? calendar.cells : [],
@@ -332,20 +319,6 @@ Page({
         sessions.length
     }
     return days.length + ':' + sum
-  },
-
-  /**
-   * 按本周均值定今晚上床点：把「回顾」变成「下一晚的行动」。
-   * 只写一个本机预填值（不上传），计算器 onShow 消费后立即清掉，避免重复触发。
-   */
-  onPlanFromAverage() {
-    const minutes = this._avgBedMin
-    if (minutes === null || minutes === undefined) {
-      wx.showToast({ title: '这段时间还没有可用的平均上床时间', icon: 'none' })
-      return
-    }
-    storage.patchMeta({ prefillSleepMin: minutes })
-    wx.switchTab({ url: '/pages/index/index' })
   },
 
   onMetricTap(e) {
@@ -405,28 +378,55 @@ Page({
   /**
    * 打开补记面板：默认时间与错误文案都走 manual-sleep 共享模块。
    * options.napDefault：已记录日「再加一段」优先给一个不与已有段重叠的小睡默认值。
+   * options.edit = { id }：修改既有的一段——预填该段起止、醒来日锁定，保存走 updateSession。
    */
   openManualSheet(day, options) {
     const opt = options || {}
     const now = Date.now()
     const today = T.dateKey(now)
     const target = typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : today
-    const times = opt.napDefault
-      ? MS.napTimesFor(storage.getRecords(), target, now, storage.getPending())
-      : MS.defaultTimesFor(target, now)
-    this._manualBaseDay = T.parseDateKey(target)
+    const records = storage.getRecords()
+    const edit = opt.edit && opt.edit.id ? opt.edit : null
+    let mode = 'add'
+    let editId = ''
+    let baseDay = T.parseDateKey(target)
+    let bedMinutes = 0
+    let wakeMinutes = 0
+    let dateText = F.fmtDateCN(baseDay)
+    if (edit) {
+      const session = S.sessionsOf(records[target]).filter((item) => item.id === edit.id)[0]
+      // 段已不存在（并发删除/切页）时不弹空面板
+      if (!session) return
+      mode = 'edit'
+      editId = session.id
+      // 与入睡页编辑面板同口径：以该段的醒来时刻所在本地日为时间基准，
+      // 醒来日显示仍用归档日（北京时区），两者在跨时区时不一定是同一天。
+      baseDay = T.startOfDay(session.endAt)
+      bedMinutes = T.minutesOf(session.startAt)
+      wakeMinutes = T.minutesOf(session.endAt)
+      dateText = F.fmtDateCN(T.parseDateKey(T.calendarDayKey(session.endAt)))
+    } else {
+      const times = opt.napDefault
+        ? MS.napTimesFor(records, target, now, storage.getPending())
+        : MS.defaultTimesFor(target, now)
+      bedMinutes = times.bedMinutes
+      wakeMinutes = times.wakeMinutes
+    }
+    this._manualBaseDay = baseDay
     this._manualBedAt = 0
     this._manualWakeAt = 0
     tabbar.hide()
     this.setData(
       {
         manualShow: true,
+        manualMode: mode,
+        manualEditId: editId,
         manualDay: target,
-        manualDateText: F.fmtDateCN(this._manualBaseDay),
+        manualDateText: dateText,
         manualDateMin: MS.minDayKey(now),
         manualToday: today,
-        manualBedTime: F.fmtClock(times.bedMinutes),
-        manualWakeTime: F.fmtClock(times.wakeMinutes),
+        manualBedTime: F.fmtClock(bedMinutes),
+        manualWakeTime: F.fmtClock(wakeMinutes),
         manualError: ''
       },
       () => this.computeManualSheet()
@@ -444,6 +444,8 @@ Page({
       dayTs: this._manualBaseDay || T.startOfDay(now),
       bedMinutes: T.parseClock(this.data.manualBedTime),
       wakeMinutes: T.parseClock(this.data.manualWakeTime),
+      // 编辑既有段：重叠与容量都要先排除它自己（只挪一分钟也会命中自己）
+      excludeId: this.data.manualMode === 'edit' ? this.data.manualEditId : '',
       now
     })
     // 有错误时不保留可保存区间（与入睡页 computeEndSheet 同一防御）：
@@ -477,7 +479,7 @@ Page({
 
   onManualCancel() {
     tabbar.show()
-    this.setData({ manualShow: false, manualError: '' })
+    this.setData({ manualShow: false, manualError: '', manualMode: 'add', manualEditId: '' })
   },
 
   onManualConfirm() {
@@ -487,11 +489,124 @@ Page({
       wx.showToast({ title: this.data.manualError, icon: 'none' })
       return
     }
-    this.saveManualSession()
+    if (this.data.manualMode === 'edit') this.saveEditSession()
+    else this.saveManualSession()
+  },
+
+  /**
+   * 修改既有的一段：只改时间，醒来日不通过面板改。
+   * 多段日若改到别天会把记录拆到两个归档日（storage.updateSession 会拒），
+   * 这里先给可读文案，不让用户对着“修改未写入”猜原因。
+   */
+  saveEditSession() {
+    // 面板值与保存值必须同源：时间 picker 的 setData 回调是异步的，
+    // “选完立刻点保存”时缓存区间可能还是上一次的，这里按面板当前值同步重算一次。
+    this.computeManualSheet()
+    if (this.data.manualError) {
+      wx.showToast({ title: this.data.manualError, icon: 'none' })
+      return
+    }
+    const day = this.data.manualDay
+    const id = this.data.manualEditId
+    const wakeDay = T.calendarDayKey(this._manualWakeAt)
+    const list = S.sessionsOf(storage.getRecords()[day])
+    if (wakeDay !== day && list.length > 1) {
+      this.setData({ manualError: '这天有多段：改醒来日会把记录拆到另一天，请先删除其它段' })
+      return
+    }
+    const updated = storage.updateSession(day, id, this._manualBedAt, this._manualWakeAt)
+    if (!updated) {
+      this.setData({ manualError: '修改未写入：可能与其它段重叠，或当天总时长超过 24 小时' })
+      return
+    }
+    tabbar.show()
+    this.setData({ manualShow: false, manualError: '', manualMode: 'add', manualEditId: '' })
+    this._signature = ''
+    this.refresh()
+    // 单段日改到别天时整条记录会跟着迁走：选中态与详情卡落到实际的归档日
+    this.setData({ selectedKey: wakeDay })
+    this.showDetail(wakeDay)
+    wx.showToast({
+      title: wakeDay === day ? '已修改这一段' : '已移到 ' + F.fmtDayCN(wakeDay),
+      icon: 'none'
+    })
+    syncNow(true)
+      .then((res) => {
+        if (!res || res.skipped === 'stale') return
+        if (res.synced === 0 && res.dropped > 0) {
+          wx.showToast({ title: '已存本机；云端未接受（时间重叠或超出范围）', icon: 'none' })
+        }
+      })
+      .catch(() => {
+        wx.showToast({ title: '已存本机，云端稍后重试', icon: 'none' })
+      })
+  },
+
+  /** 详情卡的「改」：打开同一块面板的编辑态（预填该段起止） */
+  onDetailEditSession(event) {
+    const id = event.currentTarget.dataset.id
+    const detail = this.data.detail
+    if (!id || !detail || !detail.day || !detail.canEdit) return
+    this.openManualSheet(detail.day, { edit: { id } })
+  },
+
+  /**
+   * 详情卡的「删」：删到最后一段时整条记录一起撤销（storage.removeSession 内含墓碑，
+   * 防云端旧记录在下次同步回填），与入睡页的删除语义完全一致。
+   */
+  onDetailDeleteSession(event) {
+    const id = event.currentTarget.dataset.id
+    const detail = this.data.detail
+    if (!id || !detail || !detail.day || !detail.canEdit) return
+    const day = detail.day
+    const list = S.sessionsOf((this._records || {})[day])
+    const target = list.filter((item) => item.id === id)[0]
+    if (!target) return
+    const only = list.length === 1
+    wx.showModal({
+      title: only ? '删除当天唯一一段？' : '删除这段睡眠？',
+      content: only
+        ? '这是当天仅有的睡眠段，删除后当天的记录会一起撤销。'
+        : '将移除 ' +
+          F.fmtClockTs(target.startAt) +
+          ' – ' +
+          F.fmtClockTs(target.endAt) +
+          '（' +
+          F.fmtDuration(target.durationMin) +
+          '），当天总睡眠会相应减少。',
+      confirmText: '删除',
+      confirmColor: '#F87171',
+      success: (res) => {
+        if (!res.confirm) return
+        if (!storage.removeSession(day, id)) {
+          wx.showToast({ title: '删除未完成，请重试一次', icon: 'none' })
+          return
+        }
+        this._signature = ''
+        this.refresh()
+        if (only) {
+          // 当天整条撤销：格子会回到空格，详情卡没有可指向的对象
+          this.setData({ selectedKey: '', detail: null })
+        } else {
+          this.setData({ selectedKey: day })
+          this.showDetail(day)
+        }
+        wx.showToast({ title: only ? '已撤销这一天的记录' : '已删除这段', icon: 'none' })
+        syncNow(true).catch(() => {
+          wx.showToast({ title: '已存本机，云端稍后重试', icon: 'none' })
+        })
+      }
+    })
   },
 
   /** 手动补记一段：不创建 pending、不发提醒，直接落 v2 session */
   saveManualSession() {
+    // 同 saveEditSession：先把面板当前值同步落成可保存区间，避免用上一次缓存
+    this.computeManualSheet()
+    if (this.data.manualError) {
+      wx.showToast({ title: this.data.manualError, icon: 'none' })
+      return
+    }
     const now = Date.now()
     const record = storage.saveSession(MS.buildSaveArgs(this._manualBedAt, this._manualWakeAt, now))
     if (!record) {
@@ -617,6 +732,24 @@ Page({
       parts.push('1 段')
     }
     parts.push('按醒来日归档')
+    // 逐段可操作行：统计页是历史记录唯一的修正入口（入睡页只处理当天），
+    // 所以每段都要能改时间、删除，否则补记错了只能越补越乱。
+    const sessionRows = sessions.map((item) => {
+      const startDay = T.calendarDayKey(item.startAt)
+      const endDay = T.calendarDayKey(item.endAt)
+      return {
+        id: item.id,
+        timeText:
+          F.fmtClockTs(item.startAt) +
+          '–' +
+          // 跨自然日的段必须标「次日」，否则 22:58–18:23 会被读成倒序
+          (endDay !== startDay ? '次日 ' : '') +
+          F.fmtClockTs(item.endAt),
+        durationText: F.fmtDuration(item.durationMin)
+      }
+    })
+    // 编辑/补记同窗口（400 天，与云同步范围一致）：窗口外改了也只存本机
+    const keepEditable = day >= MS.minDayKey(now)
     this.setData(
       {
         detail: {
@@ -625,8 +758,10 @@ Page({
           tag: '已记录',
           main,
           sub: parts.join(' · ') + inProgress,
+          sessions: sessionRows,
           // 已记录日也能再加一段（午休/醒来后再睡）：补记面板会按区间挡重叠。
-          canAdd: day >= MS.minDayKey(now)
+          canAdd: keepEditable,
+          canEdit: keepEditable
         }
       },
       () => this.scrollToDetail()
@@ -1302,7 +1437,7 @@ Page({
   },
 
   goSleep() {
-    wx.switchTab({ url: '/pages/sleep/sleep' })
+    tabbar.switchTo(1, '/pages/sleep/sleep')
   },
 
   onEmptyManual() {

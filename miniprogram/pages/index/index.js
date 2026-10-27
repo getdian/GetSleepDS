@@ -130,6 +130,8 @@ Page({
 
   onShow() {
     this._alive = true
+    // 全局 tab 意图只由 tabbar.switchTo 写：这里回写会在“快速连点”时
+    // 把最后一次点击覆盖成中间页，造成两个 tab 同时像被选中。
     const tabBar = this.getTabBar && this.getTabBar()
     if (tabBar) {
       // custom-tab-bar 在独立 root，wx:if 不能可靠移除它；单页模式必须显式隐藏
@@ -145,25 +147,6 @@ Page({
         wakeTime: prefWake,
         wakeContext: this.wakeContextText(prefWake, DEFAULT_FALL, Date.now())
       })
-    }
-    // 统计页「按本周均值定今晚入睡点」：一次性预填，算完即清，避免每次进页都触发
-    const prefillMinutes = storage.getMeta().prefillSleepMin
-    if (Number.isInteger(prefillMinutes)) {
-      storage.patchMeta({ prefillSleepMin: null })
-      const clock = F.fmtClock(prefillMinutes)
-      const prefillNow = Date.now()
-      this._anchorAt = prefillNow
-      this.setData(
-        {
-          mode: 'sleep',
-          sleepTime: clock,
-          sleepContext: this.sleepContextText(clock, prefillNow)
-        },
-        () => {
-          this.calc(true)
-          if (this.data.view) this.setData({ flipped: true })
-        }
-      )
     }
     // 提醒可能已到点或被「清除全部数据」撤销：按本机记录重新对齐按钮状态
     const planReminder = reminder.getPlanReminder()
@@ -629,7 +612,7 @@ Page({
     // 否则入睡模式算出 06:45、打卡却仍按偏好 07:30。
     const view = this.data.flipped ? this.data.view : null
     if (view && view.targetWakeAt) reminder.savePlanTarget(view.targetWakeAt, Date.now())
-    wx.switchTab({ url: '/pages/sleep/sleep' })
+    tabbar.switchTo(1, '/pages/sleep/sleep')
   },
 
   /* ---------------- 背景图 ---------------- */

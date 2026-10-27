@@ -8,7 +8,9 @@
 }
 
 .stats-page {
-  padding-top: 8rpx;
+  /* 标题区已于 2026-10-27 移除：首块（周期行 / 空态）需要一点顶部呼吸，
+     否则会贴着 top-bar 像是被裁掉了一截 */
+  padding-top: 20rpx;
   /* .page 已带 200rpx + safe-area 的底部让位；统计页底部由 .safe-bottom 单独算一次。
      两处叠加会变成 380rpx + 两个 safe-area（iPhone 14 约 267pt），页脚像被推到了半屏。 */
   padding-bottom: 0;
@@ -21,24 +23,12 @@
   padding-bottom: calc(300rpx + env(safe-area-inset-bottom));
 }
 
-.stats-hero {
-  display: flex;
-  flex-direction: column;
-  gap: 6rpx;
-  margin-bottom: 34rpx;
-}
-
-.stats-hero .title-xl {
-  margin-top: 4rpx;
-}
-
 /* 指标周期：本周还没打卡时会回退到最近 7 天，周期与区间必须在首屏可见，
    否则回退后用户会把 7 天数据读成"本周"，或者以为历史记录丢了 */
 .metrics-period {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  gap: 10rpx;
 }
 
 .metrics-period-label {
@@ -125,16 +115,6 @@
   white-space: nowrap;
 }
 
-.metric-sub {
-  max-width: 100%;
-  font-size: 18rpx;
-  line-height: 1.2;
-  color: rgba(175, 195, 240, 0.72);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 /* 主指标（平均睡眠）：样式略强，字号更大、纯白高亮、层次鲜明 */
 .metric--duration .metric-value {
   font-size: 52rpx;
@@ -147,11 +127,6 @@
   font-size: 21rpx;
   font-weight: 500;
   color: rgba(230, 240, 255, 0.92);
-}
-
-.metric--duration .metric-sub {
-  font-size: 19rpx;
-  color: var(--color-primary-soft);
 }
 
 .metrics-empty {
@@ -225,7 +200,6 @@
 .span-tabs {
   display: flex;
   align-items: center;
-  gap: 10rpx;
 }
 
 .span-tab {
@@ -382,6 +356,86 @@
   color: var(--text-secondary);
 }
 
+/* 逐段操作行：时间 · 时长 · 改/删。
+   统计页是历史记录唯一的修正入口（入睡页只处理当天），所以每段都要能改能删。 */
+.dd-sessions {
+  margin-top: 10rpx;
+  padding-top: 4rpx;
+  border-top: 1rpx solid rgba(255, 255, 255, 0.07);
+}
+
+.dd-session {
+  display: flex;
+  align-items: center;
+  min-height: 64rpx;
+}
+
+/* 老内核没有 flex gap：横向间距统一走相邻兄弟 margin，避免与 gap 叠加成 20rpx */
+.dd-session > text + text,
+.dd-session > text + view {
+  margin-left: 10rpx;
+}
+
+.dd-session-time {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 21rpx;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dd-session-dur {
+  flex: none;
+  font-size: 20rpx;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.dd-session-ops {
+  flex: none;
+  display: flex;
+  align-items: center;
+}
+
+/* 改 / 删：文字按钮，视觉 64rpx，上下各补 12rpx 到 88rpx 命中区 */
+.dd-op {
+  position: relative;
+  min-height: 64rpx;
+  padding: 0 14rpx;
+  display: flex;
+  align-items: center;
+  font-size: 21rpx;
+  color: var(--color-primary);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.dd-op::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -12rpx;
+  bottom: -12rpx;
+}
+
+.dd-op.is-danger {
+  color: #F87171;
+}
+
+.dd-op:active,
+.dd-op--tap {
+  opacity: 0.55;
+  transform: scale(0.94);
+}
+
+/* 编辑态：醒来日只读（不给 picker），弱化到辅助层避免看成可点 */
+.end-date-row.is-static .end-date-v {
+  color: var(--text-secondary);
+}
+
 /* 已记录日的补记入口：多段模型下"这天再加一段"不该只藏在入睡页 */
 .dd-add {
   margin-top: 8rpx;
@@ -423,7 +477,6 @@
   flex: none;
   display: flex;
   align-items: center;
-  gap: 16rpx;
 }
 
 .poster-btn:active,
@@ -560,7 +613,6 @@
   flex: none;
   display: flex;
   align-items: center;
-  gap: 16rpx;
 }
 
 /* 自绘开关：原生 switch 缩到 0.8 后在深色底上开关态几乎看不出，
@@ -738,31 +790,19 @@
   height: 480px;
 }
 
-/* 回顾 → 行动：按本周均值定今晚入睡点 */
-.week-plan {
-  position: relative;
-  margin-top: 16rpx;
-  min-height: 88rpx;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16rpx;
-  padding: 0 26rpx;
-  border-radius: 999rpx;
-  background: rgba(145, 175, 255, 0.12);
-  border: 1rpx solid rgba(145, 175, 255, 0.26);
+/* 老内核没有 flex gap（iOS < 14.5 / 老安卓 X5）：横向间距用相邻兄弟 margin */
+.metrics-period > text + text {
+  margin-left: 10rpx;
 }
 
-.week-plan-k {
-  font-size: 24rpx;
-  color: rgba(226, 235, 255, 0.92);
+.span-tabs .span-tab + .span-tab {
+  margin-left: 10rpx;
 }
 
-.week-plan-arrow {
-  font-size: 26rpx;
-  color: var(--color-primary-soft, #A7A4FF);
+.section-actions .poster-btn {
+  margin-left: 16rpx;
 }
 
-.week-plan--tap {
-  background: rgba(145, 175, 255, 0.2);
+.sync-ops > view + view {
+  margin-left: 16rpx;
 }

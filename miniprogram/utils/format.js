@@ -47,12 +47,16 @@ function fmtHours(minutes) {
   return (Math.round(minutes / 6) / 10).toFixed(1) + ' 小时'
 }
 
-/** 日历格内紧凑时长：3.7h / 45m；无记录返回空串 */
+/**
+ * 日历格内紧凑时长：6h05 / 45m；无记录返回空串。
+ * 必须与详情卡「共 6 小时 05 分」同源：旧的 0.1 小时取整会把 365 分钟显示成 6.1h，
+ * 用户点开看到 6 小时 05 分，会以为日历和详情是两个不同的数。
+ */
 function fmtHoursShort(minutes) {
   const total = Math.max(0, Math.round(minutes || 0))
   if (!total) return ''
   if (total < 60) return total + 'm'
-  return (Math.round(total / 6) / 10).toFixed(1) + 'h'
+  return Math.floor(total / 60) + 'h' + T.pad2(total % 60)
 }
 
 function fmtDateCN(timestamp) {

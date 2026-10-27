@@ -35,15 +35,11 @@
   transition: color 0.18s ease;
 }
 
-/* hover-class：点击瞬间给一层极轻的玻璃高光，避免只有选中态变色 */
+/* hover-class：只作用于图标+文字，不再给整格铺底。
+   整格背景在切页瞬间会跟着旧实例一起消失，容易被读成“另一个 tab 的背景闪了一下”。 */
 .tab-item--tap .tab-content {
   opacity: 0.72;
   transform: scale(0.96);
-}
-
-.tab-item--tap {
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 999rpx;
 }
 
 .tab-content {
@@ -90,9 +86,44 @@
   color: #AAB7FF;
 }
 
+/* 选中态：图标放大一档 + 主色光晕，比“整格底色”更稳，不会在切换首帧闪出一块背景 */
+.tab-item.is-on .tab-clock,
+.tab-item.is-on .tab-moon,
+.tab-item.is-on .tab-stats {
+  transform: scale(1.06);
+  filter: drop-shadow(0 0 10rpx rgba(129, 140, 248, 0.6));
+}
+
 .tab-item.is-on .tab-label {
-  color: #E9EEFF;
-  font-weight: 500;
+  color: #F2F5FF;
+  font-weight: 600;
+}
+
+/* 选中指示：贴 tabBar 底边的短光条。静态元素（不做滑动指示器）——
+   custom-tab-bar 每页一个实例，滑动动画会在切页时重播，反而更抖。 */
+.tab-item.is-on::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 14rpx;
+  width: 24rpx;
+  height: 4rpx;
+  margin-left: -12rpx;
+  border-radius: 2rpx;
+  background: #AAB7FF;
+  box-shadow: 0 0 12rpx rgba(129, 140, 248, 0.65);
+}
+
+/* 中间入睡不叠短线：用圆环内描边强化，避免一个圆里再塞一条线 */
+.tab-item.is-center.is-on::after {
+  display: none;
+}
+
+.tab-item.is-center.is-on .tab-center-bg {
+  border-color: rgba(129, 140, 248, 0.38);
+  box-shadow:
+    0 0 34rpx rgba(99, 102, 241, 0.3),
+    inset 0 0 22rpx rgba(129, 140, 248, 0.18);
 }
 
 .tab-item.is-center {

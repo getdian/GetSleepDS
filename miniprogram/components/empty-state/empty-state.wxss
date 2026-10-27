@@ -35,15 +35,20 @@
 
 /* 3×3 迷你格：左上第一格是“即将长出的第一格”。
    格子 30rpx + 描边 0.22，保证 9 格在深底上都可见。 */
+/* 兼容性：不用 Grid / gap；3×30 + 2×7 = 104rpx */
 .es-grid {
   position: relative;
-  display: grid;
-  grid-template-columns: repeat(3, 30rpx);
-  grid-auto-rows: 30rpx;
-  gap: 7rpx;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  width: 104rpx;
+  margin: 0 auto;
 }
 
 .es-cell {
+  width: 30rpx;
+  height: 30rpx;
+  margin-bottom: 7rpx;
   box-sizing: border-box;
   border-radius: 9rpx;
   background: rgba(167, 164, 255, 0.1);

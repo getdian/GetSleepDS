@@ -424,23 +424,4 @@ test('分享路径携带输入参数（被分享者能看到同一推荐）', ()
   require('../miniprogram/utils/events').clearQueue()
 })
 
-test('首页消费统计页预填：切到入睡模式并直接展示结果面', () => {
-  const originalNow = Date.now
-  Date.now = () => NOW
-  try {
-    Object.keys(store).forEach((key) => delete store[key])
-    const page = makePage()
-    storage.patchMeta({ prefillSleepMin: 23 * 60 + 15 })
-    page.onShow()
-    assert.equal(page.data.mode, 'sleep')
-    assert.equal(page.data.sleepTime, '23:15')
-    assert.equal(page.data.flipped, true, '预填后直接展示结果，少一步点击')
-    assert.ok(page.data.view && page.data.view.mainTime)
-    assert.equal(storage.getMeta().prefillSleepMin, null, '预填是一次性的')
-    // onShow 会启动 60s 时钟与事件队列：不清掉会让测试进程挂住
-    page.onHide()
-    require('../miniprogram/utils/events').clearQueue()
-  } finally {
-    Date.now = originalNow
-  }
-})
+

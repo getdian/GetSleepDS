@@ -4,7 +4,6 @@
   position: fixed;
   display: flex;
   align-items: center;
-  gap: 8rpx;
   opacity: 0;
   transform: translate3d(60rpx, 0, 0) scale(0.92);
   transform-origin: 100% 50%;
@@ -35,7 +34,6 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6rpx;
   border-radius: var(--radius-pill);
   transition: opacity 0.15s ease;
 }
@@ -48,7 +46,6 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 8rpx;
 }
 
 .dock-mini-title {
@@ -74,7 +71,6 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 10rpx;
   color: var(--text-muted);
   transition: color 0.2s ease;
 }
@@ -150,7 +146,6 @@
   flex: none;
   display: flex;
   align-items: center;
-  gap: 6rpx;
 }
 
 /* 下一首：双三角 + 竖条，与 now-playing 同一套几何 */
@@ -211,7 +206,6 @@
 .dock-ico-pause {
   display: flex;
   align-items: center;
-  gap: 9rpx;
   height: 30rpx;
   animation: dockIconIn 0.16s var(--ease-gentle);
 }
@@ -1613,3 +1607,30 @@
   background: rgba(52, 211, 153, 0.14);
 }
 
+
+/* 老内核没有 flex gap：迷你条用相邻兄弟 margin 还原（iOS < 14.5 / 老安卓 X5） */
+.dock-mini .dock-mini-ctrls {
+  margin-left: 8rpx;
+}
+
+.dock-mini-status {
+  margin-top: 6rpx;
+}
+
+.dock-mini-sep,
+.dock-mini-cat {
+  margin-left: 8rpx;
+}
+
+.dock-mini-sub,
+.dock-mini-timer {
+  margin-left: 10rpx;
+}
+
+.dock-mini-ctrls .dmc-btn + .dmc-btn {
+  margin-left: 6rpx;
+}
+
+.dock-pbar + .dock-pbar {
+  margin-left: 9rpx;
+}

@@ -24,15 +24,18 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* 兼容性：不用 CSS Grid / gap（老安卓 X5 / iOS 14.5 以下）
+   7×40 + 6×4 = 304rpx，与月份块同宽；列距由 space-between 均分，行距用 margin-bottom */
 .cs-week {
-  display: grid;
-  grid-template-columns: repeat(7, 40rpx);
-  gap: 4rpx;
-  justify-content: center;
-  margin-bottom: 4rpx;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  width: 304rpx;
+  margin: 0 auto 4rpx;
 }
 
 .cs-week-cell {
+  width: 40rpx;
   text-align: center;
   /* 12rpx 在真机只能靠轮廓猜；14rpx 仍能压进 40rpx 格 */
   font-size: 14rpx;
@@ -40,11 +43,11 @@
 }
 
 .cs-grid {
-  display: grid;
-  grid-template-columns: repeat(7, 40rpx);
-  grid-auto-rows: 40rpx;
-  gap: 4rpx;
-  justify-content: center;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  width: 304rpx;
+  margin: 0 auto;
 }
 
 /* 一年视图约 450 格：文字直接放在格子里，省掉一层 text 节点 */
@@ -53,6 +56,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 40rpx;
+  height: 40rpx;
+  margin-bottom: 4rpx;
   border-radius: 5rpx;
   background: rgba(255, 255, 255, 0.045);
   /* 40rpx 格内两位日号：16rpx 在真机偏低，18rpx 仍能压进格子 */

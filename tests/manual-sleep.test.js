@@ -124,6 +124,46 @@ test('区间校验：与已有段重叠被拦（跨天也要查全表）', () =>
   assert.match(result.error, /重叠/)
 })
 
+test('区间校验：编辑既有段时排除自身（只挪 30 分钟不算重叠）', () => {
+  const records = {
+    '2026-10-18': {
+      day: '2026-10-18',
+      sessions: [
+        { id: 's-1', startAt: local(2026, 10, 17, 23, 0), endAt: local(2026, 10, 18, 7, 0) }
+      ]
+    }
+  }
+  const base = {
+    records,
+    dayTs: new Date(2026, 9, 18, 0, 0, 0, 0).getTime(),
+    bedMinutes: 23 * 60 + 30,
+    wakeMinutes: 7 * 60,
+    now: NOW
+  }
+  assert.equal(M.evaluateManualRange(base).code, 'overlap', '不排除自身会与自己重叠')
+  const edited = M.evaluateManualRange(Object.assign({}, base, { excludeId: 's-1' }))
+  assert.equal(edited.code, '')
+  assert.equal(edited.durationMin, 450)
+})
+
+test('容量预检：编辑 8 段日里的一段不按“第 9 段”拒绝', () => {
+  const sessions = []
+  for (let i = 0; i < 8; i += 1) {
+    const start = local(2026, 10, 20, 0, 0) + i * 2 * 60 * 60 * 1000
+    sessions.push({ id: 's' + i, startAt: start, endAt: start + 30 * 60 * 1000 })
+  }
+  const records = { '2026-10-20': { day: '2026-10-20', sessions } }
+  const base = {
+    records,
+    dayTs: new Date(2026, 9, 20, 0, 0, 0, 0).getTime(),
+    bedMinutes: 13 * 60 + 5,
+    wakeMinutes: 13 * 60 + 35,
+    now: NOW
+  }
+  assert.equal(M.evaluateManualRange(base).code, 'toomany', '不排除自身时按第 9 段拒')
+  assert.equal(M.evaluateManualRange(Object.assign({}, base, { excludeId: 's-6' })).code, '')
+})
+
 test('区间校验：与进行中的睡眠重叠被拦（pending 不在 records 里）', () => {
   const now = NOW
   const result = M.evaluateManualRange({

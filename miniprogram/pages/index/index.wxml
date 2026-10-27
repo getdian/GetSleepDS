@@ -21,9 +21,11 @@
          只陈述输入，与结果卡的「推荐…时间」形成 输入→输出 的阅读顺序。 -->
     <text wx:if="{{!flipped}}" class="hero-title">{{mode === 'wake' ? '想几点起？' : '想几点睡？'}}</text>
     <view wx:else class="hero-echo">
-      <text class="hero-echo-day">{{view.echoPrefix}}</text>
-      <text class="hero-echo-time">{{mode === 'wake' ? wakeTime : sleepTime}}</text>
-      <text class="hero-echo-unit">{{mode === 'wake' ? '起床' : '入睡'}}</text>
+      <view class="hero-echo-line">
+        <text class="hero-echo-day">{{view.echoPrefix}}</text>
+        <text class="hero-echo-time">{{mode === 'wake' ? wakeTime : sleepTime}}</text>
+        <text class="hero-echo-unit">{{mode === 'wake' ? '起床' : '入睡'}}</text>
+      </view>
     </view>
     <text class="hero-sub">{{mode === 'wake' ? '选一个起床时间，找到适合你的睡点。' : '选一个入睡时间，找到适合你的起床时间。'}}</text>
   </view>
@@ -145,10 +147,11 @@
                 </view>
               </view>
 
-              <!-- 朋友圈单页模式不能 switchTab / 登录，跨页与提醒入口一起隐藏 -->
-              <view wx:if="{{!singlePage}}" class="result-extra">
+              <!-- 上行：提醒 + 换方向（换方向是页内动作，单页模式也保留）；
+                   下行：返回 + 去入睡打卡（跨页动作，单页模式隐藏） -->
+              <view class="result-extra">
                 <view
-                  wx:if="{{view.mainAt && !view.mainPassed}}"
+                  wx:if="{{!singlePage && view.mainAt && !view.mainPassed}}"
                   class="result-remind {{remindAt === view.mainAt ? 'is-set' : ''}}"
                   bindtap="onRemindMain"
                   hover-class="result-remind--tap"
@@ -157,15 +160,15 @@
                   <text class="result-remind-ico">{{remindAt === view.mainAt ? '✓' : '◔'}}</text>
                   <text>{{remindAt === view.mainAt ? '已设提醒' : (mode === 'wake' ? '提醒我入睡' : '提醒我起床')}}</text>
                 </view>
-                <view class="result-go" bindtap="goSleep" hover-class="result-go--tap" hover-stay-time="120">
-                  <text>去入睡打卡</text>
-                  <text class="result-go-arrow">→</text>
-                </view>
+                <view class="result-switch" bindtap="toggleMode" hover-class="result-switch--tap" hover-stay-time="120">{{mode === 'wake' ? '换成我想几点睡' : '换成我想几点起'}} ⇄</view>
               </view>
 
               <view class="result-actions">
                 <view class="result-reset" bindtap="reset" hover-class="result-reset--tap" hover-stay-time="120">‹ 返回</view>
-                <view class="result-switch" bindtap="toggleMode" hover-class="result-switch--tap" hover-stay-time="120">{{mode === 'wake' ? '换成我想几点睡' : '换成我想几点起'}} ⇄</view>
+                <view wx:if="{{!singlePage}}" class="result-go" bindtap="goSleep" hover-class="result-go--tap" hover-stay-time="120">
+                  <text>去入睡打卡</text>
+                  <text class="result-go-arrow">→</text>
+                </view>
               </view>
 
               <view class="result-share">

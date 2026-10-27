@@ -111,7 +111,6 @@
 .end-date-v {
   display: flex;
   align-items: center;
-  gap: 8rpx;
   font-size: 24rpx;
   color: var(--text-primary);
 }
@@ -124,7 +123,6 @@
 .end-times {
   display: flex;
   align-items: center;
-  gap: 10rpx;
   margin-top: 22rpx;
 }
 
@@ -172,7 +170,6 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6rpx 8rpx;
   margin-top: 14rpx;
   font-size: 21rpx;
   color: var(--color-primary-soft);
@@ -205,7 +202,6 @@
 
 .end-actions {
   display: flex;
-  gap: 12rpx;
   margin-top: 20rpx;
 }
 
@@ -245,4 +241,21 @@
 
 .end-btn.primary.is-disabled {
   opacity: 0.38;
+}
+
+/* 老内核没有 flex gap：用相邻兄弟 margin 还原（iOS < 14.5 / 老安卓 X5） */
+.end-date-v > text + text {
+  margin-left: 8rpx;
+}
+
+.end-times picker + picker {
+  margin-left: 10rpx;
+}
+
+.end-summary > text + text {
+  margin-left: 8rpx;
+}
+
+.end-actions .end-btn + .end-btn {
+  margin-left: 12rpx;
 }

@@ -56,29 +56,33 @@
 }
 
 /* 星期行与格子共用同一套列网格，保证列对齐。
-   横向间距收密（4rpx）、纵向留给行呼吸（16rpx） */
+   横向间距收密（4rpx）、纵向留给行呼吸（16rpx）。
+
+   兼容性：不用 CSS Grid / flex gap——老安卓 X5（Chromium 53）没有 Grid，
+   iOS 14.5 以下没有 flex gap。这里用「固定宽容器 + space-between」还原同一组间距：
+   7×92 + 6×4 = 668rpx，列距由 space-between 均分，行距用 margin-bottom。 */
 .mc-week {
-  display: grid;
-  grid-template-columns: repeat(7, 92rpx);
-  gap: 0 4rpx;
-  justify-content: center;
-  margin-bottom: 18rpx;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  width: 668rpx;
+  margin: 0 auto 18rpx;
 }
 
 .mc-week-cell {
+  width: 92rpx;
   text-align: center;
   font-size: 16rpx;
   color: var(--text-muted);
 }
 
-/* 92×76rpx 扁格：7 列铺满内容宽（7×92 + 6×4 = 668rpx，左右各让约 9rpx），
-   列间距 4rpx 收密、行间距 16rpx 放大——7 列紧凑、5 行之间透气 */
+/* 92×76rpx 扁格：7 列铺满 668rpx，列间距 4rpx 收密、行间距 16rpx 放大 */
 .mc-grid {
-  display: grid;
-  grid-template-columns: repeat(7, 92rpx);
-  grid-auto-rows: 76rpx;
-  gap: 16rpx 4rpx;
-  justify-content: center;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  width: 668rpx;
+  margin: 0 auto;
 }
 
 .mc-cell {
@@ -87,10 +91,17 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2rpx;
+  width: 92rpx;
+  height: 76rpx;
+  margin-bottom: 16rpx;
   border-radius: 12rpx;
   background: rgba(255, 255, 255, 0.045);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* 格内两行（日号 + 时长/补记）：用相邻兄弟 margin 代替 flex gap，老内核同样有 2rpx 呼吸 */
+.mc-cell > text + text {
+  margin-top: 2rpx;
 }
 
 .mc-cell:active {

@@ -20,6 +20,17 @@ test('daypartOf 四段按本地时区：5/11/18/23 边界', () => {
   assert.equal(F.daypartOf(at(23, 59)), 'late')
 })
 
+test('日历格内时长与详情同源：不取整到 0.1 小时', () => {
+  // 365 分钟曾经显示成 6.1h（≈6 小时 6 分），详情却是 6 小时 05 分
+  assert.equal(F.fmtHoursShort(365), '6h05')
+  assert.equal(F.fmtHoursShort(219), '3h39')
+  assert.equal(F.fmtHoursShort(60), '1h00')
+  assert.equal(F.fmtHoursShort(45), '45m')
+  assert.equal(F.fmtHoursShort(0), '')
+  // 与详情文案的数字部分逐一对齐（详情是「6 小时 05 分」）
+  assert.equal(F.fmtDuration(365), '6 小时 05 分')
+})
+
 test('时段标签覆盖凌晨/早晨/上午/中午/下午/傍晚/晚上边界', () => {
   assert.equal(F.periodLabel(at(0)), '凌晨')
   assert.equal(F.periodLabel(at(4, 59)), '凌晨')
