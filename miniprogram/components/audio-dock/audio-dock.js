@@ -83,8 +83,6 @@ Component({
     // 源已赋值但尚未真正起播（弱网/缓存文件损坏）时，文案显示“连接中”而不是“正在播放”
     loading: false,
     playerSub: '',
-    cacheText: '',
-    cacheCount: 0,
     sheetShow: false,
     unlocking: false,
     prepareText: '',
@@ -340,38 +338,10 @@ Component({
     },
 
     /* ---------------- 缓存 ---------------- */
+    /** 缓存状态只体现在每行的 ↓ 标记上，不再有汇总文案与整库清理入口 */
     refreshCache() {
       if (!this._alive) return
-      const tracks = this.data.tracks
-      const current = this.findTrack(this.data.currentId)
-      const count = cache.cachedCount(tracks, this._ttlDays, current && current.url)
-      const mb = (cache.usedBytes() / 1024 / 1024).toFixed(1)
-      this.setData({
-        cacheCount: count,
-        cacheText: '已缓存 ' + count + '/' + tracks.length + ' 首 · 占用 ' + mb + ' MB'
-      })
       this.applyFilter()
-    },
-
-    onCleanCache() {
-      if (!this.data.cacheCount) {
-        wx.showToast({ title: '暂无缓存', icon: 'none' })
-        return
-      }
-      wx.showModal({
-        title: '清理音频缓存',
-        content: '清理后再次播放需要重新下载，Wi-Fi 下会自动补全。',
-        confirmText: '清理',
-        cancelText: '取消',
-        success: (res) => {
-          if (!res.confirm) return
-          // 正在播放的文件不能被删，否则当前曲目可能中断；其余缓存全部清掉。
-          const current = this.findTrack(this.data.currentId)
-          cache.cleanAll(current && current.url ? current.url : '')
-          this.refreshCache()
-          wx.showToast({ title: '已清理', icon: 'none' })
-        }
-      })
     },
 
     /* ---------------- 解锁 ---------------- */
@@ -1167,7 +1137,7 @@ Component({
       this.play(track)
     },
 
-    /** 点 ⤓：删除这首的缓存（不喜欢的、占空间的），不影响其它已缓存音源 */
+    /** 点 ✓：删除这首的缓存（不喜欢的、占空间的），不影响其它已缓存音源 */
     onRemoveCacheTap(event) {
       const id = event.currentTarget.dataset.id
       const track = this.findTrack(id)
@@ -1175,7 +1145,7 @@ Component({
       this.confirmRemoveCache(track)
     },
 
-    /** 长按曲目：与点 ⤓ 同一套确认口径 */
+    /** 长按曲目：与点 ✓ 同一套确认口径 */
     onTrackLongPress(event) {
       const id = event.currentTarget.dataset.id
       const track = this.findTrack(id)

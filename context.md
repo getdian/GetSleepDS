@@ -227,6 +227,8 @@ tests/            Node 纯逻辑测试
 
 44. **用户反馈闭环（2026-10-27）**：`POST /api/feedback`（`{code,type,content,contact}`，类型白名单 `SUGGEST/MUSIC/ISSUE`、正文 ≤500、联系方式 ≤64、控制字符清洗保留换行）→ 新表 `user_feedback`（`001_init.sql` 与启动 DDL 双份，纯加法，无手工迁移）→ 后台「用户反馈」面板只读 + 标记已处理。限流 IP 5/分钟 + openid 5/小时；`features.feedback`（config-schema / app.config.json / fallback.js / admin.js / 文档 五处已同步）关掉后入口隐藏且接口 403。设计与边界：**不做回复、不做删除**（回复需客服体系；删除与用户「清除数据」形成两套语义），用户清除数据时 `eraseUserData`/`eraseCloudData` 会级联删反馈。口径与边界见 `DECISIONS.md` ADR-029（不占顶栏、不接微信原生反馈、不做回复与后台删除）。**模拟器 390×844 已实测**（入口/chips 选中态/字数/空白校验/真实 201 成功态/tabBar 复位，截图 `docs/assets/l4-feedback-*.png`），后台面板浏览器实测（Edge headless，列表/角标/类型标签/pre-wrap 换行/联系方式、标记后角标同步、只看未处理筛选、0 console error，截图 `docs/assets/l4-feedback-admin.png`）；**仍未验**：真机软键盘弹起与 iOS 中文输入，见 docs/13 §1.40。
 
+46b. **环境声音抽屉精简（2026-10-28）**：①移除抽屉顶部「正在播放」行——该行只随 `currentId` 插入 DOM，点播放瞬间把下方内容整体下推（用户截图反馈的抖动），状态改由当前行承担（标题/状态 `--color-primary-soft` + 600 字重，有当前曲时其余行标题降 `--text-secondary`、图标底 62% 透明度，`scroll-view` 的 `has-current` 类）。②已缓存标记由绿色 ↓ 改**暗灰 ✓**（`rgba(148,163,184,.55)`、28rpx/400），避免被读成“下载”；点 ✓ 仍弹「删除这首的缓存？」二次确认，长按同口径。③移除底部缓存汇总、「清理」整库入口与「锁屏后继续播放」脚注（`cacheText/cacheCount/onCleanCache` 一并删除），整库清理仍由统计页「清除数据」承担。④定时关闭固定贴抽屉底（`margin-top:auto`）、**无底框/背景**，标签 27rpx/600、选中档实心 `#c9ccfa` 深字、档位 48rpx、剩余时间 `--color-primary-soft`。⑤抽屉高度 `86vh → 68vh`（顶边在屏高 32%，关闭 X 进入拇指区；点上方遮罩关闭实测 `open=false`），列表内部滚动、头部与定时块不动。⑥标题同行加 22rpx 副标「陪着你，慢慢睡着」（baseline 对齐，「结束播放」出现时不换行）；**不采用「陪眠曲」**：`陪眠` 非现成词且贴近「陪睡」，`曲` 会把雨声/白噪音窄化成音乐——功能名保留「环境声音」，解锁弹窗/后台面板/分类值（`环境音`）不动。验证：`npm test` 460 项 / 459 通过 / 0 失败 / 1 skip、`npm run check` 通过（719.5 KB）、模拟器 390×844 截图复核（空闲/模拟播放态、16 条模拟音轨滚动）、console 无 error。**未真机**：点 ✓ 删缓存的确认弹窗与删除后刷新、真实起播/锁屏（见 docs/13 §1.42 与第 2 区）。
+
 ## 8. 快速命令
 
 ```bash

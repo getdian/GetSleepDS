@@ -99,6 +99,7 @@
       <view class="dock-head-mark">♫</view>
       <view class="dock-head-text">
         <text class="dock-title">环境声音</text>
+        <text class="dock-head-sub">陪着你，慢慢睡着</text>
       </view>
     </view>
     <text
@@ -109,20 +110,6 @@
       aria-label="{{stopArmed ? '再点一次结束播放' : '结束播放'}}"
     >{{stopArmed ? '再点一次结束' : '结束播放'}}</text>
     <view class="dock-close" catchtap="closeSheet" aria-role="button" aria-label="关闭环境声音"></view>
-  </view>
-
-  <view wx:if="{{currentId}}" class="dock-now">
-    <view class="dock-now-eq {{playing ? 'is-on' : 'is-off'}}">
-      <view class="dock-sbar ds-1"></view>
-      <view class="dock-sbar ds-2"></view>
-      <view class="dock-sbar ds-3"></view>
-      <view class="dock-sbar ds-4"></view>
-    </view>
-    <view class="dock-now-copy">
-      <text class="dock-now-k">正在播放</text>
-      <text class="dock-now-title">{{currentTitle}}</text>
-    </view>
-    <text class="dock-now-sub">{{loading ? '连接中…' : (playing ? '播放中' : '已暂停')}}</text>
   </view>
 
   <view wx:if="{{!freeMode}}" class="dock-status">
@@ -175,7 +162,7 @@
     </view>
   </view>
 
-  <scroll-view class="dock-list" scroll-y enhanced show-scrollbar="{{false}}">
+  <scroll-view class="dock-list {{currentId ? 'has-current' : ''}}" scroll-y enhanced show-scrollbar="{{false}}">
     <view
       wx:for="{{filteredTracks}}"
       wx:key="id"
@@ -205,8 +192,8 @@
         data-id="{{item.id}}"
         catchtap="onRemoveCacheTap"
         aria-role="button"
-        aria-label="删除这首的缓存"
-      >↓</view>
+        aria-label="本机已缓存，点击可删除缓存"
+      >✓</view>
       <view class="dock-fav {{item.favorite ? 'is-on' : ''}}" data-id="{{item.id}}" catchtap="onToggleFavorite">
         {{item.favorite ? '♥' : '♡'}}
       </view>
@@ -245,16 +232,6 @@
       >{{item.label}}</view>
     </view>
   </view>
-
-  <view class="dock-cache" catchtouchmove="noop">
-    <view class="dock-cache-main">
-      <text class="dock-cache-text">{{cacheText}}</text>
-      <text class="dock-cache-tip">点曲目右侧 ⤓ 或长按，可只删除该曲缓存</text>
-    </view>
-    <text wx:if="{{cacheCount}}" class="dock-cache-clean" bindtap="onCleanCache">清理</text>
-  </view>
-
-  <view class="dock-tail" catchtouchmove="noop">锁屏后继续播放；定时到点自动停止</view>
 </view>
 
 <unlock-sheet

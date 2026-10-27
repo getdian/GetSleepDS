@@ -257,13 +257,15 @@
   pointer-events: auto;
 }
 
+/* 68vh：比原 86vh 矮一截，遮罩留在上部方便点外部关闭，标题栏/关闭键也落进拇指区；
+   曲目多时列表内部滚动，不再靠整块面板撑满屏幕 */
 .dock-sheet {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
   z-index: var(--z-sheet, 200);
-  height: 86vh;
+  height: 68vh;
   display: flex;
   flex-direction: column;
   padding: 20rpx 28rpx calc(20rpx + env(safe-area-inset-bottom));
@@ -287,7 +289,7 @@
 /* 曲库少时让抽屉跟着内容收短，避免一两条声音撑出大片空白 */
 .dock-sheet.is-short {
   height: auto;
-  max-height: 86vh;
+  max-height: 68vh;
 }
 
 .dock-sheet.is-short .dock-list {
@@ -336,17 +338,30 @@
   color: #DDE3FF;
 }
 
+/* 标题与陪伴副标同行：主标题保持功能名，副标只做情绪层 */
 .dock-head-text {
   display: flex;
-  flex-direction: column;
-  gap: 2rpx;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 12rpx;
   min-width: 0;
 }
 
 .dock-title {
+  flex: none;
   font-size: 36rpx;
   line-height: 1.25;
   color: var(--text-moon-pure);
+}
+
+.dock-head-sub {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 22rpx;
+  line-height: 1.2;
+  color: rgba(203, 214, 236, 0.7);
 }
 
 .dock-head-stop {
@@ -378,68 +393,6 @@
   border: 1rpx solid var(--border-moon-subtle);
   font-size: 30rpx;
   color: var(--text-secondary);
-}
-
-/* 当前播放：滚动列表后仍能看到正在响的声音 */
-.dock-now {
-  display: flex;
-  align-items: center;
-  gap: 14rpx;
-  margin-top: 16rpx;
-  padding: 14rpx 18rpx;
-  border-radius: var(--radius-md);
-  border: 1rpx solid rgba(167, 164, 255, 0.2);
-  background: rgba(99, 102, 241, 0.1);
-  flex: none;
-}
-
-.dock-now-eq {
-  width: 50rpx;
-  height: 30rpx;
-  flex: none;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  gap: 3rpx;
-  color: var(--color-primary-soft);
-}
-
-.dock-now-eq .dock-sbar {
-  width: 4rpx;
-  margin-right: 0;
-}
-
-.dock-now-eq.is-off .dock-sbar {
-  animation-play-state: paused;
-  opacity: 0.42;
-}
-
-.dock-now-copy {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1rpx;
-}
-
-.dock-now-k {
-  font-size: 17rpx;
-  letter-spacing: 2rpx;
-  color: var(--text-muted);
-}
-
-.dock-now-title {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-size: 24rpx;
-  color: var(--text-primary);
-}
-
-.dock-now-sub {
-  flex: none;
-  font-size: 19rpx;
-  color: var(--color-primary-soft);
 }
 
 /* 搜索 */
@@ -559,8 +512,7 @@
 
 .dock-cat:active,
 .dock-timer-chip:active,
-.dock-fav:active,
-.dock-cache-clean:active {
+.dock-fav:active {
   opacity: 0.7;
 }
 
@@ -568,15 +520,13 @@
 .dock-fav,
 .dock-tbtn,
 .dock-cat,
-.dock-cache-clean,
 .dock-clear {
   position: relative;
 }
 
 .dock-fav::after,
 .dock-tbtn::after,
-.dock-cat::after,
-.dock-cache-clean::after {
+.dock-cat::after {
   content: "";
   position: absolute;
   left: -6rpx;
@@ -776,7 +726,8 @@
 }
 
 .dock-timer-label {
-  font-size: 26rpx;
+  font-size: 27rpx;
+  font-weight: 600;
   line-height: 1.2;
   white-space: nowrap;
   color: var(--text-primary);
@@ -784,12 +735,12 @@
 
 /* 运行中的剩余时间：与偏好档位区分，暂停时显示冻结的剩余 */
 .dock-timer-live {
-  font-size: 18rpx;
+  font-size: 19rpx;
   line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: var(--color-primary);
+  color: var(--color-primary-soft);
 }
 
 /* 深色轨道 + 等分分段，选中为浅紫药丸 */
@@ -840,37 +791,6 @@
   color: #3f49bf;
   font-weight: 600;
   box-shadow: 0 3rpx 10rpx rgba(0, 0, 0, 0.28);
-}
-
-/* 缓存 */
-.dock-cache {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 14rpx;
-  flex: none;
-}
-
-.dock-cache-text {
-  font-size: 20rpx;
-  color: var(--text-muted);
-}
-
-.dock-cache-clean {
-  min-height: 64rpx;
-  display: inline-flex;
-  align-items: center;
-  font-size: 20rpx;
-  color: var(--color-primary);
-  padding: 0 0 0 16rpx;
-}
-
-.dock-tail {
-  margin-top: 6rpx;
-  text-align: center;
-  font-size: 20rpx;
-  color: var(--text-muted);
-  flex: none;
 }
 
 /* ============================================================
@@ -1269,44 +1189,13 @@
   color: var(--text-muted);
 }
 
-/* 当前播放：一行，不做卡片 */
-.dock-now {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-  margin-top: 10rpx;
-  padding: 0 4rpx;
+/* 定时：固定贴抽屉底部，不加底框，只用字号/字重/实心档位承担权重 */
+.dock-timer {
+  gap: 14rpx;
+  margin-top: auto;
+  padding: 16rpx 4rpx 0;
   border: none;
   background: transparent;
-}
-
-.dock-now-eq {
-  width: 44rpx;
-  height: 26rpx;
-}
-
-.dock-now-k {
-  font-size: 16rpx;
-  letter-spacing: 2rpx;
-  color: var(--text-muted);
-}
-
-.dock-now-title {
-  font-size: 23rpx;
-  color: var(--text-primary);
-}
-
-.dock-now-sub {
-  font-size: 18rpx;
-  color: var(--color-primary-soft);
-}
-
-/* 定时：与计算器「预计入睡耗时」同一套小胶囊，不再做整条深色轨道 */
-.dock-timer {
-  gap: 12rpx;
-  margin-top: 20rpx;
-  padding-top: 0;
-  border-top: none;
 }
 
 .dock-timer-seg {
@@ -1321,57 +1210,37 @@
 .dock-timer-chip {
   position: relative;
   flex: none;
-  min-width: 76rpx;
-  height: 44rpx;
-  min-height: 44rpx;
+  min-width: 78rpx;
+  height: 48rpx;
+  min-height: 48rpx;
   margin: 0;
   padding: 0 10rpx;
   border-radius: 999rpx;
   background: transparent !important;
   box-shadow: none !important;
-  font-size: 23rpx;
+  font-size: 24rpx;
   text-align: center;
-  color: rgba(190, 204, 230, 0.7);
+  color: rgba(210, 220, 240, 0.78);
 }
 
-/* 44rpx 视觉 + 上下各 22rpx 外扩 = 88rpx 热区（档位横向间距小，只做纵向） */
+/* 48rpx 视觉 + 上下各 20rpx 外扩 = 88rpx 热区（档位横向间距小，只做纵向） */
 .dock-timer-chip::after {
   content: '';
   position: absolute;
   left: 0;
   right: 0;
-  top: -22rpx;
-  bottom: -22rpx;
+  top: -20rpx;
+  bottom: -20rpx;
 }
 
+/* 选中档位是这一块唯一的实心亮色：睡前一眼就能看到倒计时是否生效 */
 .dock-timer-chip.is-on {
-  color: #e9e7ff;
-  font-weight: 500;
-  background: rgba(150, 146, 255, 0.14) !important;
-  box-shadow: inset 0 0 0 1rpx rgba(167, 164, 255, 0.3) !important;
+  color: #1E2340;
+  font-weight: 600;
+  background: #c9ccfa !important;
+  box-shadow: 0 4rpx 14rpx rgba(120, 116, 255, 0.38) !important;
 }
 
-/* 缓存与脚注：简单一行 */
-.dock-cache {
-  margin-top: 16rpx;
-  padding: 0 4rpx;
-}
-
-.dock-cache-text,
-.dock-cache-clean,
-.dock-tail {
-  font-size: 18rpx;
-  color: var(--text-muted);
-}
-
-.dock-cache-clean {
-  padding-left: 12rpx;
-  color: var(--color-primary-soft);
-}
-
-.dock-tail {
-  margin-top: 4rpx;
-}
 
 /* ============================================================
    悬浮音符 / 绿色吸附音符 / 极简播放条
@@ -1529,19 +1398,6 @@
   background: rgba(145, 175, 255, 0.16);
 }
 
-.dock-cache-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6rpx;
-}
-
-.dock-cache-tip {
-  font-size: 18rpx;
-  color: rgba(190, 204, 230, 0.5);
-}
-
 /* 继续上次：冷启动/重进小程序的一键续听入口 */
 .dock-resume {
   display: flex;
@@ -1578,7 +1434,7 @@
   background: rgba(145, 175, 255, 0.18);
 }
 
-/* 已缓存的曲目：可点的 ⤓ 标记（比"只能长按"更可发现） */
+/* 已缓存的曲目：对勾只表示“本机已存”，用暗灰弱色，避免被读成下载按钮 */
 .dock-cached {
   position: relative;
   flex: none;
@@ -1587,10 +1443,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  /* 只留一个粗箭头：与播放/暂停图标同一套“无框、够粗、够简约”的语言 */
-  color: rgba(110, 231, 183, 0.95);
-  font-size: 34rpx;
-  font-weight: 700;
+  color: rgba(148, 163, 184, 0.55);
+  font-size: 28rpx;
+  font-weight: 400;
   line-height: 1;
 }
 
@@ -1604,7 +1459,7 @@
 }
 
 .dock-cached:active {
-  background: rgba(52, 211, 153, 0.14);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 
@@ -1633,4 +1488,29 @@
 
 .dock-pbar + .dock-pbar {
   margin-left: 9rpx;
+}
+
+/* ============================================================
+   播放中的行内高亮：顶部“正在播放”条已移除，
+   状态改由当前行承担——焦点色与播放/暂停图标同源，其余行退到二级层级
+   ============================================================ */
+.dock-list.has-current .dock-track:not(.is-playing) .dock-tname {
+  color: var(--text-secondary);
+}
+
+.dock-list.has-current .dock-track:not(.is-playing) .dock-tstate {
+  color: rgba(148, 163, 184, 0.62);
+}
+
+.dock-list.has-current .dock-track:not(.is-playing) .dock-icon-wrap {
+  opacity: 0.62;
+}
+
+.dock-track.is-playing .dock-tname {
+  color: var(--color-primary-soft);
+  font-weight: 600;
+}
+
+.dock-track.is-playing .dock-tstate {
+  color: var(--color-primary-soft);
 }
