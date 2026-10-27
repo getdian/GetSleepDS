@@ -2,7 +2,14 @@ const { invalidBody } = require('./errors')
 
 const ICONS = ['rain', 'wave', 'fire', 'noise', 'night']
 const MAX_AUDIO = 10
-const DEFAULT_FEATURES = { summary: true, sync: true, timer: true, preload: true, events: true }
+const DEFAULT_FEATURES = {
+  summary: true,
+  sync: true,
+  timer: true,
+  preload: true,
+  events: true,
+  feedback: true
+}
 const DEFAULT_CACHE = { maxMB: 80, ttlDays: 7 }
 // 页面展示位：默认全部关闭，运营在后台按需开启并填广告位 ID
 const AD_SLOTS = ['home', 'sleep', 'stats', 'statsFooter']
@@ -307,7 +314,8 @@ function validateConfig(input, base) {
     sync: featuresInput.sync !== false,
     timer: featuresInput.timer !== false,
     preload: featuresInput.preload !== false,
-    events: featuresInput.events !== false
+    events: featuresInput.events !== false,
+    feedback: featuresInput.feedback !== false
   }
 
   const cacheInput = Object.assign(

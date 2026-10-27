@@ -1300,7 +1300,7 @@ button:disabled {
   font-size: 12px;
 }
 
-/* 保存失败滞留态：toast 消失后按钮仍显示“失败 · 重试”，避免用户以为已保存 */
+/* 保存失败滞留态：toast 消失后按钮仍显示"失败 · 重试"，避免用户以为已保存 */
 .primary.save-failed {
   background: rgba(248, 113, 113, 0.16);
   border-color: rgba(248, 113, 113, 0.55);
@@ -1350,4 +1350,79 @@ button:disabled {
 /* 趋势图：分享柱与播放柱区分开 */
 .trend-bar.share {
   background: #FBBF24;
+}
+
+/* 用户反馈列表：一卡一条，正文优先可读，openid 弱化为可定位信息 */
+.feedback-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.feedback-item {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-alpha);
+}
+
+.feedback-item.is-handled {
+  opacity: 0.62;
+}
+
+.feedback-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.feedback-type {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.18);
+  color: #C7D2FE;
+  font-size: 12px;
+}
+
+.feedback-time {
+  color: var(--dim);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.feedback-done {
+  color: #34D399;
+  font-size: 12px;
+}
+
+.feedback-text {
+  margin: 8px 0 0;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.feedback-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.feedback-meta code {
+  color: var(--dim);
+  font-size: 11px;
+  word-break: break-all;
+}
+
+.feedback-contact {
+  color: var(--muted);
+  word-break: break-all;
 }

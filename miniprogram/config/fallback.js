@@ -35,7 +35,8 @@ module.exports = {
     sync: true,
     timer: true,
     preload: true,
-    events: true
+    events: true,
+    feedback: true
   },
   cache: {
     maxMB: 80,

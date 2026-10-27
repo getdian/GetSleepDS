@@ -14,6 +14,7 @@ const audioSession = require('../../utils/audio-session')
 const reminder = require('../../utils/reminder')
 const tabbar = require('../../utils/tabbar')
 const events = require('../../utils/events')
+const FF = require('../../utils/feedback-form')
 const adSlots = require('../../utils/ads')
 const { getConfig, loadConfig } = require('../../utils/config')
 
@@ -69,13 +70,28 @@ Page({
     cloudPendingErase: false,
     syncBusy: false,
     posterPath: '',
-    posterSharePath: ''
+    posterSharePath: '',
+    // 反馈与建议：入口默认隐藏，配置到达后按 features.feedback 决定是否展示
+    feedbackEnabled: false,
+    feedbackShow: false,
+    feedbackTypes: FF.TYPES,
+    feedbackType: FF.DEFAULT_TYPE,
+    feedbackContent: '',
+    feedbackContact: '',
+    feedbackError: '',
+    feedbackSending: false,
+    feedbackSent: false,
+    feedbackCounter: FF.counterText('')
   },
 
   onLoad() {
     this._alive = true
     this._records = {}
     this._signature = ''
+    // 首帧就用缓存/兜底配置决定入口，避免"先闪出反馈入口又被配置收回"
+    const cachedConfig = getConfig() || {}
+    const cachedFeatures = cachedConfig.features || {}
+    this.setData({ feedbackEnabled: cachedFeatures.feedback !== false })
     // 先在 onLoad 渲染一次，避免首帧先画“还没有记录”再被 onShow 覆盖
     this.refresh()
     adSlots.apply(this)
@@ -95,9 +111,24 @@ Page({
         // 配置拉回来时只在“会影响本页的配置”变化时重算：此前无条件 refresh，
         // 进页一次会算两遍（1 年视图 ~420 格）。
         const features = (cfg && cfg.features) || {}
-        const sig = (cfg && cfg.version) + '|' + (features.sync === false ? 'off' : 'on')
+        const sig =
+          (cfg && cfg.version) +
+          '|' +
+          (features.sync === false ? 'off' : 'on') +
+          '|' +
+          (features.feedback === false ? 'off' : 'on')
         if (sig === this._cfgSig) return
         this._cfgSig = sig
+        const feedbackEnabled = features.feedback !== false
+        if (feedbackEnabled !== this.data.feedbackEnabled) {
+          if (feedbackEnabled) {
+            this.setData({ feedbackEnabled })
+          } else {
+            // 运营关掉总闸时，已打开的反馈面板必须一起收起，
+            // 否则用户写完点提交才被服务端 403
+            this.setData({ feedbackEnabled, feedbackShow: false }, () => tabbar.show())
+          }
+        }
         this.refresh()
       })
       .catch(() => {})
@@ -139,10 +170,14 @@ Page({
       .catch(() => {})
   },
 
-  /** 补记面板打开时切走页面：收起面板并恢复 tabBar，避免回来时导航是隐藏的 */
+  /** 补记/反馈面板打开时切走页面：收起面板并恢复 tabBar，避免回来时导航是隐藏的 */
   onHide() {
     if (this.data.manualShow) {
       this.setData({ manualShow: false, manualError: '' })
+      tabbar.show()
+    }
+    if (this.data.feedbackShow) {
+      this.setData({ feedbackShow: false })
       tabbar.show()
     }
   },
@@ -635,6 +670,85 @@ Page({
   },
 
   noop() {},
+
+  /* ---------- 反馈与建议 ---------- */
+
+  onOpenFeedback() {
+    // 刻意不在这里重置 feedbackSending：仍在途的提交（切后台/收起面板后再打开）
+    // 必须继续占着这个闸，否则会放开一次重复提交，同一段内容落库两条。
+    this.setData({
+      feedbackShow: true,
+      feedbackError: '',
+      feedbackSent: false
+    })
+    // 与补记面板同口径：弹层覆盖页面时先让出浮动 tabBar，关闭时再恢复
+    tabbar.hide()
+  },
+
+  onCloseFeedback() {
+    // 提交中不允许关闭，但必须给回执：静默 return 会让用户以为点了没反应
+    if (this.data.feedbackSending) {
+      wx.showToast({ title: '正在提交，请稍候', icon: 'none' })
+      return
+    }
+    this.setData({ feedbackShow: false, feedbackError: '' })
+    tabbar.show()
+  },
+
+  onPickFeedbackType(e) {
+    const key = e && e.currentTarget && e.currentTarget.dataset && e.currentTarget.dataset.key
+    if (!FF.isType(key)) return
+    this.setData({ feedbackType: key })
+  },
+
+  onFeedbackContent(e) {
+    const value = (e && e.detail && e.detail.value) || ''
+    this.setData({
+      feedbackContent: value,
+      feedbackCounter: FF.counterText(value),
+      // 用户开始改写就清掉上一次的报错，避免"已经改了但红字还在"
+      feedbackError: ''
+    })
+  },
+
+  onFeedbackContact(e) {
+    const value = (e && e.detail && e.detail.value) || ''
+    this.setData({ feedbackContact: value })
+  },
+
+  onSubmitFeedback() {
+    if (this.data.feedbackSending) return
+    const result = FF.buildPayload({
+      type: this.data.feedbackType,
+      content: this.data.feedbackContent,
+      contact: this.data.feedbackContact
+    })
+    if (!result.ok) {
+      this.setData({ feedbackError: result.error })
+      return
+    }
+    this.setData({ feedbackSending: true, feedbackError: '' })
+    withLogin((code) => api.submitFeedback(code, result.payload))
+      .then(() => {
+        if (!this._alive) return
+        // 成功态清空输入：同一段内容不该被用户重复提交两次
+        this.setData({
+          feedbackSending: false,
+          feedbackSent: true,
+          feedbackContent: '',
+          feedbackContact: '',
+          feedbackType: FF.DEFAULT_TYPE,
+          feedbackCounter: FF.counterText('')
+        })
+      })
+      .catch((err) => {
+        if (!this._alive) return
+        this.setData({
+          feedbackSending: false,
+          feedbackError: (err && err.message) || '提交失败，请稍后重试'
+        })
+      })
+  },
 
   /** 详情卡渲染后滚到可视区：浮动 tabBar 会盖住页面底部，不滚用户只看到半张卡 */
   scrollToDetail() {

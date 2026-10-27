@@ -38,17 +38,17 @@
       />
       <view class="bp-info">
         <text class="bp-name">{{item.title}}</text>
-        <text class="bp-state">{{item.isDefault ? '默认背景 · 免费' : item.unlocked ? '已解锁 · 剩 ' + item.remainHours + ' 小时' : freeMode ? '免费使用 ' + unlockHours + ' 小时' : '看广告解锁 ' + unlockHours + ' 小时'}}</text>
+        <text class="bp-state">{{item.isDefault ? '默认背景' : item.unlocked ? '已解锁 · 剩 ' + item.remainHours + ' 小时' : freeMode ? '可随时更换' : '看广告解锁 ' + unlockHours + ' 小时'}}</text>
       </view>
       <text wx:if="{{activeId === item.id}}" class="bp-check">使用中</text>
       <text wx:elif="{{item.isDefault}}" class="bp-badge">默认</text>
       <text wx:elif="{{item.unlocked}}" class="bp-badge is-on">已解锁</text>
-      <text wx:elif="{{freeMode}}" class="bp-badge is-on">免费</text>
+      <text wx:elif="{{freeMode}}" class="bp-badge">可切换</text>
       <text wx:else class="bp-badge">看广告</text>
     </view>
 
     <view wx:if="{{!items.length}}" class="bp-empty">还没有可用的背景图</view>
   </scroll-view>
 
-  <view class="bp-foot" catchtouchmove="noop">默认背景免费；{{freeMode ? '其他背景可直接使用' : '选择其他背景需观看一次视频'}}，使用 {{unlockHours}} 小时。</view>
+  <view class="bp-foot" catchtouchmove="noop">{{freeMode ? '所有背景都可以随意更换；选中的背景保留 ' + unlockHours + ' 小时，到时自动回到默认，可以再选。' : '默认背景可直接使用；其他背景需观看一次视频，可使用 ' + unlockHours + ' 小时。'}}</view>
 </view>

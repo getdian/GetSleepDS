@@ -800,7 +800,7 @@ Page({
       wx.showModal({
         title: isDefault ? '切换到默认背景？' : '切换背景？',
         content:
-          '当前付费背景还剩约 ' + leftHours + ' 小时。切换后会结束本次解锁，再使用需重新' +
+          '当前背景还剩约 ' + leftHours + ' 小时。切换后会结束本次解锁，再使用需重新' +
           (freeMode ? '选择' : '观看视频') +
           '。',
         confirmText: '切换',

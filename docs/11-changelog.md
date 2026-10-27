@@ -1,5 +1,29 @@
 # 睡点 · 关键更新记录
 
+## 2026-10-27 · 用户反馈闭环：统计页表单 → 服务端三类存储 → 后台只读巡检
+
+背景：用户想提建议此前没有落点（只有一句「意见反馈」文案，运营收不到内容）。本轮打通最小闭环，**刻意不做回复/删除**——回复需要客服体系，删除会与用户「清除数据」形成两套语义。
+
+- **服务端**：新增 `POST /api/feedback`（`server/src/routes/feedback.js`）：`{code,type,content,contact}` → `codeToOpenid` 换 openid；类型白名单 `SUGGEST / MUSIC / ISSUE`；正文 ≤500、联系方式 ≤64；控制字符清掉但保留 `\n`/`\t`。限流 **IP 5/分钟 + openid 5/小时**（反代漏配 `TRUST_PROXY` 时 IP 桶会被全站共用，故补第二维，与 `/records/erase` 同款）。`features.feedback === false` 时 `featureOff`（403）——服务端才是权威关闸，旧版本客户端也拦得住。
+- **存储**：新表 `user_feedback`（`server/sql/001_init.sql` 与 `db/index.js` 启动 DDL 双份、`CREATE TABLE IF NOT EXISTS` 纯加法），三个索引（`created_at DESC` / `(openid, created_at DESC)` / `handled_at IS NULL` 部分索引）。memory 与 PG 双实现；用户「清除数据」级联删（`eraseUserData` 与 `eraseCloudData` 两处都删）——反馈含 openid 与用户自填的联系方式，清完还留着就自相矛盾。
+- **后台**：「用户反馈」面板（PANEL_META + 进面板即拉 + 标记已处理）。正文一律 `textContent` 落 DOM（用户输入，绝不拼 HTML），`white-space: pre-wrap` 保留换行；标记已处理写 `admin_audit('admin_feedback_handled')`，**只记编号、不落正文与联系方式**；列出 openid 便于跳「用户数据」定位，面板文案已注明属客服敏感信息。
+- **小程序**：统计页「反馈与建议」入口 + 表单（类型 chips / 正文 textarea + 字数 / 可选联系方式），规则抽到 `miniprogram/utils/feedback-form.js`（清洗与长度与服务端同口径，可被 `node:test` 直接断言，避免两边漂移）。入口受 `features.feedback` 控制，关闸后连提交也返回可读文案。
+- **本轮 review 修复（4 条，均为上线前拦下）**：①内存版 `listFeedback` 只按 `createdAt` 倒序，`Array.sort` 是稳定排序 → 同一毫秒的两条反馈「最新一条」读到旧数据（`feedback.test.js:176` 因此失败），改为 `b.createdAt - a.createdAt || b.id - a.id`，PG 侧同步 `ORDER BY created_at DESC, id DESC`；②提交中关面板原本静默 `return`，最坏约 20 秒无任何响应（请求 10s + 登录队列 10s），补 toast「正在提交，请稍候」——**静默吞掉用户操作等同于没做完**；③`onOpenFeedback` 原无条件把 `feedbackSending` 重置为 false，提交中切后台再打开就能绕过防连点、同一段内容落两条，改为不重置（在途请求自己会在 `then/catch` 落回 false）；④`.fb-contact` 缺 `width:100%` + `box-sizing:border-box`，`input` 的左右 padding 会撑出面板圆角（与 `.fb-textarea` 对齐）。
+- **后台列表口径**：一次拉 200 条（服务端上限），面板文案写明「按时间倒序最多最近 200 条；勾只看未处理时取未处理的最新 200 条，处理完旧的会自动顶上来」——不写清楚会出现「角标 130 但只看到 100 条」的困惑。
+- **验证**：`npm test` 460 项 / 459 通过 / 0 失败 / 1 skip；`npm run check` 通过（主包 708.0 KB）；改动 JS `node --check` 全通过。**未机验**：小程序表单与后台面板的视觉/交互（模拟器需 close + open 项目窗口才编译新文件），已登记 `docs/13` §1.40；数据库新表随 api-server 启动自动 `CREATE TABLE IF NOT EXISTS` 生效，无需手工迁移。
+
+## 2026-10-27 · 背景选择器去掉「免费」措辞：不再暗示存在收费项
+
+背景（运营反馈，截图圈选两处）：①列表徽章写「免费」、副标写「免费使用 24 小时」，容易被读成「有免费版就一定有付费版」——用户还没见过任何收费项，先产生了防备；②脚注只讲好处、不讲 24 小时后会发生什么。核实结论：背景功能**从来没有付费路径**（`free` 模式点一下即换、`rewarded` 模式看一次激励视频），「免费」是在跟一个不存在的东西作对比，属于自造疑点。
+
+- **副标**：默认项 `默认背景 · 免费` → `默认背景`；免费模式非默认项 `免费使用 24 小时` → `可随时更换`（广告模式的 `看广告解锁 N 小时` 不动）。
+- **徽章**：免费模式 `免费` → `可切换`，同时摘掉 `is-on` 紫色强调——紫色是「占到便宜」的语言，中性状态词不该用；`使用中 / 默认 / 已解锁 / 看广告` 语义不变。
+- **脚注**：改为纯事实陈述、全程不提钱。免费模式「所有背景都可以随意更换；选中的背景保留 N 小时，到时自动回到默认，可以再选。」；广告模式「默认背景可直接使用；其他背景需观看一次视频，可使用 N 小时。」原句缺「到点自动回到默认」这半句——`loadBackgrounds` 专门为这个观感加了到期 toast（「背景使用时长已到，已切回默认」），文案不写就会重演「背景被弄丢了」的反馈。N 仍取 `backgroundUnlockHours`，未写死 24。
+- **切换确认弹窗**：`onBgSelect` 的 `当前付费背景还剩约 N 小时` → `当前背景还剩约 N 小时`。这句在免费模式也会弹（选中 A 再选 B 就触发），是整个功能里最直接说出「付费」二字的位置。
+- **未改**：广告模式分支文案结构、`defaultBackgroundId` 语义、解锁与到期逻辑——0 逻辑变更，仅 `background-picker.wxml` 三行文案 + `index.js` 一处字符串。
+- **验证**：`npm run check` 通过（3 页面 / 22 JSON / 17 WXML / 19 WXSS，708.0 KB）；`npm test` 460 项 / 459 通过 / 0 失败 / 1 skip（首跑时那条 `feedback.test.js:176` 失败已在同日「用户反馈闭环」条目里修掉，见上方）。
+- **未机验**：新文案在 390×844 下的实际折行未截图——副标 5 字（可用宽约 380rpx）、脚注约 2 行、`可切换` 比 `免费` 宽 20rpx，理论都不折行/不挤，按纪律仍标「未机验」，已登记 `docs/13` §1.39。
+
 ## 2026-10-27 · 计算器结果面：翻面不再让整页上移 + 回显等比例放大 + 操作分两行
 
 背景（用户两轮反馈）：①翻面时结果态把副标 `max-height` 压成 0、标题又从 72rpx 缩到 40rpx，hero 一下矮约 90rpx，卡片与页脚整体上跳；②回显太小，且「去入睡打卡」与「换成…」的位置该互换、后者不该有按钮底。舞台高度本来就固定 712rpx，收副标换不来任何空间——只是位移。

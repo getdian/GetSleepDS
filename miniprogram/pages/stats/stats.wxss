@@ -806,3 +806,137 @@
 .sync-ops > view + view {
   margin-left: 16rpx;
 }
+
+/* ---------- 反馈入口与反馈面板 ---------- */
+
+/* 一行弱化文字：不加边框/底色，避免与「数据与备份」抢层级 */
+.feedback-entry {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+  min-height: 88rpx;
+  margin-top: 12rpx;
+  font-size: 22rpx;
+  letter-spacing: 1rpx;
+  color: var(--text-muted);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.feedback-entry:active,
+.feedback-entry--tap {
+  opacity: 0.55;
+  transform: scale(0.98);
+}
+
+.feedback-entry-arrow {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.28);
+}
+
+.fb-types {
+  display: flex;
+  margin-top: 24rpx;
+}
+
+/* 老内核没有 flex gap：相邻兄弟补间距 */
+.fb-types .fb-type + .fb-type {
+  margin-left: 12rpx;
+}
+
+.fb-type {
+  flex: 1;
+  min-height: 64rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  border: 1rpx solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 22rpx;
+  color: var(--text-secondary);
+  transition: opacity 0.14s ease, background 0.14s ease, border-color 0.14s ease;
+}
+
+.fb-type.is-on {
+  border-color: rgba(129, 140, 248, 0.6);
+  background: rgba(129, 140, 248, 0.18);
+  color: #C7D2FE;
+}
+
+.fb-type--tap {
+  opacity: 0.7;
+}
+
+.fb-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 200rpx;
+  margin-top: 20rpx;
+  padding: 20rpx;
+  border-radius: 20rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 26rpx;
+  line-height: 1.6;
+  color: var(--text-primary);
+}
+
+.fb-placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.fb-counter {
+  display: block;
+  margin-top: 8rpx;
+  text-align: right;
+  font-size: 18rpx;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.fb-contact {
+  /* 与 .fb-textarea 同口径：input 不给宽高与 box-sizing 时，左右 padding 会撑出面板 */
+  width: 100%;
+  box-sizing: border-box;
+  height: 84rpx;
+  margin-top: 12rpx;
+  padding: 0 20rpx;
+  border-radius: 20rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 24rpx;
+  color: var(--text-primary);
+}
+
+.fb-done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10rpx;
+  padding: 40rpx 0 8rpx;
+}
+
+.fb-done-ico {
+  width: 88rpx;
+  height: 88rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(129, 140, 248, 0.18);
+  font-size: 40rpx;
+  color: #C7D2FE;
+}
+
+.fb-done-title {
+  font-size: 30rpx;
+  color: var(--text-primary);
+}
+
+.fb-done-sub {
+  font-size: 20rpx;
+  line-height: 1.6;
+  text-align: center;
+  color: var(--text-muted);
+}

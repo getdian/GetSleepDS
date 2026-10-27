@@ -92,6 +92,21 @@ CREATE INDEX IF NOT EXISTS idx_events_created_at ON events (created_at);
 CREATE INDEX IF NOT EXISTS idx_events_type_created ON events (type, created_at);
 CREATE INDEX IF NOT EXISTS idx_events_openid ON events (openid);
 
+-- 用户反馈：只存用户主动提交的内容。type 三类（SUGGEST/MUSIC/ISSUE），
+-- contact 为可选联系方式（用户自愿填写）；后台标记已处理后 handled_at 非空。
+CREATE TABLE IF NOT EXISTS user_feedback (
+    id          BIGSERIAL PRIMARY KEY,
+    openid      VARCHAR(64) NOT NULL,
+    type        VARCHAR(16) NOT NULL,
+    content     VARCHAR(600) NOT NULL,
+    contact     VARCHAR(64) NOT NULL DEFAULT '',
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    handled_at  TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_user_feedback_created ON user_feedback (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_user_feedback_openid ON user_feedback (openid, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_user_feedback_open ON user_feedback (handled_at) WHERE handled_at IS NULL;
+
 -- 后台敏感操作审计：只存 openid 哈希前缀，不落明文；容器日志轮转后仍可追溯。
 CREATE TABLE IF NOT EXISTS admin_audit (
     id           BIGSERIAL PRIMARY KEY,
@@ -112,6 +127,8 @@ function createMemoryDb() {
   const events = []
   const audits = []
   const reminders = new Map()
+  const feedback = []
+  let feedbackSeq = 0
   let appConfig = null
 
   return {
@@ -338,12 +355,22 @@ function createMemoryDb() {
           eventCount += 1
         }
       }
+      // 反馈含 openid 与用户自愿填写的联系方式：清除数据必须一起清，
+      // 否则「已清除」之后后台仍留着可联系到本人的信息。
+      let feedbackCount = 0
+      for (let i = feedback.length - 1; i >= 0; i -= 1) {
+        if (feedback[i].openid === openid) {
+          feedback.splice(i, 1)
+          feedbackCount += 1
+        }
+      }
       erasures.set(openid, erasedAt)
       return {
         records: recordCount,
         unlocks: unlockCount,
         events: eventCount,
         reminders: reminderCount,
+        feedback: feedbackCount,
         erasedAt
       }
     },
@@ -368,11 +395,20 @@ function createMemoryDb() {
           eventCount += 1
         }
       }
+      // 反馈只存在云端（本机不落副本），因此“只删云端副本”也要删干净。
+      let feedbackCount = 0
+      for (let i = feedback.length - 1; i >= 0; i -= 1) {
+        if (feedback[i].openid === openid) {
+          feedback.splice(i, 1)
+          feedbackCount += 1
+        }
+      }
       return {
         records: recordCount,
         unlocks: unlockCount,
         events: eventCount,
         reminders: reminderCount,
+        feedback: feedbackCount,
         erasedAt: 0
       }
     },
@@ -423,6 +459,43 @@ function createMemoryDb() {
 
     async countEvents(openid) {
       return events.filter((event) => event.openid === openid).length
+    },
+
+    async insertFeedback(openid, item) {
+      const createdAt = item.createdAt || Date.now()
+      feedbackSeq += 1
+      feedback.push({
+        id: feedbackSeq,
+        openid,
+        type: item.type,
+        content: item.content,
+        contact: item.contact || '',
+        createdAt,
+        handledAt: 0
+      })
+      if (feedback.length > 5000) feedback.splice(0, feedback.length - 5000)
+      return { id: feedbackSeq, createdAt }
+    },
+
+    /** onlyOpen=true 时只返回未处理；unhandled 恒为全量未处理数（侧边栏/筛选角标用） */
+    async listFeedback(limit, onlyOpen) {
+      const count = Math.min(Math.max(Number(limit) || 50, 1), 200)
+      const unhandled = feedback.filter((row) => !row.handledAt).length
+      const items = feedback
+        .filter((row) => (onlyOpen ? !row.handledAt : true))
+        // 同一毫秒提交的多条反馈要按 id 倒序兜底：只比 createdAt 时 Array.sort 稳定，
+        // 平手会保持插入顺序（最旧的排最前），「取最新一条」的调用方就会读到旧数据。
+        .sort((a, b) => b.createdAt - a.createdAt || b.id - a.id)
+        .slice(0, count)
+        .map((row) => Object.assign({}, row))
+      return { items, unhandled }
+    },
+
+    async markFeedbackHandled(id, nowTs) {
+      const row = feedback.find((item) => item.id === Number(id))
+      if (!row) return { updated: false }
+      if (!row.handledAt) row.handledAt = nowTs || Date.now()
+      return { updated: true }
     },
 
     async logAdminAction(action, openidTag, details) {
@@ -920,6 +993,8 @@ function createPostgresDb(connectionString) {
         const events = await client.query('DELETE FROM events WHERE openid = $1', [openid])
         // 订阅提醒含 openid/session_id 明文，且到点会真的推送：清除全部数据时必须一起删。
         const reminders = await client.query('DELETE FROM sleep_reminders WHERE openid = $1', [openid])
+        // 反馈含 openid 与用户自愿填写的联系方式：清除数据必须一起清。
+        const feedback = await client.query('DELETE FROM user_feedback WHERE openid = $1', [openid])
         await client.query('DELETE FROM sleep_record_deletions WHERE openid = $1', [openid])
         await client.query('COMMIT')
         return {
@@ -927,6 +1002,7 @@ function createPostgresDb(connectionString) {
           unlocks: unlocks.rowCount,
           events: events.rowCount,
           reminders: reminders.rowCount,
+          feedback: feedback.rowCount,
           erasedAt
         }
       } catch (error) {
@@ -948,6 +1024,8 @@ function createPostgresDb(connectionString) {
         const events = await client.query('DELETE FROM events WHERE openid = $1', [openid])
         // 只删云端副本时，云端待发送的订阅提醒也属于云端数据。
         const reminders = await client.query('DELETE FROM sleep_reminders WHERE openid = $1', [openid])
+        // 反馈只存在云端，因此“只删云端副本”也要删干净。
+        const feedback = await client.query('DELETE FROM user_feedback WHERE openid = $1', [openid])
         await client.query('DELETE FROM sleep_record_deletions WHERE openid = $1', [openid])
         await client.query('COMMIT')
         return {
@@ -955,6 +1033,7 @@ function createPostgresDb(connectionString) {
           unlocks: unlocks.rowCount,
           events: events.rowCount,
           reminders: reminders.rowCount,
+          feedback: feedback.rowCount,
           erasedAt: 0
         }
       } catch (error) {
@@ -1044,6 +1123,55 @@ function createPostgresDb(connectionString) {
     async countEvents(openid) {
       const result = await pool.query('SELECT count(*)::int AS n FROM events WHERE openid = $1', [openid])
       return Number(result.rows[0].n) || 0
+    },
+
+    async insertFeedback(openid, item) {
+      const createdAt = item.createdAt || Date.now()
+      const result = await pool.query(
+        `INSERT INTO user_feedback (openid, type, content, contact, created_at)
+         VALUES ($1, $2, $3, $4, to_timestamp($5::bigint / 1000.0))
+         RETURNING id, (EXTRACT(EPOCH FROM created_at) * 1000)::bigint AS ts`,
+        [openid, item.type, item.content, item.contact || '', createdAt]
+      )
+      return { id: Number(result.rows[0].id), createdAt: Number(result.rows[0].ts) }
+    },
+
+    async listFeedback(limit, onlyOpen) {
+      const count = Math.min(Math.max(Number(limit) || 50, 1), 200)
+      const where = onlyOpen ? 'WHERE handled_at IS NULL' : ''
+      const [list, open] = await Promise.all([
+        pool.query(
+          `SELECT id, openid, type, content, contact,
+                  (EXTRACT(EPOCH FROM created_at) * 1000)::bigint AS ts,
+                  (EXTRACT(EPOCH FROM handled_at) * 1000)::bigint AS handled_ts
+           FROM user_feedback ${where}
+           ORDER BY created_at DESC, id DESC LIMIT $1`,
+          [count]
+        ),
+        pool.query('SELECT count(*)::int AS n FROM user_feedback WHERE handled_at IS NULL')
+      ])
+      return {
+        items: list.rows.map((row) => ({
+          id: Number(row.id),
+          openid: row.openid,
+          type: row.type,
+          content: row.content,
+          contact: row.contact,
+          createdAt: Number(row.ts),
+          handledAt: row.handled_ts ? Number(row.handled_ts) : 0
+        })),
+        unhandled: Number(open.rows[0].n) || 0
+      }
+    },
+
+    async markFeedbackHandled(id, nowTs) {
+      const result = await pool.query(
+        `UPDATE user_feedback
+         SET handled_at = COALESCE(handled_at, to_timestamp($2::bigint / 1000.0))
+         WHERE id = $1`,
+        [Number(id), nowTs || Date.now()]
+      )
+      return { updated: result.rowCount > 0 }
     },
 
     async logAdminAction(action, openidTag, details) {

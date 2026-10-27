@@ -129,7 +129,16 @@ function loadConfig(env) {
       windowMs: 60 * 1000,
       maxUnlockPerIp: intEnv(source.RATE_UNLOCK_IP, 60, 'RATE_UNLOCK_IP', 1, 100000),
       maxUnlockPerOpenid: intEnv(source.RATE_UNLOCK_OPENID, 5, 'RATE_UNLOCK_OPENID', 1, 100000),
-      maxSummaryPerIp: intEnv(source.RATE_SUMMARY_IP, 30, 'RATE_SUMMARY_IP', 1, 100000)
+      maxSummaryPerIp: intEnv(source.RATE_SUMMARY_IP, 30, 'RATE_SUMMARY_IP', 1, 100000),
+      // 反馈是低频动作：IP 5/分钟，同一用户 5/小时（反代下 IP 桶可能被全站共用）
+      maxFeedbackPerIp: intEnv(source.RATE_FEEDBACK_IP, 5, 'RATE_FEEDBACK_IP', 1, 100000),
+      maxFeedbackPerOpenid: intEnv(
+        source.RATE_FEEDBACK_OPENID,
+        5,
+        'RATE_FEEDBACK_OPENID',
+        1,
+        100000
+      )
     },
     app: {
       version: file.version,

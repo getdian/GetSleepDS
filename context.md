@@ -112,8 +112,8 @@ tests/            Node 纯逻辑测试
 
 ## 5. 当前验证基线
 
-- `npm test`：**405 项 / 404 通过 / 0 失败 / 1 skip**（2026-10-26 复核收口 + 音频解锁埋点轮实测；PG 集成用例在未设置 `PG_TEST_URL` 时跳过）。
-- `npm run check`：3 页面 / 22 JSON / 17 WXML / 19 WXSS，主包约 642.1 KB（以最新输出为准）。
+- `npm test`：**460 项 / 459 通过 / 0 失败 / 1 skip**（2026-10-27 反馈闭环 + 背景文案轮实测；PG 集成用例在未设置 `PG_TEST_URL` 时跳过）。
+- `npm run check`：3 页面 / 22 JSON / 17 WXML / 19 WXSS，主包约 708.0 KB（以最新输出为准）。
 - `npm run verify:web`：11 页 / 3 条内链，无 404（2026-10-26 批次 D）。
 - **验收清单（2026-10-22 建）**：全部待验收项已合并至 [docs/13-acceptance-checklist.md](docs/13-acceptance-checklist.md)，分三区——本机已验收（CLI 模拟器 390×844 实测，含入睡页 10-22 改版与统计页 10-21 改版全状态截图、console 无 error）/ 待真机（音频锁屏、中断、定时、手势手感）/ 待外部输入（部署、AppSecret、COS 防盗链、流量主）。续作新增"未验收"项一律先落该表再写代码。
 - 交付包：以 `release-artifacts/` 下最新 `getsleep-<label>.zip` 为准（`npm run pack` 生成，含 `RELEASE-MANIFEST.json` 与逐文件 sha256，同时留 `.sha256` 校验文件）；打包前会强制跑 `npm test` + `npm run check`。
@@ -224,6 +224,8 @@ tests/            Node 纯逻辑测试
 42. **环境音运营可读化（2026-10-26）**：后台图标下拉改「🌧 雨声 / 🌊 海浪 / 🔥 炉火 / 🎚 白噪音 / 🌙 深夜」；分类加常用标签（自然之声/环境音/白噪音/轻音乐/助眠音乐/冥想）并合并 datalist；看板趋势加分享柱（金）；小程序已缓存曲目右侧加可点 ⤓（二次确认删单曲缓存），长按同口径；已有当前曲目时隐藏“继续上次”。**封面图不做**（内置图标 + 分类色已够，睡前低频浏览收益低于运营与加载成本；未来若做用 96px WebP ≤15KB，与 icon 二选一）。门禁 385/0 fail/1 skip，check 622.1 KB。**未机验**：后台浏览器点验、真机删缓存确认。
 
 43. **睡眠口径分层（2026-10-27）**：`startAt` = 上床、`sleepAt` = 睡着（可选；`sessions[].sleepAt`，本地 `sessions.normalizeSession` 与服务端 `validate.normalizeSession` 白名单均已放行，越界只丢字段不丢段）。**主口径仍是在床**（`durationMin = endAt - startAt`）：完成态大数字标签「在床时长」、统计页指标「平均上床」、日期详情「首段 X 上床」；「入睡」只用于事件描述（空态「去入睡」、补记面板时间标签、进行中状态）与真实睡着时刻。睡眠效率 = 睡着 / 在床（仅主段、仅当有 `sleepAt`，完成态一行「入睡 23:00 · 睡着 7 小时 00 分 · 效率 97%」）。**决策：不切 TST 主口径**——`sleepAt` 默认 = 上床 + 档位，不改的用户会得到恒等于「在床 − 15 分钟」的假测量，且分不清「认可默认」与「没看」；待「改入睡时刻的用户占比」数据再议。入睡耗时档位走 `app.globalData.fallMinutes`（会话级、不落 prefs），打卡快照进 `pending.fallMinutes`，结束面板三格「上床/入睡/起床」。门禁 433/432/0 fail/1 skip、check 677.7 KB。
+
+44. **用户反馈闭环（2026-10-27）**：`POST /api/feedback`（`{code,type,content,contact}`，类型白名单 `SUGGEST/MUSIC/ISSUE`、正文 ≤500、联系方式 ≤64、控制字符清洗保留换行）→ 新表 `user_feedback`（`001_init.sql` 与启动 DDL 双份，纯加法，无手工迁移）→ 后台「用户反馈」面板只读 + 标记已处理。限流 IP 5/分钟 + openid 5/小时；`features.feedback`（config-schema / app.config.json / fallback.js / admin.js / 文档 五处已同步）关掉后入口隐藏且接口 403。设计与边界：**不做回复、不做删除**（回复需客服体系；删除与用户「清除数据」形成两套语义），用户清除数据时 `eraseUserData`/`eraseCloudData` 会级联删反馈。上线后需运营点验后台面板与小程序表单视觉（docs/13 §1.40），未机验。
 
 ## 8. 快速命令
 

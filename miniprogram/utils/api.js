@@ -54,6 +54,16 @@ function trackEvents(code, events) {
   })
 }
 
+function submitFeedback(code, payload) {
+  const data = Object.assign({ code }, payload || {})
+  return request({
+    path: '/api/feedback',
+    method: 'POST',
+    data,
+    timeout: 10000
+  })
+}
+
 function eraseRecords(code, options) {
   return request({
     path: '/api/records/erase',
@@ -101,5 +111,6 @@ module.exports = {
   cancelReminder,
   eraseRecords,
   trackEvents,
+  submitFeedback,
   fetchPosterQr
 }

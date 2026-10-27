@@ -98,6 +98,20 @@ CREATE INDEX IF NOT EXISTS idx_events_created_at ON events (created_at);
 CREATE INDEX IF NOT EXISTS idx_events_type_created ON events (type, created_at);
 CREATE INDEX IF NOT EXISTS idx_events_openid ON events (openid);
 
+-- 用户反馈：只存用户主动提交的内容；contact 为可选联系方式（用户自愿填写）
+CREATE TABLE IF NOT EXISTS user_feedback (
+    id          BIGSERIAL PRIMARY KEY,
+    openid      VARCHAR(64) NOT NULL,
+    type        VARCHAR(16) NOT NULL,
+    content     VARCHAR(600) NOT NULL,
+    contact     VARCHAR(64) NOT NULL DEFAULT '',
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    handled_at  TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_user_feedback_created ON user_feedback (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_user_feedback_openid ON user_feedback (openid, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_user_feedback_open ON user_feedback (handled_at) WHERE handled_at IS NULL;
+
 -- 后台敏感操作审计：只存 openid 哈希前缀，不落明文
 CREATE TABLE IF NOT EXISTS admin_audit (
     id           BIGSERIAL PRIMARY KEY,

@@ -225,6 +225,20 @@
     </view>
   </view>
 
+  <!-- 反馈入口：低频，刻意只占一行文字（不进顶栏、不占主流程视觉权重） -->
+  <view
+    wx:if="{{feedbackEnabled}}"
+    class="feedback-entry"
+    bindtap="onOpenFeedback"
+    hover-class="feedback-entry--tap"
+    hover-stay-time="120"
+    aria-role="button"
+    aria-label="反馈与建议"
+  >
+    <text class="feedback-entry-text">反馈与建议</text>
+    <text class="feedback-entry-arrow">›</text>
+  </view>
+
   <ad-slot slot-name="statsFooter" enabled="{{ads.statsFooter.enabled}}" unit-id="{{ads.statsFooter.unitId}}" type="{{ads.statsFooter.type}}" />
 
   <canvas canvas-id="poster" class="poster-canvas"></canvas>
@@ -293,6 +307,73 @@
       <view class="end-btn ghost" catchtap="onManualCancel" hover-class="end-btn--tap" hover-stay-time="120">取消</view>
       <view class="end-btn primary {{manualError ? 'is-disabled' : ''}}" catchtap="onManualConfirm" hover-class="end-btn--tap" hover-stay-time="120">{{manualMode === 'edit' ? '保存修改' : '保存补记'}}</view>
     </view>
+  </view>
+</view>
+
+<!-- 反馈面板：类型 + 正文 + 可选联系方式；成功后就地给结论，不弹 toast -->
+<view wx:if="{{feedbackShow}}" class="end-mask" catchtap="onCloseFeedback" catchtouchmove="noop">
+  <view class="end-sheet" catchtap="noop" catchtouchmove="noop" aria-role="dialog" aria-label="反馈与建议">
+    <view class="end-head">
+      <view>
+        <text class="end-title">反馈与建议</text>
+        <text class="end-sub">想听的音乐、想要的开关、遇到的问题，都可以写在这里。</text>
+      </view>
+      <text class="end-close" catchtap="onCloseFeedback" aria-role="button" aria-label="关闭" hover-class="end-close--tap" hover-stay-time="100">×</text>
+    </view>
+
+    <block wx:if="{{feedbackSent}}">
+      <view class="fb-done">
+        <text class="fb-done-ico">✓</text>
+        <text class="fb-done-title">收到了，谢谢你</text>
+        <text class="fb-done-sub">会逐条看。需要回复的话，下次留个联系方式。</text>
+      </view>
+      <view class="end-actions">
+        <view class="end-btn primary" catchtap="onCloseFeedback" hover-class="end-btn--tap" hover-stay-time="120">关闭</view>
+      </view>
+    </block>
+
+    <block wx:else>
+      <view class="fb-types">
+        <view
+          wx:for="{{feedbackTypes}}"
+          wx:key="key"
+          class="fb-type {{feedbackType === item.key ? 'is-on' : ''}}"
+          data-key="{{item.key}}"
+          catchtap="onPickFeedbackType"
+          hover-class="fb-type--tap"
+          hover-stay-time="100"
+        >{{item.label}}</view>
+      </view>
+
+      <textarea
+        class="fb-textarea"
+        value="{{feedbackContent}}"
+        bindinput="onFeedbackContent"
+        maxlength="500"
+        placeholder="写具体一点更容易改（比如哪首歌、哪一步不顺）"
+        placeholder-class="fb-placeholder"
+      />
+      <text class="fb-counter">{{feedbackCounter}}</text>
+
+      <input
+        class="fb-contact"
+        value="{{feedbackContact}}"
+        bindinput="onFeedbackContact"
+        maxlength="64"
+        placeholder="联系方式（可选，方便回复你）"
+        placeholder-class="fb-placeholder"
+      />
+
+      <text wx:if="{{feedbackError}}" class="end-error">{{feedbackError}}</text>
+      <view class="end-actions">
+        <view
+          class="end-btn primary {{feedbackSending ? 'is-disabled' : ''}}"
+          catchtap="onSubmitFeedback"
+          hover-class="end-btn--tap"
+          hover-stay-time="120"
+        >{{feedbackSending ? '提交中…' : '提交'}}</view>
+      </view>
+    </block>
   </view>
 </view>
 

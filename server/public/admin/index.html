@@ -78,6 +78,9 @@
               <button type="button" class="side-item" data-panel="web">
                 <span class="side-ico">⌘</span><span>国际站</span>
               </button>
+              <button type="button" class="side-item" data-panel="feedback">
+                <span class="side-ico">✐</span><span>用户反馈</span>
+              </button>
               <button type="button" class="side-item" data-panel="users">
                 <span class="side-ico">◎</span><span>用户数据</span>
               </button>
@@ -349,6 +352,7 @@
             <label class="switch"><input type="checkbox" id="feat-events"><span>匿名事件统计</span></label>
             <label class="switch"><input type="checkbox" id="feat-timer"><span>定时关闭</span></label>
             <label class="switch"><input type="checkbox" id="feat-preload"><span>进入即预加载</span></label>
+            <label class="switch"><input type="checkbox" id="feat-feedback"><span>反馈入口</span></label>
           </div>
           <div class="grid grid-cache">
             <label class="field">
@@ -489,6 +493,23 @@
         </section>
 
       </form>
+
+      <section class="panel admin-panel" data-panel="feedback" hidden>
+        <div class="panel-head">
+          <div>
+            <h2>用户反馈</h2>
+            <p class="hint">小程序「统计 → 反馈与建议」提交的内容，分三类：功能建议 / 想听的音乐 / 问题反馈。列表按时间倒序、最多显示最近 200 条（勾「只看未处理」时按未处理项取最新 200 条，处理完旧的会自动顶上来）。列表含用户 openid（用于到「用户数据」里定位该用户），属客服敏感信息，不要外传；正文按纯文本渲染。用户在小程序里执行「清除数据」时反馈会一并删除，这里不提供单独删除，以免出现两套删除语义。</p>
+          </div>
+          <span class="badge">未处理 <strong id="feedback-count">0</strong></span>
+        </div>
+        <div class="panel-actions">
+          <label class="switch"><input type="checkbox" id="feedback-only-open"><span>只看未处理</span></label>
+          <button type="button" id="feedback-refresh" class="ghost">刷新</button>
+        </div>
+        <div id="feedback-list" class="feedback-list">
+          <div class="empty-line">加载中…</div>
+        </div>
+      </section>
 
       <section class="panel admin-panel" data-panel="users" hidden>
         <div class="panel-head">

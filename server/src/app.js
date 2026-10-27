@@ -15,6 +15,7 @@ const { createEventsRoute } = require('./routes/events')
 const { createSummaryRoute } = require('./routes/summary')
 const { createRecordsRoute } = require('./routes/records')
 const { createRemindersRoute } = require('./routes/reminders')
+const { createFeedbackRoute } = require('./routes/feedback')
 const { createReminderService } = require('./services/reminders')
 const { createShareRoute } = require('./routes/share')
 
@@ -228,6 +229,9 @@ function createApp(options) {
   const recordsSyncOpenid = createRateLimiter(60 * 1000, 30)
   const eraseIp = createRateLimiter(60 * 1000, 3)
   const shareIp = createRateLimiter(60 * 1000, 3)
+  // 反馈：低频动作，IP 桶默认 5/分钟；再按 openid 5/小时（反代下 IP 桶可能全员共用）
+  const feedbackIp = createRateLimiter(60 * 1000, limits.maxFeedbackPerIp || 5)
+  const feedbackOpenid = createRateLimiter(60 * 60 * 1000, limits.maxFeedbackPerOpenid || 5)
   // 反代下 req.ip 可能全员相同，按 openid 再补一层维度，避免互相挤占。
   const eraseOpenid = createRateLimiter(60 * 1000, 10)
   const shareOpenid = createRateLimiter(60 * 1000, 10)
@@ -284,6 +288,19 @@ function createApp(options) {
   app.use(
     '/api',
     createRemindersRoute({ config, db, codeToOpenid, limitIp: recordsIp, now, store })
+  )
+  app.use(
+    '/api',
+    createFeedbackRoute({
+      config,
+      db,
+      codeToOpenid,
+      limitIp: feedbackIp,
+      limitOpenid: feedbackOpenid,
+      now,
+      store,
+      logger
+    })
   )
   app.use(
     '/api',

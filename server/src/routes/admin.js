@@ -350,6 +350,56 @@ function createAdminRoute(options) {
     })
   )
 
+  // 用户反馈：只读列表 + 标记已处理。删除不单独提供——用户「清除数据」会级联删干净，
+  // 避免出现「后台删了但用户以为还在」的第二套语义。
+  router.get(
+    '/admin/feedback',
+    auth.requireAuth,
+    wrap(async (req, res) => {
+      if (!db.listFeedback) {
+        throw apiError('NOT_SUPPORTED', '当前存储不支持反馈读取', 501)
+      }
+      const onlyOpen = req.query && (req.query.onlyOpen === '1' || req.query.onlyOpen === 'true')
+      let result = null
+      try {
+        result = await db.listFeedback(req.query && req.query.limit, onlyOpen)
+      } catch (e) {
+        log.error('[db] admin feedback list failed:', req.id || '', e.message)
+        throw dbUnavailable()
+      }
+      res.json({ items: result.items, unhandled: result.unhandled })
+    })
+  )
+
+  router.post(
+    '/admin/feedback/:id/handled',
+    auth.requireAuth,
+    wrap(async (req, res) => {
+      const id = Number(req.params.id)
+      if (!Number.isInteger(id) || id <= 0) throw invalidBody('反馈编号不合法')
+      if (!db.markFeedbackHandled) {
+        throw apiError('NOT_SUPPORTED', '当前存储不支持反馈处理', 501)
+      }
+      let result = null
+      try {
+        result = await db.markFeedbackHandled(id, now())
+      } catch (e) {
+        log.error('[db] admin feedback handled failed:', req.id || '', e.message)
+        throw dbUnavailable()
+      }
+      if (!result.updated) throw apiError('NOT_FOUND', '反馈不存在', 404)
+      // 审计只记编号与动作，不落反馈正文与联系方式
+      if (db.logAdminAction) {
+        try {
+          await db.logAdminAction('admin_feedback_handled', '', { feedbackId: id })
+        } catch (e) {
+          log.error('[audit] admin_feedback_handled failed:', e.message)
+        }
+      }
+      res.json({ id, handled: true })
+    })
+  )
+
   // 客服/合规：按 openid 精确查询与删除。openid 不写入日志，只记录哈希前缀。
   router.get(
     '/admin/users/:openid',

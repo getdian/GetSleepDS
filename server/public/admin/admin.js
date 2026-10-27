@@ -142,6 +142,7 @@
     copy: { title: '解锁文案', sub: '抽屉里的标题、说明与按钮', badge: '文案' },
     landing: { title: '落地页', sub: '落地页展示的小程序码与引导文案', badge: '内容' },
     web: { title: '国际站', sub: '站点品牌、订阅入口、AdSense 与分析 ID', badge: '出海' },
+    feedback: { title: '用户反馈', sub: '建议、想听的音乐与问题反馈', badge: '客服' },
     users: { title: '用户数据', sub: '按 openid 查询与删除云端记录', badge: '客服 / 合规' },
     audit: { title: '操作日志', sub: '配置保存、删除用户与上传的留痕', badge: '审计' },
     security: { title: '安全', sub: '后台密码与登录会话', badge: '安全' },
@@ -196,6 +197,10 @@
     if (name === 'security') {
       // 密码来源与上次修改时间只读展示，进面板时拉一次
       loadSecurity().catch(function () {})
+    }
+    if (name === 'feedback') {
+      // 反馈是运营的低频巡检项：进面板即拉一次，失败在列表里给可见错误
+      loadFeedback().catch(function () {})
     }
   }
 
@@ -732,7 +737,8 @@
         sync: $('#feat-sync').checked,
         events: $('#feat-events').checked,
         timer: $('#feat-timer').checked,
-        preload: $('#feat-preload').checked
+        preload: $('#feat-preload').checked,
+        feedback: $('#feat-feedback').checked
       },
       cache: {
         maxMB: Number($('#cache-max').value),
@@ -825,6 +831,7 @@
     $('#feat-events').checked = config.features.events !== false
     $('#feat-timer').checked = config.features.timer !== false
     $('#feat-preload').checked = config.features.preload !== false
+    $('#feat-feedback').checked = config.features.feedback !== false
 
     $('#cache-max').value = (config.cache && config.cache.maxMB) || 80
     $('#cache-ttl').value = (config.cache && config.cache.ttlDays) || 7
@@ -1161,6 +1168,128 @@
       failed.className = 'empty-line'
       failed.textContent = '加载失败：' + (error.message || '请稍后重试')
       box.appendChild(failed)
+    }
+  }
+
+  /* ---------- 用户反馈 ---------- */
+
+  const FEEDBACK_TYPES = { SUGGEST: '建议', MUSIC: '想听的音乐', ISSUE: '问题反馈' }
+
+  function renderFeedback(data) {
+    const box = $('#feedback-list')
+    const badge = $('#feedback-count')
+    if (!box) return
+    box.textContent = ''
+    if (badge) badge.textContent = String(data.unhandled || 0)
+
+    const items = data.items || []
+    if (!items.length) {
+      const empty = document.createElement('div')
+      empty.className = 'empty-line'
+      empty.textContent = '还没有反馈'
+      box.appendChild(empty)
+      return
+    }
+
+    items.forEach(function (item) {
+      const card = document.createElement('div')
+      card.className = 'feedback-item' + (item.handledAt ? ' is-handled' : '')
+
+      const head = document.createElement('div')
+      head.className = 'feedback-head'
+
+      const type = document.createElement('span')
+      type.className = 'feedback-type'
+      type.textContent = FEEDBACK_TYPES[item.type] || item.type
+      head.appendChild(type)
+
+      const time = document.createElement('span')
+      time.className = 'feedback-time'
+      time.textContent = formatRecordTime(item.createdAt)
+      head.appendChild(time)
+
+      if (item.handledAt) {
+        const done = document.createElement('span')
+        done.className = 'feedback-done'
+        done.textContent = '已处理'
+        head.appendChild(done)
+      }
+
+      // 正文按纯文本落 DOM（textContent）：反馈是用户输入，绝不能拼 HTML
+      const body = document.createElement('p')
+      body.className = 'feedback-text'
+      body.textContent = item.content
+
+      const meta = document.createElement('div')
+      meta.className = 'feedback-meta'
+      const openid = document.createElement('code')
+      openid.textContent = item.openid
+      meta.appendChild(openid)
+      if (item.contact) {
+        const contact = document.createElement('span')
+        contact.className = 'feedback-contact'
+        contact.textContent = '联系方式：' + item.contact
+        meta.appendChild(contact)
+      }
+
+      const actions = document.createElement('div')
+      actions.className = 'row-actions'
+      if (!item.handledAt) {
+        const button = document.createElement('button')
+        button.type = 'button'
+        button.className = 'ghost'
+        button.textContent = '标记已处理'
+        button.addEventListener('click', function () {
+          markFeedbackHandled(item.id, button)
+        })
+        actions.appendChild(button)
+      }
+
+      card.appendChild(head)
+      card.appendChild(body)
+      card.appendChild(meta)
+      if (actions.childNodes.length) card.appendChild(actions)
+      box.appendChild(card)
+    })
+  }
+
+  async function loadFeedback() {
+    const box = $('#feedback-list')
+    if (!box) return
+    box.textContent = ''
+    const loading = document.createElement('div')
+    loading.className = 'empty-line'
+    loading.textContent = '加载中…'
+    box.appendChild(loading)
+
+    const onlyOpen = $('#feedback-only-open') && $('#feedback-only-open').checked
+    try {
+      // 服务端上限 200（db.listFeedback 夹取）；面板一次性拉满，不做分页
+      const data = await api('/api/admin/feedback?limit=200' + (onlyOpen ? '&onlyOpen=1' : ''))
+      renderFeedback(data)
+    } catch (error) {
+      box.textContent = ''
+      const failed = document.createElement('div')
+      failed.className = 'empty-line'
+      failed.textContent = '加载失败：' + (error.message || '请稍后重试')
+      box.appendChild(failed)
+    }
+  }
+
+  async function markFeedbackHandled(id, button) {
+    if (button) button.disabled = true
+    try {
+      await api('/api/admin/feedback/' + id + '/handled', { method: 'POST', body: {} })
+      await loadFeedback()
+    } catch (error) {
+      if (button) button.disabled = false
+      const box = $('#feedback-list')
+      if (box) {
+        const failed = document.createElement('div')
+        failed.className = 'warning'
+        failed.textContent = '标记失败：' + (error.message || '请稍后重试')
+        box.insertBefore(failed, box.firstChild)
+      }
     }
   }
 
@@ -2007,6 +2136,12 @@
 
   $('#audit-refresh').addEventListener('click', function () {
     loadAudit().catch(function () {})
+  })
+  $('#feedback-refresh').addEventListener('click', function () {
+    loadFeedback().catch(function () {})
+  })
+  $('#feedback-only-open').addEventListener('change', function () {
+    loadFeedback().catch(function () {})
   })
   $('#pw-submit').addEventListener('click', function () {
     changePassword().catch(function () {})
