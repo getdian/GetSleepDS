@@ -1380,7 +1380,7 @@
 /* 悬浮音符：页面主题深色 + 透明玻璃圆底，无边框、不描高光 */
 .dock-fab {
   right: 26rpx;
-  bottom: calc(176rpx + env(safe-area-inset-bottom));
+  bottom: 24rpx;
   width: 108rpx;
   height: 108rpx;
   border-radius: 50%;
@@ -1409,7 +1409,7 @@
 .dock-note {
   position: fixed;
   right: 26rpx;
-  bottom: calc(176rpx + env(safe-area-inset-bottom));
+  bottom: 24rpx;
   z-index: var(--z-fab, 40);
   width: 108rpx;
   height: 108rpx;
@@ -1475,7 +1475,7 @@
 .dock-mini {
   left: auto;
   right: 0;
-  bottom: calc(176rpx + env(safe-area-inset-bottom));
+  bottom: 24rpx;
   width: 480rpx;
   max-width: calc(100% - 24rpx);
   min-height: 88rpx;

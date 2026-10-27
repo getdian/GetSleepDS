@@ -12,7 +12,7 @@ from PIL import Image, ImageDraw
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "miniprogram", "assets")
 
-NORMAL = (100, 116, 139, 255)   # #64748B
+NORMAL = (124, 135, 153, 255)   # #7C8799
 ACTIVE = (129, 140, 248, 255)   # #818CF8
 SOFT = (165, 180, 252, 255)     # #A5B4FC
 
@@ -32,23 +32,34 @@ def tab_home(color):
     img, side = canvas(81)
     d = ImageDraw.Draw(img)
     c = side // 2
-    w = 12
-    d.ellipse((54, 54, 270, 270), outline=color, width=w)
-    d.line((c, c, c, 100), fill=color, width=w)
-    d.line((c, c, 212, 190), fill=color, width=w)
+    w = 14
+    # 极简时规外环
+    d.ellipse((58, 58, 266, 266), outline=color, width=w)
+    # 中心轴销
+    r_pin = 9
+    d.ellipse((c - r_pin, c - r_pin, c + r_pin, c + r_pin), fill=color)
+    # 时针（指向 12 点）
+    h_top = 104
+    d.line((c, c, c, h_top), fill=color, width=w)
+    d.ellipse((c - w // 2, h_top - w // 2, c + w // 2, h_top + w // 2), fill=color)
+    # 分针（指向 2 点方向）
+    m_x, m_y = 216, 188
+    d.line((c, c, m_x, m_y), fill=color, width=w)
+    d.ellipse((m_x - w // 2, m_y - w // 2, m_x + w // 2, m_y + w // 2), fill=color)
     return img, side
 
 
 def tab_stats(color):
     img, side = canvas(81)
     d = ImageDraw.Draw(img)
-    widths = 42
-    gap = 16
-    start = 54
-    heights = (54, 90, 126, 162)
+    widths = 36
+    gap = 20
+    start = 66
+    # 睡眠节律律动脉冲曲线高程
+    heights = (72, 160, 112, 178)
     for i, h in enumerate(heights):
         x = start + i * (widths + gap)
-        d.rounded_rectangle((x, 270 - h, x + widths, 270), radius=10, fill=color)
+        d.rounded_rectangle((x, 262 - h, x + widths, 262), radius=14, fill=color)
     return img, side
 
 
@@ -70,10 +81,26 @@ def tab_sleep(color):
     img, side = canvas(81)
     mask = Image.new("L", (side, side), 0)
     md = ImageDraw.Draw(mask)
-    md.ellipse((72, 54, 252, 234), fill=255)
-    md.ellipse((126, 30, 306, 210), fill=0)
+    # 弧光新月
+    md.ellipse((68, 56, 252, 240), fill=255)
+    md.ellipse((126, 32, 304, 210), fill=0)
     solid = Image.new("RGBA", (side, side), color)
     img.paste(solid, (0, 0), mask)
+
+    # 灵动微星 (4-point micro star)
+    d = ImageDraw.Draw(img)
+    sx, sy = 232, 82
+    star_points = [
+        (sx, sy - 18),
+        (sx + 5, sy - 5),
+        (sx + 18, sy),
+        (sx + 5, sy + 5),
+        (sx, sy + 18),
+        (sx - 5, sy + 5),
+        (sx - 18, sy),
+        (sx - 5, sy - 5),
+    ]
+    d.polygon(star_points, fill=color)
     return img, side
 
 
@@ -161,6 +188,7 @@ def main():
     for color, suffix in ((NORMAL, ""), (ACTIVE, "-active")):
         img, side = tab_home(color)
         save(img, side, "tab-home%s.png" % suffix, 81)
+        save(img, side, "tab-calc%s.png" % suffix, 81)
         img, side = tab_stats(color)
         save(img, side, "tab-stats%s.png" % suffix, 81)
         img, side = tab_audio(color)

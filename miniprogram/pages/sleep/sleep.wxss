@@ -5,8 +5,8 @@
   position: relative;
   z-index: var(--z-page, 1);
   padding-top: 8rpx;
-  /* 与 app.wxss .page 同口径：让出 tabBar 后再叠安全区 */
-  padding-bottom: calc(190rpx + env(safe-area-inset-bottom));
+  /* 与 app.wxss .page 同口径：为常驻悬浮音符留出空间 */
+  padding-bottom: 140rpx;
 }
 
 /* Hero：与计算器页同一套大标题 + 轻说明 */

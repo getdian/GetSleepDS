@@ -13,23 +13,28 @@
     "navigationStyle": "custom"
   },
   "tabBar": {
-    "custom": true,
-    "color": "#8A94A6",
+    "color": "#7C8799",
     "selectedColor": "#818CF8",
-    "backgroundColor": "#0C101D",
+    "backgroundColor": "#0A0E1A",
     "borderStyle": "black",
     "list": [
       {
         "pagePath": "pages/index/index",
-        "text": "计算器"
+        "text": "计算器",
+        "iconPath": "assets/tab-home.png",
+        "selectedIconPath": "assets/tab-home-active.png"
       },
       {
         "pagePath": "pages/sleep/sleep",
-        "text": "入睡"
+        "text": "入睡",
+        "iconPath": "assets/tab-sleep.png",
+        "selectedIconPath": "assets/tab-sleep-active.png"
       },
       {
         "pagePath": "pages/stats/stats",
-        "text": "统计"
+        "text": "统计",
+        "iconPath": "assets/tab-stats.png",
+        "selectedIconPath": "assets/tab-stats-active.png"
       }
     ]
   },

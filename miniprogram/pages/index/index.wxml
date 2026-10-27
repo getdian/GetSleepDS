@@ -251,5 +251,3 @@
   bind:category="onBgCategory"
   bind:select="onBgSelect"
 />
-
-<custom-tab-bar wx:if="{{!singlePage}}" />

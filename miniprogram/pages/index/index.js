@@ -134,8 +134,9 @@ Page({
     // 把最后一次点击覆盖成中间页，造成两个 tab 同时像被选中。
     const tabBar = this.getTabBar && this.getTabBar()
     if (tabBar) {
-      // custom-tab-bar 在独立 root，wx:if 不能可靠移除它；单页模式必须显式隐藏
       tabBar.setData({ selected: 0, hidden: !!this.data.singlePage })
+    } else if (this.data.singlePage) {
+      tabbar.hide()
     }
     // 偏好可能被外部改过（「清除全部数据」会重置 prefs）：只在值真的变化时回写，
     // 避免把用户本次手动拨动的时间轮覆盖掉。

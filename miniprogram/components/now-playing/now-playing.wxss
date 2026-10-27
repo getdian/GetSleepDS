@@ -5,8 +5,8 @@
      左侧留白就把「点播放条外部折叠」的点击吞掉（入睡页 dock 只锚右，所以能折）。
      宽度由内容撑开（播放条 480rpx / 音符 108rpx）。 */
   right: 0;
-  /* 与入睡页 dock 共用同一套底部安全位：避开 tabBar 并拉开间距，又不压住计算器主按钮 */
-  bottom: calc(176rpx + env(safe-area-inset-bottom));
+  /* 与入睡页 dock 共用同一套底部安全位：避开原生 tabBar 并留出优雅间距 */
+  bottom: 24rpx;
   z-index: var(--z-player, 100);
   padding: 0 0 0 24rpx;
   pointer-events: none;

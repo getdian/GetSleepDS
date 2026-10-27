@@ -154,10 +154,13 @@
         >补记一段 ›</view>
       </view>
 
+      <!-- 左分享 / 中记录数 / 右海报：两侧各占 1fr，中间 auto 才会相对整行真正居中 -->
       <view class="section-foot">
-        <text class="heat-note">{{calendarNote}}</text>
-        <view class="section-actions">
+        <view class="foot-side">
           <share-btn variant="icon" />
+        </view>
+        <text class="heat-note">{{calendarNote}}</text>
+        <view class="foot-side foot-side--end">
           <view class="poster-btn" bindtap="onMakePoster" hover-class="poster-btn--tap" hover-stay-time="120" aria-role="button" aria-label="生成近 30 天海报并保存到相册">
             <text class="poster-spark">✦</text>
             <text>生成 30 天海报</text>
@@ -376,5 +379,3 @@
     </block>
   </view>
 </view>
-
-<custom-tab-bar />

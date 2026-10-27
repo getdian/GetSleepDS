@@ -1,5 +1,23 @@
 # 睡点 · 关键更新记录
 
+## 2026-10-28 · 重构底部导航：全面回归微信原生 TabBar，根治快速切换抖动
+
+背景（用户反馈）：快速切换 tab-bar 时按钮存在激活样式的抖动情况。根本原因为自定义组件 `custom-tab-bar` 在多页面各持一份实例，切换瞬间的组件渲染、`onShow` 与 `setData` 产生了不可避免的竞态闪烁。本轮彻底移除 `custom-tab-bar`，回归微信原生 `tabBar` 体系。
+
+- **架构**：`app.json` 移除 `"custom": true`，由微信底层 C++ 容器直接渲染底栏；三页 WXML 移除 `<custom-tab-bar />` 并删除 `miniprogram/custom-tab-bar/` 目录，彻底杜绝实例竞态与切换抖动。
+- **视觉**：底色 `#0A0E1A`、边框 `black`、未选 `#7C8799`、激活 `#818CF8`；`tools/gen_assets.py` 重绘生成 Apple 几何质感图标（时规 dial、新月 micro-star、律动波形）。主包体积自 737.1 KB 降至 725.1 KB。
+- **避让与桥接**：`utils/tabbar.js` 统一封装 `wx.hideTabBar()` 与 `wx.showTabBar()`；原生底栏位于 Webview 外部，`audio-dock` 与 `now-playing` 悬浮元素定位优化为 `bottom: 24rpx;`，页面 `.page` 底部 padding 缩减为 140rpx，消除双重安全区留白。
+- **验证**：`npm test` 460 项 / 459 通过 / 0 失败 / 1 skip；`npm run check` 纯绿通过。
+
+## 2026-10-28 · 统计页日历底行重排：分享靠左、记录数真正居中
+
+背景（用户截图反馈）：打卡日历下方一行里「分享」夹在「本月已记录 N 天」与「生成 30 天海报」之间，视觉重心偏右。
+
+- **结构**：`.section-foot` 由「文案 + [分享 | 海报]」改为三栏「分享 / 文案 / 海报」；左右各包一层 `.foot-side` 并 `flex: 1 1 0`（basis 0），中间 `.heat-note` 改 `flex: 0 0 auto` + `text-align: center`。删除死类 `.section-actions`（连同其 `.poster-btn` 外边距规则）。
+- **为什么不用「文案 flex:1 + text-align:center」**：左侧图标约 60rpx、右侧海报胶囊约 200rpx，剩余空间全给文案时中线会左偏约 70rpx；只有两侧 basis 0 + 等分剩余空间，文案才相对整行居中。
+- **验证**：模拟器 390×844 量取 `.heat-note` 中线 195 = `.section-foot` 中线 195（内容区 16–374）；左栏 16–159、右栏 231–374；截图 `docs/assets/l4-stats-foot.png`。`npm test` 460 / 459 通过 / 0 失败 / 1 skip、`npm run check` 通过。
+- **已知边界**：320px 级窄屏下海报胶囊（约 124px）超过可用半宽，文案中线会被推左约 16px；iPhone SE(375) 及以上无影响，未为此压缩海报文案或改字号。
+
 ## 2026-10-27 · 用户反馈闭环：统计页表单 → 服务端三类存储 → 后台只读巡检
 
 背景：用户想提建议此前没有落点（只有一句「意见反馈」文案，运营收不到内容）。本轮打通最小闭环，**刻意不做回复/删除**——回复需要客服体系，删除会与用户「清除数据」形成两套语义。

@@ -464,15 +464,20 @@
 - [x] 门禁：`npm test` 435/434/0 fail/1 skip；`check` 通过（679.6 KB）。
 - [ ] 真机：护眼/低亮度模式下 lv1 与空格是否仍可区分。
 
-### 1.36 底部 tabBar 切换闪动（2026-10-27，模拟器已验）
+### 1.36 底部导航全面重构：回归微信原生 TabBar（2026-10-28，模拟器已验）
 
-- [x] 复现取证：`custom-tab-bar` 的 `attached` 里 `getCurrentPages()` 为空，日志 `[tabbar] attached route= index=-1` → 每个新页面的 tabBar 首帧都停在默认 `selected: 0`（计算器高亮），等页面 `onShow` 才改成目标项 → 切到统计/入睡时闪一下“别的 tab 被选中”。
-- [x] 修复：新增 `app.globalData.tabIndex` 单一来源——`onTap` 在 `switchTab` **之前**写入并即时高亮，三个页面 `onShow` 用 `tabbar.setIndex(0/1/2)` 维护；`attached` 在 route 查不到时用它兜底首帧。
-- [x] 复验日志：冷启动 `index=0`、切统计 `index=2`、切入睡 `index=1`（修复前均为 `-1`）。
-- [x] 视觉：去掉 `hover-class` 的整格铺底（切页瞬间旧实例消失会像“别的 tab 背景闪一下”），只保留图标/文字缩放反馈。
-- [x] 强化选中（同日）：图标 `scale(1.06)` + 主色 `drop-shadow`、文字提亮到 600；贴 tabBar 底边的 24×4rpx 静态光条（不做滑动指示器，避免切页重播）；中间入睡不叠短线，改为圆环内描边 + 外发光。截图 `docs/assets/l4-tabbar-calc.png`、`l4-tabbar-stats.png`、`l4-tabbar-sleep.png`。
-- [x] 二次复现（加下划线后更明显）：切到统计时旧页（计算器）的条仍带“计算器选中 + 下划线”约 1 秒。根因是 `onTap` 里 `setData` 未 flush 就 `switchTab`，旧页渲染被挂起、过渡帧沿用旧画面。修复：把 `switchTab` 放进 `setData` 回调，旧条先重绘成目标项再切页；数据层采样确认新页首帧 `selected=2`、无中间 0。
-- [ ] 真机：快速连点三个 tab、iOS 低亮度下确认无闪动/无残留高亮。
+- [x] 快速切换抖动根因：自定义 `custom-tab-bar` 在每个页面各有独立组件实例，快速连击或切换时，组件初始化默认值、`attached`、页面 `onShow` 与 `setData` 产生了不可避免的竞态闪烁。
+- [x] 架构决断：彻底移除 `custom-tab-bar`，回归微信原生 `app.json` 的 `tabBar` 体系，由微信底层 C++ 视图容器直接渲染，从根本上终结多实例竞态与激活态抖动。
+- [x] 视觉与配置：
+  - `app.json` 移除 `"custom": true`，配置暗夜星空色盘（`backgroundColor: #0A0E1A`，未选色 `#7C8799`，选中色 `#818CF8`）；
+  - `tools/gen_assets.py` 产出 Apple 极简几何图标（时规 dial、新月 micro-star、节律波），放置于 `miniprogram/assets/`；
+  - 各页面 WXML 彻底移除 `<custom-tab-bar />`，删除 `miniprogram/custom-tab-bar/` 目录；
+  - 主包体积从 737.1 KB 下降至 725.1 KB。
+- [x] 桥接与避让重算：
+  - `utils/tabbar.js` 的 `hide()` / `show()` 对接微信原生 `wx.hideTabBar({ animation: false })` / `wx.showTabBar()`，`switchTo()` 对接 `wx.switchTab()`；
+  - 微信原生 `tabBar` 位于 Webview 外部（不再侵占页面内部视口），`audio-dock` / `now-playing` 悬浮元素定位统一优化为 `bottom: 24rpx;`，页面底部内边距精简至 `140rpx~160rpx`，消除双重安全区留白。
+- [x] 门禁全绿：`npm test` 460 / 459 通过 / 1 skip，`npm run check` 纯绿通过。
+- [ ] 真机：iOS / Android 快速滑动切换 Tab，体验底层原生切换的绝对稳定性与零抖动。
 
 ### 1.37 统计页详情卡「改 / 删」——历史记录修正入口（2026-10-27，模拟器已验）
 
@@ -528,6 +533,17 @@
 - [x] 后台面板浏览器实测（2026-10-27，Edge headless + puppeteer-core，1440×980，`PORT=3101` memory 实例灌 2 条）：左侧新增「用户反馈」入口可点开；列表 2 条、角标「未处理 2」、类型标签「问题反馈 / 想听的音乐」正确、正文 `white-space: pre-wrap` 生效（多行保留）、联系方式行「联系方式：wx: getsleep-test」；点「标记已处理」→ 角标 1、该卡出现「已处理」、按钮消失；勾「只看未处理」→ 列表 1 条；`pageerror` / `console.error` 均为 0。截图 `docs/assets/l4-feedback-admin.png`。
 - [x] 后台失败提示不堆叠：把 `/handled` 请求临时替换为 500 后连点两次「标记已处理」→ 列表内 `.warning` 恒为 1 条（文案「标记失败：模拟失败」），按钮恢复可点（本轮 review 修复「先清旧再插新」实测生效）。
 - [ ] 真机：软键盘弹起后 textarea 上方内容是否可达、iOS 中文输入与换行、面板最大高度在无障碍大字号下的表现。
+
+### 1.41 统计页日历底行重排（2026-10-28，模拟器已验）
+
+背景（用户截图反馈）：打卡日历下方一行里，「分享」夹在「本月已记录 N 天」与「生成 30 天海报」之间，视觉重心偏右。
+
+- [x] 结构：`.section-foot` 由「文案 + [分享 | 海报]」改为三栏「分享 / 文案 / 海报」；左右各包 `.foot-side`（`flex: 1 1 0`），中间 `.heat-note` 改 `flex: 0 0 auto` + `text-align: center`。删除死类 `.section-actions` 及其 `.poster-btn` 外边距规则。
+- [x] 居中是真居中而非近似：模拟器 390×844 量取 `.heat-note` 中线 **195**，`.section-foot` 中线 **195**（页面 390 宽，内容区 16–374）；左栏 16–159（分享贴内容左缘）、右栏 231–374（海报右缘贴内容右缘）。
+- [x] 备选方案已排除：「文案 `flex:1` + `text-align:center`」会让中线左偏约 70rpx（左图标约 60rpx、右胶囊约 200rpx 不对称）。
+- [x] 截图 `docs/assets/l4-stats-foot.png`（7 条本月记录的数据态）。
+- [x] 已知边界：320px 级窄屏下海报胶囊约 124px 超过可用半宽，文案中线会被推左约 16px；iPhone SE(375) 及以上不受影响，未为此压缩海报文案。
+- [ ] 真机：小屏 Android 观感与分享按钮热区（组件热区 64rpx 高，未改）。
 
 ## 2. 待真机验收（代码就绪，模拟器不可替代）
 
