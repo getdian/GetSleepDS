@@ -508,7 +508,7 @@
 - [ ] 视觉：390×844 下「可随时更换」副标单行不折、脚注不超过 2 行、`可切换` 徽章不挤 `bp-badge` 列（模拟器或真机过目后打勾）。
 - [ ] 口径复核：让没看过后台配置的人读这三处文案，不应再问出「以后是不是要收费」。
 
-### 1.40 用户反馈闭环（2026-10-27，单测/门禁已验；**小程序与后台视觉未机验**）
+### 1.40 用户反馈闭环（2026-10-27，单测/门禁/模拟器/后台浏览器已验；**真机键盘未验**）
 
 背景：统计页新增「反馈与建议」表单（类型/正文/可选联系方式），服务端 `POST /api/feedback` 落 `user_feedback` 表，后台「用户反馈」面板只读巡检 + 标记已处理。
 
@@ -516,11 +516,18 @@
 - [x] 失败出口：弱网/超时（10s）、429 限流、403 关闸、501 存储不支持都会落到表单内红字，面板仍可关闭。
 - [x] 重复提交：提交中按钮守卫 + **面板重开不重置守卫**（review 修复，见 changelog 同日条目）；提交中点 × 给「正在提交，请稍候」而非静默无响应。
 - [x] 清除数据级联：`eraseUserData` / `eraseCloudData` 都删 `user_feedback`（memory + PG 双实现，`server/test/feedback.test.js` 覆盖）。
-- [x] 后台：正文 `textContent` 渲染（零 `innerHTML`）、保留换行、标记已处理写审计只记编号；列表最多 200 条且面板文案写明口径。
+- [x] 后台接口：正文 `textContent` 渲染（零 `innerHTML`）、保留换行、标记已处理写审计只记编号；列表最多 200 条且面板文案写明口径。**本机实测**（`PORT=3101` memory 实例 + 后台 Cookie 会话）：提交 1 条 MUSIC → `GET /api/admin/feedback` 返回 `count=1 / unhandled=1 / contact` 原样保留；`POST /api/admin/feedback/1/handled` 后 `onlyOpen=1` 返回 0 条、`unhandled=0`、`handledAt>0`。
 - [x] 门禁：`npm test` 460 / 459 通过 / 0 失败 / 1 skip；`check` 708.0 KB。
-- [ ] 小程序：统计页入口与表单在 390×844 的实际排版（textarea 高度、counter、键盘弹起后面板上半部是否可达）、提交成功态。
-- [ ] 后台：浏览器点「用户反馈」面板（列表/勾只看未处理/标记已处理后角标同步），需真实库里有数据。
-- [ ] 真机：一篇含换行的长反馈从提交到后台显示的全链路。
+- [x] 小程序 390×844 模拟器实测（2026-10-27，wechatide CLI + `automation_evaluate`）：
+  - 入口：统计页底部（「数据与备份」之后）单行「反馈与建议 ›」弱化文字，命中区 88rpx，截图 `docs/assets/l4-feedback-entry.png`。
+  - 表单：类型三选一 chips（选中态紫描边+底色）、textarea 实高 150px、字数「13/500」、可选联系方式、提交按钮，截图 `docs/assets/l4-feedback-sheet.png`；量取 `end-sheet` 宽 390 / chips 右边缘 374（左右各 16px 内边距，无裁切）、textarea 358×150。
+  - 校验：空白内容提交 → 表单内红字「写点什么再提交吧」，`feedbackSending` 保持 false，截图 `docs/assets/l4-feedback-error.png`。
+  - 成功态：真实 `POST /api/feedback` 201 后切「收到了，谢谢你」+ 输入清空 + 类型回默认，截图 `docs/assets/l4-feedback-done.png`；`get_simulator_console` 无 error 输出。
+  - tabBar：打开面板 `tabbar.hide()`、关闭后 `hidden=false / selected=2` 复位（evaluate 读取）。
+  - **验证手法披露**：本机 3100 端口已有旧版 dev server（无 `/api/feedback`），为避免重启他人进程，另起 `PORT=3101` 实例，仅在 `automation_evaluate` 内临时改写 `wx.request` 的 URL（3100→3101）完成真实提交，事后还原；仓库代码零改动。
+- [x] 后台面板浏览器实测（2026-10-27，Edge headless + puppeteer-core，1440×980，`PORT=3101` memory 实例灌 2 条）：左侧新增「用户反馈」入口可点开；列表 2 条、角标「未处理 2」、类型标签「问题反馈 / 想听的音乐」正确、正文 `white-space: pre-wrap` 生效（多行保留）、联系方式行「联系方式：wx: getsleep-test」；点「标记已处理」→ 角标 1、该卡出现「已处理」、按钮消失；勾「只看未处理」→ 列表 1 条；`pageerror` / `console.error` 均为 0。截图 `docs/assets/l4-feedback-admin.png`。
+- [x] 后台失败提示不堆叠：把 `/handled` 请求临时替换为 500 后连点两次「标记已处理」→ 列表内 `.warning` 恒为 1 条（文案「标记失败：模拟失败」），按钮恢复可点（本轮 review 修复「先清旧再插新」实测生效）。
+- [ ] 真机：软键盘弹起后 textarea 上方内容是否可达、iOS 中文输入与换行、面板最大高度在无障碍大字号下的表现。
 
 ## 2. 待真机验收（代码就绪，模拟器不可替代）
 

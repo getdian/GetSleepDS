@@ -196,6 +196,7 @@ CREATE INDEX IF NOT EXISTS idx_events_created_at ON events (created_at);
 | POST | `/api/records/sync` | code | 上传记录/删除墓碑；服务端重算 day、丢弃单条脏数据，返回云端剩余记录 |
 | POST | `/api/records/erase` | code | 合规删除：默认删除记录/解锁/事件并写 erasure 水位；`cloudOnly:true` 只删云端副本、不写水位（3 次/分钟/IP）；`cloudOnly` 非布尔返回 400 |
 | POST | `/api/events` | code | 上报轻量事件（app_open / checkin / audio_play / audio_unlock / audio_unlock_fail / audio_interrupt / manual_sleep / share / ad_show / ad_error） |
+| POST | `/api/feedback` | code | 用户反馈：`{code,type,content,contact}`，`type ∈ SUGGEST/MUSIC/ISSUE`，正文 ≤500、联系方式 ≤64（可选），控制字符清洗保留换行；写 `user_feedback`。限流 IP 5/分钟 + openid 5/小时（`RATE_FEEDBACK_IP` / `RATE_FEEDBACK_OPENID`）；`features.feedback === false` 返回 403 |
 | POST | `/api/admin/login` | 密码 | 后台登录，写 HttpOnly + SameSite=Strict Cookie |
 | POST | `/api/admin/logout` | Cookie | 清除后台会话 |
 | GET | `/api/admin/session` | 无 | 当前是否已登录 |
@@ -205,6 +206,8 @@ CREATE INDEX IF NOT EXISTS idx_events_created_at ON events (created_at);
 | GET | `/api/admin/analytics` | Cookie | 看板聚合（今日/本周/14 天/ Top 5） |
 | GET | `/api/admin/users/:openid` | Cookie | 按 openid 查询云端记录、解锁到期时间与事件数（客服/合规） |
 | DELETE | `/api/admin/users/:openid/records` | Cookie | 删除该 openid 的记录、解锁与事件，写 erasure 水位与 `admin_audit` 审计 |
+| GET | `/api/admin/feedback` | Cookie | 用户反馈列表（按时间倒序，最多 200 条；`onlyOpen=1` 只看未处理），返回 `items` 与全局 `unhandled` |
+| POST | `/api/admin/feedback/:id/handled` | Cookie | 标记反馈已处理（写 `admin_feedback_handled` 审计，只记编号）；不存在返回 404 |
 | GET/PUT | `/api/admin/storage` | Cookie | 读取 / 保存 COS 配置（SecretKey 加密） |
 | POST | `/api/admin/storage/test` | Cookie | 测试 COS 连接 |
 | POST | `/api/admin/audio/upload` | Cookie | 上传音频到 COS（multipart，≤25MB） |

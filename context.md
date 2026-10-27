@@ -225,7 +225,7 @@ tests/            Node 纯逻辑测试
 
 43. **睡眠口径分层（2026-10-27）**：`startAt` = 上床、`sleepAt` = 睡着（可选；`sessions[].sleepAt`，本地 `sessions.normalizeSession` 与服务端 `validate.normalizeSession` 白名单均已放行，越界只丢字段不丢段）。**主口径仍是在床**（`durationMin = endAt - startAt`）：完成态大数字标签「在床时长」、统计页指标「平均上床」、日期详情「首段 X 上床」；「入睡」只用于事件描述（空态「去入睡」、补记面板时间标签、进行中状态）与真实睡着时刻。睡眠效率 = 睡着 / 在床（仅主段、仅当有 `sleepAt`，完成态一行「入睡 23:00 · 睡着 7 小时 00 分 · 效率 97%」）。**决策：不切 TST 主口径**——`sleepAt` 默认 = 上床 + 档位，不改的用户会得到恒等于「在床 − 15 分钟」的假测量，且分不清「认可默认」与「没看」；待「改入睡时刻的用户占比」数据再议。入睡耗时档位走 `app.globalData.fallMinutes`（会话级、不落 prefs），打卡快照进 `pending.fallMinutes`，结束面板三格「上床/入睡/起床」。门禁 433/432/0 fail/1 skip、check 677.7 KB。
 
-44. **用户反馈闭环（2026-10-27）**：`POST /api/feedback`（`{code,type,content,contact}`，类型白名单 `SUGGEST/MUSIC/ISSUE`、正文 ≤500、联系方式 ≤64、控制字符清洗保留换行）→ 新表 `user_feedback`（`001_init.sql` 与启动 DDL 双份，纯加法，无手工迁移）→ 后台「用户反馈」面板只读 + 标记已处理。限流 IP 5/分钟 + openid 5/小时；`features.feedback`（config-schema / app.config.json / fallback.js / admin.js / 文档 五处已同步）关掉后入口隐藏且接口 403。设计与边界：**不做回复、不做删除**（回复需客服体系；删除与用户「清除数据」形成两套语义），用户清除数据时 `eraseUserData`/`eraseCloudData` 会级联删反馈。上线后需运营点验后台面板与小程序表单视觉（docs/13 §1.40），未机验。
+44. **用户反馈闭环（2026-10-27）**：`POST /api/feedback`（`{code,type,content,contact}`，类型白名单 `SUGGEST/MUSIC/ISSUE`、正文 ≤500、联系方式 ≤64、控制字符清洗保留换行）→ 新表 `user_feedback`（`001_init.sql` 与启动 DDL 双份，纯加法，无手工迁移）→ 后台「用户反馈」面板只读 + 标记已处理。限流 IP 5/分钟 + openid 5/小时；`features.feedback`（config-schema / app.config.json / fallback.js / admin.js / 文档 五处已同步）关掉后入口隐藏且接口 403。设计与边界：**不做回复、不做删除**（回复需客服体系；删除与用户「清除数据」形成两套语义），用户清除数据时 `eraseUserData`/`eraseCloudData` 会级联删反馈。口径与边界见 `DECISIONS.md` ADR-029（不占顶栏、不接微信原生反馈、不做回复与后台删除）。**模拟器 390×844 已实测**（入口/chips 选中态/字数/空白校验/真实 201 成功态/tabBar 复位，截图 `docs/assets/l4-feedback-*.png`），后台面板浏览器实测（Edge headless，列表/角标/类型标签/pre-wrap 换行/联系方式、标记后角标同步、只看未处理筛选、0 console error，截图 `docs/assets/l4-feedback-admin.png`）；**仍未验**：真机软键盘弹起与 iOS 中文输入，见 docs/13 §1.40。
 
 ## 8. 快速命令
 
@@ -253,4 +253,4 @@ wechatide -c <Agent名> get_simulator_console --project <仓库绝对路径> --c
 
 小程序：微信开发者工具导入仓库根目录；开发版自动指向 `127.0.0.1:3100`，体验/正式版自动指向 `https://sleep.qfmaster.com`。
 标准操作与 1Panel 上传/反代步骤见 [docs/10-operations.md](docs/10-operations.md)；本次关键更新见 [docs/11-changelog.md](docs/11-changelog.md)。
-关键取舍见 [DECISIONS.md](DECISIONS.md)（27 条 ADR，截至 ADR-027：睡眠日边界、圆均值、LWW、模板总结、午休范围、同步容错、删除水位、1Panel 部署、不做付费内容、不做分享解锁等）。
+关键取舍见 [DECISIONS.md](DECISIONS.md)（29 条 ADR，截至 ADR-029：睡眠日边界、圆均值、LWW、模板总结、午休范围、同步容错、删除水位、1Panel 部署、不做付费内容、不做分享解锁、统计周期回退、反馈渠道边界等）。

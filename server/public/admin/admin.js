@@ -1285,6 +1285,9 @@
       if (button) button.disabled = false
       const box = $('#feedback-list')
       if (box) {
+        // 连续失败不能堆出一串同样的提示：先清掉上一条再插
+        const stale = box.querySelector('.warning')
+        if (stale) box.removeChild(stale)
         const failed = document.createElement('div')
         failed.className = 'warning'
         failed.textContent = '标记失败：' + (error.message || '请稍后重试')
