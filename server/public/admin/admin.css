@@ -352,6 +352,11 @@ h1 {
   flex: none;
 }
 
+.audio-sub .favbase {
+  width: 96px;
+  flex: none;
+}
+
 .badge {
   font-size: 12px;
   padding: 4px 10px;
@@ -765,8 +770,19 @@ button:disabled {
   flex: none;
 }
 
-.bg-url {
-  width: 100%;
+.bg-url-row {
+  display: flex;
+  gap: 8px;
+}
+
+.bg-url-row .bg-url {
+  flex: 1;
+  min-width: 0;
+}
+
+.bg-url-row .bg-usebase {
+  width: 96px;
+  flex: none;
 }
 
 .bg-keep-original {

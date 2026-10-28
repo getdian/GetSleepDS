@@ -4,6 +4,7 @@ const assert = require('node:assert/strict')
 const { createApp } = require('../src/app')
 const { loadConfig } = require('../src/config')
 const { createMemoryDb } = require('../src/db')
+const { createConfigStore } = require('../src/services/config-store')
 
 function bj(year, month, day, hour, minute) {
   return Date.UTC(year, month - 1, day, hour - 8, minute)
@@ -216,4 +217,128 @@ test('audio_interrupt 在事件白名单内（外部中断可观测）', async (
   })
   assert.equal(res.status, 200)
   assert.equal(res.body.accepted, 2)
+})
+
+test('环境音收藏：同一人重复收藏不重复计数，取消后归零', async () => {
+  const first = await fetch(base + '/api/audio/favorites')
+  const firstBody = await first.json()
+  assert.equal(first.status, 200)
+  assert.equal(firstBody.counts['sleep-10001'], 0)
+
+  const add = await post('/api/audio/favorite', { code: 'dev-code', trackId: 'sleep-10001', on: true })
+  assert.equal(add.status, 200)
+  assert.equal(add.body.count, 1)
+
+  const again = await post('/api/audio/favorite', { code: 'dev-code', trackId: 'sleep-10001', on: true })
+  assert.equal(again.body.count, 1, '主键去重：同一 openid 只算一次')
+
+  const listed = await fetch(base + '/api/audio/favorites')
+  assert.equal((await listed.json()).counts['sleep-10001'], 1)
+
+  const remove = await post('/api/audio/favorite', { code: 'dev-code', trackId: 'sleep-10001', on: false })
+  assert.equal(remove.body.count, 0)
+})
+
+test('环境音收藏：未知曲目与缺参数都被拒绝（不往统计表灌脏数据）', async () => {
+  const unknown = await post('/api/audio/favorite', { code: 'dev-code', trackId: 'not-exist', on: true })
+  assert.equal(unknown.status, 400)
+
+  const noCode = await post('/api/audio/favorite', { trackId: 'sleep-10001', on: true })
+  assert.equal(noCode.status, 400)
+})
+
+test('环境音收藏展示值 = 后台人气基数 + 真实收藏', async () => {
+  const fileConfig = JSON.parse(JSON.stringify(require('../config/app.config.json')))
+  fileConfig.audio[0].favBase = 713
+  const favDb = createMemoryDb()
+  const favApp = createApp({
+    config: loadConfig({ NODE_ENV: 'test', ALLOW_DEV_LOGIN: '1', DB_MODE: 'memory' }),
+    db: favDb,
+    configStore: createConfigStore({
+      db: favDb,
+      fileConfig,
+      logger: { log() {}, error() {} }
+    }),
+    logger: { log() {}, error() {} },
+    now: () => FIXED_NOW
+  })
+  const favServer = favApp.listen(0)
+  await new Promise((resolve) => favServer.once('listening', resolve))
+  const favBase = 'http://127.0.0.1:' + favServer.address().port
+  try {
+    const before = await (await fetch(favBase + '/api/audio/favorites')).json()
+    assert.equal(before.counts['sleep-10001'], 713)
+
+    const added = await (
+      await fetch(favBase + '/api/audio/favorite', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ code: 'dev-code', trackId: 'sleep-10001', on: true })
+      })
+    ).json()
+    assert.equal(added.count, 714)
+
+    const removed = await (
+      await fetch(favBase + '/api/audio/favorite', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ code: 'dev-code', trackId: 'sleep-10001', on: false })
+      })
+    ).json()
+    assert.equal(removed.count, 713)
+  } finally {
+    await new Promise((resolve) => favServer.close(resolve))
+  }
+})
+
+test('背景使用次数 = 后台人气基数 + 真实累计（同一人多次算多次）', async () => {
+  const fileConfig = JSON.parse(JSON.stringify(require('../config/app.config.json')))
+  fileConfig.backgrounds = [
+    {
+      id: 'bg-1',
+      title: '湖面',
+      category: '夜色',
+      url: 'https://example.com/bg.jpg',
+      enabled: true,
+      useBase: 713
+    }
+  ]
+  const bgDb = createMemoryDb()
+  const bgApp = createApp({
+    config: loadConfig({ NODE_ENV: 'test', ALLOW_DEV_LOGIN: '1', DB_MODE: 'memory' }),
+    db: bgDb,
+    configStore: createConfigStore({
+      db: bgDb,
+      fileConfig,
+      logger: { log() {}, error() {} }
+    }),
+    logger: { log() {}, error() {} },
+    now: () => FIXED_NOW
+  })
+  const bgServer = bgApp.listen(0)
+  await new Promise((resolve) => bgServer.once('listening', resolve))
+  const bgBase = 'http://127.0.0.1:' + bgServer.address().port
+  try {
+    const before = await (await fetch(bgBase + '/api/backgrounds/uses')).json()
+    assert.equal(before.counts['bg-1'], 713)
+
+    const use = async (bgId) =>
+      fetch(bgBase + '/api/backgrounds/use', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ code: 'dev-code', bgId })
+      })
+
+    const first = await (await use('bg-1')).json()
+    assert.equal(first.count, 714)
+
+    // 与收藏不同：换用同一张背景多次是真实使用行为，每次都累加
+    const second = await (await use('bg-1')).json()
+    assert.equal(second.count, 715)
+
+    const unknown = await use('not-exist')
+    assert.equal(unknown.status, 400, '未上架的背景不能写入统计')
+  } finally {
+    await new Promise((resolve) => bgServer.close(resolve))
+  }
 })

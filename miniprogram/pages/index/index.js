@@ -9,6 +9,8 @@ const backgrounds = require('../../utils/backgrounds')
 const tabbar = require('../../utils/tabbar')
 const ad = require('../../utils/ad')
 const events = require('../../utils/events')
+const api = require('../../utils/api')
+const { withLogin } = require('../../utils/login')
 const { getConfig, loadConfig, getConfigStatus } = require('../../utils/config')
 
 const CLOCK_INTERVAL = 60 * 1000
@@ -50,6 +52,8 @@ Page({
   onLoad(options) {
     this._alive = true
     this._bgItems = []
+    // 背景使用次数快照（id -> 展示值）：拉到服务端数据后覆盖，失败时回落各自 useBase
+    this._bgUseCounts = {}
     this._cfgLoaded = false
     this._sleepTouched = false
     this._bgExpiryNotified = false
@@ -644,8 +648,13 @@ Page({
       this._bgExpiryNotified = true
       wx.showToast({ title: '背景使用时长已到，已切回默认', icon: 'none' })
     }
+    const useCounts = this._bgUseCounts || {}
     const items = list.map((item) => {
       const itemUnlocked = backgrounds.isUnlocked(unlocked, item.id, now)
+      // 服务端展示值优先；没拉到（或该背景刚上架）时用后台基数
+      const useCount = Object.prototype.hasOwnProperty.call(useCounts, item.id)
+        ? useCounts[item.id]
+        : item.useBase
       return {
         id: item.id,
         title: item.title,
@@ -657,7 +666,9 @@ Page({
         unlocked: itemUnlocked,
         remainHours: itemUnlocked
           ? Math.max(1, Math.ceil((Number(unlocked.expireAt) - now) / 3600000))
-          : 0
+          : 0,
+        useCount,
+        useText: backgrounds.useTextOf(useCount)
       }
     })
 
@@ -675,6 +686,40 @@ Page({
       bgCategory: category,
       bgItems: this.filterBgItems(items, category)
     })
+  },
+
+  /** 拉取背景使用次数：失败静默保留后台基数，不能因为统计挂掉让选择器变空 */
+  refreshBgUses() {
+    api.fetchBackgroundUses().then(
+      (res) => {
+        if (!this._alive) return
+        const counts = (res && res.counts) || {}
+        const next = {}
+        Object.keys(counts).forEach((id) => {
+          const value = Number(counts[id])
+          if (Number.isFinite(value) && value >= 0) next[id] = value
+        })
+        this._bgUseCounts = next
+        this.loadBackgrounds()
+      },
+      () => {}
+    )
+  },
+
+  /**
+   * 记录一次真实使用。失败静默：本地已经切过去了，
+   * 统计只影响别人的参考值，不能因此打断切换流程。
+   */
+  trackBgUse(id) {
+    withLogin((code) => api.trackBackgroundUse(code, id)).then(
+      (res) => {
+        const count = Number(res && res.count)
+        if (!Number.isFinite(count) || count < 0) return
+        this._bgUseCounts[id] = count
+        if (this._alive) this.loadBackgrounds()
+      },
+      () => {}
+    )
   },
 
   filterBgItems(items, category) {
@@ -736,6 +781,8 @@ Page({
     }
     // 打开前重算一次，刷新到期/解锁状态
     this.loadBackgrounds()
+    // 使用次数不阻塞打开：拿到后刷新一次列表
+    this.refreshBgUses()
     tabbar.hide()
     this.setData({ bgOpen: true })
   },
@@ -876,6 +923,8 @@ Page({
     }
     this._pendingBgGrant = ''
     this.loadBackgrounds()
+    // 解锁成功 = 用户真正用上了这张背景，计入「已被使用 N 次」
+    this.trackBgUse(id)
     tabbar.show()
     this.setData({ bgOpen: false })
     wx.showToast({ title: '背景已解锁', icon: 'none' })
@@ -903,6 +952,8 @@ Page({
       bgOpen: false
     })
     this.loadBackgrounds()
+    // 默认背景不展示次数、也不计入「已被使用」；其余切换成功都算一次真实使用
+    if (!defaultItem || defaultItem.id !== id) this.trackBgUse(id)
 
     backgrounds.cacheImage(item.url).then((path) => {
       if (path && this._alive && this.data.background && this.data.background.id === id) {

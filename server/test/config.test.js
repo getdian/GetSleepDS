@@ -51,6 +51,54 @@ test('旧配置缺少 category / cache 时按默认值补齐', () => {
   assert.equal(normalized.features.preload, true)
 })
 
+test('收藏人气基数：读路径容错，保存路径校验并沿用旧值', () => {
+  const base = normalizeConfig({ audio: FILE_AUDIO })
+  assert.equal(base.audio[0].favBase, 0, '历史配置没有该字段时按 0')
+
+  // 库里被直接改坏也不能让 /api/config 整个 500
+  assert.equal(normalizeConfig({ audio: [Object.assign({}, FILE_AUDIO[0], { favBase: -5 })] }).audio[0].favBase, 0)
+  assert.equal(
+    normalizeConfig({ audio: [Object.assign({}, FILE_AUDIO[0], { favBase: 1e9 })] }).audio[0].favBase,
+    99999
+  )
+
+  const saved = validateConfig({ audio: [Object.assign({}, FILE_AUDIO[0], { favBase: 713 })] }, base)
+  assert.equal(saved.audio[0].favBase, 713)
+
+  // 旧后台标签页不提交该字段：保存其它字段时不能把运营设的 713 清成 0
+  const kept = validateConfig({ audio: [FILE_AUDIO[0]] }, saved)
+  assert.equal(kept.audio[0].favBase, 713)
+
+  assert.throws(() => validateConfig({ audio: [Object.assign({}, FILE_AUDIO[0], { favBase: -1 })] }, base), /人气基数/)
+  assert.throws(() => validateConfig({ audio: [Object.assign({}, FILE_AUDIO[0], { favBase: 1.5 })] }, base), /人气基数/)
+})
+
+test('背景人气基数：读路径容错，保存路径校验并沿用旧值', () => {
+  const FILE_BG = [{ id: 'bg-1', title: '湖面', url: 'https://example.com/bg.jpg', enabled: true }]
+  const base = normalizeConfig({ audio: FILE_AUDIO, backgrounds: FILE_BG })
+  assert.equal(base.backgrounds[0].useBase, 0, '历史配置没有该字段时按 0')
+
+  assert.equal(
+    normalizeConfig({ backgrounds: [Object.assign({}, FILE_BG[0], { useBase: -9 })] }).backgrounds[0].useBase,
+    0
+  )
+
+  const saved = validateConfig(
+    { audio: FILE_AUDIO, backgrounds: [Object.assign({}, FILE_BG[0], { useBase: 713 })] },
+    base
+  )
+  assert.equal(saved.backgrounds[0].useBase, 713)
+
+  // 旧后台标签页不提交该字段：保存其它字段时不能清零
+  const kept = validateConfig({ audio: FILE_AUDIO, backgrounds: [FILE_BG[0]] }, saved)
+  assert.equal(kept.backgrounds[0].useBase, 713)
+
+  assert.throws(
+    () => validateConfig({ audio: FILE_AUDIO, backgrounds: [Object.assign({}, FILE_BG[0], { useBase: 1.5 })] }, base),
+    /人气基数/
+  )
+})
+
 test('开发环境未设密码时生成随机临时密码，且不把 COS 密钥标为可用', () => {
   const config = loadConfig({ NODE_ENV: 'test', DB_MODE: 'memory' })
   assert.notEqual(config.admin.password, 'password123')

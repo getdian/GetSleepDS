@@ -497,6 +497,7 @@
     categoryInput.value = item.category || '环境音'
     row.querySelector('.url').value = item.url || ''
     row.querySelector('.icon').value = item.icon || 'noise'
+    row.querySelector('.favbase').value = Number(item.favBase) > 0 ? String(item.favBase) : ''
 
     // 常用分类做成可直接点的标签：不用记名字，也不会因为输入法差异产生“环境音 ”这种脏分类
     const suggestBox = row.querySelector('.cat-suggests')
@@ -586,6 +587,7 @@
     row.querySelector('.bg-title').value = item.title || ''
     row.querySelector('.bg-category').value = item.category || '夜色'
     row.querySelector('.bg-url').value = item.url || ''
+    row.querySelector('.bg-usebase').value = Number(item.useBase) > 0 ? String(item.useBase) : ''
     row.querySelector('.bg-enabled').checked = item.enabled !== false
     const preview = row.querySelector('.bg-preview')
     if (item.url) preview.src = item.url
@@ -700,7 +702,8 @@
         subtitle: row.querySelector('.subtitle').value.trim(),
         category: row.querySelector('.category').value.trim(),
         url: row.querySelector('.url').value.trim(),
-        icon: row.querySelector('.icon').value
+        icon: row.querySelector('.icon').value,
+        favBase: Math.max(0, Math.min(99999, Math.floor(Number(row.querySelector('.favbase').value) || 0)))
       }
     })
 
@@ -720,7 +723,8 @@
         title: row.querySelector('.bg-title').value.trim(),
         category: row.querySelector('.bg-category').value.trim(),
         url: row.querySelector('.bg-url').value.trim(),
-        enabled: row.querySelector('.bg-enabled').checked
+        enabled: row.querySelector('.bg-enabled').checked,
+        useBase: Math.max(0, Math.min(99999, Math.floor(Number(row.querySelector('.bg-usebase').value) || 0)))
       }
     })
 
@@ -878,6 +882,15 @@
       const item = payload.audio[i]
       if (!item.title) return '第 ' + (i + 1) + ' 条环境音缺少名称'
       if (!/^https:\/\//i.test(item.url)) return '第 ' + (i + 1) + ' 条环境音地址必须是 https'
+      if (!Number.isInteger(item.favBase) || item.favBase < 0 || item.favBase > 99999) {
+        return '第 ' + (i + 1) + ' 条人气基数需为 0–99999 的整数'
+      }
+    }
+    for (let i = 0; i < (payload.backgrounds || []).length; i += 1) {
+      const item = payload.backgrounds[i]
+      if (!Number.isInteger(item.useBase) || item.useBase < 0 || item.useBase > 99999) {
+        return '第 ' + (i + 1) + ' 张背景图人气基数需为 0–99999 的整数'
+      }
     }
     if (!Number.isInteger(payload.unlock.ttlHours) || payload.unlock.ttlHours < 1 || payload.unlock.ttlHours > 168) {
       return '解锁有效期需为 1–168 小时的整数'

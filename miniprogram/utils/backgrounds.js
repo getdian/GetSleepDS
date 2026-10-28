@@ -24,9 +24,42 @@ function normalize(list) {
       category: item.category || '夜色',
       url: item.url,
       thumbUrl: thumbUrlOf(item.url),
-      sort: Number.isInteger(item.sort) ? item.sort : index
+      sort: Number.isInteger(item.sort) ? item.sort : index,
+      // 展示用「已被使用 N 次」的后台人气基数（真实次数由服务端累加）
+      useBase: Math.max(0, Math.floor(Number(item.useBase) || 0))
     }))
     .sort((a, b) => a.sort - b.sort)
+}
+
+/**
+ * 背景列表第二行的使用次数文案。
+ * 0 次时回落「可随时更换」——没人用过还写「已被使用 0 次」比不显示更伤信任，
+ * 也保留了原文案的可切换暗示。
+ */
+function useTextOf(count) {
+  const num = Math.max(0, Math.floor(Number(count) || 0))
+  if (!num) return '可随时更换'
+  if (num >= 10000) {
+    const wan = Math.round(num / 1000) / 10
+    return '已被使用 ' + wan + ' 万次'
+  }
+  return '已被使用 ' + num + ' 次'
+}
+
+/**
+ * 合并服务端下发的次数（展示值已含后台基数）。
+ * 没拿到计数的背景回落它自己的 useBase，避免网络抖动把运营设的值显示成 0。
+ */
+function withUseCounts(items, counts) {
+  const map = counts || {}
+  return (items || []).map((item) => {
+    const value = Number(map[item.id])
+    const count = Number.isFinite(value) && value >= 0 ? value : Number(item.useBase) || 0
+    return Object.assign({}, item, {
+      useCount: count,
+      useText: useTextOf(count)
+    })
+  })
 }
 
 function defaultOf(config) {
@@ -158,6 +191,8 @@ function getUnlocked() {
 
 module.exports = {
   normalize,
+  useTextOf,
+  withUseCounts,
   thumbUrlOf,
   defaultOf,
   isUnlocked,

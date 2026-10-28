@@ -334,7 +334,7 @@ test('文案中性：睡梦中/空闲态都不出现「夜色/明早/今晚/今�
   assert.equal(page.data.state, 'idle')
   assert.equal(page.data.orbMeta, '等待入睡')
   assert.equal(page.data.heroSub, '记录入睡这一刻，醒来后再记起床。')
-  assert.equal(page.data.footerText, '愿这一觉安稳')
+  assert.equal(page.data.footerText, '愿这一觉安稳，每天都陪伴你~')
   assert.equal(page.data.orbCaption, '点击圆环，记录入睡', '空闲态与睡梦中的动作词统一为「点击」')
   assert.equal(page.data.footerSource, '', '空闲页脚不是语录，不该带出处')
   const idleText =

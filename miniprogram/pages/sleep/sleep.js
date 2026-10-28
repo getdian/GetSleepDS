@@ -71,7 +71,7 @@ Page({
     weekCount: 0,
     streak: 0,
     canAddSession: false,
-    footerText: '愿这一觉安稳',
+    footerText: '愿这一觉安稳，每天都陪伴你~',
     // 完成态语录出处；为空表示当天没有语录，页脚走固定文案
     footerSource: ''
   },
@@ -327,7 +327,7 @@ Page({
     // 完成态用「每日一句」：按 dateKey（设备本地日历日，仅用于 UI 文案）固定，
     // 同一天反复进入不跳句；语录不可用时才回落到按时段的收尾句。
     const quote = done ? Q.quoteOf(T.dateKey(now)) : null
-    let footerText = '愿这一觉安稳'
+    let footerText = '愿这一觉安稳，每天都陪伴你~'
     if (done) {
       footerText = quote
         ? quote.text

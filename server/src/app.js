@@ -11,6 +11,7 @@ const { createSecretBox } = require('./lib/secret-box')
 const { createConfigRoute } = require('./routes/config')
 const { createAdminRoute } = require('./routes/admin')
 const { createAudioRoute } = require('./routes/audio')
+const { createBackgroundsRoute } = require('./routes/backgrounds')
 const { createEventsRoute } = require('./routes/events')
 const { createSummaryRoute } = require('./routes/summary')
 const { createRecordsRoute } = require('./routes/records')
@@ -216,6 +217,9 @@ function createApp(options) {
   const limits = config.rateLimit
   const unlockIp = createRateLimiter(limits.windowMs, limits.maxUnlockPerIp)
   const unlockOpenid = createRateLimiter(limits.windowMs, limits.maxUnlockPerOpenid)
+  // 收藏是浏览行为（打开抽屉即拉一次、连点几首），与「看广告解锁」分开计数
+  const favIp = createRateLimiter(limits.windowMs, 60)
+  const favOpenid = createRateLimiter(limits.windowMs, 30)
   const summaryIp = createRateLimiter(limits.windowMs, limits.maxSummaryPerIp)
   const loginIp = createRateLimiter(60 * 1000, 5)
   // 改密独立配额：与登录分开计数，避免改密失败重试把登录额度用光
@@ -263,6 +267,22 @@ function createApp(options) {
       codeToOpenid,
       limitIp: unlockIp,
       limitOpenid: unlockOpenid,
+      limitFavIp: favIp,
+      limitFavOpenid: favOpenid,
+      now,
+      store,
+      logger
+    })
+  )
+  app.use(
+    '/api',
+    createBackgroundsRoute({
+      config,
+      db,
+      codeToOpenid,
+      // 与收藏共用「内容偏好」配额：两者都是低频繁的浏览型动作
+      limitIp: favIp,
+      limitOpenid: favOpenid,
       now,
       store,
       logger

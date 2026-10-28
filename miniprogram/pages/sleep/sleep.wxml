@@ -5,7 +5,6 @@
 <view class="page sleep-page" bindtouchstart="onPageTouch">
   <view class="sleep-hero fade-up">
     <view class="sleep-hero-meta">
-      <text class="sleep-eyebrow">SLEEP LOG</text>
       <text class="sleep-date">{{dateText}}</text>
     </view>
     <text class="sleep-title">{{heroTitle}}</text>

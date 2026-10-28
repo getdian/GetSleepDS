@@ -8,6 +8,7 @@ const events = require('../../utils/events')
 const audioTimer = require('../../utils/audio-timer')
 const player = require('../../utils/audio-player')
 const { isReallyPlaying } = require('../../utils/player-surface')
+const favCounts = require('../../utils/audio-favorites')
 const tabbar = require('../../utils/tabbar')
 
 const ICONS = ['rain', 'wave', 'fire', 'noise', 'night']
@@ -50,7 +51,8 @@ const TIMER_OPTIONS = [
 /** 配置指纹：用于回前台时判断是否需要重新 apply（避免每 show 都 setData 一遍） */
 function configSignature(cfg) {
   if (!cfg) return ''
-  const tracks = (cfg.audio || []).map((item) => item.id).join(',')
+  // 带上人气基数：后台改了收藏数也要触发 applyConfig，否则回前台时列表数字是旧的
+  const tracks = (cfg.audio || []).map((item) => item.id + ':' + (Number(item.favBase) || 0)).join(',')
   const unlock = cfg.unlock || {}
   return [
     cfg.version,
@@ -257,8 +259,16 @@ Component({
     noop() {},
 
     applyConfig(cfg) {
+      // 配置轮询可能在统计回来之后到达：展示值只会 ≥ 后台基数，
+      // 不能把已经拿到的「基数 + 真实收藏」冲回基数
+      const known = {}
+      ;(this.data.tracks || []).forEach((track) => {
+        if (track && track.id) known[track.id] = Number(track.favCount) || 0
+      })
       const tracks = (cfg.audio || []).map((item) => {
         const iconKey = ICONS.indexOf(item.icon) >= 0 ? item.icon : 'noise'
+        const base = Math.max(0, Math.floor(Number(item.favBase) || 0))
+        const count = Math.max(base, known[item.id] || 0)
         return {
           id: item.id,
           title: item.title || '环境音',
@@ -266,9 +276,15 @@ Component({
           category: item.category || '环境音',
           tone: toneOf(item.category || '环境音'),
           url: item.url,
-          icon: '/assets/icon-' + iconKey + '.png'
+          icon: '/assets/icon-' + iconKey + '.png',
+          // 收藏展示值先按后台基数落位；真实收藏由 /api/audio/favorites 补齐
+          favBase: base,
+          favCount: count,
+          favText: favCounts.formatFavText(count)
         }
       })
+      // 排序快照只在配置/统计变更时重建：点 ♥ 只改数字，列表位置不动
+      this._rankCounts = favCounts.rankOf(tracks)
 
       const categories = ['全部', '收藏']
       tracks.forEach((track) => {
@@ -309,6 +325,40 @@ Component({
     refreshCache() {
       if (!this._alive) return
       this.applyFilter()
+    },
+
+    /* ---------------- 收藏人数 ---------------- */
+    /**
+     * 拉取「人气基数 + 真实收藏」。失败静默保留基数：
+     * 统计是锦上添花，不能因为一次网络抖动让列表文案变成 0 人。
+     */
+    refreshFavCounts() {
+      if (!this._alive || this._favLoading) return
+      this._favLoading = true
+      api.fetchAudioFavorites().then(
+        (res) => {
+          this._favLoading = false
+          if (!this._alive) return
+          const tracks = favCounts.mergeFavCounts(this.data.tracks, res && res.counts)
+          this._rankCounts = favCounts.rankOf(tracks)
+          this.setData({ tracks }, () => this.applyFilter())
+        },
+        () => {
+          this._favLoading = false
+        }
+      )
+    },
+
+    /** 调用方传入的是服务端算好的展示值（已含基数） */
+    patchFavCount(id, count) {
+      if (!this._alive) return
+      const value = Math.max(0, Math.floor(Number(count) || 0))
+      const tracks = this.data.tracks.map((track) =>
+        track.id === id
+          ? Object.assign({}, track, { favCount: value, favText: favCounts.formatFavText(value) })
+          : track
+      )
+      this.setData({ tracks }, () => this.applyFilter())
     },
 
     /* ---------------- 解锁 ---------------- */
@@ -847,6 +897,8 @@ Component({
       this.setData({ favoriteIds: storage.getFavorites(), miniExpanded: true, collapsed: false, collapsing: false })
       this.refreshUnlock()
       this.refreshCache()
+      // 收藏人数：不阻塞抽屉打开，回来后重建排序快照
+      this.refreshFavCounts()
       this.setData({ open: true })
     },
 
@@ -888,7 +940,7 @@ Component({
       const keyword = String(this.data.keyword || '').trim().toLowerCase()
       const category = this.data.activeCategory
       const favorites = this.data.favoriteIds || []
-      const list = this.data.tracks
+      const filtered = this.data.tracks
         .filter((track) => {
           if (category === '收藏' && favorites.indexOf(track.id) < 0) return false
           if (category !== '全部' && category !== '收藏' && track.category !== category) return false
@@ -901,6 +953,9 @@ Component({
             cached: !!this.peekCached(track.url)
           })
         )
+      // 「收藏」Tab 是用户自己的集合，保持配置顺序；其余按收藏人数降序。
+      // 排序用打开抽屉时的快照（_rankCounts），点 ♥ 只变数字不重排，否则刚点的那行会当场跳走。
+      const list = category === '收藏' ? filtered : favCounts.sortByRank(filtered, this._rankCounts)
       this.setData({ filteredTracks: list })
     },
 
@@ -908,7 +963,23 @@ Component({
       const id = event.currentTarget.dataset.id
       if (!id) return
       const favorites = storage.toggleFavorite(id)
-      this.setData({ favoriteIds: favorites }, () => this.applyFilter())
+      const on = favorites.indexOf(id) >= 0
+      // 本地先落地：数字立即 ±1，排序快照不动
+      const delta = on ? 1 : -1
+      const tracks = this.data.tracks.map((track) => {
+        if (track.id !== id) return track
+        const next = Math.max(0, (Number(track.favCount) || 0) + delta)
+        return Object.assign({}, track, { favCount: next, favText: favCounts.formatFavText(next) })
+      })
+      this.setData({ favoriteIds: favorites, tracks }, () => this.applyFilter())
+      // 全站计数异步上报；失败不回滚本地收藏，下次打开抽屉重新对账
+      withLogin((code) => api.setAudioFavorite(code, id, on)).then(
+        (res) => {
+          const count = Number(res && res.count)
+          if (Number.isFinite(count) && count >= 0) this.patchFavCount(id, count)
+        },
+        () => {}
+      )
     },
 
     onTrackTap(event) {

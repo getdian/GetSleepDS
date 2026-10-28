@@ -48,3 +48,38 @@ test('列表缩略图 URL 走 COS 图片处理，已有查询串时正确拼接'
 test('背景图分类去重且带“全部”', () => {
   assert.deepEqual(B.categories(B.normalize(CONFIG.backgrounds)), ['全部', '山川', '夜色'])
 })
+
+test('使用次数文案：0 次回落「可随时更换」，万位缩写', () => {
+  assert.equal(B.useTextOf(0), '可随时更换')
+  assert.equal(B.useTextOf(undefined), '可随时更换')
+  assert.equal(B.useTextOf(-3), '可随时更换')
+  assert.equal(B.useTextOf(713), '已被使用 713 次')
+  assert.equal(B.useTextOf(9999), '已被使用 9999 次')
+  assert.equal(B.useTextOf(12345), '已被使用 1.2 万次')
+})
+
+test('使用次数合并：未下发时回落各自基数，非法值不污染展示', () => {
+  const items = [
+    { id: 'a', useBase: 713 },
+    { id: 'b', useBase: 0 }
+  ]
+  const merged = B.withUseCounts(items, { a: 715 })
+  assert.equal(merged[0].useCount, 715)
+  assert.equal(merged[0].useText, '已被使用 715 次')
+  assert.equal(merged[1].useCount, 0)
+  assert.equal(merged[1].useText, '可随时更换')
+
+  const dirty = B.withUseCounts([{ id: 'a', useBase: 9 }], { a: 'abc' })
+  assert.equal(dirty[0].useCount, 9)
+  const negative = B.withUseCounts([{ id: 'a', useBase: 9 }], { a: -1 })
+  assert.equal(negative[0].useCount, 9)
+})
+
+test('normalize 带出后台人气基数，缺失时按 0', () => {
+  const list = B.normalize([
+    { id: 'x', title: 'X', url: 'https://a.com/x.jpg', useBase: 713 },
+    { id: 'y', title: 'Y', url: 'https://a.com/y.jpg' }
+  ])
+  assert.equal(list[0].useBase, 713)
+  assert.equal(list[1].useBase, 0)
+})

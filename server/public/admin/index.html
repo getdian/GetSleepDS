@@ -642,6 +642,7 @@
       <div class="audio-sub">
         <input class="subtitle" placeholder="副标题，如：循环播放 · 支持锁屏" maxlength="40">
         <input class="category" list="category-options" placeholder="分类（点下方常用，或自己填）" maxlength="12">
+        <input class="favbase" type="number" min="0" max="99999" step="1" placeholder="收藏基数" title="前台显示的收藏人数基数（如 713），用户真实收藏会在此之上累加">
       </div>
       <div class="cat-suggests" aria-label="常用分类"></div>
       <div class="audio-url">
@@ -665,7 +666,10 @@
           <button type="button" class="icon-btn down" title="下移">↓</button>
           <button type="button" class="icon-btn remove" title="删除">✕</button>
         </div>
-        <input class="bg-url" placeholder="https://.../backgrounds/bg.jpg" maxlength="500">
+        <div class="bg-url-row">
+          <input class="bg-url" placeholder="https://.../backgrounds/bg.jpg" maxlength="500">
+          <input class="bg-usebase" type="number" min="0" max="99999" step="1" placeholder="使用基数" title="前台显示的「已被使用 N 次」基数（如 713），用户真实使用会在此之上累加">
+        </div>
       </div>
     </div>
   </template>

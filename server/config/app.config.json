@@ -7,7 +7,8 @@
       "subtitle": "循环雨声 · 支持锁屏",
       "category": "自然之声",
       "url": "https://img.qfmaster.com/sleep/sleep-10001.mp3",
-      "icon": "rain"
+      "icon": "rain",
+      "favBase": 0
     }
   ],
   "unlock": {

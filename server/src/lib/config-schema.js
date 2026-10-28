@@ -2,6 +2,9 @@ const { invalidBody } = require('./errors')
 
 const ICONS = ['rain', 'wave', 'fire', 'noise', 'night']
 const MAX_AUDIO = 10
+// 「人气基数」上限（环境音收藏数 / 背景使用次数共用）：
+// 只影响前台展示的起点，真实计数在其上累加。
+const MAX_COUNT_BASE = 99999
 const DEFAULT_FEATURES = {
   summary: true,
   sync: true,
@@ -66,7 +69,9 @@ function normalizeBackgrounds(input, fallback) {
       category: value.category || '夜色',
       url: value.url || '',
       sort: Number.isInteger(value.sort) ? value.sort : index,
-      enabled: value.enabled !== false
+      enabled: value.enabled !== false,
+      // 展示用「已被使用 N 次」基数；历史配置没有该字段时按 0（前台回落原文案）
+      useBase: clampCount(value.useBase)
     }
   })
 }
@@ -180,6 +185,23 @@ function readText(value, label, max, required) {
   return text
 }
 
+/** 读路径的宽容版：脏数据/旧配置一律落到 0，不让一条坏基数阻断整个 /api/config */
+function clampCount(value) {
+  const num = Math.floor(Number(value))
+  if (!Number.isFinite(num) || num <= 0) return 0
+  return Math.min(num, MAX_COUNT_BASE)
+}
+
+/** 保存路径的严格版：后台填错要报错，而不是静默改成 0 */
+function readCount(value, label) {
+  if (value === undefined || value === null || value === '') return 0
+  const num = Number(value)
+  if (!Number.isInteger(num) || num < 0 || num > MAX_COUNT_BASE) {
+    throw invalidBody(label + '人气基数需为 0–' + MAX_COUNT_BASE + ' 的整数')
+  }
+  return num
+}
+
 /** 文件配置 / 数据库配置的宽松合并，缺失字段用兜底补齐 */
 function normalizeConfig(input, base) {
   const source = isObject(input) ? input : {}
@@ -187,7 +209,7 @@ function normalizeConfig(input, base) {
   const rawAudio =
     Array.isArray(source.audio) && source.audio.length ? source.audio : fallback.audio || []
 
-  // 旧版本配置没有 category，这里逐条补齐，避免升级后分类筛选直接空掉
+  // 旧版本配置没有 category / favBase，这里逐条补齐，避免升级后分类筛选直接空掉
   const audio = rawAudio.map((item) => {
     const value = isObject(item) ? item : {}
     return {
@@ -196,7 +218,9 @@ function normalizeConfig(input, base) {
       subtitle: value.subtitle || '循环播放 · 支持锁屏',
       category: value.category || '环境音',
       url: value.url || '',
-      icon: ICONS.indexOf(value.icon) >= 0 ? value.icon : 'noise'
+      icon: ICONS.indexOf(value.icon) >= 0 ? value.icon : 'noise',
+      // 展示用收藏基数：历史配置没有该字段时按 0（只显示真实收藏）
+      favBase: clampCount(value.favBase)
     }
   })
 
@@ -262,6 +286,13 @@ function validateConfig(input, base) {
     throw invalidBody('最多 ' + MAX_AUDIO + ' 条环境音')
   }
 
+  // 旧后台标签页 / 脚本提交的 audio 条目没有 favBase：按同 id 的已生效值沿用，
+  // 否则运营只改个标题就会把收藏基数一起清零。
+  const baseAudioById = {}
+  ;(Array.isArray(baseConfig.audio) ? baseConfig.audio : []).forEach((item) => {
+    if (item && typeof item.id === 'string') baseAudioById[item.id] = item
+  })
+
   const seen = {}
   const audio = audioInput.map((item, index) => {
     const label = '第 ' + (index + 1) + ' 条环境音'
@@ -285,13 +316,17 @@ function validateConfig(input, base) {
     if (seen[id]) throw invalidBody('环境音 ID 重复：' + id)
     seen[id] = true
 
+    const favBaseFallback = baseAudioById[id] ? baseAudioById[id].favBase : 0
+    const favBase = readCount(item.favBase === undefined ? favBaseFallback : item.favBase, label)
+
     return {
       id,
       title,
       subtitle: subtitle || '循环播放 · 支持锁屏',
       category,
       url,
-      icon
+      icon,
+      favBase
     }
   })
 
@@ -400,6 +435,13 @@ function validateConfig(input, base) {
   if (backgroundsInput.length > MAX_BACKGROUNDS) {
     throw invalidBody('最多 ' + MAX_BACKGROUNDS + ' 张背景图')
   }
+  // 旧后台标签页 / 脚本提交的背景条目没有 useBase：按同 id 的已生效值沿用，
+  // 否则运营只改个标题就会把使用基数一起清零。
+  const baseBgById = {}
+  ;(Array.isArray(baseConfig.backgrounds) ? baseConfig.backgrounds : []).forEach((item) => {
+    if (item && typeof item.id === 'string') baseBgById[item.id] = item
+  })
+
   const seenBg = {}
   const backgrounds = backgroundsInput.map((item, index) => {
     const label = '第 ' + (index + 1) + ' 张背景图'
@@ -431,13 +473,17 @@ function validateConfig(input, base) {
       sort = n
     }
 
+    const useBaseFallback = baseBgById[id] ? baseBgById[id].useBase : 0
+    const useBase = readCount(item.useBase === undefined ? useBaseFallback : item.useBase, label)
+
     return {
       id,
       title,
       category,
       url,
       sort,
-      enabled: item.enabled !== false
+      enabled: item.enabled !== false,
+      useBase
     }
   })
 
@@ -598,6 +644,7 @@ function validateConfig(input, base) {
 module.exports = {
   ICONS,
   MAX_AUDIO,
+  MAX_COUNT_BASE,
   AD_SLOTS,
   AD_TYPES,
   MAX_BACKGROUNDS,

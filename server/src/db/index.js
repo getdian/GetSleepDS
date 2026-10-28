@@ -10,6 +10,28 @@ CREATE TABLE IF NOT EXISTS audio_unlocks (
 CREATE INDEX IF NOT EXISTS idx_audio_unlocks_openid_expire
     ON audio_unlocks (openid, expire_time DESC);
 
+-- 环境音收藏：只存「谁收藏了哪首」，前台展示值 = 后台人气基数 + 这里的真实计数。
+-- 主键天然去重，同一用户重复收藏不会把数字刷上去。
+CREATE TABLE IF NOT EXISTS audio_favorites (
+    openid      VARCHAR(64) NOT NULL,
+    track_id    VARCHAR(64) NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (openid, track_id)
+);
+CREATE INDEX IF NOT EXISTS idx_audio_favorites_track
+    ON audio_favorites (track_id);
+
+-- 背景图使用次数：前台展示「已被使用 N 次」= 后台人气基数 + 这里的累计次数。
+-- 与收藏不同：同一用户换用同一张背景多次是真实使用行为，因此不做唯一约束。
+CREATE TABLE IF NOT EXISTS background_uses (
+    id          BIGSERIAL PRIMARY KEY,
+    openid      VARCHAR(64) NOT NULL,
+    bg_id       VARCHAR(64) NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_background_uses_bg
+    ON background_uses (bg_id);
+
 CREATE TABLE IF NOT EXISTS sleep_records (
     openid       VARCHAR(64) NOT NULL,
     day          DATE NOT NULL,
@@ -128,6 +150,10 @@ function createMemoryDb() {
   const audits = []
   const reminders = new Map()
   const feedback = []
+  // 环境音收藏：openid -> Set(trackId)
+  const audioFavs = new Map()
+  // 背景使用记录（同一人可多次，用于累计「已被使用 N 次」）
+  const bgUses = []
   let feedbackSeq = 0
   let appConfig = null
 
@@ -345,6 +371,11 @@ function createMemoryDb() {
       records.delete(openid)
       deletions.delete(openid)
       const unlockCount = unlocks.delete(openid) ? 1 : 0
+      // 收藏与背景使用都带 openid，属用户偏好：全量清除与仅清云端都要一起清
+      audioFavs.delete(openid)
+      for (let i = bgUses.length - 1; i >= 0; i -= 1) {
+        if (bgUses[i].openid === openid) bgUses.splice(i, 1)
+      }
       // 「删除全部数据」必须连订阅提醒一起清：否则清除后仍会在到点推送，
       // 且 openid/session_id 会继续留存在 sleep_reminders 里直到 7 天清理。
       const reminderCount = reminders.delete(openid) ? 1 : 0
@@ -386,6 +417,11 @@ function createMemoryDb() {
       records.delete(openid)
       deletions.delete(openid)
       const unlockCount = unlocks.delete(openid) ? 1 : 0
+      // 收藏与背景使用都带 openid，属用户偏好：全量清除与仅清云端都要一起清
+      audioFavs.delete(openid)
+      for (let i = bgUses.length - 1; i >= 0; i -= 1) {
+        if (bgUses[i].openid === openid) bgUses.splice(i, 1)
+      }
       // 只删云端副本时，云端的订阅提醒也属于“云端数据”，必须一起清。
       const reminderCount = reminders.delete(openid) ? 1 : 0
       let eventCount = 0
@@ -455,6 +491,58 @@ function createMemoryDb() {
       })
       if (events.length > 50000) events.splice(0, events.length - 50000)
       return accepted.length
+    },
+
+    /** 收藏/取消收藏，返回该曲目的真实收藏人数（不含后台人气基数） */
+    async setAudioFavorite(openid, trackId, on) {
+      let bucket = audioFavs.get(openid)
+      if (!bucket) {
+        bucket = new Set()
+        audioFavs.set(openid, bucket)
+      }
+      if (on) bucket.add(trackId)
+      else bucket.delete(trackId)
+      let count = 0
+      audioFavs.forEach((set) => {
+        if (set.has(trackId)) count += 1
+      })
+      return count
+    },
+
+    async countAudioFavorites(trackIds) {
+      const counts = {}
+      ;(Array.isArray(trackIds) ? trackIds : []).forEach((id) => {
+        if (id) counts[id] = 0
+      })
+      audioFavs.forEach((set) => {
+        set.forEach((id) => {
+          if (counts[id] !== undefined) counts[id] += 1
+        })
+      })
+      return counts
+    },
+
+    /** 记录一次背景使用，返回该背景的真实累计次数（不含后台基数） */
+    async addBackgroundUse(openid, bgId) {
+      bgUses.push({ openid, bgId, ts: Date.now() })
+      // 与 events 同口径：内存模式也要有上限，避免长期运行无限增长
+      if (bgUses.length > 50000) bgUses.splice(0, bgUses.length - 50000)
+      let count = 0
+      bgUses.forEach((item) => {
+        if (item.bgId === bgId) count += 1
+      })
+      return count
+    },
+
+    async countBackgroundUses(ids) {
+      const counts = {}
+      ;(Array.isArray(ids) ? ids : []).forEach((id) => {
+        if (id) counts[id] = 0
+      })
+      bgUses.forEach((item) => {
+        if (counts[item.bgId] !== undefined) counts[item.bgId] += 1
+      })
+      return counts
     },
 
     async countEvents(openid) {
@@ -990,6 +1078,9 @@ function createPostgresDb(connectionString) {
         )
         const records = await client.query('DELETE FROM sleep_records WHERE openid = $1', [openid])
         const unlocks = await client.query('DELETE FROM audio_unlocks WHERE openid = $1', [openid])
+        // 收藏与背景使用都带 openid，属用户偏好：全量清除与仅清云端都要一起清
+        await client.query('DELETE FROM audio_favorites WHERE openid = $1', [openid])
+        await client.query('DELETE FROM background_uses WHERE openid = $1', [openid])
         const events = await client.query('DELETE FROM events WHERE openid = $1', [openid])
         // 订阅提醒含 openid/session_id 明文，且到点会真的推送：清除全部数据时必须一起删。
         const reminders = await client.query('DELETE FROM sleep_reminders WHERE openid = $1', [openid])
@@ -1021,6 +1112,9 @@ function createPostgresDb(connectionString) {
         await client.query('SELECT pg_advisory_xact_lock(hashtext($1)::bigint)', [openid])
         const records = await client.query('DELETE FROM sleep_records WHERE openid = $1', [openid])
         const unlocks = await client.query('DELETE FROM audio_unlocks WHERE openid = $1', [openid])
+        // 收藏与背景使用都带 openid，属用户偏好：全量清除与仅清云端都要一起清
+        await client.query('DELETE FROM audio_favorites WHERE openid = $1', [openid])
+        await client.query('DELETE FROM background_uses WHERE openid = $1', [openid])
         const events = await client.query('DELETE FROM events WHERE openid = $1', [openid])
         // 只删云端副本时，云端待发送的订阅提醒也属于云端数据。
         const reminders = await client.query('DELETE FROM sleep_reminders WHERE openid = $1', [openid])
@@ -1123,6 +1217,70 @@ function createPostgresDb(connectionString) {
     async countEvents(openid) {
       const result = await pool.query('SELECT count(*)::int AS n FROM events WHERE openid = $1', [openid])
       return Number(result.rows[0].n) || 0
+    },
+
+    /** 收藏/取消收藏，返回该曲目的真实收藏人数（不含后台人气基数） */
+    async setAudioFavorite(openid, trackId, on) {
+      if (on) {
+        await pool.query(
+          `INSERT INTO audio_favorites (openid, track_id) VALUES ($1, $2)
+           ON CONFLICT (openid, track_id) DO NOTHING`,
+          [openid, trackId]
+        )
+      } else {
+        await pool.query('DELETE FROM audio_favorites WHERE openid = $1 AND track_id = $2', [openid, trackId])
+      }
+      const result = await pool.query(
+        'SELECT count(*)::int AS n FROM audio_favorites WHERE track_id = $1',
+        [trackId]
+      )
+      return Number(result.rows[0] && result.rows[0].n) || 0
+    },
+
+    async countAudioFavorites(trackIds) {
+      const ids = (Array.isArray(trackIds) ? trackIds : []).filter(Boolean)
+      const counts = {}
+      ids.forEach((id) => {
+        counts[id] = 0
+      })
+      if (!ids.length) return counts
+      const result = await pool.query(
+        `SELECT track_id, count(*)::int AS n FROM audio_favorites
+         WHERE track_id = ANY($1::text[]) GROUP BY track_id`,
+        [ids]
+      )
+      result.rows.forEach((row) => {
+        counts[row.track_id] = Number(row.n) || 0
+      })
+      return counts
+    },
+
+    /** 记录一次背景使用，返回该背景的真实累计次数（不含后台基数） */
+    async addBackgroundUse(openid, bgId) {
+      await pool.query('INSERT INTO background_uses (openid, bg_id) VALUES ($1, $2)', [openid, bgId])
+      const result = await pool.query(
+        'SELECT count(*)::int AS n FROM background_uses WHERE bg_id = $1',
+        [bgId]
+      )
+      return Number(result.rows[0] && result.rows[0].n) || 0
+    },
+
+    async countBackgroundUses(ids) {
+      const list = (Array.isArray(ids) ? ids : []).filter(Boolean)
+      const counts = {}
+      list.forEach((id) => {
+        counts[id] = 0
+      })
+      if (!list.length) return counts
+      const result = await pool.query(
+        `SELECT bg_id, count(*)::int AS n FROM background_uses
+         WHERE bg_id = ANY($1::text[]) GROUP BY bg_id`,
+        [list]
+      )
+      result.rows.forEach((row) => {
+        counts[row.bg_id] = Number(row.n) || 0
+      })
+      return counts
     },
 
     async insertFeedback(openid, item) {

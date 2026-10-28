@@ -11,6 +11,26 @@ CREATE TABLE IF NOT EXISTS audio_unlocks (
 CREATE INDEX IF NOT EXISTS idx_audio_unlocks_openid_expire
     ON audio_unlocks (openid, expire_time DESC);
 
+-- 环境音收藏：前台展示值 = 后台人气基数 + 真实收藏数；主键去重防刷
+CREATE TABLE IF NOT EXISTS audio_favorites (
+    openid      VARCHAR(64) NOT NULL,
+    track_id    VARCHAR(64) NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (openid, track_id)
+);
+CREATE INDEX IF NOT EXISTS idx_audio_favorites_track
+    ON audio_favorites (track_id);
+
+-- 背景图使用次数：展示值 = 后台人气基数 + 累计使用；同一用户多次使用算多次
+CREATE TABLE IF NOT EXISTS background_uses (
+    id          BIGSERIAL PRIMARY KEY,
+    openid      VARCHAR(64) NOT NULL,
+    bg_id       VARCHAR(64) NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_background_uses_bg
+    ON background_uses (bg_id);
+
 -- 云端备份：本地仍是主数据，服务端只做灾备与换机恢复
 CREATE TABLE IF NOT EXISTS sleep_records (
     openid       VARCHAR(64) NOT NULL,

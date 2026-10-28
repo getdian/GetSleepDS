@@ -169,10 +169,31 @@ CREATE TABLE IF NOT EXISTS events (
     created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_events_created_at ON events (created_at);
+
+-- 环境音收藏：前台「N 人收藏和喜欢」= 后台 audio[].favBase + 这里的人数（主键去重）
+CREATE TABLE IF NOT EXISTS audio_favorites (
+    openid      VARCHAR(64) NOT NULL,
+    track_id    VARCHAR(64) NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (openid, track_id)
+);
+CREATE INDEX IF NOT EXISTS idx_audio_favorites_track
+    ON audio_favorites (track_id);
+
+-- 背景图使用次数：前台「已被使用 N 次」= 后台 backgrounds[].useBase + 这里累计（同一人多次算多次）
+CREATE TABLE IF NOT EXISTS background_uses (
+    id          BIGSERIAL PRIMARY KEY,
+    openid      VARCHAR(64) NOT NULL,
+    bg_id       VARCHAR(64) NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_background_uses_bg
+    ON background_uses (bg_id);
 ```
 
 - `app_config` 是后台配置的持久化位置：`key='app'` 为下发配置，`key='cos'` 为加密后的存储凭证。
 - `events` 只存 openid、类型、目标、时间；保留 180 天。
+- `audio_favorites` / `background_uses` 只用于展示计数（后台人气基数 + 真实计数），两条「清除数据」路径（全量 / 仅云副本）都会按 openid 一起删。
 - 清理：每 6 小时删除过期解锁记录，并清理 180 天前的事件。
 - 服务端启动时执行上述 DDL（幂等）。PostgreSQL 容器首次初始化会起临时实例再重启，连接失败会重试 5 次（每次间隔 2s）后退出。
 
@@ -192,6 +213,10 @@ CREATE INDEX IF NOT EXISTS idx_events_created_at ON events (created_at);
 | GET | `/api/ready` | 无 | 就绪探针（DB 不可用返回 503） |
 | GET | `/api/config` | 无 | 下发音频列表、广告位、开关、文案 |
 | POST | `/api/audio/unlock` | code | 校验 code → openid，按后台 `unlock.ttlHours`（1–168）写入解锁 |
+| GET | `/api/audio/favorites` | 无 | 环境音收藏人数（展示值 = 后台 `favBase` + 真实收藏），30s 缓存；计数查询失败降级为纯基数 |
+| POST | `/api/audio/favorite` | code | `{code,trackId,on}`：收藏/取消，只接受当前上架曲目，返回最新展示值；与收藏共用「内容偏好」限流（60/分钟 IP、30/分钟 openid） |
+| GET | `/api/backgrounds/uses` | 无 | 背景使用次数（展示值 = 后台 `useBase` + 真实累计），30s 缓存；失败降级为纯基数 |
+| POST | `/api/backgrounds/use` | code | `{code,bgId}`：记一次背景使用，只接受配置里存在的背景，返回最新展示值 |
 | POST | `/api/summary` | 无 | 由记录生成本周事实描述 |
 | POST | `/api/records/sync` | code | 上传记录/删除墓碑；服务端重算 day、丢弃单条脏数据，返回云端剩余记录 |
 | POST | `/api/records/erase` | code | 合规删除：默认删除记录/解锁/事件并写 erasure 水位；`cloudOnly:true` 只删云端副本、不写水位（3 次/分钟/IP）；`cloudOnly` 非布尔返回 400 |

@@ -13,6 +13,36 @@ function unlockAudio(code) {
   })
 }
 
+/** 环境音收藏人数（展示值 = 后台人气基数 + 真实收藏） */
+function fetchAudioFavorites() {
+  return request({ path: '/api/audio/favorites', timeout: 6000 })
+}
+
+/** 收藏 / 取消收藏，返回该曲目最新展示值 */
+function setAudioFavorite(code, trackId, on) {
+  return request({
+    path: '/api/audio/favorite',
+    method: 'POST',
+    data: { code, trackId, on: !!on },
+    timeout: 6000
+  })
+}
+
+/** 背景图使用次数（展示值 = 后台人气基数 + 真实累计） */
+function fetchBackgroundUses() {
+  return request({ path: '/api/backgrounds/uses', timeout: 6000 })
+}
+
+/** 记录一次背景使用，返回该背景最新展示值 */
+function trackBackgroundUse(code, bgId) {
+  return request({
+    path: '/api/backgrounds/use',
+    method: 'POST',
+    data: { code, bgId },
+    timeout: 6000
+  })
+}
+
 function syncRecords(code, records, deletedDays, includeAll) {
   return request({
     path: '/api/records/sync',
@@ -106,6 +136,10 @@ function fetchPosterQr(code) {
 module.exports = {
   fetchConfig,
   unlockAudio,
+  fetchAudioFavorites,
+  setAudioFavorite,
+  fetchBackgroundUses,
+  trackBackgroundUse,
   syncRecords,
   createReminder,
   cancelReminder,

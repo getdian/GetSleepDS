@@ -12,7 +12,9 @@ module.exports = {
       subtitle: '循环雨声 · 支持锁屏',
       category: '自然之声',
       url: 'https://img.qfmaster.com/sleep/sleep-10001.mp3',
-      icon: 'rain'
+      icon: 'rain',
+      // 展示用收藏人气基数（后台可设），真实收藏在服务端累加
+      favBase: 0
     }
   ],
   unlock: {
