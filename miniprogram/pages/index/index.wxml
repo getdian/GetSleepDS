@@ -251,3 +251,6 @@
   bind:category="onBgCategory"
   bind:select="onBgSelect"
 />
+
+<!-- 添加到「我的小程序」引导：出现时机由 utils/add-tip.js 统一裁决 -->
+<add-tip />

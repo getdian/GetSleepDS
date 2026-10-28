@@ -20,6 +20,9 @@ function emptyBucket(day) {
     interrupts: 0,
     // 补记次数：只打卡不补记 vs 高补记率，是判断“打卡闭环是否成立”的关键信号
     manualSleeps: 0,
+    // 添加到「我的小程序」：show 是曝光，tap 是用户点了气泡/「添加」（说明有人在认真看）
+    addTipShows: 0,
+    addTipTaps: 0,
     // 分享次数：分享 → 打开 → 首次打卡 漏斗的第一段，没有它无法判断增长动作是否有效
     shares: 0
   }
@@ -61,6 +64,8 @@ function createAnalytics(options) {
     let weekAdErrors = 0
     let weekInterrupts = 0
     let weekManualSleeps = 0
+    let weekAddTipShows = 0
+    let weekAddTipTaps = 0
     let weekShares = 0
     const top = new Map()
     const sources = new Map()
@@ -95,6 +100,10 @@ function createAnalytics(options) {
         bucket.interrupts += 1
       }
       if (event.type === 'manual_sleep') bucket.manualSleeps += 1
+      if (event.type === 'add_tip') {
+        if (event.target === 'show') bucket.addTipShows += 1
+        if (event.target === 'tap') bucket.addTipTaps += 1
+      }
       if (event.type === 'share') bucket.shares += 1
 
       if (event.type === 'ad_show' || event.type === 'ad_error') {
@@ -122,6 +131,10 @@ function createAnalytics(options) {
         if (event.type === 'ad_show') weekAdShows += 1
         if (event.type === 'ad_error') weekAdErrors += 1
         if (event.type === 'manual_sleep') weekManualSleeps += 1
+        if (event.type === 'add_tip') {
+          if (event.target === 'show') weekAddTipShows += 1
+          if (event.target === 'tap') weekAddTipTaps += 1
+        }
         if (event.type === 'share') weekShares += 1
       }
     })
@@ -172,6 +185,8 @@ function createAnalytics(options) {
         adErrors: todayBucket.adErrors,
         interrupts: todayBucket.interrupts,
         manualSleeps: todayBucket.manualSleeps,
+        addTipShows: todayBucket.addTipShows,
+        addTipTaps: todayBucket.addTipTaps,
         shares: todayBucket.shares
       },
       week: {
@@ -184,6 +199,8 @@ function createAnalytics(options) {
         adErrors: weekAdErrors,
         interrupts: weekInterrupts,
         manualSleeps: weekManualSleeps,
+        addTipShows: weekAddTipShows,
+        addTipTaps: weekAddTipTaps,
         shares: weekShares
       },
       ads: {

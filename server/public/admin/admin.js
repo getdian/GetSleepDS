@@ -454,6 +454,10 @@
     // 分享是“分享 → 打开 → 首次打卡”漏斗的分母：没有它无法判断分享动作是否有效
     $('#stat-shares').textContent = today.shares || 0
     $('#stat-shares-sub').textContent = '本周 ' + (week.shares || 0)
+    // 添加到「我的小程序」气泡：曝光对比点击，点击率太低说明文案/位置没打动人
+    $('#stat-addtip').textContent = today.addTipShows || 0
+    $('#stat-addtip-sub').textContent =
+      '本周 ' + (week.addTipShows || 0) + ' · 点击 ' + (week.addTipTaps || 0)
 
     const ads = data.ads || {}
     $('#stat-ad-shows').textContent = ads.todayShows || 0

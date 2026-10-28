@@ -194,6 +194,18 @@ test('一条脏事件只丢自己，不带走同批有效事件', async () => {
   assert.equal(res.body.dropped, 1)
 })
 
+test('add_tip 在事件白名单内（小程序引导的曝光与点击）', async () => {
+  const res = await post('/api/events', {
+    code: 'dev-code',
+    events: [
+      { type: 'add_tip', target: 'show', ts: FIXED_NOW + 210 * 1000 },
+      { type: 'add_tip', target: 'tap', ts: FIXED_NOW + 211 * 1000 }
+    ]
+  })
+  assert.equal(res.status, 200)
+  assert.equal(res.body.accepted, 2)
+})
+
 test('audio_interrupt 在事件白名单内（外部中断可观测）', async () => {
   const res = await post('/api/events', {
     code: 'dev-code',

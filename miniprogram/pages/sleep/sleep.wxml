@@ -222,3 +222,6 @@
   <view class="dim-end" catchtap="onLightsOutEnd" hover-class="dim-end--tap" hover-stay-time="120">结束入睡</view>
   <text class="dim-hint">轻触任意处唤醒</text>
 </view>
+
+<!-- 添加到「我的小程序」引导：出现时机由 utils/add-tip.js 统一裁决（入睡中/熄灯时不弹） -->
+<add-tip />

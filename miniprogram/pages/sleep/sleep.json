@@ -7,6 +7,7 @@
     "top-bar": "/components/top-bar/top-bar",
     "audio-dock": "/components/audio-dock/audio-dock",
     "ad-slot": "/components/ad-slot/ad-slot",
-    "share-btn": "/components/share-btn/share-btn"
+    "share-btn": "/components/share-btn/share-btn",
+    "add-tip": "/components/add-tip/add-tip"
   }
 }

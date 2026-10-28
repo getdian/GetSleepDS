@@ -1,0 +1,19 @@
+<!-- 添加到「我的小程序」引导气泡：贴右上胶囊下方、整体紧凑右对齐。
+     结构对齐微信生态通用样式：× · 主说明/副说明 · 「添加」，整卡可点。
+     能力边界：微信没有能替用户添加的 API，点卡片/「添加」只弹路径提示，不假装一键添加。 -->
+<view
+  wx:if="{{visible}}"
+  class="add-tip {{closing ? 'is-out' : ''}}"
+  style="top:{{top}}px; right:{{right}}px;"
+  bindtap="onBodyTap"
+  hover-class="add-tip--tap"
+  hover-stay-time="100"
+>
+  <view class="add-tip-arrow" style="right:{{arrowRight}}px;"></view>
+  <view class="add-tip-close" catchtap="onClose" hover-class="add-tip-close--tap" hover-stay-time="100">✕</view>
+  <view class="add-tip-main">
+    <text class="add-tip-title">添加到我的小程序</text>
+    <text class="add-tip-sub">下拉微信就能找到</text>
+  </view>
+  <view class="add-tip-btn">添加</view>
+</view>

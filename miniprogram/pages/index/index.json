@@ -8,6 +8,7 @@
     "ad-slot": "/components/ad-slot/ad-slot",
     "share-btn": "/components/share-btn/share-btn",
     "now-playing": "/components/now-playing/now-playing",
-    "background-picker": "/components/background-picker/background-picker"
+    "background-picker": "/components/background-picker/background-picker",
+    "add-tip": "/components/add-tip/add-tip"
   }
 }

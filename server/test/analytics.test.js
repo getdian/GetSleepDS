@@ -120,6 +120,21 @@ test('audio_unlock_fail 按原因聚合，并进入今日/本周', async () => {
   ])
 })
 
+test('add_tip 只统计 show 与 tap，close/auto 不入账', async () => {
+  const events = [
+    eventAt(0, 'add_tip', 'show'),
+    eventAt(0, 'add_tip', 'tap'),
+    eventAt(0, 'add_tip', 'close'),
+    eventAt(0, 'add_tip', 'auto')
+  ]
+  const analytics = createAnalytics(fakeDeps(events))
+  const overview = await analytics.overview(Date.now())
+  assert.equal(overview.today.addTipShows, 1)
+  assert.equal(overview.today.addTipTaps, 1)
+  assert.equal(overview.week.addTipShows, 1)
+  assert.equal(overview.week.addTipTaps, 1)
+})
+
 test('dayKey 按东八区归日', () => {
   const noon = Date.parse('2026-10-19T12:00:00+08:00')
   assert.equal(dayKey(noon), '2026-10-19')

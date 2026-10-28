@@ -17,6 +17,8 @@ const TYPES = [
   'ad_show',
   'ad_error',
   'manual_sleep',
+  // 添加到「我的小程序」引导：target = show|known|close|mute（mute=用户点了「不再提示」）
+  'add_tip',
   // 分享次数：分享 → 打开 → 首次打卡 漏斗的分母
   'share'
 ]

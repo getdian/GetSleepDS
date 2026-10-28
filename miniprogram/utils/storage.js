@@ -382,6 +382,16 @@ function setSyncEnabled(enabled) {
   return !!patchMeta({ syncEnabled: enabled === true })
 }
 
+/** 添加到「我的小程序」引导的本地状态（周频/月上限/静默），只存本机、不参与云同步 */
+function getAddTip() {
+  const meta = getMeta()
+  return meta.addTip && typeof meta.addTip === 'object' ? meta.addTip : null
+}
+
+function setAddTip(value) {
+  return patchMeta({ addTip: value })
+}
+
 function getConfigCache() {
   const raw = safeGet(KEYS.config, null)
   if (!raw || !raw.data || !raw.fetchedAt) return null
@@ -459,6 +469,8 @@ module.exports = {
   patchMeta,
   getSyncEnabled,
   setSyncEnabled,
+  getAddTip,
+  setAddTip,
   getConfigCache,
   setConfigCache,
   getPrefs,
