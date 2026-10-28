@@ -149,6 +149,9 @@ function loadConfig(env) {
       backgroundUnlockHours: file.backgroundUnlockHours,
       // 落地页小程序码：漏传会让文件配置在空库/首次部署时被 normalizeConfig 静默丢弃
       site: file.site,
+      // 国际站：同理不能漏——后台「国际站」面板写的 web 段要经过这里才有基础值，
+      // 否则 normalizeConfig 只能回落到 DEFAULT_WEB（见 docs/14-intl-prd.md §9）
+      web: file.web,
       // 订阅消息：漏传会让后台“小程序与订阅消息”面板在空库首次部署时读不到默认值
       reminder: file.reminder,
       features: file.features,

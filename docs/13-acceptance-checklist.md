@@ -673,6 +673,17 @@
 - [ ] **真机（老安卓 X5 / 旧版微信）**：统计页月历是否仍为 7 列、年历 12 个月是否横向可滑；首页 3D 翻转是否闪烁。
 - [ ] 剩余 67 处 `gap`（非核心路径：`audio-dock` 抽屉内部 25、统计/入睡页次要行等）在 iOS < 14.5 上仍会丢失间距，属已知技术债，未全量改造。
 
+### 2.7 播放器接入层收口（2026-10-28，代码已改 + 单测绿，**模拟器待授权**）
+
+> 背景：新增 `utils/audio-player.js` 作为 BackgroundAudioManager 的唯一持有者（实例/取源/错误归属/坏源策略），audio-dock 与 now-playing 改为调用它。行为按设计不变，但按 AGENTS.md §5.8 必须复核四条。
+
+- [x] `npm test` 485 项 / 484 通过 / 0 失败 / 1 skip；音频四件套 + `audio-player` 两组共 66/66 通过；`npm run check` 通过（728.1 KB）。
+- [x] **模拟器 390×844（2026-10-28，audio-dock 事件归属迁移后）**：`dock.play()` 起播 → 面板 `playing=true`、`hasSrc=true`、`paused=false`，meta `lastTrackActive/lastTrackPlaying` 均 true；`stopPlayback()` → meta 两者 false、`currentId=''`，切统计页 `#np` `visible=false`（条消失）；冷启动残影（meta playing:true + 无 src + 本进程未起播）→ 入睡页保留曲目、`playing=false`、meta 只归零 lastTrackPlaying 而 lastTrackActive 仍 true；console 无 error。
+- [ ] 小程序内暂停 → 回前台/中断结束后**不**自动续播（devtools 无法造出系统暂停，待真机）
+- [ ] 外部暂停（来电/切 App）→ 迷你条保留 → 回前台自动续播（`BAM.pause()` 在 devtools 不真正生效，待真机）
+- [ ] 真机锁屏多轮回环、耳机拔出、通知栏停止
+- 说明：`now-playing` 仍自行监听（1c 才迁移），本轮的机验结论只覆盖入睡页 audio-dock 路径。
+
 ## 3. 待外部输入（不是代码问题）
 
 | # | 事项 | 卡住的功能 | 责任方 |

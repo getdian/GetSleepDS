@@ -24,6 +24,7 @@
 
 const storage = require('./storage')
 const cache = require('./audio-cache')
+const player = require('./audio-player')
 const playerState = require('./player-state')
 const { getConfig } = require('./config')
 
@@ -84,13 +85,9 @@ function report(type, target) {
 }
 
 function getAudio() {
-  if (audio) return audio
-  if (typeof wx === 'undefined' || !wx.getBackgroundAudioManager) return null
-  try {
-    audio = wx.getBackgroundAudioManager()
-  } catch (e) {
-    audio = null
-  }
+  // 实例统一由 audio-player 持有：本模块不再自己 getBackgroundAudioManager，
+  // 否则又会多出一份“谁也说不清谁先拿到”的引用。
+  audio = player.audio()
   return audio
 }
 
@@ -419,6 +416,9 @@ playerState.setLoopGuard(allowReplay)
 function _resetForTest() {
   clearResumeTimer()
   audio = null
+  // 实例缓存现在归 audio-player 管：不一起清掉，下一个用例仍会拿到上一轮
+  // 的假播放器，表现为“续播没发生”。
+  player._resetForTest()
   initialized = false
   interrupted = false
   wantPlaying = false

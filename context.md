@@ -58,6 +58,7 @@ miniprogram/
     sync.js       云同步与回填
     audio-cache.js 下载/保存/巡检/监听
     audio-timer.js 跨页面定时关闭单例
+    audio-player.js 播放器接入层（实例单例/取源/错误归属/坏源策略，两个组件共用）
     config.js / api.js / request.js / login.js / ad.js / ads.js / backgrounds.js / events.js
     launch-source.js  启动来源归一化（scene|path|from → app_open.target，看板来源分布）
   config/
@@ -112,8 +113,8 @@ tests/            Node 纯逻辑测试
 
 ## 5. 当前验证基线
 
-- `npm test`：**460 项 / 459 通过 / 0 失败 / 1 skip**（2026-10-27 反馈闭环 + 背景文案轮实测；PG 集成用例在未设置 `PG_TEST_URL` 时跳过）。
-- `npm run check`：3 页面 / 22 JSON / 17 WXML / 19 WXSS，主包约 708.0 KB（以最新输出为准）。
+- `npm test`：**485 项 / 484 通过 / 0 失败 / 1 skip**（2026-10-28 架构收口第一刀 + 1b 事件归属 + 配置结构一致性；PG 集成用例在未设置 `PG_TEST_URL` 时跳过）。
+- `npm run check`：3 页面 / 21 JSON / 16 WXML / 18 WXSS，主包约 728.1 KB（以最新输出为准）。
 - `npm run verify:web`：11 页 / 3 条内链，无 404（2026-10-26 批次 D）。
 - **验收清单（2026-10-22 建）**：全部待验收项已合并至 [docs/13-acceptance-checklist.md](docs/13-acceptance-checklist.md)，分三区——本机已验收（CLI 模拟器 390×844 实测，含入睡页 10-22 改版与统计页 10-21 改版全状态截图、console 无 error）/ 待真机（音频锁屏、中断、定时、手势手感）/ 待外部输入（部署、AppSecret、COS 防盗链、流量主）。续作新增"未验收"项一律先落该表再写代码。
 - 交付包：以 `release-artifacts/` 下最新 `getsleep-<label>.zip` 为准（`npm run pack` 生成，含 `RELEASE-MANIFEST.json` 与逐文件 sha256，同时留 `.sha256` 校验文件）；打包前会强制跑 `npm test` + `npm run check`。
@@ -228,6 +229,9 @@ tests/            Node 纯逻辑测试
 44. **用户反馈闭环（2026-10-27）**：`POST /api/feedback`（`{code,type,content,contact}`，类型白名单 `SUGGEST/MUSIC/ISSUE`、正文 ≤500、联系方式 ≤64、控制字符清洗保留换行）→ 新表 `user_feedback`（`001_init.sql` 与启动 DDL 双份，纯加法，无手工迁移）→ 后台「用户反馈」面板只读 + 标记已处理。限流 IP 5/分钟 + openid 5/小时；`features.feedback`（config-schema / app.config.json / fallback.js / admin.js / 文档 五处已同步）关掉后入口隐藏且接口 403。设计与边界：**不做回复、不做删除**（回复需客服体系；删除与用户「清除数据」形成两套语义），用户清除数据时 `eraseUserData`/`eraseCloudData` 会级联删反馈。口径与边界见 `DECISIONS.md` ADR-029（不占顶栏、不接微信原生反馈、不做回复与后台删除）。**模拟器 390×844 已实测**（入口/chips 选中态/字数/空白校验/真实 201 成功态/tabBar 复位，截图 `docs/assets/l4-feedback-*.png`），后台面板浏览器实测（Edge headless，列表/角标/类型标签/pre-wrap 换行/联系方式、标记后角标同步、只看未处理筛选、0 console error，截图 `docs/assets/l4-feedback-admin.png`）；**仍未验**：真机软键盘弹起与 iOS 中文输入，见 docs/13 §1.40。
 
 46b. **环境声音抽屉精简（2026-10-28）**：①移除抽屉顶部「正在播放」行——该行只随 `currentId` 插入 DOM，点播放瞬间把下方内容整体下推（用户截图反馈的抖动），状态改由当前行承担（标题/状态 `--color-primary-soft` + 600 字重，有当前曲时其余行标题降 `--text-secondary`、图标底 62% 透明度，`scroll-view` 的 `has-current` 类）。②已缓存标记由绿色 ↓ 改**暗灰 ✓**（`rgba(148,163,184,.55)`、28rpx/400），避免被读成“下载”；点 ✓ 仍弹「删除这首的缓存？」二次确认，长按同口径。③移除底部缓存汇总、「清理」整库入口与「锁屏后继续播放」脚注（`cacheText/cacheCount/onCleanCache` 一并删除），整库清理仍由统计页「清除数据」承担。④定时关闭固定贴抽屉底（`margin-top:auto`）、**无底框/背景**，标签 27rpx/600、选中档实心 `#c9ccfa` 深字、档位 48rpx、剩余时间 `--color-primary-soft`。⑤抽屉高度 `86vh → 68vh`（顶边在屏高 32%，关闭 X 进入拇指区；点上方遮罩关闭实测 `open=false`），列表内部滚动、头部与定时块不动。⑥标题同行加 22rpx 副标「陪着你，慢慢睡着」（baseline 对齐，「结束播放」出现时不换行）；**不采用「陪眠曲」**：`陪眠` 非现成词且贴近「陪睡」，`曲` 会把雨声/白噪音窄化成音乐——功能名保留「环境声音」，解锁弹窗/后台面板/分类值（`环境音`）不动。验证：`npm test` 460 项 / 459 通过 / 0 失败 / 1 skip、`npm run check` 通过（719.5 KB）、模拟器 390×844 截图复核（空闲/模拟播放态、16 条模拟音轨滚动）、console 无 error。**未真机**：点 ✓ 删缓存的确认弹窗与删除后刷新、真实起播/锁屏（见 docs/13 §1.42 与第 2 区）。
+
+47. **架构收口第一刀：播放器接入层 + web 配置静默丢值（2026-10-28）**：①新增 `utils/audio-player.js`，成为 `BackgroundAudioManager` 的唯一持有者与唯一判断点——`audio()`（实例单例，audio-dock / now-playing / audio-session 三处 `wx.getBackgroundAudioManager()` 收敛到这里）、`surfaceOf()`（读真实状态并给出 coldPatch，两个组件不再各拼 6 个字段）、`attach()/rebuild()`（取源/https 校验/缓存优先/期望源+赋值时刻）、`errorPlan()`（ignore / playing / too_soon / fallback / terminal 五分支）、`markBadSource()`（磁盘不可用才删、本会话一律拉黑）。②顺带修掉一处真实分歧：now-playing 的缓存回退此前漏 `markBad`，首页/统计页遇到坏缓存会反复命中同一源；现在两个组件共用同一实现。③`web` 配置段此前只写不读（`normalizeConfig` 与 `src/config/index.js` 都漏装配，保存后 30s 缓存过期即消失，`/api/config` 从不含它），补 `normalizeWeb` 与文件装配，`server/test/config.test.js` 用三条断言锁住（缺省默认、保存保留、locales 白名单）。验证：`npm test` 470/469/0 fail/1 skip（新增 `tests/audio-player.test.js` 9 例）、音频四件套 57/57、`npm run check` 通过（732.9 KB）。**未机验**：wechatide 停在用户授权（pending），AGENTS.md §5 的四条模拟器复核待授权后补。**同轮补的配置护栏**：新增 `server/test/config-parity.test.js`（6 例）——文件配置/客户端 fallback/归一化/校验四个来源的键集合必须对齐（`version` 单独放行），并额外断言比较器自己抓得住漂移，避免测试变成永远为真；这正是 `web` 只写不读那类漏配的可发现化。**下一步**：1b——把 BAM 事件注册搬进 audio-player。**（1b 已完成，见下条）**
+47b. **1b：audio-dock 事件归属（2026-10-28 同日）**：`player.init()` 成为唯一注册 BAM 8 个事件的地方（单例、幂等），dock 改为 `subscribe(snapshot)` + 视图映射，净删约 500 行 handler/命令（1561 → 1061 行）。now-playing 本轮未迁——它仍自行监听，与改前拓扑一致（claim 继续生效），迁移是 1c。三个必须记住的细节：①`hydrate()` 在 init / 首个订阅时按 meta + BAM 补状态，否则「先在首页播歌、再进入睡页才首次 init」会显示空态；②`audio-timer` 改为调用点 `require`——它依赖 audio-session，而 audio-session require 本模块，顶层 require 形成循环、先加载方拿到空对象（表现为 `audioTimer.clear is not a function`）；③12s 加载兜底与 3s/4s 重试定时器加 `unref()`，否则 `node --test` 进程被挂住 12s。**模拟器机验（wechatide，pages/sleep/sleep）**：`dock.play()` → `dockPlaying:true / hasSrc:true / paused:false`、meta `lastTrackActive:true / lastTrackPlaying:true`；`stopPlayback()` → meta 两者 false、`dockId:''`，切统计页 `#np` `visible:false`；冷启动残影（meta playing:true + `globalData.audioSession=false` + 无 src）→ 入睡页 `dockId` 保留、`dockPlaying:false`、meta `lastTrackPlaying` 归零而 `lastTrackActive` 仍 true；console 无 error。**未机验**：外部中断→自动续播（devtools 里 `BAM.pause()` 不真正生效，造不出系统暂停）、真机锁屏/来电。门禁：`npm test` 485/484/0 fail/1 skip（新增 `tests/audio-player-events.test.js` 9 例）、`npm run check` 通过（728.1 KB）。**下一步**：1c 把 now-playing 也迁到订阅，然后评估 `claimExpiryToast` 是否可以删。
 
 ## 8. 快速命令
 

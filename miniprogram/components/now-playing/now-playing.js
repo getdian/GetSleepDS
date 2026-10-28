@@ -12,7 +12,8 @@ const playerState = require('../../utils/player-state')
 const cache = require('../../utils/audio-cache')
 const events = require('../../utils/events')
 const audioSession = require('../../utils/audio-session')
-const { resolvePlayerSurface, isReallyPlaying } = require('../../utils/player-surface')
+const player = require('../../utils/audio-player')
+const { isReallyPlaying } = require('../../utils/player-surface')
 const { nextTrackManual } = require('../../utils/player-queue')
 const tabbar = require('../../utils/tabbar')
 const { getConfig } = require('../../utils/config')
@@ -118,13 +119,11 @@ Component({
 
   methods: {
     setup() {
-      if (this._audio || !wx.getBackgroundAudioManager) return
-      try {
-        this._audio = wx.getBackgroundAudioManager()
-      } catch (e) {
-        this._audio = null
-      }
-      if (!this._audio) return
+      if (this._audio) return
+      // 实例由 audio-player 单例持有，这里只订阅它，不再自己创建。
+      const audio = player.audio()
+      if (!audio) return
+      this._audio = audio
       this._audio.onPlay(this._onPlay)
       this._audio.onPause(this._onPause)
       this._audio.onStop(this._onStop)
@@ -303,15 +302,12 @@ Component({
       if (!this.canPlay()) return false
       const meta = storage.getMeta()
       if (!meta.lastTrackId || !this._audio) return false
-      const cfg = getConfig()
-      const track = (cfg.audio || []).filter((item) => item.id === meta.lastTrackId)[0]
-      // 与 audio-dock.play 同口径：非 https 源不重建，避免进入静默 onError 循环
-      if (!track || !track.url || track.url.indexOf('https://') !== 0) return false
-      const cached = cache.peek(track.url, (cfg.cache && cfg.cache.ttlDays) || 7, track.url)
-      this._audio.title = '睡点 · ' + track.title
-      this._audio.epname = '环境音'
-      this._audio.singer = '睡点'
-      this.setAudioSrc(cached || track.url)
+      // 取源、https 校验、缓存优先、期望源记账都在 audio-player 里，两个组件共用一份
+      const attached = player.rebuild(meta.lastTrackId, { audio: this._audio })
+      if (!attached) return false
+      // 接入层已经赋过 src，这里只同步期望源，避免重复赋值触发重新加载
+      this._expectSrc = attached.url
+      audioSession.setExpectedSrc(attached.url)
       storage.patchMeta({ lastTrackActive: true, lastTrackPlaying: true })
       return true
     },
@@ -378,18 +374,9 @@ Component({
     /** 以 meta + 后台音频状态为准同步展示；任何事件都走这里，避免多实例口径漂移 */
     sync(force) {
       if (!this._alive) return
-      const meta = storage.getMeta()
-      const audio = this._audio
-      const app = getApp()
-      const surface = resolvePlayerSurface({
-        lastTrackId: meta.lastTrackId,
-        lastTrackActive: meta.lastTrackActive,
-        lastTrackPlaying: meta.lastTrackPlaying,
-        hasSrc: !!(audio && audio.src),
-        // 必须严格 false 才算在播：BAM 无 src 时 paused 是 undefined，!paused 会是 true
-        playingNow: !!(audio && audio.src) && audio.paused === false,
-        sessionLive: !!(app && app.globalData && app.globalData.audioSession)
-      })
+      const view = player.surfaceOf({ audio: this._audio })
+      const meta = view.meta
+      const surface = view.surface
       if (!surface.visible) {
         // 只有“用户显式停止”或从未播放过才收起入口
         this.collapse()
@@ -398,9 +385,7 @@ Component({
       }
       // 冷启动/悬浮 X 停止后的残影：只把播放态归零，**不清会话**。
       // 清了会话（markStopped）会让用户重进小程序时迷你条消失，无法继续听。
-      if (surface.cold && meta.lastTrackPlaying !== false) {
-        storage.patchMeta({ lastTrackPlaying: false })
-      }
+      if (view.coldPatch) storage.patchMeta(view.coldPatch)
 
       const playing = surface.playing
       const title = meta.lastTrackTitle || '环境音'
@@ -611,34 +596,37 @@ Component({
       }
       this.disarmLoadingGuard()
       if (this.data.loading) this.setData({ loading: false })
-      // 仍在出声：网络/解码抖动交给底层重连，不能清会话。
-      // 否则会出现“音乐还在播，首页/统计页迷你条已经消失”的状态错位。
-      if (isReallyPlaying(this._audio)) {
+      const audio = this._audio
+      const meta = storage.getMeta()
+      // 归属与分支统一由 audio-player 判定（旧源迟到 / 1.5s 内 / 仍在出声 / 回退 / 终态）。
+      // 这样“首页/统计页遇到坏缓存要回退远程”和“坏源要拉黑”两件事只剩一份实现。
+      const plan = player.errorPlan({
+        audio,
+        expected,
+        track: player.trackOf(meta.lastTrackId),
+        fromCache: !!(audio && audio.src && audio.src.indexOf('https://') !== 0)
+      })
+      if (plan.action === 'playing') {
         this.sync(true)
         return
       }
-      const audio = this._audio
-      // 本地缓存源损坏时，dock 不在场（首页/统计页）也要自行回退远程一次；
-      // 否则重建源会反复命中同一个坏文件，用户点一次播放就失败一次。
-      if (audio && audio.src && audio.src.indexOf('https://') !== 0) {
-        const meta = storage.getMeta()
-        const cfg = getConfig()
-        const track = (cfg.audio || []).filter((item) => item.id === meta.lastTrackId)[0]
-        if (track && track.url) {
-          // 同一轮错误只允许一个组件执行“坏缓存失效 + 远程回退”；
-          // 另一个实例（audio-dock）已经处理过时直接同步即可。
-          if (playerState.isFallbacking(track.url)) {
-            this.sync(true)
-            return
-          }
-          playerState.markFallback(track.url)
-          // 与 audio-dock 同口径：只有磁盘文件确实不可用才删。
-          // 网络/解码错误时文件是好的，直接删会误伤健康缓存（还可能删到在播文件）。
-          if (!cache.isUsable(track.url)) cache.remove(track.url)
-          storage.patchMeta({ lastTrackActive: true, lastTrackPlaying: true })
-          this.setAudioSrc(track.url)
+      if (plan.action === 'ignore' || plan.action === 'too_soon') {
+        this.sync(true)
+        return
+      }
+      if (plan.action === 'fallback') {
+        // 同一轮错误只允许一个组件执行“坏缓存失效 + 远程回退”；
+        // 另一个实例（audio-dock）已经处理过时直接同步即可。
+        if (playerState.isFallbacking(plan.badUrl)) {
+          this.sync(true)
           return
         }
+        playerState.markFallback(plan.badUrl)
+        // 与 audio-dock 同一实现：磁盘可用就不删、但本会话一律拉黑
+        player.markBadSource(plan.badUrl)
+        storage.patchMeta({ lastTrackActive: true, lastTrackPlaying: true })
+        this.setAudioSrc(plan.badUrl)
+        return
       }
       // 两个组件监听同一个全局播放器，事件顺序不保证。
       // 等一个极短窗口，让 audio-dock（播放会话的 owner）先决定：

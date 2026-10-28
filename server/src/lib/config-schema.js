@@ -116,6 +116,26 @@ function normalizeSite(input, fallback) {
   }
 }
 
+/**
+ * 国际站（Web）配置的归一化。
+ *
+ * 为什么必须有这一段：`web` 之前只在 validateConfig（后台保存）里出现，
+ * normalizeConfig 的返回对象漏了它，而 config-store 每次读都要过 normalizeConfig——
+ * 于是后台保存的 web 在 30s 缓存过期后就被静默丢弃，/api/config 从来不含它
+ * （docs/14 §9 要求「后台可视化、无需重启」，实测是只写不读）。
+ * 这里补上归一化，并沿用后台的 locales 白名单口径。
+ */
+function normalizeWeb(input, fallback) {
+  const source = isObject(input) ? input : {}
+  const base = isObject(fallback) ? fallback : {}
+  const merged = Object.assign({}, DEFAULT_WEB, base, source)
+  const locales = Array.isArray(merged.locales) ? merged.locales : DEFAULT_WEB.locales
+  const usable = locales.filter((item) => WEB_LOCALES.indexOf(item) >= 0).slice(0, 4)
+  merged.enabled = merged.enabled !== false
+  merged.locales = usable.length ? usable : DEFAULT_WEB.locales
+  return merged
+}
+
 function normalizeReminder(input, fallback) {
   const source = isObject(input) ? input : {}
   const base = isObject(fallback) ? fallback : DEFAULT_REMINDER
@@ -216,6 +236,8 @@ function normalizeConfig(input, base) {
       Number(fallback.backgroundUnlockHours) ||
       DEFAULT_BACKGROUND_UNLOCK_HOURS,
     site: normalizeSite(source.site, fallback.site),
+    // 与 validateConfig 的返回保持一致：漏了它，后台保存的 web 段会在下一次读时消失
+    web: normalizeWeb(source.web, fallback.web),
     reminder: normalizeReminder(source.reminder, fallback.reminder),
     features: Object.assign({}, DEFAULT_FEATURES, fallback.features || {}, isObject(source.features) ? source.features : {}),
     cache: Object.assign({}, DEFAULT_CACHE, fallback.cache || {}, isObject(source.cache) ? source.cache : {}),

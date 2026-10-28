@@ -196,6 +196,9 @@ test('生产环境配置齐全时可以启动', () => {
   // 文件配置的 site 段必须进 app：漏传会让空库首次部署丢失落地页小程序码
   assert.ok(config.app.site, 'app.site 缺失')
   assert.equal(typeof config.app.site.mpQrNote, 'string')
+  // 国际站 web 段同理：漏传会让后台面板只写不读（docs/14 §9 要求可编辑且生效）
+  assert.ok(config.app.web, 'app.web 缺失')
+  assert.equal(config.app.web.brand, 'SleepCycle')
 })
 
 test('订阅消息配置：默认开启、模板 ID 可后台填写、非法值被拒', () => {
@@ -257,6 +260,31 @@ test('订阅消息配置：默认开启、模板 ID 可后台填写、非法值�
       ),
     /同一个字段名/
   )
+})
+
+test('国际站配置：normalize 必须保留 web 段（只写不读是已发生过的缺陷）', () => {
+  const base = normalizeConfig({ audio: FILE_AUDIO, unlock: {}, features: {}, copy: {} })
+  // 缺省时给 DEFAULT_WEB，而不是 undefined
+  assert.equal(base.web.enabled, true)
+  assert.equal(base.web.brand, 'SleepCycle')
+  assert.deepEqual(base.web.locales, ['en', 'es'])
+
+  const kept = normalizeConfig(
+    {
+      audio: FILE_AUDIO,
+      unlock: {},
+      features: {},
+      copy: {},
+      web: { brand: 'MySleep', locales: ['ja', 'xx', 'en'], freeLimit: 3 }
+    },
+    base
+  )
+  assert.equal(kept.web.brand, 'MySleep')
+  assert.equal(kept.web.freeLimit, 3)
+  // 与后台 validateConfig 同口径：未知 locale 丢弃、最多 4 个
+  assert.deepEqual(kept.web.locales, ['ja', 'en'])
+  // 后台显式关闭后不得被默认值翻回 true
+  assert.equal(normalizeConfig({ web: { enabled: false } }, base).web.enabled, false)
 })
 
 test('生产环境未设置 TRUST_PROXY 时拒绝启动（限流桶会全站共用）', () => {

@@ -6,14 +6,25 @@ const { withLogin } = require('../../utils/login')
 const ad = require('../../utils/ad')
 const events = require('../../utils/events')
 const audioTimer = require('../../utils/audio-timer')
-const playerState = require('../../utils/player-state')
-const audioSession = require('../../utils/audio-session')
-const { resolvePlayerSurface, isReallyPlaying } = require('../../utils/player-surface')
-const { nextTrackInQueue, nextTrackManual } = require('../../utils/player-queue')
+const player = require('../../utils/audio-player')
+const { isReallyPlaying } = require('../../utils/player-surface')
 const tabbar = require('../../utils/tabbar')
 
 const ICONS = ['rain', 'wave', 'fire', 'noise', 'night']
-const TOGGLE_GUARD_MS = 220
+// 播放器只发 code，文案留在视图层（同一事件在两个页面可以有不同说法）
+const PLAYER_NOTICES = {
+  expired: '解锁已到期，重新解锁后继续',
+  network_back: '网络已恢复，解锁后可继续播放',
+  play_failed: '播放失败，请重试',
+  load_timeout: '连接超时，点按重试',
+  audio_failed: '音频加载失败，点按重试',
+  replay_limited: '播放异常，请重新播放',
+  timer_stop: '定时结束，已停止播放',
+  only_one_track: '只有一个音源',
+  bad_url: '音频地址未配置',
+  unsupported: '当前版本不支持后台播放',
+  meta_save_failed: '播放状态保存失败'
+}
 const TONES = {
   自然之声: 'teal',
   白噪音: 'blue',
@@ -112,12 +123,6 @@ Component({
       this._collapseTimer = null
       this._peekTimer = null
       this._reconcileTimer = null
-      this._stopRequested = false
-      this._playingFromCache = false
-      this._currentTrack = null
-      // 最后一次赋给 BackgroundAudioManager 的 src；onError 不带源标识，
-      // 用它判断“这条错误是不是已经切走的旧源迟到的”。
-      this._expectSrc = ''
       this._wasUnlocked = false
       // 广告看完了但本地有效期写入失败时，至少保证本次会话可用；
       // 否则抽屉显示“已解锁”、点曲目却重新弹解锁。
@@ -177,13 +182,14 @@ Component({
       // meta.audioTimerMinutes，“回忆旧值”会让默认值失效；有跨进程恢复的
       // 运行中/暂停中倒计时时，按真实状态回显档位。
       this.setData({ timerMinutes: audioTimer.total() || 0 })
+      // 播放器按同一档位起表：它负责起播时的定时偏好，UI 只是回显
+      player.setTimerMinutes(audioTimer.total() || 0)
 
       loadConfig(true).then((cfg) => this.applyRemoteConfig(cfg))
     },
 
     detached() {
       this._alive = false
-      this.disarmLoadingGuard()
       this.clearStopArm()
       if (this._collapseTimer) {
         clearTimeout(this._collapseTimer)
@@ -207,8 +213,6 @@ Component({
         this._unlockTimer = null
       }
       this.clearAutoCacheTimer()
-      clearTimeout(this._waitRetryTimer)
-      clearTimeout(this._pauseRetryTimer)
       this.offAudio()
     }
   },
@@ -251,43 +255,6 @@ Component({
 
   methods: {
     noop() {},
-
-    /**
-     * 起播兜底：BackgroundAudioManager 在弱网/坏源时可能既不给 play 也不给 error，
-     * 没有这个定时器“正在连接音频…”会永久挂在迷你条上，且没有任何重试出口。
-     */
-    armLoadingGuard() {
-      this.disarmLoadingGuard()
-      this._loadingTimer = setTimeout(() => {
-        this._loadingTimer = null
-        if (!this._alive || !this.data.loading) return
-        // 超时前已实际起播：不能判失败（play 事件可能丢失）
-        if (isReallyPlaying(this._audio)) {
-          this.setData({ playing: true, loading: false })
-          return
-        }
-        // 12s 还没起播：不能只改文案而留下 playing=true 的绿音符。
-        // 复位播放态 + 展开播放条，让「连接超时，点按重试」可见且控件回到“播放”图标。
-        this.setData({
-          playing: false,
-          loading: false,
-          miniExpanded: true,
-          playerSub: '连接超时，点按重试'
-        })
-        storage.patchMeta({ lastTrackPlaying: false })
-        audioSession.onPlayFailed()
-        try {
-          if (this._audio) this._audio.pause()
-        } catch (e) {}
-      }, 12000)
-    },
-
-    disarmLoadingGuard() {
-      if (this._loadingTimer) {
-        clearTimeout(this._loadingTimer)
-        this._loadingTimer = null
-      }
-    },
 
     applyConfig(cfg) {
       const tracks = (cfg.audio || []).map((item) => {
@@ -448,304 +415,52 @@ Component({
     },
 
     /* ---------------- 音频 ---------------- */
+    /**
+     * 播放器由 audio-player 统一持有并注册事件；这里只订阅 snapshot。
+     * 组件卸载不注销事件（跨页播放要继续），只解除本视图的订阅。
+     */
     setupAudio() {
-      if (this._audio || !wx.getBackgroundAudioManager) return
-      let audio = null
-      try {
-        audio = wx.getBackgroundAudioManager()
-      } catch (e) {
-        audio = null
-      }
-      if (!audio) return
+      this._audio = player.audio()
+      if (!this._audio) return
+      this._unsubPlayer = player.subscribe((view) => this.applyPlayerState(view))
+      player.init({
+        notice: (code) => this.handlePlayerNotice(code),
+        timerMinutes: Number(this.data.timerMinutes) || 0
+      })
+    },
 
-      this._audio = audio
-      const handlers = {
-        play: () => {
-          if (!this._alive) return
-          // 系统侧恢复（通知栏/锁屏/耳机）也要过权益校验：到期后不能靠系统控件续播。
-          if (!this.isUnlocked() && !this.isFreeMode()) {
-            try {
-              this._audio.pause()
-            } catch (e) {}
-            storage.patchMeta({ lastTrackPlaying: false })
-            this.setData({ playing: false, loading: false })
-            if (this._pageVisible) {
-              wx.showToast({ title: '解锁已到期，重新解锁后继续', icon: 'none' })
-            }
-            return
-          }
-          this.disarmLoadingGuard()
-          // 真正起播：清掉缓冲标记与重试定时器
-          this._waitingAt = 0
-          this._pauseRetry = 0
-          clearTimeout(this._waitRetryTimer)
-          clearTimeout(this._pauseRetryTimer)
-          playerState.clearFallback()
-          // 任何来源的起播都算会话存活（含系统通知栏/锁屏续播）
-          audioSession.onPlay()
-          storage.patchMeta({ lastTrackPlaying: true })
-          this.setData({ playing: true, loading: false })
-          // 系统侧恢复（通知栏/锁屏/耳机）与首次起播都走这里：
-          // 暂停事件已冻结倒计时，这里续剩余；没有运行中的倒计时才按本会话已明确
-          // 选择的档位起表（默认“关”= 不起表，不跨会话回忆旧档位）。
-          this.applyTimerPreference(this.data.timerMinutes)
-          // 后台/锁屏时 onTimeUpdate 不再回调，回环点改由定时器兜底
-          playerState.armLoop(this._audio)
-          this.syncPlayerText()
-        },
-        pause: () => {
-          if (!this._alive) return
-          // BAM 缓冲时会自动 pause：这不是用户暂停，不能冻结定时、也不能收成“已暂停”条，
-          // 否则弱网首播会表现为“刚点播放就暂停，定时也停了”。
-          const buffering = Date.now() - (this._waitingAt || 0) < 30 * 1000
-          const userPaused = audioSession.isUserPaused()
-          this.disarmLoadingGuard()
-          // 缓冲期内且不是用户暂停：保持“连接中”，3s 后补一次 play（最多 2 次）。
-          // 没有这一层时，真机上点新歌播几秒被缓冲打断，会直接停在“已暂停，点击继续”。
-          const retry =
-            buffering && !userPaused && !this._stopRequested && !!this.data.currentId && (this._pauseRetry || 0) < 2
-          if (retry) {
-            this._pauseRetry = (this._pauseRetry || 0) + 1
-            this.setData({ playing: false, loading: true, miniExpanded: true })
-            this.armLoadingGuard()
-            this.syncPlayerText()
-            clearTimeout(this._pauseRetryTimer)
-            this._pauseRetryTimer = setTimeout(() => {
-              if (!this._alive || this._stopRequested) return
-              if (isReallyPlaying(this._audio)) return
-              this.safePlay()
-            }, 3000)
-            return
-          }
-          if (buffering) this.armLoadingGuard()
-          else audioTimer.pause()
-          // 只有用户在小程序内暂停才阻止自动恢复；来电/其他 App 造成的暂停留给
-          // 中断结束或回前台续播（audio-session 内部判定）
-          audioSession.onPause()
-          storage.patchMeta({ lastTrackPlaying: false })
-          this.setData({
-            playing: false,
-            loading: buffering || this.data.loading,
-            miniExpanded: !buffering
-          })
-          this.syncPlayerText()
-        },
-        waiting: () => {
-          if (!this._alive || this._stopRequested) return
-          // 音频加载中（弱网/首次播放）：只进“连接中”，**不要**把 playing 置 false。
-          // BAM 缓冲时经常只发 waiting、不再补发 play，置 false 会让正在播放的音频
-          // 一直显示“已暂停”（实机/模拟器均复现）。
-          this._waitingAt = Date.now()
-          this.setData({ loading: true })
-          this.armLoadingGuard()
-          this.syncPlayerText()
-          clearTimeout(this._waitRetryTimer)
-          this._waitRetryTimer = setTimeout(() => {
-            if (!this._alive || !this._audio || this._stopRequested) return
-            if (!this.data.currentId) return
-            if (isReallyPlaying(this._audio)) {
-              // 实际已在播，只是 play 事件没到：以真实状态为准自愈
-              this.setData({ playing: true, loading: false })
-              return
-            }
-            // 个别基础库缓冲结束后不自动续播：补一次 play
-            this.safePlay()
-          }, 4000)
-        },
-        canplay: () => {
-          if (!this._alive) return
-          this.disarmLoadingGuard()
-          // canplay 比 play 事件更可靠：部分基础库起播时不补发 play。
-          // 以播放器真实状态自愈，避免“声音在播、UI 显示已暂停”。
-          const live = isReallyPlaying(this._audio)
-          if (this.data.loading || (live && !this.data.playing)) {
-            this.setData({ loading: false, playing: live || this.data.playing })
-          }
-          playerState.armLoop(this._audio)
-        },
-        timeupdate: () => {
-          if (!this._alive || this._stopRequested) return
-          // 与 now-playing 同口径：play 事件早到/丢失时，按真实出声状态自愈 UI
-          if (!this.data.playing && isReallyPlaying(this._audio)) {
-            this.setData({ playing: true, loading: false })
-            storage.patchMeta({ lastTrackPlaying: true })
-            this.syncPlayerText()
-          }
-          // 无缝回环绕过 onEnded，而 60s 的 refreshUnlock 只在页面可见时跑；
-          // 低频复检一次权益，避免切到首页/统计页后“看一次广告播整夜”。
-          const now = Date.now()
-          if (now - (this._entitlementAt || 0) > 15000) {
-            this._entitlementAt = now
-            if (this.data.currentId && !this.isUnlocked() && !this.isFreeMode()) {
-              // 从“配置没拉到”的免费兜底恢复到真实配置时，用户并没有做过到期操作，
-              // 不能报“解锁已到期”（会让人以为广告白看了）。
-              const title = this._recovered
-                ? '网络已恢复，解锁后可继续播放'
-                : '解锁已到期，重新解锁后继续'
-              this.stopPlayback()
-              if (this._pageVisible) wx.showToast({ title, icon: 'none' })
-              return
-            }
-          }
-          // 曲末前无缝回环：不进 ended、不换 src，保住微信悬浮音符（见 player-state.seamlessLoop）
-          playerState.seamlessLoop(this._audio)
-          // 前台每秒校准回环定时器；锁屏后没有 timeupdate 时由它独立兜底
-          playerState.armLoop(this._audio)
-        },
-        stop: () => {
-          if (!this._alive) return
-          this.disarmLoadingGuard()
-          const stoppedByUser = this._stopRequested
-          this._stopRequested = false
-          // 系统 stop（浮窗 X / 系统回收）不结束会话，只取消“应继续播放”的意图：
-          // 迷你条继续以“已暂停”显示，与需求「只有小程序内停止才消失」一致。
-          audioSession.onStop()
-          storage.patchMeta({ lastTrackPlaying: false })
-          this.setData({ playing: false, loading: false })
-          if (stoppedByUser) {
-            this.setData({ currentId: '', currentTitle: '', playerSub: '' })
-          }
-          this.syncPlayerText()
-        },
-        ended: () => {
-          if (!this._alive) return
-          // 会话已被显式终止（用户停止 / 定时到点）：迟到的 ended 不能重新起播。
-          // 两个组件监听同一个播放器、派发顺序不保证，先到者必须同样让路。
-          if (!audioSession.isActive()) {
-            storage.patchMeta({ lastTrackPlaying: false })
-            this.setData({ playing: false })
-            return
-          }
-          // now-playing 也注册了 onEnded：同一轮 ended 只让一个组件重播，
-          // 否则会重复赋同一个 src 并各自 play()，循环点必然出现重播双写。
-          if (!playerState.claimEnded()) return
-          // 坏源/极短源可能在 10s 内反复 ended：打满上限后停在“已暂停”，
-          // 交给用户手动重试，避免无限重建音源。
-          if (!audioSession.allowReplay()) {
-            audioSession.onPlayFailed()
-            storage.patchMeta({ lastTrackPlaying: false })
-            this.setData({ playing: false })
-            if (this._pageVisible) wx.showToast({ title: '播放异常，请重新播放', icon: 'none' })
-            return
-          }
-          // 锁屏期间 JS 可能被挂起；重新播放前先按墙钟检查定时是否已到点。
-          // restore 到点时会立刻停音频并清 endAt，之后 shouldStop() 恒 false，
-          // 因此还要看“刚刚到点”的时间戳，避免到点后又循环重播。
-          audioTimer.restore()
-          const expiredAt = audioTimer.lastExpiredAt()
-          const justExpired = expiredAt && Date.now() - expiredAt < 2000
-          if (audioTimer.shouldStop() || justExpired) {
-            this.stopPlayback()
-            return
-          }
-          this.advance()
-        },
-        error: (err) => {
-          if (!this._alive) return
-          // 切歌/缓存回退竞态：旧源的 onError 可能在新源已经起播后到达，
-          // 处理它会把新曲的缓存删掉、甚至把新会话清成空态。
-          // 期望源以会话模块为准：自动续播（audio-session.playCurrent）会重设 src，
-          // 但组件本地 _expectSrc 仍是旧值；先用本地值会把真实错误当成旧源丢掉。
-          const expected = audioSession.getExpectedSrc() || this._expectSrc
-          // 没有任何期望源 = 本进程没起过播：无法归属的错误一律不处理，
-          // 否则冷启动/旧会话残留的错误会把当前会话误杀。
-          if (!expected) return
-          if (!playerState.isCurrentSourceError(this._audio && this._audio.src, expected)) {
-            return
-          }
-          // 错误码此前被丢弃，线上无法判断是网络、解码还是文件损坏；
-          // 同一轮可能触发多次，1s 内只上报一条（target = trackId|code，服务端 64 字符内）。
-          const now = Date.now()
-          if (now - (this._lastErrorAt || 0) > 1000) {
-            this._lastErrorAt = now
-            const code = (err && (err.errCode || err.code)) || 'unknown'
-            events.track('audio_error', (this.data.currentId || 'unknown') + '|' + code)
-          }
-          this.disarmLoadingGuard()
-          // 播放器仍在出声：网络/解码类错误可能只是当前分片抖动，底层会自行重连。
-          // 这时绝不能清会话——否则会出现“音乐还在播，首页/统计页迷你条已经消失、
-          // 入睡页回到空闲态”。只把 loading 收掉，等真实的 pause/stop 再判定。
-          if (isReallyPlaying(this._audio)) {
-            this.setData({ loading: false })
-            return
-          }
-          // onError 不带 src：刚切歌（<1.5s）的这条错误很可能来自上一个源。
-          // 此时不删缓存、不拉黑，只收 loading——否则会把新曲的正常缓存误删。
-          if (Date.now() - (this._srcSetAt || 0) < 1500) {
-            this.setData({ loading: false })
-            return
-          }
-          if (this._playingFromCache && this._currentTrack) {
-            this._playingFromCache = false
-            const badUrl = this._currentTrack.url
-            // 只有磁盘文件确实不可用才删文件：网络/解码错误时文件本身是好的，
-            // 删掉会误伤（切歌竞态下删的还可能是新曲的正常缓存）。
-            if (!cache.isUsable(badUrl)) cache.remove(badUrl)
-            // 会话内一律不再命中：文件还在也说明这条源播不出来；
-            // 用户主动重播（play）时会清掉黑名单，重新验证一次。
-            cache.markBad(badUrl)
-            this.refreshCache()
-            this.setData({ loading: false })
-            // 同一轮错误只允许一个组件执行远程回退；now-playing 已处理过时不要重复赋 src。
-            if (playerState.isFallbacking(badUrl)) return
-            // 标记“正在回退”，让同时监听的 now-playing 不要把这次错误当终态。
-            playerState.markFallback(badUrl)
-            // 与 play/replay 同口径：赋值 src 不保证自动起播，且要重新挂 loading 兜底，
-            // 否则回退远程后可能停在“正在连接”直到 12s 超时。
-            this.armLoadingGuard()
-            this.setAudioSrc(this._currentTrack.url)
-            this.safePlay()
-            return
-          }
-          // 终态失败：**保留会话**，迷你条以“已暂停”留在三个页面，用户可点按重试。
-          // 只有用户主动停止（stopPlayback）才允许移除入口，外部原因不算停止。
-          playerState.clearFallback()
-          audioSession.onPlayFailed()
-          this.setData({ playing: false, loading: false })
-          storage.patchMeta({ lastTrackPlaying: false })
-          // 失败后冻结倒计时：否则到点时会 stopAudio()，把“用户没停”变成业务终止
-          audioTimer.pause()
-          // 播放中可能人在首页/统计页：那边由 now-playing 负责提示，避免双 toast
-          if (this._pageVisible) wx.showToast({ title: '音频加载失败，点按重试', icon: 'none' })
-        }
+    /** 把 snapshot 落到 data：只写变化的键，避免逐秒整块 setData */
+    applyPlayerState(view) {
+      if (!this._alive) return
+      const patch = {}
+      if (this.data.playing !== view.playing) patch.playing = view.playing
+      if (this.data.loading !== view.loading) patch.loading = view.loading
+      if (this.data.currentId !== view.currentId) patch.currentId = view.currentId
+      if (this.data.currentTitle !== view.currentTitle) patch.currentTitle = view.currentTitle
+      if (this.data.currentCategory !== view.currentCategory) patch.currentCategory = view.currentCategory
+      if (!view.currentId) {
+        patch.playerSub = ''
+        patch.timerRemainText = ''
       }
-      this._handlers = handlers
-      audio.onPlay(handlers.play)
-      audio.onPause(handlers.pause)
-      audio.onStop(handlers.stop)
-      audio.onEnded(handlers.ended)
-      audio.onError(handlers.error)
-      if (audio.onWaiting) audio.onWaiting(handlers.waiting)
-      if (audio.onCanplay) audio.onCanplay(handlers.canplay)
-      if (audio.onTimeUpdate) audio.onTimeUpdate(handlers.timeupdate)
+      if (Object.keys(patch).length) this.setData(patch)
+      this.syncPlayerText()
+    },
+
+    /** 播放器事件产生的提示：文案留在视图层，播放器只发 code */
+    handlePlayerNotice(code) {
+      const text = PLAYER_NOTICES[code]
+      if (!text || !this._pageVisible || !this._alive) return
+      wx.showToast({ title: text, icon: 'none' })
     },
 
     offAudio() {
-      const audio = this._audio
-      const handlers = this._handlers || {}
-      if (audio) {
-        const pairs = [
-          ['offPlay', 'play'],
-          ['offPause', 'pause'],
-          ['offStop', 'stop'],
-          ['offEnded', 'ended'],
-          ['offError', 'error'],
-          ['offCanplay', 'canplay'],
-          ['offTimeUpdate', 'timeupdate']
-        ]
-        pairs.forEach((pair) => {
-          if (typeof audio[pair[0]] !== 'function') return
-          try {
-            audio[pair[0]](handlers[pair[1]])
-          } catch (e) {}
-        })
+      if (this._unsubPlayer) {
+        this._unsubPlayer()
+        this._unsubPlayer = null
       }
       this._audio = null
     },
-
-    /** 清掉迷你条/音符的展示态（不动持久化的播放偏好） */
     clearPlayerSurface() {
-      this.disarmLoadingGuard()
       if (!this.data.currentId && !this.data.playing && !this.data.loading) return
       this.setData({
         currentId: '',
@@ -772,6 +487,8 @@ Component({
       this._degraded = cfg.degraded === true
       this._cfgSig = configSignature(cfg)
       if (wasDegraded && !this._degraded) this._recovered = true
+      // 交给播放器决定到期提示说“解锁到期”还是“网络已恢复”
+      player.setRecovering(this._recovered)
       this.applyConfig(cfg)
       ad.init(cfg.unlock && cfg.unlock.adUnitId)
       // findTrack 读的是 applyConfig 之后的新 tracks
@@ -787,30 +504,16 @@ Component({
 
     syncFromAudio() {
       if (!this._audio) return
-      this.disarmLoadingGuard()
-      const meta = storage.getMeta()
-      // 冷启动/进程被杀后 BackgroundAudioManager 没有 src，本进程也没创建过音频会话：
-      // 此时 meta 里的 lastTrackPlaying 只是上个进程的残影，不能当成真实播放态，
-      // 否则会“显示正在播放但无声”，且点暂停会走进重建音源分支把声音放出来。
-      // 判据与 now-playing.sync 保持一致（audioSession 只在本次启动播放过时为 true）。
-      const app = getApp()
-      const surface = resolvePlayerSurface({
-        lastTrackId: meta.lastTrackId,
-        lastTrackActive: meta.lastTrackActive,
-        lastTrackPlaying: meta.lastTrackPlaying,
-        hasSrc: !!this._audio.src,
-        // 必须严格 false 才算在播：BAM 无 src 时 paused 是 undefined，!paused 会是 true
-        playingNow: !!this._audio.src && this._audio.paused === false,
-        sessionLive: !!(app && app.globalData && app.globalData.audioSession)
-      })
+      const view = player.surfaceOf({ audio: this._audio })
+      const meta = view.meta
+      const surface = view.surface
       if (!surface.visible) {
         this.clearPlayerSurface()
         return
       }
-      // 冷启动/悬浮 X 停止后：只归零播放态，保留会话让用户能接着听
-      if (surface.cold && meta.lastTrackPlaying !== false) {
-        storage.patchMeta({ lastTrackPlaying: false })
-      }
+      // 冷启动/悬浮 X 停止后：只归零播放态，保留会话让用户能接着听。
+      // coldPatch 由 audio-player 统一给出，避免两个组件各写一遍判据。
+      if (view.coldPatch) storage.patchMeta(view.coldPatch)
       const track = this.findTrack(meta.lastTrackId)
       if (!track) {
         // 音源已在后台下架：属于业务终止，可以收会话
@@ -926,185 +629,26 @@ Component({
         fail: () => arm(this._netType)
       })
     },
-
-    /**
-     * 统一设置音源并记录“最后一次赋值的 src”。
-     * 必须走这里：切歌/缓存回退/重建源三处若直接赋 src，onError 就无从判断旧源。
-     */
-    setAudioSrc(url) {
-      const next = url || ''
-      this._expectSrc = next
-      // 记录赋值时刻：onError 不带 src，用它识别“切歌后迟到的旧源错误”
-      this._srcSetAt = Date.now()
-      // 会话模块也记一份：now-playing 在别的页面可能没有本地期望源，
-      // onError 时用它判断“这条错误是不是已经切走的旧源”。
-      audioSession.setExpectedSrc(next)
-      if (this._audio) this._audio.src = next
-    },
-
+    /** 起播：源选择/meta/埋点/定时都在 audio-player 收口，这里只做视图反应 */
     play(track, localPath) {
-      if (!track.url || track.url.indexOf('https://') !== 0) {
-        wx.showToast({ title: '音频地址未配置', icon: 'none' })
-        return
-      }
-      if (!this._audio) {
-        wx.showToast({ title: '当前版本不支持后台播放', icon: 'none' })
-        return
-      }
-      // 到期后不允许从任何入口（锁屏恢复/跨页/程序化）重新起播；
-      // 与 now-playing.handlePlay 同一口径，避免“到期但还能续播”的权益漏洞。
-      if (!this.isUnlocked() && !this.isFreeMode()) {
-        this.stopPlayback()
-        if (this._pageVisible) wx.showToast({ title: '解锁已到期，重新解锁后继续', icon: 'none' })
-        return
-      }
-
-      this.clearStopArm()
-      this._stopRequested = false
-      // 新一轮起播：清掉上一轮的缓冲标记与重试定时器
-      this._waitingAt = 0
-      clearTimeout(this._waitRetryTimer)
-      playerState.clearFallback()
-      // 用户在应用内主动起播：允许后续中断自动恢复
-      audioSession.markUserPlay()
-      // 用户主动点播即视为重试：必须先清黑名单再取缓存，
-      // 否则上一轮播放失败拉黑后，这次即使文件已下载好也仍走远程。
-      cache.clearBad(track.url)
       const cached = localPath || this.peekCached(track.url)
-      this._currentTrack = track
-      this._playingFromCache = !!cached
+      if (!player.play(track, { cached })) return
       this.clearCollapseTimer()
-
-      this.setData({
-        currentId: track.id,
-        currentTitle: track.title,
-        currentCategory: track.category || '',
-        playing: true,
-        // 自动连播（advance）不该弹条：只按用户的“记忆展开”偏好决定
-        miniExpanded: this.expandedPreferred(),
-        collapsed: false,
-        collapsing: false,
-        // 已经在播了，不再显示「继续上次」
-        resumeLabel: '',
-        // 源还没加载完；canplay/play 事件到达后清除，避免弱网下误显示“正在播放”
-        loading: true
-      })
-      this.armLoadingGuard()
-      this.syncPlayerText()
-
-      this._audio.title = '睡点 · ' + track.title
-      this._audio.epname = '环境音'
-      this._audio.singer = '睡点'
-      this.setAudioSrc(cached || track.url)
-      // 与 replay / togglePlay 同口径：赋值 src 不保证自动起播，补一次 play()，
-      // 避免少数基础库停在「正在连接音频…」直到 12s 超时。
-      this.safePlay()
-
-      const savedMeta = storage.patchMeta({
-        lastTrackId: track.id,
-        lastTrackTitle: track.title,
-        lastTrackCategory: track.category || '',
-        lastTrackActive: true,
-        lastTrackPlaying: true
-      })
-      // 存储满时播放本身仍可用，但下次进入无法恢复曲目，必须让用户知道
-      if (!savedMeta) wx.showToast({ title: '播放状态保存失败', icon: 'none' })
-      events.track('audio_play', track.id)
+      // 用户主动点播/切歌：按记忆偏好展开播放条（自动连播不弹条）
+      this.setData({ miniExpanded: this.expandedPreferred(), collapsed: false, collapsing: false, resumeLabel: '' })
       // 播放即排队缓存：移动网络等 20s（避免试听浪费），Wi-Fi 等 8s 让首播先稳
       this.scheduleAutoCache(track)
-
-      this.applyTimerPreference(this.data.timerMinutes)
     },
-
-    /** play() 在部分基础库会同步抛错；失败时回到暂停态，别留下“正在播放”的假状态 */
-    safePlay() {
-      if (!this._audio) return false
-      try {
-        this._audio.play()
-        return true
-      } catch (e) {
-        this.disarmLoadingGuard()
-        this.setData({ playing: false, loading: false })
-        storage.patchMeta({ lastTrackPlaying: false })
-        audioSession.onPlayFailed()
-        if (this._pageVisible) wx.showToast({ title: '播放失败，请重试', icon: 'none' })
-        return false
-      }
-    },
-
-    replay() {
-      // 自然播放结束不应因 onPause/playing 状态先被置 false 而停止循环；
-      // 只有用户主动 stop（_stopRequested）才允许中断。
-      // 会话已被显式终止时同样不再续播（ended 迟到 / 定时到点后的事件）。
-      if (this._stopRequested || !this.data.currentId || !audioSession.isActive()) return
-      if (!this.isUnlocked() && !this.isFreeMode()) {
-        this.stopPlayback()
-        if (this._pageVisible) wx.showToast({ title: '解锁已到期，重新解锁后继续', icon: 'none' })
-        return
-      }
-      const track = this.findTrack(this.data.currentId)
-      if (!track || !this._audio) return
-      const cached = this.peekCached(track.url)
-      this._playingFromCache = !!cached
-      this.setData({ loading: true })
-      this.armLoadingGuard()
-      this._audio.title = '睡点 · ' + track.title
-      // 回环续播必须重新确认会话存活：上一轮如果被 onError/restore 误清，
-      // 这里只重建音源会让“音乐在播但迷你条没了”延续下去。
-      // 注意用 markAutoReplay：自动续播不能清空回环限流预算（否则 8 次上限永远打不满）。
-      audioSession.markAutoReplay()
-      storage.patchMeta({ lastTrackActive: true, lastTrackPlaying: true })
-      this.setAudioSrc(cached || track.url)
-      // 赋值 src 不会在所有基础库上自动起播；与 now-playing.handleEnded 及
-      // togglePlay 正常分支保持同一口径，否则自然播完会静默停住。
-      this.safePlay()
-    },
-
-    /**
-     * 曲末推进：默认单曲循环；收藏连播模式下取下一首收藏。
-     * 明确不做“全列表自动顺序播放”——睡前场景半夜换音色容易吵醒，
-     * 想听别的由用户主动选。
-     */
-    advance() {
-      const next = this.nextInQueue()
-      if (next) {
-        this.play(next)
-        return
-      }
-      this.replay()
-    },
-
-    nextInQueue() {
-      return nextTrackInQueue(
-        this.data.tracks,
-        this.data.currentId,
-        storage.getFavorites(),
-        storage.getMeta().audioQueueMode
-      )
-    },
-
     /**
      * 迷你条「下一首」：与跨页迷你条同一套候选（收藏连播优先，其余列表循环）。
      * 切歌必须走 play()：meta、缓存、埋点、定时偏好都在那里收口，避免两个入口两套行为。
      */
     onNextTap() {
-      const meta = storage.getMeta()
-      const track = nextTrackManual(
-        this.data.tracks,
-        this.data.currentId || meta.lastTrackId,
-        storage.getFavorites(),
-        meta.audioQueueMode
-      )
-      if (!track) {
-        wx.showToast({ title: '只有一个音源', icon: 'none' })
-        return
-      }
-      this.play(track)
+      if (!player.next()) return
       // 手动切歌才亮相：自动连播（advance）仍保持音符，避免半夜自己弹出播放条
       if (!this.expandedPreferred()) this.setData({ miniExpanded: true, collapsed: false })
       this.peekMiniBar()
     },
-
     onToggleQueueMode() {
       const favorites = storage.getFavorites() || []
       const next = this.data.queueMode === 'favorites' ? 'single' : 'favorites'
@@ -1180,73 +724,18 @@ Component({
 
     togglePlay() {
       if (!this._audio || !this.data.currentId) return
-      const now = Date.now()
-      if (now - (this._toggleAt || 0) < TOGGLE_GUARD_MS) return
-      this._toggleAt = now
-      // 以 BackgroundAudioManager 的真实 paused 为准；不能用 data.playing，
-      // 页面隐藏期间系统侧暂停时 data 可能滞后，导致“点暂停没反应”。
-      if (isReallyPlaying(this._audio)) {
+      const result = player.toggle()
+      if (result === 'paused') {
         this.clearCollapseTimer()
-        this.setData({ playing: false, miniExpanded: true, collapsed: false, collapsing: false })
-        storage.patchMeta({ lastTrackPlaying: false })
-        // 小程序内主动暂停：唯一不允许中断结束后自动恢复的暂停来源
-        audioSession.markUserPause()
-        this._audio.pause()
-        audioTimer.pause()
+        this.setData({ miniExpanded: true, collapsed: false, collapsing: false })
         return
       }
-
-      // 解锁到期后允许暂停，但不允许从迷你条直接续播；必须回入睡页重新解锁。
-      if (!this.isUnlocked() && !this.isFreeMode()) {
-        this.stopPlayback()
-        if (this._pageVisible) wx.showToast({ title: '解锁已到期，重新解锁后继续', icon: 'none' })
-        return
-      }
-
-      // 系统侧 stop（通知栏/锁屏/被其他音频抢占）后部分基础库会清空 src，
-      // 直接 play() 不会重新起播；此时按 replay 的口径重建源。
-      if (!this._audio.src) {
-        const track = this.findTrack(this.data.currentId)
-        if (!track || !track.url) return
-        const cached = this.peekCached(track.url)
-        this._currentTrack = track
-        this._playingFromCache = !!cached
+      if (result === 'played') {
         this.clearCollapseTimer()
-        this.setData({ loading: true, playing: true, miniExpanded: true, collapsed: false, collapsing: false })
-        this.armLoadingGuard()
-        this._audio.title = '睡点 · ' + track.title
-        this._audio.epname = '环境音'
-        this._audio.singer = '睡点'
-        audioSession.markUserPlay()
-        this.setAudioSrc(cached || track.url)
-        storage.patchMeta({
-          lastTrackId: track.id,
-          lastTrackTitle: track.title,
-          lastTrackCategory: track.category || '',
-          lastTrackActive: true,
-          lastTrackPlaying: true
-        })
-        this.applyTimerPreference(this.data.timerMinutes)
-        // 系统侧 stop 后重设 src 不会自动起播：必须显式 play，否则首次点击无声、
-        // 需要再点一次（与同函数末尾的正常恢复分支一致）。
-        this.safePlay()
+        this.setData({ miniExpanded: true, collapsed: false, collapsing: false })
         this.peekMiniBar()
-        return
       }
-
-      this.applyTimerPreference(this.data.timerMinutes)
-      storage.patchMeta({ lastTrackPlaying: true })
-      audioSession.markUserPlay()
-      this.clearCollapseTimer()
-      this.setData({ playing: true, miniExpanded: true, collapsed: false, collapsing: false })
-      this.safePlay()
-      this.peekMiniBar()
     },
-
-    /**
-     * 跨页“记忆展开”：与 now-playing 共用 app.globalData.playerBarExpanded。
-     * 用户在任一页把播放条点开，另外两页也保持展开；点外部收起则三页一起收。
-     */
     expandedPreferred() {
       const app = getApp()
       return !!(app && app.globalData && app.globalData.playerBarExpanded)
@@ -1334,25 +823,19 @@ Component({
 
     stopPlayback() {
       this.clearStopArm()
-      this._stopRequested = true
-      this._waitingAt = 0
-      this._pauseRetry = 0
-      clearTimeout(this._waitRetryTimer)
-      clearTimeout(this._pauseRetryTimer)
-      this.disarmLoadingGuard()
-      // 停止本次播放即结束这一段会话：定时偏好回到“关”，下次播放需明确重新选择
-      audioTimer.clear(undefined, true)
-      // 用户主动停止：清会话 + 关闭自动恢复意图（audio-session 是唯一写入口径）
-      audioSession.markStopped()
+      player.stop()
       this.clearCollapseTimer()
       // 主动停止后不再启动新的后台缓存；已开始的下载保留（下次可命中）
       this.clearAutoCacheTimer()
-      this.setData({ currentId: '', currentTitle: '', currentCategory: '', playing: false, loading: false, playerSub: '', timerRemainText: '', timerMinutes: 0, miniExpanded: false, collapsed: false, collapsing: false, resumeLabel: '' })
-      if (this._audio) {
-        try {
-          this._audio.stop()
-        } catch (e) {}
-      }
+      this.setData({
+        playerSub: '',
+        timerRemainText: '',
+        timerMinutes: 0,
+        miniExpanded: false,
+        collapsed: false,
+        collapsing: false,
+        resumeLabel: ''
+      })
     },
 
     /* ---------------- 抽屉交互 ---------------- */
@@ -1552,6 +1035,7 @@ Component({
         return
       }
       this.setData({ timerMinutes: minutes })
+      player.setTimerMinutes(minutes)
       const saved = storage.patchMeta({ audioTimerMinutes: minutes })
       if (!saved) wx.showToast({ title: '定时设置保存失败', icon: 'none' })
 
