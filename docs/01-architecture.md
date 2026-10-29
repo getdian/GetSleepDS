@@ -213,10 +213,12 @@ CREATE INDEX IF NOT EXISTS idx_background_uses_bg
 | GET | `/api/ready` | 无 | 就绪探针（DB 不可用返回 503） |
 | GET | `/api/config` | 无 | 下发音频列表、广告位、开关、文案 |
 | POST | `/api/audio/unlock` | code | 校验 code → openid，按后台 `unlock.ttlHours`（1–168）写入解锁 |
-| GET | `/api/audio/favorites` | 无 | 环境音收藏人数（展示值 = 后台 `favBase` + 真实收藏），30s 缓存；计数查询失败降级为纯基数 |
-| POST | `/api/audio/favorite` | code | `{code,trackId,on}`：收藏/取消，只接受当前上架曲目，返回最新展示值；与收藏共用「内容偏好」限流（60/分钟 IP、30/分钟 openid） |
-| GET | `/api/backgrounds/uses` | 无 | 背景使用次数（展示值 = 后台 `useBase` + 真实累计），30s 缓存；失败降级为纯基数 |
-| POST | `/api/backgrounds/use` | code | `{code,bgId}`：记一次背景使用，只接受配置里存在的背景，返回最新展示值 |
+| GET | `/api/audio/favorites` | 无 | 环境音**真实收藏数** `{real:{trackId:n}}`（不含后台 `favBase`，展示值由客户端用「配置基数 + real」合成），30s 缓存；计数查询失败降级为 0，不 500 |
+| POST | `/api/audio/favorite` | code | `{code,trackId,on}`：收藏/取消，只接受当前上架曲目，返回 `{id,real}`；与背景共用「内容偏好」限流（60/分钟 IP、30/分钟 openid） |
+| GET | `/api/backgrounds/uses` | 无 | 背景**真实使用次数** `{real:{bgId:n}}`（不含后台 `useBase`），30s 缓存；失败降级为 0 |
+| POST | `/api/backgrounds/use` | code | `{code,bgId}`：记一次背景使用，只接受配置里存在的背景，返回 `{id,real}` |
+
+四个端点由同一个 `createPopularityRoute` 工厂生成（`server/src/routes/popularity.js`），差异只在列表键 / id 字段 / 读写库函数。刻意**只下发真实数**：若由服务端合成「基数 + 真实」，运营调低基数后客户端缓存的旧展示值会压住新基数（2026-10-29 审查发现 M1，已改为客户端合成）。
 | POST | `/api/summary` | 无 | 由记录生成本周事实描述 |
 | POST | `/api/records/sync` | code | 上传记录/删除墓碑；服务端重算 day、丢弃单条脏数据，返回云端剩余记录 |
 | POST | `/api/records/erase` | code | 合规删除：默认删除记录/解锁/事件并写 erasure 水位；`cloudOnly:true` 只删云端副本、不写水位（3 次/分钟/IP）；`cloudOnly` 非布尔返回 400 |

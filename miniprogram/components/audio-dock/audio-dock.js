@@ -259,30 +259,24 @@ Component({
     noop() {},
 
     applyConfig(cfg) {
-      // 配置轮询可能在统计回来之后到达：展示值只会 ≥ 后台基数，
-      // 不能把已经拿到的「基数 + 真实收藏」冲回基数
-      const known = {}
-      ;(this.data.tracks || []).forEach((track) => {
-        if (track && track.id) known[track.id] = Number(track.favCount) || 0
-      })
-      const tracks = (cfg.audio || []).map((item) => {
-        const iconKey = ICONS.indexOf(item.icon) >= 0 ? item.icon : 'noise'
-        const base = Math.max(0, Math.floor(Number(item.favBase) || 0))
-        const count = Math.max(base, known[item.id] || 0)
-        return {
-          id: item.id,
-          title: item.title || '环境音',
-          subtitle: item.subtitle || '循环播放 · 支持锁屏',
-          category: item.category || '环境音',
-          tone: toneOf(item.category || '环境音'),
-          url: item.url,
-          icon: '/assets/icon-' + iconKey + '.png',
-          // 收藏展示值先按后台基数落位；真实收藏由 /api/audio/favorites 补齐
-          favBase: base,
-          favCount: count,
-          favText: favCounts.formatFavText(count)
-        }
-      })
+      // 展示值 = 当前配置基数 + 服务端真实收藏（_realFavs 由 refreshFavCounts 维护）。
+      // 不用旧展示值兜底：运营调低/调高基数都要立刻生效，不能被旧值压住。
+      const tracks = favCounts.withRealCounts(
+        (cfg.audio || []).map((item) => {
+          const iconKey = ICONS.indexOf(item.icon) >= 0 ? item.icon : 'noise'
+          return {
+            id: item.id,
+            title: item.title || '环境音',
+            subtitle: item.subtitle || '循环播放 · 支持锁屏',
+            category: item.category || '环境音',
+            tone: toneOf(item.category || '环境音'),
+            url: item.url,
+            icon: '/assets/icon-' + iconKey + '.png',
+            favBase: Math.max(0, Math.floor(Number(item.favBase) || 0))
+          }
+        }),
+        this._realFavs
+      )
       // 排序快照只在配置/统计变更时重建：点 ♥ 只改数字，列表位置不动
       this._rankCounts = favCounts.rankOf(tracks)
 
@@ -329,7 +323,7 @@ Component({
 
     /* ---------------- 收藏人数 ---------------- */
     /**
-     * 拉取「人气基数 + 真实收藏」。失败静默保留基数：
+     * 拉取真实收藏数 real（不含后台基数）。失败静默保留现有值：
      * 统计是锦上添花，不能因为一次网络抖动让列表文案变成 0 人。
      */
     refreshFavCounts() {
@@ -339,9 +333,14 @@ Component({
         (res) => {
           this._favLoading = false
           if (!this._alive) return
-          const tracks = favCounts.mergeFavCounts(this.data.tracks, res && res.counts)
-          this._rankCounts = favCounts.rankOf(tracks)
-          this.setData({ tracks }, () => this.applyFilter())
+          const real = {}
+          const source = (res && res.real) || {}
+          Object.keys(source).forEach((id) => {
+            const value = Number(source[id])
+            if (Number.isFinite(value) && value >= 0) real[id] = value
+          })
+          this._realFavs = real
+          this.rebuildFavCounts()
         },
         () => {
           this._favLoading = false
@@ -349,16 +348,20 @@ Component({
       )
     },
 
-    /** 调用方传入的是服务端算好的展示值（已含基数） */
-    patchFavCount(id, count) {
+    /** 展示值 = 后台基数 + 真实收藏；配置或计数任一变化都走这里重算并重建排序快照 */
+    rebuildFavCounts() {
       if (!this._alive) return
-      const value = Math.max(0, Math.floor(Number(count) || 0))
-      const tracks = this.data.tracks.map((track) =>
-        track.id === id
-          ? Object.assign({}, track, { favCount: value, favText: favCounts.formatFavText(value) })
-          : track
-      )
+      const tracks = favCounts.withRealCounts(this.data.tracks, this._realFavs)
+      this._rankCounts = favCounts.rankOf(tracks)
       this.setData({ tracks }, () => this.applyFilter())
+    },
+
+    /** 收藏上报返回的是该曲目的真实数（不含基数），更新后重算展示值 */
+    patchFavCount(id, real) {
+      if (!this._alive) return
+      const value = Math.max(0, Math.floor(Number(real) || 0))
+      this._realFavs = Object.assign({}, this._realFavs || {}, { [id]: value })
+      this.rebuildFavCounts()
     },
 
     /* ---------------- 解锁 ---------------- */
@@ -975,8 +978,8 @@ Component({
       // 全站计数异步上报；失败不回滚本地收藏，下次打开抽屉重新对账
       withLogin((code) => api.setAudioFavorite(code, id, on)).then(
         (res) => {
-          const count = Number(res && res.count)
-          if (Number.isFinite(count) && count >= 0) this.patchFavCount(id, count)
+          const real = Number(res && res.real)
+          if (Number.isFinite(real) && real >= 0) this.patchFavCount(id, real)
         },
         () => {}
       )

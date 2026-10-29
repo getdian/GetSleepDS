@@ -4,6 +4,7 @@
  * 纯函数 normalize/defaultOf/activeOf/categories 可在 Node 里单测。
  */
 const storage = require('./storage')
+const F = require('./format')
 
 /**
  * 列表缩略图走 COS 图片处理，避免选择器一次拉 20 张原图。
@@ -39,22 +40,21 @@ function normalize(list) {
 function useTextOf(count) {
   const num = Math.max(0, Math.floor(Number(count) || 0))
   if (!num) return '可随时更换'
-  if (num >= 10000) {
-    const wan = Math.round(num / 1000) / 10
-    return '已被使用 ' + wan + ' 万次'
-  }
+  const wan = F.compactWan(num)
+  if (wan) return '已被使用 ' + wan + ' 万次'
   return '已被使用 ' + num + ' 次'
 }
 
 /**
- * 合并服务端下发的次数（展示值已含后台基数）。
- * 没拿到计数的背景回落它自己的 useBase，避免网络抖动把运营设的值显示成 0。
+ * 展示值 = 后台人气基数（item.useBase）+ 真实使用次数（服务端 real）。
+ * 真实数缺失/非法按 0：网络抖动不会把运营设的值显示成 0，
+ * 运营调低基数也不会被旧的展示值压住（基数永远取当前配置）。
  */
-function withUseCounts(items, counts) {
-  const map = counts || {}
+function withUseCounts(items, realMap) {
+  const map = realMap || {}
   return (items || []).map((item) => {
-    const value = Number(map[item.id])
-    const count = Number.isFinite(value) && value >= 0 ? value : Number(item.useBase) || 0
+    const real = Math.max(0, Math.floor(Number(map[item.id]) || 0))
+    const count = (Number(item.useBase) || 0) + real
     return Object.assign({}, item, {
       useCount: count,
       useText: useTextOf(count)

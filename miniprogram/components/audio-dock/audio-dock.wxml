@@ -184,7 +184,7 @@
             <view class="dock-eq-bar eq-3"></view>
           </view>
         </view>
-        <text class="dock-tstate">{{currentId === item.id ? (loading ? '正在连接音频…' : (playing ? '播放中 · 点击暂停' : '已暂停 · 点击继续')) : item.favText}}</text>
+        <text class="dock-tstate">{{currentId === item.id ? (loading ? '正在连接音频…' : (playing ? '播放中 · 点击暂停' : '已暂停 · 点击继续')) : (item.cached ? '已缓存 · ' + item.favText : item.favText)}}</text>
       </view>
       <view
         wx:if="{{item.cached && currentId !== item.id}}"

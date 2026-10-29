@@ -22,6 +22,7 @@ CREATE INDEX IF NOT EXISTS idx_audio_favorites_track
     ON audio_favorites (track_id);
 
 -- 背景图使用次数：展示值 = 后台人气基数 + 累计使用；同一用户多次使用算多次
+-- 累计口径：不做时间清理；清除数据按 openid 删除需要 openid 索引
 CREATE TABLE IF NOT EXISTS background_uses (
     id          BIGSERIAL PRIMARY KEY,
     openid      VARCHAR(64) NOT NULL,
@@ -30,6 +31,8 @@ CREATE TABLE IF NOT EXISTS background_uses (
 );
 CREATE INDEX IF NOT EXISTS idx_background_uses_bg
     ON background_uses (bg_id);
+CREATE INDEX IF NOT EXISTS idx_background_uses_openid
+    ON background_uses (openid);
 
 -- 云端备份：本地仍是主数据，服务端只做灾备与换机恢复
 CREATE TABLE IF NOT EXISTS sleep_records (

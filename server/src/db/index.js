@@ -23,6 +23,7 @@ CREATE INDEX IF NOT EXISTS idx_audio_favorites_track
 
 -- 背景图使用次数：前台展示「已被使用 N 次」= 后台人气基数 + 这里的累计次数。
 -- 与收藏不同：同一用户换用同一张背景多次是真实使用行为，因此不做唯一约束。
+-- 累计口径：不做时间清理（清了数字会倒退），量级随真实使用低频增长。
 CREATE TABLE IF NOT EXISTS background_uses (
     id          BIGSERIAL PRIMARY KEY,
     openid      VARCHAR(64) NOT NULL,
@@ -31,6 +32,9 @@ CREATE TABLE IF NOT EXISTS background_uses (
 );
 CREATE INDEX IF NOT EXISTS idx_background_uses_bg
     ON background_uses (bg_id);
+-- 清除数据按 openid 删除：没有这个索引就是全表扫描
+CREATE INDEX IF NOT EXISTS idx_background_uses_openid
+    ON background_uses (openid);
 
 CREATE TABLE IF NOT EXISTS sleep_records (
     openid       VARCHAR(64) NOT NULL,
@@ -502,6 +506,8 @@ function createMemoryDb() {
       }
       if (on) bucket.add(trackId)
       else bucket.delete(trackId)
+      // 取消最后一首后清掉空桶，避免 Map 随用户数无限增长
+      if (!bucket.size) audioFavs.delete(openid)
       let count = 0
       audioFavs.forEach((set) => {
         if (set.has(trackId)) count += 1
@@ -524,9 +530,8 @@ function createMemoryDb() {
 
     /** 记录一次背景使用，返回该背景的真实累计次数（不含后台基数） */
     async addBackgroundUse(openid, bgId) {
+      // 内存库重启即清零，不做条数截断：截断会让「累计」计数倒退，与 PG 语义不一致
       bgUses.push({ openid, bgId, ts: Date.now() })
-      // 与 events 同口径：内存模式也要有上限，避免长期运行无限增长
-      if (bgUses.length > 50000) bgUses.splice(0, bgUses.length - 50000)
       let count = 0
       bgUses.forEach((item) => {
         if (item.bgId === bgId) count += 1

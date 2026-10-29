@@ -84,6 +84,16 @@ function signedMinutes(value) {
   return Math.floor(abs / 60) + ' 小时 ' + T.pad2(abs % 60) + ' 分'
 }
 
+/**
+ * 万位紧凑写法：12345 → '1.2'，98765 → '9.9'；不足 1 万返回 null（调用方用原数）。
+ * 环境音收藏人数与背景使用次数共用同一套缩写口径。
+ */
+function compactWan(count) {
+  const num = Math.floor(Number(count) || 0)
+  if (num < 10000) return null
+  return String(Math.round(num / 1000) / 10)
+}
+
 module.exports = {
   fmtClock,
   fmtClockTs,
@@ -95,5 +105,6 @@ module.exports = {
   fmtDateCN,
   fmtDayCN,
   greeting,
-  signedMinutes
+  signedMinutes,
+  compactWan
 }

@@ -13,23 +13,35 @@ test('收藏文案：0 人回落「点击播放」，万位缩写', () => {
   assert.equal(fav.formatFavText(98765), '9.9 万人收藏和喜欢')
 })
 
-test('合并计数：缺少下发值的曲目回落自己的基数，而不是 0', () => {
+test('展示值 = 后台基数 + 真实收藏；缺 real 回落基数', () => {
   const tracks = [
     { id: 'rain', favBase: 713 },
     { id: 'wave', favBase: 0 }
   ]
-  const list = fav.mergeFavCounts(tracks, { rain: 715 })
+  const list = fav.withRealCounts(tracks, { rain: 2 })
   assert.equal(list[0].favCount, 715)
   assert.equal(list[0].favText, '715 人收藏和喜欢')
   assert.equal(list[1].favCount, 0)
   assert.equal(list[1].favText, '点击播放')
 })
 
-test('合并计数：非法值不污染展示', () => {
-  const list = fav.mergeFavCounts([{ id: 'rain', favBase: 9 }], { rain: 'abc' })
-  assert.equal(list[0].favCount, 9)
-  const negative = fav.mergeFavCounts([{ id: 'rain', favBase: 9 }], { rain: -1 })
+test('真实数缺失/非法按 0，不污染展示（负数不会把基数减掉）', () => {
+  const dirty = fav.withRealCounts([{ id: 'rain', favBase: 9 }], { rain: 'abc' })
+  assert.equal(dirty[0].favCount, 9)
+  const negative = fav.withRealCounts([{ id: 'rain', favBase: 9 }], { rain: -1 })
   assert.equal(negative[0].favCount, 9)
+  const missing = fav.withRealCounts([{ id: 'rain', favBase: 9 }], undefined)
+  assert.equal(missing[0].favCount, 9)
+})
+
+test('运营调低基数后展示值立即跟随（不被旧展示值压住）', () => {
+  // 这是 M1 修复的核心断言：合成永远取「当前配置的 favBase + real」，
+  // 不存在 max(base, 旧展示值) 这类兜底，调低调高都立即正确。
+  const real = { rain: 2 }
+  const high = fav.withRealCounts([{ id: 'rain', favBase: 713 }], real)
+  assert.equal(high[0].favCount, 715)
+  const low = fav.withRealCounts([{ id: 'rain', favBase: 10 }], real)
+  assert.equal(low[0].favCount, 12)
 })
 
 test('排序按收藏降序，同分保持配置顺序（稳定排序）', () => {

@@ -1,5 +1,17 @@
 # 睡点 · 关键更新记录
 
+## 2026-10-29 · 双轴代码审查修复：接口只下发真实数 + 路由工厂收敛
+
+背景：对 6d86577 做 Standards + Spec 双轴子代理审查（主代理逐条读源码复核行号）。无严重级问题；修复 4 项中等 + 6 项轻微。
+
+- **M1（逻辑缺陷）**：运营调低收藏/使用基数后，前台展示值被旧值压住（`Math.max(base, known)`）。根治 = **接口只下发真实数 real**（GET/POST 均不含基数），客户端用「当前配置基数 + real」合成（`withRealCounts` / `withUseCounts`），调低调高立即生效；背景侧同类隐患一并消除。新增回归用例「调低基数后展示值立即跟随」。
+- **M2**：恢复「已缓存 · 」前缀，与收藏人数共存（此前被默认文案替换静默丢掉，属未确认取舍）。
+- **M3**：`background_uses` 补 `idx_background_uses_openid`（双份 DDL）——清除数据按 openid 删除此前是全表扫描。
+- **M4（重复代码）**：抽 `server/src/routes/popularity.js` 工厂，audio/backgrounds 两个路由由 ~96 行镜像收敛为参数化注册；`config-schema` 提 `indexById`；万位缩写收敛到 `utils/format.js` 的 `compactWan`；`withUseCounts` 由死代码变为 `loadBackgrounds` 唯一合成入口。
+- **轻微**：memory `background_uses` 去掉 50000 截断（与 PG 累计语义对齐）、收藏空桶清理、`backgrounds` 路由的 `track` 变量名随工厂消失、admin 上限加同步注释。
+- **测试**：接口语义改造同步 + 新增 3 条（统计失败降级为 0、收藏超 openid 配额 429、调低基数回归）。`npm test` 519 项 / 518 通过 / 0 失败 / 1 skip；`npm run check` 通过（含文档配图 96 张）。
+- **已知保留（非缺陷）**：打开抽屉时统计到达会重排一次（快照先按基数建，统计回来后按真实数据重排；点 ♥ 仍不重排）；`background_uses` 不做时间清理（累计口径，清了数字会倒退）。
+
 ## 2026-10-28 · 入睡页空闲态页脚加陪伴语
 
 - 空闲态页脚 `愿这一觉安稳` → `愿这一觉安稳，每天都陪伴你~`（`sleep.js` 的 data 初值与 `refreshAll` 两处同步，`tests/sleep-page.test.js` 断言更新）。

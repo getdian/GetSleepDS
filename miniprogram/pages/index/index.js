@@ -52,8 +52,8 @@ Page({
   onLoad(options) {
     this._alive = true
     this._bgItems = []
-    // 背景使用次数快照（id -> 展示值）：拉到服务端数据后覆盖，失败时回落各自 useBase
-    this._bgUseCounts = {}
+    // 背景真实使用次数（id -> real，不含后台基数）：拉到服务端数据后覆盖，失败时回落各自 useBase
+    this._bgRealUses = {}
     this._cfgLoaded = false
     this._sleepTouched = false
     this._bgExpiryNotified = false
@@ -648,13 +648,9 @@ Page({
       this._bgExpiryNotified = true
       wx.showToast({ title: '背景使用时长已到，已切回默认', icon: 'none' })
     }
-    const useCounts = this._bgUseCounts || {}
-    const items = list.map((item) => {
+    // 展示值 = 后台基数 + 真实使用（_bgRealUses 由 refreshBgUses 维护），统一走 withUseCounts 合成
+    const items = backgrounds.withUseCounts(list, this._bgRealUses).map((item) => {
       const itemUnlocked = backgrounds.isUnlocked(unlocked, item.id, now)
-      // 服务端展示值优先；没拉到（或该背景刚上架）时用后台基数
-      const useCount = Object.prototype.hasOwnProperty.call(useCounts, item.id)
-        ? useCounts[item.id]
-        : item.useBase
       return {
         id: item.id,
         title: item.title,
@@ -667,8 +663,8 @@ Page({
         remainHours: itemUnlocked
           ? Math.max(1, Math.ceil((Number(unlocked.expireAt) - now) / 3600000))
           : 0,
-        useCount,
-        useText: backgrounds.useTextOf(useCount)
+        useCount: item.useCount,
+        useText: item.useText
       }
     })
 
@@ -693,13 +689,13 @@ Page({
     api.fetchBackgroundUses().then(
       (res) => {
         if (!this._alive) return
-        const counts = (res && res.counts) || {}
-        const next = {}
-        Object.keys(counts).forEach((id) => {
-          const value = Number(counts[id])
-          if (Number.isFinite(value) && value >= 0) next[id] = value
+        const real = {}
+        const source = (res && res.real) || {}
+        Object.keys(source).forEach((id) => {
+          const value = Number(source[id])
+          if (Number.isFinite(value) && value >= 0) real[id] = value
         })
-        this._bgUseCounts = next
+        this._bgRealUses = real
         this.loadBackgrounds()
       },
       () => {}
@@ -713,9 +709,9 @@ Page({
   trackBgUse(id) {
     withLogin((code) => api.trackBackgroundUse(code, id)).then(
       (res) => {
-        const count = Number(res && res.count)
-        if (!Number.isFinite(count) || count < 0) return
-        this._bgUseCounts[id] = count
+        const real = Number(res && res.real)
+        if (!Number.isFinite(real) || real < 0) return
+        this._bgRealUses = Object.assign({}, this._bgRealUses || {}, { [id]: real })
         if (this._alive) this.loadBackgrounds()
       },
       () => {}

@@ -58,12 +58,12 @@ test('使用次数文案：0 次回落「可随时更换」，万位缩写', () 
   assert.equal(B.useTextOf(12345), '已被使用 1.2 万次')
 })
 
-test('使用次数合并：未下发时回落各自基数，非法值不污染展示', () => {
+test('使用次数 = 后台基数 + 真实使用；真实数缺失/非法按 0', () => {
   const items = [
     { id: 'a', useBase: 713 },
     { id: 'b', useBase: 0 }
   ]
-  const merged = B.withUseCounts(items, { a: 715 })
+  const merged = B.withUseCounts(items, { a: 2 })
   assert.equal(merged[0].useCount, 715)
   assert.equal(merged[0].useText, '已被使用 715 次')
   assert.equal(merged[1].useCount, 0)
@@ -73,6 +73,10 @@ test('使用次数合并：未下发时回落各自基数，非法值不污染�
   assert.equal(dirty[0].useCount, 9)
   const negative = B.withUseCounts([{ id: 'a', useBase: 9 }], { a: -1 })
   assert.equal(negative[0].useCount, 9)
+
+  // 调低基数立即跟随：合成取当前 useBase，不被旧展示值压住
+  const low = B.withUseCounts([{ id: 'a', useBase: 10 }], { a: 2 })
+  assert.equal(low[0].useCount, 12)
 })
 
 test('normalize 带出后台人气基数，缺失时按 0', () => {

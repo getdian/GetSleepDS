@@ -97,7 +97,7 @@ tests/            Node 纯逻辑测试
 
 - **“配置 JSON”只是只读检查**，不是要求手改；运营字段全部有表单。
 - 分类不是独立表：每条音频一个 `category` 字符串，客户端去重生成筛选；后台输入框带已有分类 datalist。
-- 收藏分两层：**本机收藏态**是 `meta.favoriteAudioIds`（不参与云同步、换机不迁移）；**全站人数**存服务端 `audio_favorites(openid, track_id)`（主键去重，取消即减 1）。前台列表第二行 = 后台 `audio[].favBase` 人气基数 + 真实收藏，按该值降序（同分保持后台顺序；点 ♥ 只变数字不重排，避免刚点的那行跳走）；0 人回落「点击播放」。接口 `GET /api/audio/favorites`、`POST /api/audio/favorite`，与解锁分桶限流。
+- 收藏分两层：**本机收藏态**是 `meta.favoriteAudioIds`（不参与云同步、换机不迁移）；**全站人数**存服务端 `audio_favorites(openid, track_id)`（主键去重，取消即减 1）。**接口只下发真实数 real**（`GET /api/audio/favorites`、`POST /api/audio/favorite`，与解锁分桶限流；与背景共用 `createPopularityRoute` 工厂），前台展示值 = 客户端自己的 `audio[].favBase` 基数 + real——服务端不合成，否则运营调低基数后旧展示值会压住新基数。列表第二行按该值降序（同分保持后台顺序；点 ♥ 只变数字不重排，避免刚点的那行跳走）；0 人回落「点击播放」，已缓存时前缀「已缓存 · 」。背景侧同构：`backgrounds[].useBase` + `background_uses` 真实次数（同一人多次算多次）。
 
 ## 4. 数据与同步
 

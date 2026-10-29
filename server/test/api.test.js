@@ -223,20 +223,20 @@ test('环境音收藏：同一人重复收藏不重复计数，取消后归零',
   const first = await fetch(base + '/api/audio/favorites')
   const firstBody = await first.json()
   assert.equal(first.status, 200)
-  assert.equal(firstBody.counts['sleep-10001'], 0)
+  assert.equal(firstBody.real['sleep-10001'], 0)
 
   const add = await post('/api/audio/favorite', { code: 'dev-code', trackId: 'sleep-10001', on: true })
   assert.equal(add.status, 200)
-  assert.equal(add.body.count, 1)
+  assert.equal(add.body.real, 1)
 
   const again = await post('/api/audio/favorite', { code: 'dev-code', trackId: 'sleep-10001', on: true })
-  assert.equal(again.body.count, 1, '主键去重：同一 openid 只算一次')
+  assert.equal(again.body.real, 1, '主键去重：同一 openid 只算一次')
 
   const listed = await fetch(base + '/api/audio/favorites')
-  assert.equal((await listed.json()).counts['sleep-10001'], 1)
+  assert.equal((await listed.json()).real['sleep-10001'], 1)
 
   const remove = await post('/api/audio/favorite', { code: 'dev-code', trackId: 'sleep-10001', on: false })
-  assert.equal(remove.body.count, 0)
+  assert.equal(remove.body.real, 0)
 })
 
 test('环境音收藏：未知曲目与缺参数都被拒绝（不往统计表灌脏数据）', async () => {
@@ -247,7 +247,7 @@ test('环境音收藏：未知曲目与缺参数都被拒绝（不往统计表�
   assert.equal(noCode.status, 400)
 })
 
-test('环境音收藏展示值 = 后台人气基数 + 真实收藏', async () => {
+test('环境音人气接口只下发真实数：基数走 /api/config，由客户端合成展示值', async () => {
   const fileConfig = JSON.parse(JSON.stringify(require('../config/app.config.json')))
   fileConfig.audio[0].favBase = 713
   const favDb = createMemoryDb()
@@ -266,8 +266,12 @@ test('环境音收藏展示值 = 后台人气基数 + 真实收藏', async () =>
   await new Promise((resolve) => favServer.once('listening', resolve))
   const favBase = 'http://127.0.0.1:' + favServer.address().port
   try {
+    // 基数只经配置通道下发；real 不含基数，否则运营调低基数后旧展示值会压住新值
+    const config = await (await fetch(favBase + '/api/config')).json()
+    assert.equal(config.audio[0].favBase, 713)
+
     const before = await (await fetch(favBase + '/api/audio/favorites')).json()
-    assert.equal(before.counts['sleep-10001'], 713)
+    assert.equal(before.real['sleep-10001'], 0)
 
     const added = await (
       await fetch(favBase + '/api/audio/favorite', {
@@ -276,7 +280,7 @@ test('环境音收藏展示值 = 后台人气基数 + 真实收藏', async () =>
         body: JSON.stringify({ code: 'dev-code', trackId: 'sleep-10001', on: true })
       })
     ).json()
-    assert.equal(added.count, 714)
+    assert.equal(added.real, 1)
 
     const removed = await (
       await fetch(favBase + '/api/audio/favorite', {
@@ -285,13 +289,73 @@ test('环境音收藏展示值 = 后台人气基数 + 真实收藏', async () =>
         body: JSON.stringify({ code: 'dev-code', trackId: 'sleep-10001', on: false })
       })
     ).json()
-    assert.equal(removed.count, 713)
+    assert.equal(removed.real, 0)
   } finally {
     await new Promise((resolve) => favServer.close(resolve))
   }
 })
 
-test('背景使用次数 = 后台人气基数 + 真实累计（同一人多次算多次）', async () => {
+test('环境音人气统计失败时降级为 0，不让列表接口 500', async () => {
+  const failDb = createMemoryDb()
+  failDb.countAudioFavorites = async () => {
+    throw new Error('boom')
+  }
+  const fileConfig = JSON.parse(JSON.stringify(require('../config/app.config.json')))
+  fileConfig.audio[0].favBase = 713
+  const failApp = createApp({
+    config: loadConfig({ NODE_ENV: 'test', ALLOW_DEV_LOGIN: '1', DB_MODE: 'memory' }),
+    db: failDb,
+    configStore: createConfigStore({
+      db: failDb,
+      fileConfig,
+      logger: { log() {}, error() {} }
+    }),
+    logger: { log() {}, error() {} },
+    now: () => FIXED_NOW
+  })
+  const failServer = failApp.listen(0)
+  await new Promise((resolve) => failServer.once('listening', resolve))
+  const failBase = 'http://127.0.0.1:' + failServer.address().port
+  try {
+    const res = await fetch(failBase + '/api/audio/favorites')
+    assert.equal(res.status, 200, '统计挂掉也必须 200，客户端按基数展示')
+    const body = await res.json()
+    assert.equal(body.real['sleep-10001'], 0)
+  } finally {
+    await new Promise((resolve) => failServer.close(resolve))
+  }
+})
+
+test('环境音收藏超过 openid 配额返回 429', async () => {
+  const favDb = createMemoryDb()
+  const favApp = createApp({
+    config: loadConfig({ NODE_ENV: 'test', ALLOW_DEV_LOGIN: '1', DB_MODE: 'memory' }),
+    db: favDb,
+    logger: { log() {}, error() {} },
+    now: () => FIXED_NOW
+  })
+  const favServer = favApp.listen(0)
+  await new Promise((resolve) => favServer.once('listening', resolve))
+  const favBase = 'http://127.0.0.1:' + favServer.address().port
+  try {
+    const body = JSON.stringify({ code: 'dev-code', trackId: 'sleep-10001', on: true })
+    let lastStatus = 0
+    // 配额 30/分钟/openid：第 31 次必须被限流（dev 模式恒为 dev_openid）
+    for (let i = 0; i < 31; i += 1) {
+      const res = await fetch(favBase + '/api/audio/favorite', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body
+      })
+      lastStatus = res.status
+    }
+    assert.equal(lastStatus, 429)
+  } finally {
+    await new Promise((resolve) => favServer.close(resolve))
+  }
+})
+
+test('背景人气接口只下发真实数：同一人多次使用算多次，基数走配置通道', async () => {
   const fileConfig = JSON.parse(JSON.stringify(require('../config/app.config.json')))
   fileConfig.backgrounds = [
     {
@@ -319,8 +383,12 @@ test('背景使用次数 = 后台人气基数 + 真实累计（同一人多次�
   await new Promise((resolve) => bgServer.once('listening', resolve))
   const bgBase = 'http://127.0.0.1:' + bgServer.address().port
   try {
+    // 基数只经配置通道下发；real 不含基数（与收藏同一套「基数+真实」客户端合成口径）
+    const config = await (await fetch(bgBase + '/api/config')).json()
+    assert.equal(config.backgrounds[0].useBase, 713)
+
     const before = await (await fetch(bgBase + '/api/backgrounds/uses')).json()
-    assert.equal(before.counts['bg-1'], 713)
+    assert.equal(before.real['bg-1'], 0)
 
     const use = async (bgId) =>
       fetch(bgBase + '/api/backgrounds/use', {
@@ -330,11 +398,11 @@ test('背景使用次数 = 后台人气基数 + 真实累计（同一人多次�
       })
 
     const first = await (await use('bg-1')).json()
-    assert.equal(first.count, 714)
+    assert.equal(first.real, 1)
 
     // 与收藏不同：换用同一张背景多次是真实使用行为，每次都累加
     const second = await (await use('bg-1')).json()
-    assert.equal(second.count, 715)
+    assert.equal(second.real, 2)
 
     const unknown = await use('not-exist')
     assert.equal(unknown.status, 400, '未上架的背景不能写入统计')

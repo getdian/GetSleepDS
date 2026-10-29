@@ -1,9 +1,11 @@
 /**
- * 环境音收藏人数：展示文案 + 排序快照。
+ * 环境音收藏人数：展示文案 + 真实计数合成 + 排序快照。
  *
  * 抽成纯函数而不是写在 audio-dock 里，是因为组件依赖 wx / BackgroundAudioManager，
  * 单测跑不动；这里的规则（万位缩写、0 人回落、同分保持配置顺序）必须能被测试锁住。
  */
+
+const { compactWan } = require('./format')
 
 const FAV_SUFFIX = '人收藏和喜欢'
 
@@ -15,23 +17,21 @@ const FAV_SUFFIX = '人收藏和喜欢'
 function formatFavText(count) {
   const num = Math.max(0, Math.floor(Number(count) || 0))
   if (!num) return '点击播放'
-  if (num >= 10000) {
-    const wan = Math.round(num / 1000) / 10
-    return wan + ' 万' + FAV_SUFFIX
-  }
+  const wan = compactWan(num)
+  if (wan) return wan + ' 万' + FAV_SUFFIX
   return num + ' ' + FAV_SUFFIX
 }
 
 /**
- * 合并服务端下发的计数（展示值已含后台人气基数）。
- * 某首歌没拿到计数时回落它自己的 favBase，而不是 0，否则网络一次抖动就把
- * 运营设的 713 显示成 0。
+ * 展示值 = 后台人气基数（track.favBase）+ 真实收藏（服务端 real）。
+ * 真实数缺失/非法按 0：网络一次抖动不会把运营设的 713 显示成 0，
+ * 运营调低基数后也不会被旧的展示值压住（基数永远取当前配置）。
  */
-function mergeFavCounts(tracks, counts) {
-  const map = counts || {}
+function withRealCounts(tracks, realMap) {
+  const map = realMap || {}
   return (tracks || []).map((track) => {
-    const value = Number(map[track.id])
-    const count = Number.isFinite(value) && value >= 0 ? value : Number(track.favBase) || 0
+    const real = Math.max(0, Math.floor(Number(map[track.id]) || 0))
+    const count = (Number(track.favBase) || 0) + real
     return Object.assign({}, track, {
       favCount: count,
       favText: formatFavText(count)
@@ -57,4 +57,4 @@ function sortByRank(tracks, rank) {
   return (tracks || []).slice().sort((a, b) => (map[b.id] || 0) - (map[a.id] || 0))
 }
 
-module.exports = { FAV_SUFFIX, formatFavText, mergeFavCounts, rankOf, sortByRank }
+module.exports = { FAV_SUFFIX, formatFavText, withRealCounts, rankOf, sortByRank }

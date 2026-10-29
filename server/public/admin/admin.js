@@ -703,6 +703,7 @@
         category: row.querySelector('.category').value.trim(),
         url: row.querySelector('.url').value.trim(),
         icon: row.querySelector('.icon').value,
+        // 上限 99999 与 config-schema 的 MAX_COUNT_BASE 同步（浏览器端无法 require 服务端常量）
         favBase: Math.max(0, Math.min(99999, Math.floor(Number(row.querySelector('.favbase').value) || 0)))
       }
     })
@@ -724,6 +725,7 @@
         category: row.querySelector('.bg-category').value.trim(),
         url: row.querySelector('.bg-url').value.trim(),
         enabled: row.querySelector('.bg-enabled').checked,
+        // 上限 99999 与 config-schema 的 MAX_COUNT_BASE 同步（浏览器端无法 require 服务端常量）
         useBase: Math.max(0, Math.min(99999, Math.floor(Number(row.querySelector('.bg-usebase').value) || 0)))
       }
     })

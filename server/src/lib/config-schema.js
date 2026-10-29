@@ -192,6 +192,15 @@ function clampCount(value) {
   return Math.min(num, MAX_COUNT_BASE)
 }
 
+/** 按 id 建索引：保存时「旧后台未提交某字段」要按同 id 沿用已生效值 */
+function indexById(list) {
+  const map = {}
+  ;(Array.isArray(list) ? list : []).forEach((item) => {
+    if (item && typeof item.id === 'string') map[item.id] = item
+  })
+  return map
+}
+
 /** 保存路径的严格版：后台填错要报错，而不是静默改成 0 */
 function readCount(value, label) {
   if (value === undefined || value === null || value === '') return 0
@@ -288,10 +297,7 @@ function validateConfig(input, base) {
 
   // 旧后台标签页 / 脚本提交的 audio 条目没有 favBase：按同 id 的已生效值沿用，
   // 否则运营只改个标题就会把收藏基数一起清零。
-  const baseAudioById = {}
-  ;(Array.isArray(baseConfig.audio) ? baseConfig.audio : []).forEach((item) => {
-    if (item && typeof item.id === 'string') baseAudioById[item.id] = item
-  })
+  const baseAudioById = indexById(baseConfig.audio)
 
   const seen = {}
   const audio = audioInput.map((item, index) => {
@@ -437,10 +443,7 @@ function validateConfig(input, base) {
   }
   // 旧后台标签页 / 脚本提交的背景条目没有 useBase：按同 id 的已生效值沿用，
   // 否则运营只改个标题就会把使用基数一起清零。
-  const baseBgById = {}
-  ;(Array.isArray(baseConfig.backgrounds) ? baseConfig.backgrounds : []).forEach((item) => {
-    if (item && typeof item.id === 'string') baseBgById[item.id] = item
-  })
+  const baseBgById = indexById(baseConfig.backgrounds)
 
   const seenBg = {}
   const backgrounds = backgroundsInput.map((item, index) => {
