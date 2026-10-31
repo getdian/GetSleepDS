@@ -1,5 +1,44 @@
 # 睡点 · 关键更新记录
 
+## 2026-10-31 · 后台环境音上限 10 → 30 + 新增/上传插到最前面 + 顺序语义写清
+
+背景：运营反馈“只能加 10 首有点小”“上传后新条目追加在最后，要一直点上移”。10 是早期只有 1 条雨声时的占位值；同时后台顺序的真实语义（客户端按收藏人数排序，人数相同才看后台顺序）没有在界面上说明，导致“我排到第一但小程序不显示第一”的误解。
+
+- **上限 10 → 30**：`server/src/lib/config-schema.js` 的 `MAX_AUDIO`；后台两处硬编码抽成 `MAX_AUDIO_ROWS` 常量并注明必须与服务端同改（服务端仍是最终门禁，后台只是提前给友好提示）。取舍：30 条足够覆盖雨/浪/火/噪/夜 × 分类；`/api/config` 体积（约 30×250B）、抽屉列表长度与后台人工维护成本都在合理范围，不盲目放大。
+- **上传 / 「+ 添加」插到最前面**：`audioList.insertBefore(row, firstElementChild)` + 统一 `renumber()` + `revealRow()` 滚到可见位置，toast 改为「已插到最前面」。「+ 添加」同样处理并聚焦标题输入。
+- **顺序语义写清**：后台音频面板提示与 `docs/05-admin.md` 补充——客户端「全部/分类」按收藏人数降序、**人数相同才按后台顺序**，「收藏」页直接按后台顺序；想让某首稳定靠前应调它的收藏基数或改用「收藏」入口。
+- **测试**：`server/test/config.test.js` 新增边界用例（30 条可保存、31 条被拒）。
+- **验证**：服务端 176 项 / 174 通过 / 0 失败 / 2 skip；客户端 390 项全通过（本轮未改小程序代码）；`npm run check` 通过（主包约 769.3 KB）。
+- **未机验**：后台是浏览器端交互，本轮没起服务点验——需人工确认一次「上传后新行在最前 + 滚动可见」「+ 添加插到最前且聚焦标题」「↑↓ 仍可微调」「第 31 条被友好拦截」。
+
+## 2026-10-31 · 环境音交互 A 批：启动即初始化事件层 + 锁屏线控 + 缓冲口径统一 + 结束入睡停音乐
+
+背景：对整条音乐交互做场景级审查（冷启动/后台/中断/弱网/到期/下架/清数据/耳机线控）。核心结构问题是**播放器事件层只在入睡页 `audio-dock` 里 init**——从首页迷你条继续播放时没有 12s 加载兜底、3s/4s 缓冲重试，`notice` 也无人订阅，同一首歌的行为取决于用户进过哪个页面。本轮只做 A 批（稳定性 + 音乐核心），不做 now-playing 全量迁移。
+
+- **启动即初始化**：`App.onLaunch` 增加幂等 `player.init()`；文案抽到 `utils/player-notices.js` 由入睡页抽屉与跨页迷你条共用（此前 `expired / load_timeout / audio_failed / only_one_track / bad_url / meta_save_failed` 在首页/统计页静默）。
+- **锁屏 / 耳机线控上下一首**：`init()` 注册 `onNext/onPrev` → `player.next()` / 新增 `player.prev()`；`player-queue` 新增 `prevInQueue / prevTrackInList / prevTrackManual`，与手动切歌同一队列口径（列表循环按快照、其余按配置列表），单音源仍提示「只有一个音源」。
+- **缓冲口径单源**：`audio-player.isBuffering()` 供两个视图共用。`now-playing.handlePause` 遇缓冲 pause 不再冻结倒计时、不再收成「已暂停」，保持「缓冲中」等播放器重试；`audio-player.handlePause` 在用户暂停（且在缓冲窗口内）时不再显示「正在连接」，也不会触发 12s 后的假超时提示。
+- **到期收口单源**：删除 `now-playing` 自己的权益巡检（原实现 pause 保会话，与入睡页 stop 收会话不一致），统一由 `audio-player` 的 15s 巡检 `stop() + notice` 收口——两个页面现在得到同一个结局。
+- **曲末闸门补齐**：`advance()` 与 `tailTick()` 增加 `canAutoStart()` 闸门。用户在曲末瞬间暂停时，迟到的 `ended` / 排队中的 `timeupdate` 不再自动切下一首或重播（上一轮 4 条起播路径之后的第 5、6 条）。
+- **停止入口统一**：统计页「清除数据」与入睡页「结束入睡」（真实打卡，不含补记/编辑）都改走 `player.stop()`——顺带清掉缓冲重试/自动缓存定时器与 `currentId`。此前清完数据 8~20 秒后当前曲目会被自动缓存重新下载回来。
+- **结束入睡自动停音乐（产品确认）**：打卡成功后停止环境音并收起三页迷你条；定时默认是「关」，不联动的话音乐会在打卡后继续响一整天。想继续听可重新点播（24h 解锁有效期仍在）。
+- **验证**：按文件逐个执行 565 项 / 563 通过 / 0 失败 / 2 skip（PG 无 `PG_TEST_URL`；沙箱内 `npm test` 并行 spawn 被拦，改为逐文件执行）；`npm run check` 通过（3 页面 / 22 JSON / 17 WXML / 19 WXSS，主包约 **769.3 KB**）。新增 10 条：`player-queue` 4（上一首口径）、`audio-player-events` 4（暂停后 ended 不切歌、线控注册与单音源提示、`isBuffering` 窗口、缓冲内暂停不显示连接中）、新文件 `tests/now-playing.test.js` 2（缓冲 pause 不冻结定时 / 用户暂停冻结）。
+- **未机验（真机）**：锁屏与耳机线控的「上一首/下一首」是否真的回调、缓冲重试在真实弱网下的体感、结束入睡停音乐的实际时机、列表循环换源时微信浮窗是否延续。
+- **仍待后续（B/C 批）**：跨页 `collapsed` 形态同步、停止上膛不被切歌清除、未解锁点播先改队列快照、下架曲目残留条、`coverImgUrl` 封面、`interrupted` 卡死兜底、`now-playing` 全量迁移到订阅。
+
+## 2026-10-31 · 环境音「莫名其妙自动播放」审查：系统停止复活 + 自动重试/回退缺意图闸门
+
+背景：用户反馈播放交互混乱、会自己响。用真实业务模块 + 假 `BackgroundAudioManager` 逐条驱动，复现出 **4 条无用户手势的起播路径**，并查出 **2 处漏 `require` 导致的静默 ReferenceError**（被 `audioTimer.emit` 的 try/catch 与 Promise 链吞掉）。对照 `AGENTS.md` §5 铁律后只修实现缺陷，“外部暂停可恢复”的产品口径按产品确认保留。
+
+- **系统 stop 不得被回前台复活**：`onStop` / `onPlayFailed` 只清 `wantPlaying`，没清 `playingAtHide`（离开时的播放快照）。锁屏/浮窗 X 停止发生在后台时，`App.onShow` 会拿这份过期快照把 `wantPlaying` 推回 `true` → 自动续播。现在两处都作废该快照；会话仍保留（迷你条显示“已暂停”，点按才播）。
+- **自动起播闸门 `canAutoStart()`**：新增于 `audio-session`（`wantPlaying && !userPaused && !interrupted && isActive()`）。缓冲 4s 重试（`handleWaiting`）、缓冲 3s 重试（`handlePause`）、缓存坏源回退（`audio-player` / `now-playing` 两处）此前都不看暂停意图，用户点了暂停仍会在几秒后被拉起，并顺带抹掉 `userPaused`。赋值 `src` 本身就会出声，所以回退分支在暂停时只拉黑坏源、不换源。
+- **迷你条停止改走 `player.stop()`**：`now-playing.close()` 原先直调 `markStopped() + audio.stop()`，绕过播放器 → `stopRequested`、缓冲重试定时器、自动缓存定时器都不清，残留的 `waitRetry` 4 秒后仍会再发一次 `play()`（空 `src`），`currentId` 也留着让下次点按重建音源起播。
+- **入睡页两处漏 `require`（P0）**：`audio-dock` 的 `onTimerTick` 用 `playerState`、`syncFromAudio` 用 `audioSession`，但文件顶部从未 require。后果：定时到点的 toast/胶囊复位被 try/catch 吞掉（到点后入睡页仍显示“上一首 + 30 分”，而首页迷你条已消失）；运营下架的曲目抛 `ReferenceError` 停不下来，且 `attached()` 后续的定时订阅、60s 权益巡检、配置自愈全部装不上。顺带把内联的 `audioTimer.subscribe` 回调提为 `onTimerTick(left)` 方法，让这条路径可被单测直接驱动。
+- **定时偏好归零**：`player.stop()` 与 `audio-timer.stopAudio()`（定时到点不走 `player.stop()`）都清零 `state.timerMinutes`；此前“结束播放/到点后再点一首”会静默又跑一遍上一轮档位，而胶囊显示“关”。
+- **验证**：逐文件执行全量 555 项 / 553 通过 / 0 失败 / 2 skip（PG 用例无 `PG_TEST_URL`；本轮在受限沙箱内 `npm test` 的并行 spawn 被拦为 EPERM，故按文件逐个执行）；`npm run check` 通过（3 页面 / 22 JSON / 17 WXML / 19 WXSS，主包约 **763.8 KB**）。新增 5 条用例（`audio-session` 1、`audio-player-events` 4）+ 新文件 `tests/audio-dock.test.js` 3 条，并已把 `audio-session` / `audio-player` 换回改动前版本反证「5 条新用例全部失败」。
+- **未机验（真机）**：锁屏/后台期间通知栏或浮窗 X 停止后回前台不复活；弱网「正在连接」时点暂停不被拉起；暂停后坏源回退不出声；停止后定时偏好不复活。模拟器不派发 `onPause/onPlay`（`docs/13` 已知），这些路径只能真机复核。
+- **本轮未动（结构问题，另立）**：`now-playing` 仍是第二套播放器实现（自带 play/pause/stop/error/到期/回环），首页与统计页各一个实例 → 同一 BAM 最多挂 3 套监听；`playingAtHide` 与 `lastEvent` 语义、定时档位双源（`audioTimer.total()` vs `state.timerMinutes`）待收口。
+
 ## 2026-10-31 · 环境音播放模式重做：单曲/列表循环 + 队列快照 + 自动缓存下沉
 
 背景：真机反馈「切到收藏连播，入睡页与计算器页都还是单曲循环」。复查根因：`player-state.seamlessLoop` 在曲末前无条件 `seek(0)`，音频永不进入 `ended`，读取 `audioQueueMode` 的 `advance()` 是死代码——开关、toast、存储写入全部正常，只有执行链断开。同时“播放模式”与“播哪一批”被压进一个按钮（模式写死收藏），不符合「单曲/列表 + 分类」的普通用户认知。新增 ADR-033。

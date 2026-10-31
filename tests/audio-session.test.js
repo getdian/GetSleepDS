@@ -182,6 +182,25 @@ test('系统 stop 只取消自动续播，不结束会话（迷你条保留）',
   assert.equal(storage.getMeta().lastTrackId, 'sleep-10001')
 })
 
+test('后台期间系统 stop（浮窗 X / 锁屏停止）后回前台不自动续播', async () => {
+  reset()
+  playingManager()
+  audioSession.init()
+  audioSession.markUserPlay()
+
+  audioSession.onAppHide() // 离开时在播 -> 记下 playingAtHide
+  manager.stop() // 后台被系统停止：src 被清空、paused=true
+  audioSession.onStop()
+  audioSession.onAppShow()
+  await sleep(120)
+
+  assert.equal(manager.plays, 0, '系统 stop 是显式停止，不得被回前台拉起')
+  assert.equal(audioSession.wantsPlayback(), false)
+  // 会话仍保留：迷你条以“已暂停”显示，用户点按才续播
+  assert.notEqual(storage.getMeta().lastTrackActive, false)
+  assert.equal(storage.getMeta().lastTrackId, 'sleep-10001')
+})
+
 test('切到其他 App 后回前台自动续播', async () => {
   reset()
   playingManager()

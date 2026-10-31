@@ -63,6 +63,12 @@ function fakeAudio(patch) {
       },
       onTimeUpdate(fn) {
         handlers.timeupdate = fn
+      },
+      onNext(fn) {
+        handlers.next = fn
+      },
+      onPrev(fn) {
+        handlers.prev = fn
       }
     },
     patch || {}
@@ -101,6 +107,7 @@ const audioTimer = require('../miniprogram/utils/audio-timer')
 const audioSession = require('../miniprogram/utils/audio-session')
 const cache = require('../miniprogram/utils/audio-cache')
 const player = require('../miniprogram/utils/audio-player')
+const playerState = require('../miniprogram/utils/player-state')
 const events = require('../miniprogram/utils/events')
 
 // 埋点走 storage 队列，测试里直接吞掉，避免依赖网络层
@@ -124,6 +131,8 @@ function reset(metaPatch) {
   audioTimer.clear()
   audioSession._resetForTest()
   player._resetForTest()
+  // ended/回环去重窗口是模块级状态：不重置会让后一个用例的 ended 被前一个用例“抢走”
+  playerState._resetClaims()
   manager = player.setManager(fakeAudio())
   cache.clearBad(TRACK.url)
   storage.patchMeta(
@@ -264,4 +273,136 @@ test('toggle()：暂停与续播互逆，并同步播放意图', () => {
   assert.equal(audioSession.isUserPaused(), true)
   // 220ms 防抖窗口内不响应
   assert.equal(player.toggle(), 'noop')
+})
+
+/* ---------------- 自动起播闸门：用户暂停后不得被重试/回退拉起 ---------------- */
+
+test('用户暂停后，waiting 的 4 秒缓冲重试不得拉起播放', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  reset()
+  manager = player.setManager(fakeAudio())
+  player.init()
+  appState.globalData.audioSession = true
+  player.play(TRACK, { cached: '' })
+  const before = plays
+  handlers.waiting() // 弱网/首次加载：排 4s 重试
+  player.pause() // 用户点暂停
+  assert.equal(manager.paused, true)
+
+  t.mock.timers.tick(4000)
+  assert.equal(plays, before, '暂停后不得被缓冲重试拉起')
+  assert.equal(manager.paused, true)
+  assert.equal(audioSession.isUserPaused(), true, '暂停意图不能被抹掉')
+})
+
+test('用户暂停后，缓冲 pause 的 3 秒重试不得拉起播放', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  reset()
+  manager = player.setManager(fakeAudio())
+  player.init()
+  appState.globalData.audioSession = true
+  player.play(TRACK, { cached: '' })
+  const before = plays
+  handlers.waiting()
+  handlers.pause() // 缓冲导致的系统侧 pause：排 3s 重试
+  player.pause() // 用户在窗口内点暂停
+
+  t.mock.timers.tick(3000)
+  assert.equal(plays, before, '暂停后不得被缓冲重试拉起')
+  assert.equal(manager.paused, true)
+})
+
+test('用户暂停后，缓存坏源回退不得重新赋源起播', () => {
+  reset()
+  manager = player.setManager(fakeAudio())
+  player.init()
+  appState.globalData.audioSession = true
+  player.play(TRACK, { cached: '/tmp/cached.mp3' })
+  player.pause()
+  const before = plays
+  const realNow = Date.now
+  const t = realNow()
+  Date.now = () => t + player.SRC_SETTLE_MS + 1
+  try {
+    manager.paused = true
+    handlers.error({ errCode: 1 })
+  } finally {
+    Date.now = realNow
+  }
+  assert.equal(plays, before, '暂停后不得因回退而重新出声')
+  // 赋 src 会自动起播，所以暂停时连源都不能换
+  assert.equal(manager.src, '/tmp/cached.mp3')
+})
+
+test('stop() 复位定时偏好：停止后再播不会自动开始上一轮的定时', () => {
+  reset()
+  manager = player.setManager(fakeAudio())
+  player.init()
+  appState.globalData.audioSession = true
+  try {
+    player.setTimerMinutes(30)
+    player.play(TRACK, { cached: '' })
+    assert.ok(audioTimer.remaining() > 0, '选了 30 分钟应起表')
+    player.stop()
+    assert.equal(audioTimer.remaining(), 0)
+    player.play(TRACK, { cached: '' })
+    assert.equal(audioTimer.remaining(), 0, '停止即结束这一段会话，偏好回到“关”')
+  } finally {
+    audioTimer.clear()
+  }
+})
+
+/* ---------------- 曲末 / 线控 / 缓冲口径 ---------------- */
+
+test('用户暂停后，迟到的 ended 不得自动播放下一首或重播', () => {
+  reset()
+  manager = player.setManager(fakeAudio())
+  player.init()
+  appState.globalData.audioSession = true
+  player.play(TRACK, { cached: '' })
+  player.pause()
+  const before = plays
+  handlers.ended()
+  assert.equal(plays, before, '暂停后 ended 不得起播')
+  assert.equal(manager.paused, true)
+  assert.notEqual(storage.getMeta().lastTrackActive, false, '会话仍保留，条子显示已暂停')
+})
+
+test('init 注册锁屏/耳机上下一首；只有一个音源时提示 one_track', () => {
+  reset()
+  manager = player.setManager(fakeAudio())
+  player.init()
+  assert.equal(typeof handlers.next, 'function')
+  assert.equal(typeof handlers.prev, 'function')
+  const notices = []
+  player.setNotice((code) => notices.push(code))
+  // 内置兜底配置只有一条音源：next/prev 必须给提示，而不是静默无反应
+  handlers.next()
+  handlers.prev()
+  assert.deepEqual(notices, ['only_one_track', 'only_one_track'])
+  assert.equal(player.prev(), false)
+})
+
+test('缓冲窗口由播放器统一判定：waiting 之后、超时之前为 true', () => {
+  reset()
+  manager = player.setManager(fakeAudio())
+  player.init()
+  assert.equal(player.isBuffering(), false)
+  handlers.waiting()
+  assert.equal(player.isBuffering(), true, '缓冲窗口内两个视图必须看到同一判定')
+})
+
+test('缓冲窗口内用户暂停：收成“已暂停”，不得停在“连接中”', () => {
+  reset()
+  manager = player.setManager(fakeAudio())
+  player.init()
+  appState.globalData.audioSession = true
+  player.play(TRACK, { cached: '' })
+  handlers.waiting()
+  assert.equal(player.snapshot().loading, true)
+  player.pause()
+  handlers.pause()
+  assert.equal(player.snapshot().loading, false, '暂停后不得仍显示“正在连接”')
+  assert.equal(player.snapshot().playing, false)
+  assert.equal(audioSession.isUserPaused(), true)
 })

@@ -11,6 +11,9 @@ const assert = require('node:assert/strict')
 const store = {}
 
 global.wx = {
+  // 入睡页现在直接引用 audio-player（结束入睡时停播放），它链式加载 audio-cache，
+  // 后者在模块顶层读取 wx.env.USER_DATA_PATH
+  env: { USER_DATA_PATH: '/tmp/sleep-page-test' },
   getStorageSync(key) {
     return store[key] === undefined ? '' : store[key]
   },

@@ -7,7 +7,10 @@ const {
   resolveQueueIds,
   nextInQueue,
   nextTrackInList,
-  nextTrackManual
+  nextTrackManual,
+  prevInQueue,
+  prevTrackInList,
+  prevTrackManual
 } = require('../miniprogram/utils/player-queue')
 
 const tracks = [
@@ -83,4 +86,33 @@ test('手动下一首统一口径：列表循环优先快照，单曲模式按�
   assert.equal(nextTrackManual(tracks, 'a', ['a'], 'list').id, 'b')
   // 历史 favorites 模式按列表循环处理
   assert.equal(nextTrackManual(tracks, 'a', ['a', 'c'], 'favorites').id, 'c')
+})
+
+/* ---------------- 上一首（锁屏 / 耳机线控） ---------------- */
+
+test('上一首：按队列快照向前，首曲回到末尾', () => {
+  assert.equal(prevInQueue(tracks, 'b', ['c', 'a', 'b']).id, 'a')
+  assert.equal(prevInQueue(tracks, 'a', ['c', 'a', 'b']).id, 'c')
+  assert.equal(prevInQueue(tracks, 'c', ['c', 'a', 'b']).id, 'b')
+})
+
+test('上一首：快照不足 2 首 / 当前曲不在快照里', () => {
+  assert.equal(prevInQueue(tracks, 'a', ['a']), null)
+  assert.equal(prevInQueue(tracks, 'a', undefined), null)
+  // 当前曲不在快照：从最后一首开始（与“下一首从第一首开始”对称）
+  assert.equal(prevInQueue(tracks, 'b', ['c', 'a']).id, 'a')
+})
+
+test('上一首兜底：按配置列表向前循环，少于 2 首返回 null', () => {
+  assert.equal(prevTrackInList(tracks, 'b').id, 'a')
+  assert.equal(prevTrackInList(tracks, 'a').id, 'c')
+  assert.equal(prevTrackInList(tracks, 'gone').id, 'c')
+  assert.equal(prevTrackInList([{ id: 'a' }], 'a'), null)
+})
+
+test('上一首统一口径：列表循环优先快照，单曲模式按配置列表', () => {
+  assert.equal(prevTrackManual(tracks, 'a', ['a', 'c'], 'list').id, 'c')
+  assert.equal(prevTrackManual(tracks, 'a', ['a', 'c'], 'single').id, 'c')
+  // 快照不足两首同样退化成配置列表，避免线控按键失灵
+  assert.equal(prevTrackManual(tracks, 'a', ['a'], 'list').id, 'c')
 })

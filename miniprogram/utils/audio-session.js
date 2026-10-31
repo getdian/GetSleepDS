@@ -243,11 +243,26 @@ function onPause() {
  */
 function onStop() {
   wantPlaying = false
+  // 后台期间被系统 stop（浮窗 X / 锁屏停止）：必须同时作废“离开时在播”的快照，
+  // 否则回前台时 onAppShow 会拿这份过期快照把 wantPlaying 推回 true，
+  // 表现为“我在微信里停了，回小程序又自己响”。
+  playingAtHide = false
 }
 
 /** 起播失败（play() 抛错）：不要自动反复重试，交给用户点击 */
 function onPlayFailed() {
   wantPlaying = false
+  playingAtHide = false
+}
+
+/**
+ * 自动起播闸门：缓冲重试、坏源回退这类“无人接管的自动动作”在起播前必须过这道门。
+ * 用户在小程序内暂停/停止后（wantPlaying=false）不得把播放拉起来，
+ * 否则会出现“点了暂停，几秒后自己又响”，并顺带抹掉暂停意图。
+ * 判据与 resumeIfPossible 同源，只是不要求“当前已暂停”。
+ */
+function canAutoStart() {
+  return wantPlaying && !userPaused && !interrupted && isActive()
 }
 
 /**
@@ -451,6 +466,7 @@ module.exports = {
   onStop,
   onPlayFailed,
   allowReplay,
+  canAutoStart,
   resumeIfPossible,
   onInterruptionBegin,
   onInterruptionEnd,

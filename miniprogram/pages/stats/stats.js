@@ -10,7 +10,7 @@ const api = require('../../utils/api')
 const { withLogin } = require('../../utils/login')
 const { syncNow, whenIdle } = require('../../utils/sync')
 const audioTimer = require('../../utils/audio-timer')
-const audioSession = require('../../utils/audio-session')
+const player = require('../../utils/audio-player')
 const reminder = require('../../utils/reminder')
 const tabbar = require('../../utils/tabbar')
 const events = require('../../utils/events')
@@ -1105,11 +1105,10 @@ Page({
     backgrounds.cleanCache()
     // 先停播放再清缓存：反过来会先删掉正在播放的文件，触发一条“音频加载失败”提示。
     audioTimer.clear()
-    // 清除数据是用户显式终止：同步关掉自动恢复意图，避免回前台把声音又拉起来
-    audioSession.markStopped()
-    try {
-      wx.getBackgroundAudioManager().stop()
-    } catch (e) {}
+    // 清除数据是用户显式终止：统一走播放器停止入口——顺带清掉停止意图、
+    // 缓冲重试与自动缓存定时器、currentId。只调 markStopped()+audio.stop()
+    // 会漏掉这些定时器，清完数据 8~20 秒后缓存又被自动下载回来。
+    player.stop()
     const pending = storage.getPending()
     const planReminder = reminder.getPlanReminder()
     // 必须在 clearAll 之前收集 id（clearAll 会重置 meta）；取消动作放到 clearAll 之后，
@@ -1120,7 +1119,7 @@ Page({
     const cleared = storage.clearAll()
     events.clearQueue()
     cache.cleanAll()
-    // lastTrackActive 已由上面的 audioSession.markStopped() 统一负责，这里不再重复写
+    // lastTrackActive 已由上面的 player.stop()（内部 markStopped）统一负责，这里不再重复写
     const patch = { syncEpoch: Date.now() }
     const app = getApp()
     if (app && app.globalData) {

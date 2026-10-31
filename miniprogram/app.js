@@ -7,6 +7,7 @@ const launchIntent = require('./utils/launch-intent')
 const audioCache = require('./utils/audio-cache')
 const audioTimer = require('./utils/audio-timer')
 const audioSession = require('./utils/audio-session')
+const player = require('./utils/audio-player')
 
 App({
   globalData: {
@@ -39,6 +40,10 @@ App({
     // 环境音中断恢复：注册 wx.onAudioInterruptionBegin/End（全局只注册一次），
     // 来电/闹钟/其他 App 抢占结束后自动续播（用户在小程序内主动暂停的不恢复）。
     audioSession.init()
+    // 播放器事件层必须在启动时就位（幂等）：此前只在入睡页 audio-dock 里 init，
+    // 于是“从首页继续播放”时没有缓冲重试/加载兜底/提示文案——同一首歌的行为
+    // 取决于用户进过哪个页面。文案由各页面 init({ notice }) 各自订阅。
+    player.init()
 
     // 开发版专用：真实感模拟数据入口（体验/正式版不挂载）
     // 开发者工具 console 里执行：getApp().seedDemo() 或 getApp().seedDemo(60)

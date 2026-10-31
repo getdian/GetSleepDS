@@ -28,7 +28,7 @@ function timer() {
   return require('./audio-timer')
 }
 const { resolvePlayerSurface } = require('./player-surface')
-const { nextInQueue, nextTrackManual, normalizeQueueMode, resolveQueueIds } = require('./player-queue')
+const { nextInQueue, nextTrackManual, prevTrackManual, normalizeQueueMode, resolveQueueIds } = require('./player-queue')
 const { getConfig } = require('./config')
 
 // audio-session 也 require 本模块（取实例）；互相 require 时不能在模块顶层取它的导出，
@@ -202,6 +202,14 @@ function expected() {
 function srcAge(now) {
   if (!expectedAt) return Infinity
   return Math.max(0, (now || Date.now()) - expectedAt)
+}
+
+/**
+ * 缓冲窗口：BAM 缓冲时会自动 pause，这与用户主动暂停不是一回事。
+ * 统一由本模块判定，两个视图（audio-dock / now-playing）不得各自推算。
+ */
+function isBuffering() {
+  return !!state.waitingAt && Date.now() - state.waitingAt < BUFFERING_WINDOW_MS
 }
 
 /* ---------------- 对外状态 ---------------- */
@@ -593,7 +601,10 @@ function stop() {
   // 主动停止后不再启动新的后台缓存；已开始的下载保留（下次可命中）
   clearAutoCacheTimer()
   disarmLoadingGuard()
-  // 停止本次播放即结束这一段会话：定时偏好回到“关”，下次播放需明确重新选择
+  // 停止本次播放即结束这一段会话：定时偏好回到“关”，下次播放需明确重新选择。
+  // 只清 audioTimer 不够——起播时按 state.timerMinutes 重新起表，漏清会让用户
+  // “停止/到点后再点一首”时静默又跑一遍上一轮的定时。
+  state.timerMinutes = 0
   timer().clear(undefined, true)
   session().markStopped()
   const a = audio()
@@ -630,6 +641,8 @@ function nearTail(a, tail) {
 function tailTick(a) {
   if (!a || queueMode() !== 'list') return false
   if (!nearTail(a, LIST_TAIL_SECONDS)) return false
+  // 用户已在小程序内暂停/停止：排队中的 timeupdate 不得把下一首切出来
+  if (!session().canAutoStart()) return true
   const meta = storage.getMeta()
   const list = (getConfig() || {}).audio || []
   const next = nextInQueue(
@@ -677,6 +690,9 @@ function refreshTail() {
  * 正常路径下 tailTick 已在 ended 之前换曲，这里只兜住“没赶上”的情况。
  */
 function advance() {
+  // 用户已在小程序内暂停/停止：迟到的 ended 不得把播放拉起来（铁律 §5.5）。
+  // 这一条同时覆盖 audio-dock 与 now-playing 两个 ended 监听方。
+  if (!session().canAutoStart()) return ''
   const meta = storage.getMeta()
   if (queueMode() !== 'list') return replay() ? 'replay' : ''
   const list = (getConfig() || {}).audio || []
@@ -730,6 +746,26 @@ function next() {
   return play(track)
 }
 
+/**
+ * 上一首：锁屏 / 耳机线控的“上一首”与手动下一首同一套队列口径。
+ * 与 next() 对称——单曲模式也会在配置列表里向前切，避免线控按键看起来失灵。
+ */
+function prev() {
+  const meta = storage.getMeta()
+  const list = (getConfig() || {}).audio || []
+  const track = prevTrackManual(
+    list,
+    state.currentId || meta.lastTrackId,
+    resolveQueueIds(list, meta.audioQueueIds),
+    meta.audioQueueMode
+  )
+  if (!track) {
+    notice('only_one_track')
+    return false
+  }
+  return play(track)
+}
+
 /* ---------------- 事件 ---------------- */
 
 function handlePlay() {
@@ -759,7 +795,7 @@ function handlePlay() {
 
 function handlePause() {
   // BAM 缓冲时会自动 pause：这不是用户暂停，不能冻结定时、也不能收成“已暂停”条
-  const buffering = Date.now() - (state.waitingAt || 0) < BUFFERING_WINDOW_MS
+  const buffering = isBuffering()
   const userPaused = session().isUserPaused()
   disarmLoadingGuard()
   // 缓冲期内且不是用户暂停：保持“连接中”，3s 后补一次 play（最多 2 次）
@@ -773,6 +809,8 @@ function handlePause() {
     pauseRetryTimer = setTimeout(() => {
       pauseRetryTimer = null
       if (state.stopRequested) return
+      // 3 秒窗口内用户可能已经点了暂停/停止：自动重试不得把播放拉起来
+      if (!session().canAutoStart()) return
       const a = audio()
       if (a && a.src && a.paused === false) return
       safePlay()
@@ -780,12 +818,14 @@ function handlePause() {
     if (pauseRetryTimer && typeof pauseRetryTimer.unref === 'function') pauseRetryTimer.unref()
     return
   }
-  if (buffering) armLoadingGuard()
-  else timer().pause()
+  // 走到这里说明不是“缓冲中自动重试”（用户已暂停 / 无当前曲目 / 重试已耗尽）：
+  // 冻结倒计时并收成“已暂停”。不能继续显示“正在连接”，否则用户点了暂停还会看到
+  // 连接态，并在 12s 后收到一条“连接超时”的假提示。
+  timer().pause()
   // 只有用户在小程序内暂停才阻止自动恢复；来电/其他 App 造成的暂停留给会话层续播
   session().onPause()
   storage.patchMeta({ lastTrackPlaying: false })
-  patch({ playing: false, loading: buffering || state.loading })
+  patch({ playing: false, loading: false })
 }
 
 function handleWaiting() {
@@ -804,6 +844,8 @@ function handleWaiting() {
       patch({ playing: true, loading: false })
       return
     }
+    // 缓冲的这 4 秒里用户可能点了暂停/停止：自动重试不得把播放拉起来
+    if (!session().canAutoStart()) return
     // 个别基础库缓冲结束后不自动续播：补一次 play
     safePlay()
   }, WAIT_RETRY_MS)
@@ -915,6 +957,12 @@ function handleError(err) {
     state.fromCache = false
     markBadSource(plan.badUrl)
     patch({ loading: false })
+    // 用户已在小程序内暂停：只把坏源拉黑，不得重新赋源起播
+    // （给 BAM 赋 src 会自动出声，表现为“暂停后又自己响”）
+    if (!session().canAutoStart()) {
+      storage.patchMeta({ lastTrackPlaying: false })
+      return
+    }
     // 同一轮错误只允许一次远程回退
     if (playerState.isFallbacking(plan.badUrl)) return
     playerState.markFallback(plan.badUrl)
@@ -956,6 +1004,10 @@ function init(options) {
   if (a.onWaiting) a.onWaiting(handleWaiting)
   if (a.onCanplay) a.onCanplay(handleCanplay)
   if (a.onTimeUpdate) a.onTimeUpdate(handleTimeUpdate)
+  // 锁屏/耳机线控的上/下一首：不注册时按键完全无响应（睡前戴耳机切歌是强习惯）。
+  // 走与手动切歌同一套队列口径，避免系统按键和界面按钮切出不同结果。
+  if (a.onNext) a.onNext(() => next())
+  if (a.onPrev) a.onPrev(() => prev())
   return true
 }
 
@@ -1004,12 +1056,14 @@ module.exports = {
   toggle,
   stop,
   next,
+  prev,
   advance,
   tailTick,
   armTail,
   refreshTail,
   scheduleAutoCache,
   replay,
+  isBuffering,
   trackOf,
   playableUrl,
   ttlDays,

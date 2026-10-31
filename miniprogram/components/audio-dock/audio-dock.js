@@ -6,27 +6,16 @@ const { withLogin } = require('../../utils/login')
 const ad = require('../../utils/ad')
 const events = require('../../utils/events')
 const audioTimer = require('../../utils/audio-timer')
+const audioSession = require('../../utils/audio-session')
 const player = require('../../utils/audio-player')
+const playerState = require('../../utils/player-state')
 const { isReallyPlaying } = require('../../utils/player-surface')
 const { normalizeQueueMode, queueIdsOf } = require('../../utils/player-queue')
+const { noticeText } = require('../../utils/player-notices')
 const favCounts = require('../../utils/audio-favorites')
 const tabbar = require('../../utils/tabbar')
 
 const ICONS = ['rain', 'wave', 'fire', 'noise', 'night']
-// 播放器只发 code，文案留在视图层（同一事件在两个页面可以有不同说法）
-const PLAYER_NOTICES = {
-  expired: '解锁已到期，重新解锁后继续',
-  network_back: '网络已恢复，解锁后可继续播放',
-  play_failed: '播放失败，请重试',
-  load_timeout: '连接超时，点按重试',
-  audio_failed: '音频加载失败，点按重试',
-  replay_limited: '播放异常，请重新播放',
-  timer_stop: '定时结束，已停止播放',
-  only_one_track: '只有一个音源',
-  bad_url: '音频地址未配置',
-  unsupported: '当前版本不支持后台播放',
-  meta_save_failed: '播放状态保存失败'
-}
 const TONES = {
   自然之声: 'teal',
   白噪音: 'blue',
@@ -157,24 +146,7 @@ Component({
       audioTimer.restore()
       this.syncFromAudio()
 
-      this._unsubTimer = audioTimer.subscribe((left) => {
-        if (!this._alive) return
-        if (left === 0 && this.data.currentId && storage.getMeta().lastTrackActive === false) {
-          const expiredAt = audioTimer.lastExpiredAt()
-          if (
-            expiredAt &&
-            Date.now() - expiredAt < 2000 &&
-            this._pageVisible &&
-            playerState.claimExpiryToast()
-          ) {
-            wx.showToast({ title: '定时结束，已停止播放', icon: 'none' })
-          }
-          // 到点即结束这一段会话：定时胶囊复位到“关”，不会静默重新起表
-          this.setData({ currentId: '', currentTitle: '', currentCategory: '', playing: false, timerMinutes: 0 })
-        }
-        // 隐藏页不逐秒算文案，回到前台时由 show 补一次
-        if (this._pageVisible) this.syncPlayerText()
-      })
+      this._unsubTimer = audioTimer.subscribe((left) => this.onTimerTick(left))
       this._unlockTimer = setInterval(() => {
         // 锁屏/切后台也要巡检：只在页可见时才跑会让整夜播放越过解锁有效期，
         // 回前台才被停掉（权益超期未收口）。refreshUnlock 内部文案未变不 setData。
@@ -495,14 +467,17 @@ Component({
       if (!view.currentId) {
         patch.playerSub = ''
         patch.timerRemainText = ''
+        // 会话已结束（停止/到点/到期/曲目下架）：定时偏好也回到“关”，
+        // 与播放器里被清零的 timerMinutes 保持同一个胶囊状态，避免“显示 30 分但不会倒计时”。
+        patch.timerMinutes = 0
       }
       if (Object.keys(patch).length) this.setData(patch)
       this.syncPlayerText()
     },
 
-    /** 播放器事件产生的提示：文案留在视图层，播放器只发 code */
+    /** 播放器事件产生的提示：文案来自 utils/player-notices（两个视图共用一份） */
     handlePlayerNotice(code) {
-      const text = PLAYER_NOTICES[code]
+      const text = noticeText(code)
       if (!text || !this._pageVisible || !this._alive) return
       wx.showToast({ title: text, icon: 'none' })
     },
@@ -1086,6 +1061,29 @@ Component({
     },
 
     /* ---------------- 定时 ---------------- */
+    /**
+     * 定时器每秒回调：到点复位与提示集中在这里。
+     * 到点即业务终止（audio-timer 已 markStopped），UI 必须同步收掉播放条与分钟胶囊，
+     * 否则入睡页会停在“上一首 + 30 分”的假状态，与首页/统计页（迷你条已消失）互相矛盾。
+     */
+    onTimerTick(left) {
+      if (!this._alive) return
+      if (left === 0 && this.data.currentId && storage.getMeta().lastTrackActive === false) {
+        const expiredAt = audioTimer.lastExpiredAt()
+        if (
+          expiredAt &&
+          Date.now() - expiredAt < 2000 &&
+          this._pageVisible &&
+          playerState.claimExpiryToast()
+        ) {
+          wx.showToast({ title: '定时结束，已停止播放', icon: 'none' })
+        }
+        this.setData({ currentId: '', currentTitle: '', currentCategory: '', playing: false, timerMinutes: 0 })
+      }
+      // 隐藏页不逐秒算文案，回到前台时由 show 补一次
+      if (this._pageVisible) this.syncPlayerText()
+    },
+
     /** 定时偏好为 0（默认关）时清掉可能残留的暂停倒计时，不能让它悄悄复活 */
     applyTimerPreference(minutes) {
       if (!this.data.timerEnabled) return

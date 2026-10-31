@@ -52,6 +52,27 @@ function nextInOrderedList(list, currentId) {
   return next
 }
 
+/** 有序列表里取上一首：向前取模；当前曲不在列表时从最后一首开始 */
+function prevInOrderedList(list, currentId) {
+  if (!list || list.length < 2) return null
+  let index = -1
+  for (let i = 0; i < list.length; i += 1) {
+    if (list[i].id === currentId) index = i
+  }
+  const prev = index >= 0 ? list[(index - 1 + list.length) % list.length] : list[list.length - 1]
+  if (!prev || prev.id === currentId) return null
+  return prev
+}
+
+/** 队列快照 → 按快照顺序映射成曲目列表（快照里已下架的 id 自然被过滤） */
+function queueListOf(tracks, queueIds) {
+  const byId = {}
+  ;(tracks || []).forEach((track) => {
+    if (track && track.id) byId[track.id] = track
+  })
+  return (Array.isArray(queueIds) ? queueIds : []).map((id) => byId[id]).filter(Boolean)
+}
+
 /**
  * 列表循环：按队列快照取下一首。
  *
@@ -65,12 +86,17 @@ function nextInQueue(tracks, currentId, queueIds) {
   if (ids.length < 2) return null
   // 顺序必须按快照（用户点播时看到的排序），不能按配置顺序重排；
   // 快照里已下架的 id 自然被过滤掉
-  const byId = {}
-  ;(tracks || []).forEach((track) => {
-    if (track && track.id) byId[track.id] = track
-  })
-  const list = ids.map((id) => byId[id]).filter(Boolean)
-  return nextInOrderedList(list, currentId)
+  return nextInOrderedList(queueListOf(tracks, ids), currentId)
+}
+
+/**
+ * 列表循环的“上一首”（锁屏/耳机线控用）：口径与 nextInQueue 对称。
+ * @returns {object|null} 上一首；快照不足 2 首或取不到时返回 null（调用方回退配置列表）
+ */
+function prevInQueue(tracks, currentId, queueIds) {
+  const ids = Array.isArray(queueIds) ? queueIds : []
+  if (ids.length < 2) return null
+  return prevInOrderedList(queueListOf(tracks, ids), currentId)
 }
 
 /**
@@ -98,11 +124,29 @@ function nextTrackManual(tracks, currentId, queueIds, mode) {
   return nextTrackInList(tracks, currentId)
 }
 
+/** 手动“上一首”的兜底：按配置顺序向前循环（与 nextTrackInList 对称） */
+function prevTrackInList(tracks, currentId) {
+  const list = (tracks || []).filter((track) => track && track.id)
+  return prevInOrderedList(list, currentId)
+}
+
+/** 锁屏/耳机“上一首”的统一口径：列表循环优先队列快照，其余按配置列表 */
+function prevTrackManual(tracks, currentId, queueIds, mode) {
+  if (normalizeQueueMode(mode) === 'list') {
+    const prev = prevInQueue(tracks, currentId, queueIds)
+    if (prev) return prev
+  }
+  return prevTrackInList(tracks, currentId)
+}
+
 module.exports = {
   normalizeQueueMode,
   queueIdsOf,
   resolveQueueIds,
   nextInQueue,
   nextTrackInList,
-  nextTrackManual
+  nextTrackManual,
+  prevInQueue,
+  prevTrackInList,
+  prevTrackManual
 }

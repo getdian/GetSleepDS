@@ -214,6 +214,10 @@
 
 - `audio-session.init()` 在 `App.onLaunch` 幂等注册 `wx.onAudioInterruptionBegin/End`；`App.onHide/onShow` 补偿“切到其他 App”没有 interruption 事件的场景。
 - 恢复条件：`wantPlaying && !userPaused && !interrupted && isActive() && canPlay()`；缺一不可。定时到点已经 `markStopped()`，不得被回前台拉起；到期不得靠中断恢复续播（`canPlay` 同组件口径）。
+- **自动起播只有一道闸门（2026-10-31）**：`audio-session.canAutoStart()` = `wantPlaying && !userPaused && !interrupted && isActive()`。缓冲 4s/3s 重试（`handleWaiting` / `handlePause` 的定时器）与缓存坏源回退（`audio-player` / `now-playing` 两处）在真正出声之前必须过这道门——赋值 `src` 会自动起播，只判断“定时器还在”会让用户点了暂停仍在几秒后被拉起，并顺带把 `userPaused` 抹掉。
+- **系统 `stop` 必须作废 `playingAtHide`（2026-10-31）**：`onStop` / `onPlayFailed` 里不清这份“离开时在播”的快照，回前台时 `onAppShow` 会拿它把 `wantPlaying` 推回 `true`，表现为“我在微信里把音乐停了，回小程序它又自己响”。会话仍保留（迷你条显示“已暂停”），只是不再自动续播。
+- **事件层必须在启动时就位（2026-10-31）**：`App.onLaunch` 调一次幂等的 `player.init()`。只在 `audio-dock` 里 init 会让“从首页继续播放”缺少 12s 加载兜底、3s/4s 缓冲重试与所有 `notice`——同一首歌的行为取决于用户进过哪个页面。文案由 `utils/player-notices.js` 共用，两个视图各自按页面可见性弹一次。
+- **缓冲判定单源（2026-10-31）**：`audio-player.isBuffering()`（`waitingAt` 起 30s 窗口）是唯一判据。两个视图都不得自行推算；缓冲 pause 不冻结定时、不显示“已暂停”，用户暂停（`userPaused`）则立即收成“已暂停”、冻结倒计时并清掉 loading。
 - 续播要处理两种脏状态：`src` 被系统清空（按 `lastTrackId` 从配置找曲目、优先本地缓存重建）与已到曲末（先 `seek(0)`，否则 `play()` 立刻再次 ended）。
 - 锁屏/通知栏的暂停与系统中断在 API 上不可区分（只有 `pause`，无原因字段）。**当前口径**：外部原因可恢复，小程序内暂停/停止一定不拉起；若产品要改这个口径，必须同时改 `onPause/onAppShow` 与验收清单，不能只在某个组件里加判断。
 
@@ -224,10 +228,15 @@
 - `claimLoop()` 保证同一轮只有一个组件 seek；`claimEnded()` 保证同一轮只有一个组件重播。`markUserPause/markStopped` 必须 `clearLoopTimer()`。
 - `allowReplay()` 给坏源/极短源上限（10 秒 8 次），超过停在“已暂停”，不得无限重建音源。
 - **列表循环（2026-10-30，替换“收藏连播”）**：单曲循环仍走上面的无缝回环；列表循环是 `armLoop(audio, 0.8, handleListTail)`——`tailTick()` 在距曲末 `LIST_TAIL_SECONDS = 0.8s` 处直接换 `src` 切下一首（换曲必须早于 `ended`，否则重设 `src` 会丢微信浮窗）。`onEnded → advance()` 保留为兜底。自动切歌走 `play(next, { auto: true })`：`markAutoReplay` 不重置重播预算，且 `tailTick` 先过 `allowReplay()` 熔断，极短音源队列同样受 10 秒 8 次上限约束。播放模式切换（`onToggleQueueMode`）必须立即 `player.refreshTail()` 按新模式重排定时器——锁屏时没有 timeupdate 来纠正旧模式。队列快照存在 `meta.audioQueueIds`（点播时按当时抽屉可见列表冻结），无快照时 `resolveQueueIds` 回退全部音源。
+- **曲末推进也要过意图闸门（2026-10-31）**：`advance()` 与 `tailTick()` 开头先问 `audio-session.canAutoStart()`。用户在曲末瞬间点了暂停时，迟到的 `ended` 与排队中的 `timeupdate` 不得自动切下一首/重播——这是“用户暂停后不得被拉起”在循环链路上的补齐。
 
 ### 10.5 用户操作
 
 - 停止必须二次确认：`now-playing` 停止方块与 `audio-dock`「结束播放」首点只“上膛”（3 秒），二点才 `markStopped()`；切歌/暂停/关抽屉/组件销毁清上膛态。
+- 停止统一走 `audio-player.stop()`（2026-10-31）：组件直调 `audio.stop()` 会漏掉 `stopRequested`、缓冲重试定时器与自动缓存定时器，残留的 `waitRetry` 4 秒后仍会再发一次 `play()`（空 `src`），并留下 `currentId` 让下次点按重建音源起播。
+- 定时偏好在会话终止时归零（2026-10-31）：`player.stop()` 与 `audio-timer.stopAudio()`（定时到点，不经过 `player.stop()`）都要把 `state.timerMinutes` 清零，否则“结束播放/到点后再点一首”会静默又跑一遍上一轮的档位，而胶囊显示“关”。
+- 所有“显式终止”都走 `player.stop()`（2026-10-31）：迷你条停止、抽屉结束播放、**统计页清除数据**、**入睡页结束入睡（真实打卡）**。只调 `markStopped()+audio.stop()` 会漏掉缓冲重试/自动缓存定时器与 `currentId`（清完数据 8~20s 缓存又被下回来）。
+- 锁屏 / 耳机线控（2026-10-31）：`init()` 必须注册 `onNext/onPrev` → `player.next()` / `player.prev()`，与手动切歌共用 `player-queue` 的队列口径；不注册时按键完全无响应，用户会当成播放器坏了。
 - `toggle` 在重建 `src` 前先确定续播意图：BackgroundAudioManager 赋 `src` 会自动起播，重建后读 `paused` 再判断会把刚重建的播放又暂停。
 - 暂停只 `pause()` 不 `stop()`；不建议在暂停时清 `src`（会让恢复路径更复杂，且丢微信浮窗）。
 

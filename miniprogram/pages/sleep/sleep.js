@@ -11,6 +11,7 @@ const reminder = require('../../utils/reminder')
 const launchIntent = require('../../utils/launch-intent')
 const tabbar = require('../../utils/tabbar')
 const storage = require('../../utils/storage')
+const player = require('../../utils/audio-player')
 const { syncNow } = require('../../utils/sync')
 const events = require('../../utils/events')
 const adSlots = require('../../utils/ads')
@@ -1160,6 +1161,10 @@ Page({
     }
     const cleared = storage.clearPending()
     this._pending = null
+    // 结束入睡 = 这一夜的环境音任务结束：自动停止播放并收起迷你条。
+    // 定时关闭默认是「关」，不联动的话音乐会在打卡后继续响一整天；
+    // 想继续听可以重新点播（24h 解锁有效期仍在）。
+    player.stop()
     this.finishSave({
       toast: cleared ? '已记录，可随时校准' : '已记录（会话清理稍后重试）',
       event: 'checkin'

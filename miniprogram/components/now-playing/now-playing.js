@@ -12,6 +12,7 @@ const playerState = require('../../utils/player-state')
 const events = require('../../utils/events')
 const audioSession = require('../../utils/audio-session')
 const player = require('../../utils/audio-player')
+const { noticeText } = require('../../utils/player-notices')
 const { isReallyPlaying } = require('../../utils/player-surface')
 const tabbar = require('../../utils/tabbar')
 const { getConfig } = require('../../utils/config')
@@ -64,6 +65,9 @@ Component({
       this._onCanplay = () => this.handleCanPlay()
       this._onTimeUpdate = () => this.handleTimeUpdate()
       this.setup()
+      // 首页/统计页也要收到播放器提示（到期、加载超时、失败…）：
+      // 事件层在 App.onLaunch 已统一初始化，这里只补本页的文案出口。
+      player.init({ notice: (code) => this.handlePlayerNotice(code) })
       this.sync(false)
       this._unsubTimer = audioTimer.subscribe(() => {
         if (!this._alive) return
@@ -199,6 +203,14 @@ Component({
       }
     },
 
+    /** 播放器事件提示（文案与入睡页共用 utils/player-notices） */
+    handlePlayerNotice(code) {
+      if (!this._alive || !this._pageVisible) return
+      const text = noticeText(code)
+      if (!text) return
+      wx.showToast({ title: text, icon: 'none' })
+    },
+
     handlePlay() {
       if (!this._alive) return
       // 系统侧恢复/锁屏播放也要过权益校验，避免到期后靠通知栏续播。
@@ -233,7 +245,14 @@ Component({
       // 任何来源的暂停都要保住“已暂停”条：不能正好卡在续播亮相的 3 秒里被收走
       this.clearPeek()
       this.disarmLoadingGuard()
-      // 与 audio-dock 同口径：通知栏/锁屏/耳机暂停也必须冻结倒计时。
+      // 缓冲导致的系统 pause 不是用户暂停：与 audio-player 同一口径——
+      // 不冻结倒计时、不把条子收成“已暂停”，保持“缓冲中”等播放器重试。
+      if (player.isBuffering() && !audioSession.isUserPaused()) {
+        this.setData({ playing: false, loading: true })
+        this.armLoadingGuard()
+        return
+      }
+      // 通知栏/锁屏/耳机暂停也必须冻结倒计时（与入睡页 dock 同口径）。
       audioTimer.pause()
       // 只有用户在小程序内暂停才阻止自动恢复
       audioSession.onPause()
@@ -264,22 +283,8 @@ Component({
         storage.patchMeta({ lastTrackPlaying: true })
         this.sync(true)
       }
-      // 无缝回环绕过 onEnded，而首页/统计页没有 audio-dock 的 60s 到期扫描；
-      // 低频复检一次权益，避免到期后一直循环播放。
-      const now = Date.now()
-      if (now - (this._entitlementAt || 0) > 15000) {
-        this._entitlementAt = now
-        if (isReallyPlaying(this._audio) && !this.canPlay()) {
-          try {
-            this._audio.pause()
-          } catch (e) {}
-          storage.patchMeta({ lastTrackPlaying: false })
-          this.setData({ playing: false, loading: false })
-          this.sync(true)
-          this.rejectLocked()
-          return
-        }
-      }
+      // 权益到期统一由 audio-player 的 timeupdate 巡检收口（15s 一次 + stop）；
+      // 这里不再自己 pause，否则同一轮到期在首页会停在“已暂停”，在入睡页却是条子消失。
       // 曲末动作与入睡页同源：列表循环在 ended 前换下一首，单曲才无缝回环
       if (!player.tailTick(this._audio)) playerState.seamlessLoop(this._audio)
       // 前台每秒校准曲末定时器；锁屏后没有 timeupdate 时由它独立兜底
@@ -603,6 +608,14 @@ Component({
         return
       }
       if (plan.action === 'fallback') {
+        // 用户已在小程序内暂停：只把坏源拉黑，不得重新赋源起播
+        // （给 BAM 赋 src 会自动出声；与 audio-player 的同一道闸门）
+        if (!audioSession.canAutoStart()) {
+          player.markBadSource(plan.badUrl)
+          storage.patchMeta({ lastTrackPlaying: false })
+          this.sync(true)
+          return
+        }
         // 同一轮错误只允许一个组件执行“坏缓存失效 + 远程回退”；
         // 另一个实例（audio-dock）已经处理过时直接同步即可。
         if (playerState.isFallbacking(plan.badUrl)) {
@@ -785,16 +798,11 @@ Component({
 
     close() {
       this.clearStopArm()
-      // 关闭播放条是“停止本次会话”，不是“把下次定时偏好归零”。
-      audioTimer.clear(undefined, true)
-      // 用户主动停止：唯一允许隐藏迷你条并关闭自动恢复的入口
-      audioSession.markStopped()
+      // 用户主动停止统一走播放器：会话终止、停止意图、重试/自动缓存定时器、
+      // 定时偏好一处收口。直调 audio.stop() 会漏掉这些清理——残留的缓冲重试
+      // 4 秒后还会再发一次 play()（空 src），并留下 currentId 让下次点按重建音源起播。
+      player.stop()
       this.collapse()
-      if (this._audio) {
-        try {
-          this._audio.stop()
-        } catch (e) {}
-      }
     },
 
     goSleep() {

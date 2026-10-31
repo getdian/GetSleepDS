@@ -38,6 +38,12 @@ function stopAudio() {
   } catch (e) {}
   // 定时到点是业务终止：只有这类显式终止才允许清会话（与“外部中断不算停止”同一口径）
   audioSession.markStopped()
+  // 到点即结束这一段会话：播放器的定时偏好也要回到“关”。
+  // 播放器起播时按自身 timerMinutes 重新起表，漏清会让用户“再点一首”时
+  // 静默又开始上一轮的倒计时（UI 胶囊还显示“关”）。
+  // 延迟 require：audio-player 会用到本模块，顶层引用会形成循环依赖。
+  const player = require('./audio-player')
+  if (player && player.setTimerMinutes) player.setTimerMinutes(0)
 }
 
 /** 后台音频是否仍有存活会话（冷启动时没有 src，持久化的倒计时不应继续生效） */
