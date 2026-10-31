@@ -1,7 +1,10 @@
 const { invalidBody } = require('./errors')
 
 const ICONS = ['rain', 'wave', 'fire', 'noise', 'night']
-const MAX_AUDIO = 10
+// 环境音条数上限：10 条是早期占位值（当时只有 1 条雨声），30 条足够覆盖
+// 雨/浪/火/噪/夜 × 多个分类；上限同时影响 `/api/config` 体积与抽屉列表长度，
+// 提太高没有收益（后台仍是人工维护），因此不跟着“大而全”走。
+const MAX_AUDIO = 30
 // 「人气基数」上限（环境音收藏数 / 背景使用次数共用）：
 // 只影响前台展示的起点，真实计数在其上累加。
 const MAX_COUNT_BASE = 99999

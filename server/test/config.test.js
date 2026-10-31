@@ -51,6 +51,21 @@ test('旧配置缺少 category / cache 时按默认值补齐', () => {
   assert.equal(normalized.features.preload, true)
 })
 
+test('环境音条数上限 30：边界内可保存，超出一条被拒', () => {
+  const base = normalizeConfig({ audio: FILE_AUDIO })
+  const make = (count) =>
+    Array.from({ length: count }, function (_, index) {
+      return {
+        id: 'a' + index,
+        title: '音' + index,
+        url: 'https://example.com/a' + index + '.mp3'
+      }
+    })
+  // 上限从 10 提到 30（2026-10-31 后台交互轮）：边界值必须仍可通过
+  assert.equal(validateConfig({ audio: make(30) }, base).audio.length, 30)
+  assert.throws(() => validateConfig({ audio: make(31) }, base), /最多 30 条环境音/)
+})
+
 test('收藏人气基数：读路径容错，保存路径校验并沿用旧值', () => {
   const base = normalizeConfig({ audio: FILE_AUDIO })
   assert.equal(base.audio[0].favBase, 0, '历史配置没有该字段时按 0')

@@ -1678,9 +1678,20 @@
     xhr.send(formData)
   }
 
+  // 环境音条数上限：与 server/src/lib/config-schema.js 的 MAX_AUDIO 保持一致
+  // （浏览器脚本不能 import Node 模块，改上限时两处一起改，服务端仍是最终门禁）
+  var MAX_AUDIO_ROWS = 30
+
+  /** 新增/上传的行插入顶部后滚到可见位置，否则运营会以为没反应 */
+  function revealRow(row) {
+    try {
+      if (row && row.scrollIntoView) row.scrollIntoView({ block: 'nearest' })
+    } catch (e) {}
+  }
+
   function uploadAudio(file) {
-    if ($$('.audio-row', audioList).length >= 10) {
-      toast('最多 10 条环境音', true)
+    if ($$('.audio-row', audioList).length >= MAX_AUDIO_ROWS) {
+      toast('最多 ' + MAX_AUDIO_ROWS + ' 条环境音', true)
       return
     }
     if (!state.storage || !state.storage.configured) {
@@ -1697,25 +1708,27 @@
       status: $('#upload-status'),
       label: '环境音',
       onSuccess: function (body) {
-        audioList.appendChild(
-          buildRow(
-            {
-              id: uniqueId('track'),
-              title: body.title || '新环境音',
-              subtitle: '循环播放 · 支持锁屏',
-              category: body.category || '环境音',
-              url: body.url,
-              icon: 'noise'
-            },
-            $$('.audio-row', audioList).length
-          )
+        // 新上传的插到列表最前面：运营上传后通常想在客户端靠前看到它；
+        // 旧实现追加到末尾，要连点十几次 ↑ 才能到顶。
+        const row = buildRow(
+          {
+            id: uniqueId('track'),
+            title: body.title || '新环境音',
+            subtitle: '循环播放 · 支持锁屏',
+            category: body.category || '环境音',
+            url: body.url,
+            icon: 'noise'
+          },
+          0
         )
+        audioList.insertBefore(row, audioList.firstElementChild)
         $('#audio-empty').hidden = true
         renumber()
         refreshCategoryOptions(collect().audio)
         setDirty(true)
         updateJson()
-        toast('上传完成，记得点“保存并生效”')
+        revealRow(row)
+        toast('上传完成，已插到最前面，记得点“保存并生效”')
       }
     })
   }
@@ -2055,8 +2068,8 @@
   $('#add-audio').addEventListener('click', function () {
     resetConfirm()
     const rows = $$('.audio-row', audioList)
-    if (rows.length >= 10) {
-      toast('最多 10 条环境音', true)
+    if (rows.length >= MAX_AUDIO_ROWS) {
+      toast('最多 ' + MAX_AUDIO_ROWS + ' 条环境音', true)
       return
     }
 
@@ -2069,11 +2082,15 @@
       icon: 'noise'
     }
 
-    audioList.appendChild(buildRow(item, rows.length))
+    // 与上传同一口径：新行插到最前面，避免逐条追加后还要手动挪位置
+    const row = buildRow(item, 0)
+    audioList.insertBefore(row, audioList.firstElementChild)
     $('#audio-empty').hidden = true
+    renumber()
     setDirty(true)
     updateJson()
-    audioList.lastElementChild.querySelector('.title').focus()
+    revealRow(row)
+    row.querySelector('.title').focus()
   })
 
   $('#audio-file').addEventListener('change', function (event) {
