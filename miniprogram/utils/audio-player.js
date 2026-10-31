@@ -28,7 +28,7 @@ function timer() {
   return require('./audio-timer')
 }
 const { resolvePlayerSurface } = require('./player-surface')
-const { nextTrackInQueue, nextTrackManual } = require('./player-queue')
+const { nextInQueue, nextTrackManual, normalizeQueueMode, resolveQueueIds } = require('./player-queue')
 const { getConfig } = require('./config')
 
 // audio-session 也 require 本模块（取实例）；互相 require 时不能在模块顶层取它的导出，
@@ -74,6 +74,10 @@ const state = {
 let loadingTimer = null
 let waitRetryTimer = null
 let pauseRetryTimer = null
+// 自动缓存定时器：所有起播入口（点播/自动连播/下一首/继续上次）共用一份，
+// 切歌或停止时必须清掉，否则会把上一首在后台下完（白耗流量）。
+let autoCacheTimer = null
+let lastNetType = ''
 let listeners = []
 let notices = []
 
@@ -102,6 +106,56 @@ function setManager(next) {
 function ttlDays() {
   const cfg = getConfig() || {}
   return (cfg.cache && cfg.cache.ttlDays) || DEFAULT_TTL_DAYS
+}
+
+/* ---------------- 自动缓存 ---------------- */
+
+function clearAutoCacheTimer() {
+  if (autoCacheTimer) {
+    clearTimeout(autoCacheTimer)
+    autoCacheTimer = null
+  }
+}
+
+/**
+ * 起播后的自动缓存：所有入口共用（抽屉点播、列表循环自动切歌、迷你条下一首、继续上次）。
+ * 小程序无法复用 BackgroundAudioManager 的流缓存，所以首次会与流式播放并行
+ * （约多耗 1 倍流量），换来之后每次播放都走本地；Wi-Fi 8s、移动网络 20s 后才开始，
+ * 避免“点开听两秒”也下整首。
+ */
+function scheduleAutoCache(track) {
+  clearAutoCacheTimer()
+  if (!track || !track.id || !playableUrl(track)) return
+  if (!audio()) return
+  const url = track.url
+  const trackId = track.id
+  if (cache.peek(url, ttlDays(), url)) return
+  const arm = (netType) => {
+    // 取网络类型期间可能已经切歌/停止：只给“仍在播的这一首”排队
+    if (state.currentId !== trackId || state.stopRequested) return
+    if (netType === 'none') return
+    clearAutoCacheTimer()
+    autoCacheTimer = setTimeout(() => {
+      autoCacheTimer = null
+      // 定时期间切歌/停止：不再下载旧曲（旧实现会把上一首下完，白耗流量）
+      if (state.currentId !== trackId || state.stopRequested) return
+      const cfg = getConfig() || {}
+      // 容量上限此前只靠每天一次 maybePrune 收敛；自动缓存不能把占用推过 maxMB
+      if (!cache.canAutoCache(cfg.cache)) return
+      cache.ensure(url, null, ttlDays()).catch(() => {})
+    }, cache.autoCacheDelay(netType))
+  }
+  if (typeof wx === 'undefined' || !wx.getNetworkType) {
+    arm(lastNetType)
+    return
+  }
+  wx.getNetworkType({
+    success: (res) => {
+      lastNetType = (res && res.networkType) || ''
+      arm(lastNetType)
+    },
+    fail: () => arm(lastNetType)
+  })
 }
 
 function trackOf(trackId) {
@@ -418,6 +472,9 @@ function play(track, options) {
     return false
   }
   clearRetryTimers()
+  // 切歌即停掉上一首还没下完的缓存：后台两条连接抢带宽会把新曲起播拖成“播几秒暂停”
+  const prevTrack = trackOf(state.currentId)
+  if (prevTrack && prevTrack.id !== track.id && prevTrack.url) cache.cancel(prevTrack.url)
   state.stopRequested = false
   state.waitingAt = 0
   state.pauseRetry = 0
@@ -434,8 +491,11 @@ function play(track, options) {
   const attached = attach(track, { cached: opts.cached })
   state.fromCache = !!(attached && attached.fromCache)
   armLoadingGuard()
-  // 用户在小程序内主动起播：允许后续中断自动恢复
-  session().markUserPlay()
+  // 用户主动点播：允许后续中断自动恢复，并重置 10s/8 次的重播预算。
+  // 自动连播（列表循环切歌）不能走这条——它是自动重建音源，必须保留预算，
+  // 否则极短音源队列会绕过熔断无限重建（AGENTS.md §5.6）。
+  if (opts.auto) session().markAutoReplay()
+  else session().markUserPlay()
   const saved = storage.patchMeta({
     lastTrackId: track.id,
     lastTrackTitle: track.title,
@@ -449,6 +509,8 @@ function play(track, options) {
   // 起播埋点：与解锁/中断同一套事件队列（后台「今日播放」用）
   const events = require('./events')
   if (events && events.track) events.track('audio_play', track.id)
+  // 起播即排队缓存：自动连播/迷你条下一首也走这里，缓存覆盖不再只限手动点播
+  scheduleAutoCache(track)
   return true
 }
 
@@ -490,6 +552,8 @@ function resume() {
   storage.patchMeta({ lastTrackPlaying: true })
   applyTimerPreference()
   safePlay()
+  // 续播也是起播入口：未缓存的曲目同样要排自动缓存
+  scheduleAutoCache(track)
   return true
 }
 
@@ -526,6 +590,8 @@ function stop() {
   state.pauseRetry = 0
   state.fromCache = false
   clearRetryTimers()
+  // 主动停止后不再启动新的后台缓存；已开始的下载保留（下次可命中）
+  clearAutoCacheTimer()
   disarmLoadingGuard()
   // 停止本次播放即结束这一段会话：定时偏好回到“关”，下次播放需明确重新选择
   timer().clear(undefined, true)
@@ -539,17 +605,91 @@ function stop() {
   patch({ currentId: '', currentTitle: '', currentCategory: '', playing: false, loading: false })
 }
 
-/** 曲末推进：默认单曲循环；收藏连播模式下取下一首收藏（不做全列表顺序播放） */
-function advance() {
+// 列表循环在曲末前多少秒换下一首：必须早于 ended，否则重设 src 会丢微信浮窗
+const LIST_TAIL_SECONDS = 0.8
+
+function queueMode() {
+  return normalizeQueueMode(storage.getMeta().audioQueueMode)
+}
+
+/** 到点窗口：timeupdate 每秒一次，容差与无缝回环同口径（tail + 0.5s） */
+function nearTail(a, tail) {
+  if (!a) return false
+  const duration = Number(a.duration)
+  const current = Number(a.currentTime)
+  if (!isFinite(duration) || duration <= 0) return false
+  if (!isFinite(current) || current < 0) return false
+  return duration - current <= tail + 0.5
+}
+
+/**
+ * 曲末动作（列表循环）：在 ended 之前换成队列快照里的下一首。
+ * 返回 true = 已接管（调用方不要再 seek 回环）；false = 仍按单曲循环处理。
+ * 队列不足 2 首 / 取不到下一首时回退单曲，不会停播。
+ */
+function tailTick(a) {
+  if (!a || queueMode() !== 'list') return false
+  if (!nearTail(a, LIST_TAIL_SECONDS)) return false
   const meta = storage.getMeta()
   const list = (getConfig() || {}).audio || []
-  const next = nextTrackInQueue(list, state.currentId, storage.getFavorites(), meta.audioQueueMode)
+  const next = nextInQueue(
+    list,
+    state.currentId || meta.lastTrackId,
+    resolveQueueIds(list, meta.audioQueueIds)
+  )
+  // 没有下一首：不消耗本轮 claim，交给 seamlessLoop 原样回环
+  if (!next) return false
+  // 同一轮曲末可能被 timeupdate 与 armLoop 定时器同时命中：只有一个能换曲
+  if (!playerState.claimLoop()) return true
+  // 自动切歌同样是重建音源：极短音源队列必须受 10s/8 次熔断约束（AGENTS.md §5.6）。
+  // 超限时本轮既不切也不 seek，让音频自然走到 ended，由 ended 的既有熔断停下并提示。
+  if (!session().allowReplay()) return true
+  play(next, { auto: true })
+  return true
+}
+
+/**
+ * 列表循环的曲末回调必须是**稳定引用**：armLoop 靠它判断“要不要重建定时器”，
+ * 每次 timeupdate 现造一个箭头函数会让定时器每秒重建一次。
+ */
+function handleListTail() {
+  return tailTick(audio())
+}
+
+/** 按播放模式排曲末动作：单曲=无缝回环；列表=到点前换下一首 */
+function armTail(a) {
+  if (!a) return false
+  if (queueMode() !== 'list') return playerState.armLoop(a)
+  return playerState.armLoop(a, LIST_TAIL_SECONDS, handleListTail)
+}
+
+/**
+ * 播放模式刚被切换：立即按新模式重排曲末定时器。
+ * 不能只等下一次 timeupdate —— 锁屏后没有 timeupdate，旧定时器会按旧模式到点。
+ */
+function refreshTail() {
+  playerState.clearLoopTimer()
+  return armTail(audio())
+}
+
+/**
+ * 曲末推进（ended 兜底）：单曲重播；列表循环取队列快照的下一首。
+ * 正常路径下 tailTick 已在 ended 之前换曲，这里只兜住“没赶上”的情况。
+ */
+function advance() {
+  const meta = storage.getMeta()
+  if (queueMode() !== 'list') return replay() ? 'replay' : ''
+  const list = (getConfig() || {}).audio || []
+  const next = nextInQueue(
+    list,
+    state.currentId || meta.lastTrackId,
+    resolveQueueIds(list, meta.audioQueueIds)
+  )
   if (next) {
-    play(next)
+    play(next, { auto: true })
     return 'next'
   }
-  replay()
-  return 'replay'
+  return replay() ? 'replay' : ''
 }
 
 /** 回环续播：重新确认会话存活，按 currentId 重建音源（自动续播不清回环预算） */
@@ -573,11 +713,16 @@ function replay() {
   return true
 }
 
-/** 手动下一首：收藏连播优先，其余按配置列表循环 */
+/** 手动下一首：列表循环在队列快照里前进，其余按配置列表循环 */
 function next() {
   const meta = storage.getMeta()
   const list = (getConfig() || {}).audio || []
-  const track = nextTrackManual(list, state.currentId || meta.lastTrackId, storage.getFavorites(), meta.audioQueueMode)
+  const track = nextTrackManual(
+    list,
+    state.currentId || meta.lastTrackId,
+    resolveQueueIds(list, meta.audioQueueIds),
+    meta.audioQueueMode
+  )
   if (!track) {
     notice('only_one_track')
     return false
@@ -609,8 +754,7 @@ function handlePlay() {
   patch({ playing: true, loading: false })
   // 系统侧恢复与首次起播都走这里：暂停事件已冻结倒计时，这里续剩余
   applyTimerPreference()
-  const a = audio()
-  if (a) playerState.armLoop(a)
+  armTail(audio())
 }
 
 function handlePause() {
@@ -673,7 +817,7 @@ function handleCanplay() {
   if (state.loading || (live && !state.playing)) {
     patch({ loading: false, playing: live || state.playing })
   }
-  if (a) playerState.armLoop(a)
+  armTail(a)
 }
 
 function handleTimeUpdate() {
@@ -696,10 +840,10 @@ function handleTimeUpdate() {
       return
     }
   }
-  // 曲末前无缝回环：不进 ended、不换 src，保住微信悬浮音符
-  playerState.seamlessLoop(a)
-  // 前台每秒校准回环定时器；锁屏后没有 timeupdate 时由它独立兜底
-  playerState.armLoop(a)
+  // 曲末动作：列表循环在 ended 前换下一首（保住微信悬浮音符）；单曲才无缝回环
+  if (!tailTick(a)) playerState.seamlessLoop(a)
+  // 前台每秒校准曲末定时器；锁屏后没有 timeupdate 时由它独立兜底
+  armTail(a)
 }
 
 function handleStop() {
@@ -841,6 +985,8 @@ function _resetForTest() {
   state.pauseRetry = 0
   disarmLoadingGuard()
   clearRetryTimers()
+  clearAutoCacheTimer()
+  lastNetType = ''
   listeners = []
   notices = []
 }
@@ -859,6 +1005,10 @@ module.exports = {
   stop,
   next,
   advance,
+  tailTick,
+  armTail,
+  refreshTail,
+  scheduleAutoCache,
   replay,
   trackOf,
   playableUrl,

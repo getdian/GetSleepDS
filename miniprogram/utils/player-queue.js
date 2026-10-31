@@ -1,47 +1,81 @@
 /**
  * 环境音播放队列（纯函数）。
  *
- * 产品口径（2026-10-26 与产品确认）：
- * - 默认 `single`：只循环当前这一首，最简、最不打扰睡前场景；
- * - `favorites`：用户显式切到“收藏连播”才按收藏列表循环；
- * - 刻意不做“全列表自动顺序播放”——半夜自动换音色容易吵醒用户，
- *   想听别的由用户主动点选即可。
- *
- * 解锁是**全局 24 小时**（与曲目数量无关），所以连播多首不会额外消耗解锁，
- * 不存在“多首播放与 24h 解锁冲突”的问题。
+ * 产品口径（2026-10-30 与产品确认，替换此前的“收藏连播”）：
+ * - 播放模式只有两种：`single` 单曲循环（默认）/ `list` 列表循环；
+ * - 队列来源与模式**正交**：点哪首歌，就以“当时看到的列表”（全部 / 收藏 / 某分类）
+ *   冻结一份队列快照（meta.audioQueueIds），曲末推进只认这份快照；
+ * - 因此“在收藏分类下点播放”才播收藏，“在全部下点播放”就播全部——
+ *   不再把收藏硬绑进模式，也不做全列表随机。
+ * - 队列不足 2 首时列表循环等同单曲（调用方回退 replay），不弹拦截。
  */
 
 function normalizeQueueMode(value) {
-  return value === 'favorites' ? 'favorites' : 'single'
+  // 'favorites' 是 2026-10-26 那版“收藏连播”的历史取值：升级用户按列表循环承接，
+  // 避免开关被静默重置成单曲。
+  return value === 'list' || value === 'favorites' ? 'list' : 'single'
+}
+
+/** 队列快照：只保留可播放的 id，去重且保持可见顺序（用户看到什么就播什么） */
+function queueIdsOf(tracks) {
+  const list = Array.isArray(tracks) ? tracks : []
+  const seen = {}
+  const ids = []
+  list.forEach((track) => {
+    const id = track && track.id
+    if (!id || seen[id]) return
+    seen[id] = true
+    ids.push(id)
+  })
+  return ids
 }
 
 /**
- * @param {Array<{id:string}>} tracks 配置里的全部音源
- * @param {string} currentId 当前曲目 id
- * @param {string[]} favorites 收藏 id 列表
- * @param {string} mode 'single' | 'favorites'
- * @returns {object|null} 下一首；不适用时返回 null（调用方回退单曲循环）
+ * 队列兜底：有快照用快照；没有快照时用当前配置的全部音源。
+ * 老版本“收藏连播”升级、或用户从未在抽屉里点过歌时，列表循环必须仍有队列，
+ * 否则在非入睡页（没有 audio-dock 补快照）会静默退回单曲循环。
  */
-function nextTrackInQueue(tracks, currentId, favorites, mode) {
-  if (normalizeQueueMode(mode) !== 'favorites') return null
-  const ids = Array.isArray(favorites) ? favorites : []
-  if (ids.length < 2) return null
-  const list = (tracks || []).filter((track) => track && ids.indexOf(track.id) >= 0)
-  if (list.length < 2) return null
+function resolveQueueIds(tracks, queueIds) {
+  const ids = Array.isArray(queueIds) ? queueIds.filter(Boolean) : []
+  return ids.length ? ids : queueIdsOf(tracks)
+}
+
+/** 有序列表里取下一首：定位当前曲、取模循环；当前曲不在列表时从第一首开始 */
+function nextInOrderedList(list, currentId) {
+  if (!list || list.length < 2) return null
   let index = -1
   for (let i = 0; i < list.length; i += 1) {
     if (list[i].id === currentId) index = i
   }
-  // 当前曲目不在收藏里（用户刚取消了收藏）：从第一首开始
   const next = index >= 0 ? list[(index + 1) % list.length] : list[0]
   if (!next || next.id === currentId) return null
   return next
 }
 
 /**
- * 手动“下一首”：按配置里的音源顺序循环。
- * 与自动推进（advance）不同——自动换曲只在收藏连播下发生，手动切歌是用户显式操作，
- * 单曲循环模式下也应该能换到别的音源，否则迷你条上的“下一首”等于没反应。
+ * 列表循环：按队列快照取下一首。
+ *
+ * @param {Array<{id:string}>} tracks 配置里的全部音源
+ * @param {string} currentId 当前曲目 id
+ * @param {string[]} queueIds 点播时冻结的队列快照
+ * @returns {object|null} 下一首；快照不足 2 首或取不到时返回 null（调用方回退单曲循环）
+ */
+function nextInQueue(tracks, currentId, queueIds) {
+  const ids = Array.isArray(queueIds) ? queueIds : []
+  if (ids.length < 2) return null
+  // 顺序必须按快照（用户点播时看到的排序），不能按配置顺序重排；
+  // 快照里已下架的 id 自然被过滤掉
+  const byId = {}
+  ;(tracks || []).forEach((track) => {
+    if (track && track.id) byId[track.id] = track
+  })
+  const list = ids.map((id) => byId[id]).filter(Boolean)
+  return nextInOrderedList(list, currentId)
+}
+
+/**
+ * 手动“下一首”的兜底：按配置里的音源顺序循环。
+ * 队列快照里取不到下一首（例如只有 1 首收藏）时用它，避免按钮点了没反应。
  *
  * @param {Array<{id:string}>} tracks 配置里的全部音源（已过滤非法项）
  * @param {string} currentId 当前曲目 id
@@ -49,23 +83,26 @@ function nextTrackInQueue(tracks, currentId, favorites, mode) {
  */
 function nextTrackInList(tracks, currentId) {
   const list = (tracks || []).filter((track) => track && track.id)
-  if (list.length < 2) return null
-  let index = -1
-  for (let i = 0; i < list.length; i += 1) {
-    if (list[i].id === currentId) index = i
-  }
-  // 当前曲目已下架/不在列表：从第一首开始
-  if (index < 0) return list[0]
-  const next = list[(index + 1) % list.length]
-  return next && next.id !== currentId ? next : null
+  return nextInOrderedList(list, currentId)
 }
 
 /**
- * 手动切歌的统一口径：收藏连播模式下走收藏队列，其余情况按列表顺序。
- * 迷你条与抽屉（如果以后加同类按钮）都用它，避免两个入口切出不同结果。
+ * 手动切歌的统一口径：列表循环优先队列快照，其余按配置列表。
+ * 迷你条与抽屉两个入口都用它，避免切出不同结果。
  */
-function nextTrackManual(tracks, currentId, favorites, mode) {
-  return nextTrackInQueue(tracks, currentId, favorites, mode) || nextTrackInList(tracks, currentId)
+function nextTrackManual(tracks, currentId, queueIds, mode) {
+  if (normalizeQueueMode(mode) === 'list') {
+    const next = nextInQueue(tracks, currentId, queueIds)
+    if (next) return next
+  }
+  return nextTrackInList(tracks, currentId)
 }
 
-module.exports = { normalizeQueueMode, nextTrackInQueue, nextTrackInList, nextTrackManual }
+module.exports = {
+  normalizeQueueMode,
+  queueIdsOf,
+  resolveQueueIds,
+  nextInQueue,
+  nextTrackInList,
+  nextTrackManual
+}

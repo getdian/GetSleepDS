@@ -223,6 +223,7 @@
 - `armLoop(audio)` 用 `setTimeout` 在距曲末 `DEFAULT_TAIL_SECONDS = 1.2s` 处 `seek(0)`；前台 timeupdate 每秒校准，后台由定时器兜底；回环后立即重排（`seek` 后 `currentTime` 未刷新时补 800ms 重试）。
 - `claimLoop()` 保证同一轮只有一个组件 seek；`claimEnded()` 保证同一轮只有一个组件重播。`markUserPause/markStopped` 必须 `clearLoopTimer()`。
 - `allowReplay()` 给坏源/极短源上限（10 秒 8 次），超过停在“已暂停”，不得无限重建音源。
+- **列表循环（2026-10-30，替换“收藏连播”）**：单曲循环仍走上面的无缝回环；列表循环是 `armLoop(audio, 0.8, handleListTail)`——`tailTick()` 在距曲末 `LIST_TAIL_SECONDS = 0.8s` 处直接换 `src` 切下一首（换曲必须早于 `ended`，否则重设 `src` 会丢微信浮窗）。`onEnded → advance()` 保留为兜底。自动切歌走 `play(next, { auto: true })`：`markAutoReplay` 不重置重播预算，且 `tailTick` 先过 `allowReplay()` 熔断，极短音源队列同样受 10 秒 8 次上限约束。播放模式切换（`onToggleQueueMode`）必须立即 `player.refreshTail()` 按新模式重排定时器——锁屏时没有 timeupdate 来纠正旧模式。队列快照存在 `meta.audioQueueIds`（点播时按当时抽屉可见列表冻结），无快照时 `resolveQueueIds` 回退全部音源。
 
 ### 10.5 用户操作
 

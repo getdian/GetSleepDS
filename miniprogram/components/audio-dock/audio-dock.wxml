@@ -155,10 +155,10 @@
   <view class="dock-section">
     <text class="dock-section-title">全部声音</text>
     <view class="dock-section-right">
-      <view class="dock-queue {{queueMode === 'favorites' ? 'is-on' : ''}}" catchtap="onToggleQueueMode">
-        {{queueMode === 'favorites' ? '🔁 收藏连播' : '🔂 单曲循环'}}
+      <view class="dock-queue {{queueMode === 'list' ? 'is-on' : ''}}" catchtap="onToggleQueueMode">
+        {{queueMode === 'list' ? '🔁 列表循环' : '🔂 单曲循环'}}
       </view>
-      <text class="dock-section-count">{{filteredTracks.length}} 首</text>
+      <text class="dock-section-count">{{queueText}}</text>
     </view>
   </view>
 

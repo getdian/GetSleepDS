@@ -86,6 +86,9 @@ function seamlessLoop(audio, tailSeconds) {
 let loopTimer = null
 let loopTimerAt = 0
 let loopGuard = null
+// 当前定时器绑定的接管回调：模式切换（单曲↔列表）时必须重建，
+// 否则会复用一个按旧模式排的回调，导致切模式后的第一首仍按旧逻辑走。
+let loopTail = null
 
 function clearLoopTimer() {
   if (loopTimer) {
@@ -93,6 +96,7 @@ function clearLoopTimer() {
     loopTimer = null
     loopTimerAt = 0
   }
+  loopTail = null
 }
 
 /**
@@ -105,10 +109,12 @@ function clearLoopTimer() {
  * timeupdate 与定时器同源（player-state 单例），不会出现两个定时器各 seek 一次。
  *
  * @param {object} audio BackgroundAudioManager 实例
- * @param {number} [tailSeconds] 距结尾多少秒内回环，默认 1.2 秒
+ * @param {number} [tailSeconds] 距结尾多少秒内动作，默认 1.2 秒
+ * @param {Function} [onTail] 到点前的接管回调；返回 true 表示调用方已处理
+ *   （例如列表循环在这里换下一首），本函数不再 seek 回环。
  * @returns {boolean} 是否成功排上
  */
-function armLoop(audio, tailSeconds) {
+function armLoop(audio, tailSeconds, onTail) {
   if (!audio || audio.paused) return false
   const duration = Number(audio.duration)
   const current = Number(audio.currentTime)
@@ -118,9 +124,10 @@ function armLoop(audio, tailSeconds) {
   const delay = (duration - current - tail) * 1000
   if (delay <= 0) return false
   const at = Date.now() + delay
-  // timeupdate 每秒一次：目标时间没变就不要反复重建定时器
-  if (loopTimer && Math.abs(loopTimerAt - at) < 500) return true
+  // timeupdate 每秒一次：目标时间没变、且接管回调没变，就不要反复重建定时器
+  if (loopTimer && Math.abs(loopTimerAt - at) < 500 && loopTail === onTail) return true
   clearLoopTimer()
+  loopTail = typeof onTail === 'function' ? onTail : null
   const timer = setTimeout(() => {
     loopTimer = null
     loopTimerAt = 0
@@ -131,16 +138,28 @@ function armLoop(audio, tailSeconds) {
     if (!isFinite(latestCurrent) || latestCurrent < 0) return
     // 定时器被系统节流提前唤醒：还没到回环点，按最新位置重排
     if (latestDuration - latestCurrent > tail + 0.5) {
-      armLoop(audio, tail)
+      armLoop(audio, tail, onTail)
       return
+    }
+    // 列表循环：到点前先让调用方换曲（换 src），不要让无缝回环把本轮 seek 掉。
+    // 换曲后由新源的 canplay/play 事件重新排程，这里直接返回。
+    // 回调异常不能打断重排：定时器回调抛错会让后台彻底失去曲末兜底。
+    if (typeof onTail === 'function') {
+      let handled = false
+      try {
+        handled = onTail() === true
+      } catch (e) {
+        handled = false
+      }
+      if (handled) return
     }
     if (!seamlessLoop(audio, tail + 0.5)) return
     // 回环后立刻排下一轮。个别基础库 seek(0) 后 currentTime 未同步刷新，
     // armLoop 会因 delay<=0 拒绝排队；锁屏后没有 timeupdate 补排，
     // 不补这一次就会出现“后台只回环一轮”。等一拍再试。
-    if (armLoop(audio, tail)) return
+    if (armLoop(audio, tail, onTail)) return
     setTimeout(() => {
-      if (!audio.paused) armLoop(audio, tail)
+      if (!audio.paused) armLoop(audio, tail, onTail)
     }, 800)
   }, delay)
   if (timer && typeof timer.unref === 'function') timer.unref()

@@ -8,6 +8,7 @@ const events = require('../../utils/events')
 const audioTimer = require('../../utils/audio-timer')
 const player = require('../../utils/audio-player')
 const { isReallyPlaying } = require('../../utils/player-surface')
+const { normalizeQueueMode, queueIdsOf } = require('../../utils/player-queue')
 const favCounts = require('../../utils/audio-favorites')
 const tabbar = require('../../utils/tabbar')
 
@@ -40,6 +41,13 @@ function toneOf(category) {
   if (/火|柴|炉/.test(name)) return 'amber'
   if (/噪|白/.test(name)) return 'blue'
   return 'violet'
+}
+
+/** 队列来源文案：「全部 8 首」/「收藏 3 首」；还没有快照时说清怎么开始 */
+function queueTextOf(ids, scope) {
+  const count = Array.isArray(ids) ? ids.length : 0
+  if (!count) return '点任意一首开始'
+  return (scope || '全部') + ' ' + count + ' 首'
 }
 const TIMER_OPTIONS = [
   { value: 30, label: '30分' },
@@ -104,8 +112,10 @@ Component({
     unlockConfirm: '观看视频',
     unlockCancel: '先不用',
     timerEnabled: true,
-    // 播放模式：single=单曲循环（默认，最简）；favorites=收藏连播
+    // 播放模式：single=单曲循环（默认，最简）；list=列表循环（按点播时冻结的队列）
     queueMode: 'single',
+    // 「全部 8 首」这类队列来源说明：模式与队列是两个维度，必须让用户看得见播的是哪一批
+    queueText: '',
     // 「继续上次」：冷启动/重进小程序时一键接着听（不自动播放，避免半夜突然出声）
     resumeLabel: ''
   },
@@ -130,16 +140,7 @@ Component({
       // 否则抽屉显示“已解锁”、点曲目却重新弹解锁。
       this._sessionUnlocked = false
       this._ttlDays = (this._cfg.cache && this._cfg.cache.ttlDays) || 7
-      // 主动播放后的自动缓存：Wi-Fi 立即、移动网络延迟（见 scheduleAutoCache）
-      this._netType = ''
-      this._autoCacheTimer = null
-      if (wx.getNetworkType) {
-        wx.getNetworkType({
-          success: (res) => {
-            this._netType = (res && res.networkType) || ''
-          }
-        })
-      }
+      // 自动缓存由 audio-player 统一排（所有起播入口共用），组件不再自己计时
       this._onCacheChange = () => this.refreshCache()
 
       cache.onChange(this._onCacheChange)
@@ -214,7 +215,6 @@ Component({
         clearInterval(this._unlockTimer)
         this._unlockTimer = null
       }
-      this.clearAutoCacheTimer()
       this.offAudio()
     }
   },
@@ -301,7 +301,8 @@ Component({
         unlockCancel: copy.unlockCancel || '先不用',
         timerEnabled,
         favoriteIds: storage.getFavorites(),
-        queueMode: meta.audioQueueMode === 'favorites' ? 'favorites' : 'single',
+        queueMode: normalizeQueueMode(meta.audioQueueMode),
+        queueText: queueTextOf(meta.audioQueueIds, meta.audioQueueScope),
         resumeLabel:
           meta.lastTrackActive !== false && meta.lastTrackId
             ? meta.lastTrackTitle || '上次的环境音'
@@ -637,63 +638,19 @@ Component({
       return cache.peek(url, this._ttlDays, url)
     },
 
-    clearAutoCacheTimer() {
-      if (this._autoCacheTimer) {
-        clearTimeout(this._autoCacheTimer)
-        this._autoCacheTimer = null
-      }
-    },
-
     /**
-     * 用户主动播放后的自动缓存。
-     * 小程序无法复用 BackgroundAudioManager 的流缓存，所以首次会与流式播放并行
-     * （约多耗 1 倍流量），换来之后每次播放都走本地、不再重复下载；
-     * 移动网络延迟 20s，避免“点开听两秒”也下整首。
+     * 起播：源选择/meta/埋点/定时/自动缓存都在 audio-player 收口，这里只做视图反应。
+     * 自动缓存下沉到播放器后，自动连播与迷你条下一首也会被缓存，不再只限手动点播。
      */
-    scheduleAutoCache(track) {
-      this.clearAutoCacheTimer()
-      if (!this._alive || !track || !track.url) return
-      if (cache.peek(track.url, this._ttlDays, track.url)) return
-      const url = track.url
-      const trackId = track.id
-      const arm = (netType) => {
-        // getNetworkType 是异步的：回调到来前用户可能已停止/切歌（stopPlayback 会清 currentId）
-        if (!this._alive || this.data.currentId !== trackId) return
-        // 离线时不排队；网络类型按“此刻”取：挂载时的快照在 Wi-Fi→4G 后会误判为立即下载
-        if (netType === 'none') return
-        this.clearAutoCacheTimer()
-        this._autoCacheTimer = setTimeout(() => {
-          this._autoCacheTimer = null
-          if (!this._alive) return
-          // 容量上限此前只靠每天一次 maybePrune 收敛；自动缓存不能把占用推过 maxMB
-          if (!cache.canAutoCache(this._cfg && this._cfg.cache)) return
-          cache.ensure(url, null, this._ttlDays).catch(() => {})
-        }, cache.autoCacheDelay(netType))
-      }
-      if (!wx.getNetworkType) {
-        arm(this._netType)
-        return
-      }
-      wx.getNetworkType({
-        success: (res) => {
-          this._netType = (res && res.networkType) || ''
-          arm(this._netType)
-        },
-        fail: () => arm(this._netType)
-      })
-    },
-    /** 起播：源选择/meta/埋点/定时都在 audio-player 收口，这里只做视图反应 */
     play(track, localPath) {
       const cached = localPath || this.peekCached(track.url)
       if (!player.play(track, { cached })) return
       this.clearCollapseTimer()
       // 用户主动点播/切歌：按记忆偏好展开播放条（自动连播不弹条）
       this.setData({ miniExpanded: this.expandedPreferred(), collapsed: false, collapsing: false, resumeLabel: '' })
-      // 播放即排队缓存：移动网络等 20s（避免试听浪费），Wi-Fi 等 8s 让首播先稳
-      this.scheduleAutoCache(track)
     },
     /**
-     * 迷你条「下一首」：与跨页迷你条同一套候选（收藏连播优先，其余列表循环）。
+     * 迷你条「下一首」：与跨页迷你条同一套候选（列表循环优先队列快照，其余按配置列表）。
      * 切歌必须走 play()：meta、缓存、埋点、定时偏好都在那里收口，避免两个入口两套行为。
      */
     onNextTap() {
@@ -702,19 +659,42 @@ Component({
       if (!this.expandedPreferred()) this.setData({ miniExpanded: true, collapsed: false })
       this.peekMiniBar()
     },
+    /**
+     * 播放模式切换：单曲循环 ↔ 列表循环。
+     * 队列来源不在这里决定——它由“点播时看到的列表”冻结（见 captureQueue），
+     * 所以在「全部」点歌就播全部、在「收藏」点歌就播收藏，模式不再绑死收藏。
+     */
     onToggleQueueMode() {
-      const favorites = storage.getFavorites() || []
-      const next = this.data.queueMode === 'favorites' ? 'single' : 'favorites'
-      if (next === 'favorites' && favorites.length < 2) {
-        wx.showToast({ title: '至少收藏 2 首才能连播', icon: 'none' })
-        return
-      }
+      const next = this.data.queueMode === 'list' ? 'single' : 'list'
       storage.patchMeta({ audioQueueMode: next })
-      this.setData({ queueMode: next })
+      // 切到列表循环却没有队列快照（历史数据）：以当前可见列表补一份，切完就真的能连播
+      if (next === 'list') {
+        const before = storage.getMeta()
+        if (!(Array.isArray(before.audioQueueIds) && before.audioQueueIds.length)) this.captureQueue()
+      }
+      const meta = storage.getMeta()
+      const queueText = queueTextOf(meta.audioQueueIds, meta.audioQueueScope)
+      this.setData({ queueMode: next, queueText })
+      // 立即按新模式重排曲末定时器：锁屏时没有 timeupdate 来纠正旧模式的回环
+      player.refreshTail()
       wx.showToast({
-        title: next === 'favorites' ? '收藏连播：播完自动下一首' : '单曲循环',
+        title:
+          next === 'list'
+            ? '列表循环：' + queueText + '，播完顺序下一首'
+            : '单曲循环：当前这首反复播放',
         icon: 'none'
       })
+    },
+
+    /**
+     * 点播即冻结队列快照：用户点哪一首，就以他当时看到的列表（全部/收藏/分类）为队列。
+     * 之后切分类、改收藏都不影响正在播的这一轮，跨页与锁屏口径一致。
+     */
+    captureQueue() {
+      const ids = queueIdsOf(this.data.filteredTracks || [])
+      const scope = this.data.activeCategory || '全部'
+      storage.patchMeta({ audioQueueIds: ids, audioQueueScope: scope })
+      this.setData({ queueText: queueTextOf(ids, scope) })
     },
 
     /** 继续上次：冷启动/重进小程序时一键接着听（不自动播放） */
@@ -876,10 +856,9 @@ Component({
 
     stopPlayback() {
       this.clearStopArm()
+      // player.stop() 内部会清掉待执行的自动缓存
       player.stop()
       this.clearCollapseTimer()
-      // 主动停止后不再启动新的后台缓存；已开始的下载保留（下次可命中）
-      this.clearAutoCacheTimer()
       this.setData({
         playerSub: '',
         timerRemainText: '',
@@ -959,7 +938,24 @@ Component({
       // 「收藏」Tab 是用户自己的集合，保持配置顺序；其余按收藏人数降序。
       // 排序用打开抽屉时的快照（_rankCounts），点 ♥ 只变数字不重排，否则刚点的那行会当场跳走。
       const list = category === '收藏' ? filtered : favCounts.sortByRank(filtered, this._rankCounts)
-      this.setData({ filteredTracks: list })
+      // 队列文案：已有快照就说明“正在播的那一批”；还没点播过就预告“现在点会以当前分类为队列”
+      const meta = storage.getMeta()
+      let queueIds = Array.isArray(meta.audioQueueIds) ? meta.audioQueueIds : []
+      let queueScope = meta.audioQueueScope
+      // 老版本“收藏连播”升级上来只有模式、没有快照：用当前可见列表补一份，
+      // 否则列表循环会静默退回单曲，升级用户会以为开关又坏了。
+      if (!queueIds.length && normalizeQueueMode(meta.audioQueueMode) === 'list') {
+        const seeded = queueIdsOf(list)
+        if (seeded.length) {
+          queueIds = seeded
+          queueScope = category || '全部'
+          storage.patchMeta({ audioQueueIds: queueIds, audioQueueScope: queueScope })
+        }
+      }
+      const queueText = queueIds.length
+        ? queueTextOf(queueIds, queueScope)
+        : (category || '全部') + ' ' + list.length + ' 首'
+      this.setData({ filteredTracks: list, queueText })
     },
 
     onToggleFavorite(event) {
@@ -1000,6 +996,9 @@ Component({
         this.togglePlay()
         return
       }
+
+      // 起播前冻结队列：这一轮播的是“用户此刻看到的这批”，后面切分类不再改队列
+      this.captureQueue()
 
       if (!this.isUnlocked() && !this.isFreeMode()) {
         this._sheetTrackId = track.id

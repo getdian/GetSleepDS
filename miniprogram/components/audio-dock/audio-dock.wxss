@@ -480,6 +480,7 @@
 .dock-section-count {
   font-size: 18rpx;
   color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .dock-list {
@@ -1187,6 +1188,7 @@
 .dock-section-count {
   font-size: 17rpx;
   color: var(--text-muted);
+  white-space: nowrap;
 }
 
 /* 定时：固定贴抽屉底部，不加底框，只用字号/字重/实心档位承担权重 */
@@ -1364,7 +1366,7 @@
   border-radius: 2rpx;
 }
 
-/* 播放模式切换（单曲循环 / 收藏连播）：只在抽屉内出现，默认单曲 */
+/* 播放模式切换（单曲循环 / 列表循环）：只在抽屉内出现，默认单曲 */
 .dock-section-right {
   display: flex;
   align-items: center;

@@ -3,18 +3,16 @@
  * 声音入口仍然只在入睡页（audio-dock）；这里只在「已经播放过」时出现，
  * 让用户在计算器/统计页也能暂停、继续、停止，不必切回入睡页。
  * 监听 play/pause/stop/error，并作为 ended 的“第二处理人”：audio-dock 只在入睡页常驻，
- * 但两个组件可能同时收到同一个 ended，因此用 playerState.claimEnded() 去重，
- * 保证每轮循环只有一个组件重建音源并重播。
+ * 但两个组件可能同时收到同一个 ended，因此用 playerState.claimEnded() 去重；
+ * 曲末推进统一交给 audio-player（单曲回环 / 列表换下一首），组件不再各写一套。
  */
 const storage = require('../../utils/storage')
 const audioTimer = require('../../utils/audio-timer')
 const playerState = require('../../utils/player-state')
-const cache = require('../../utils/audio-cache')
 const events = require('../../utils/events')
 const audioSession = require('../../utils/audio-session')
 const player = require('../../utils/audio-player')
 const { isReallyPlaying } = require('../../utils/player-surface')
-const { nextTrackManual } = require('../../utils/player-queue')
 const tabbar = require('../../utils/tabbar')
 const { getConfig } = require('../../utils/config')
 
@@ -226,8 +224,8 @@ Component({
       // 与入睡页 dock 同口径：偏好取内存中的 audioTimer.total()（默认“关”=0，
       // 不跨会话回忆 meta 里的旧档位）。
       this.applyTimerPreference(audioTimer.total())
-      // 后台/锁屏时 onTimeUpdate 不再回调，回环点改由定时器兜底
-      playerState.armLoop(this._audio)
+      // 后台/锁屏时 onTimeUpdate 不再回调，曲末动作改由定时器兜底（单曲回环 / 列表换曲）
+      player.armTail(this._audio)
     },
 
     handlePause() {
@@ -253,7 +251,7 @@ Component({
       if (this.data.loading || (live && !this.data.playing)) {
         this.setData({ loading: false, playing: live || this.data.playing })
       }
-      playerState.armLoop(this._audio)
+      player.armTail(this._audio)
     },
 
     handleTimeUpdate() {
@@ -282,10 +280,10 @@ Component({
           return
         }
       }
-      // 曲末前无缝回环：不进 ended、不换 src，保住微信悬浮音符（见 player-state.seamlessLoop）
-      playerState.seamlessLoop(this._audio)
-      // 前台每秒校准回环定时器；锁屏后没有 timeupdate 时由它独立兜底
-      playerState.armLoop(this._audio)
+      // 曲末动作与入睡页同源：列表循环在 ended 前换下一首，单曲才无缝回环
+      if (!player.tailTick(this._audio)) playerState.seamlessLoop(this._audio)
+      // 前台每秒校准曲末定时器；锁屏后没有 timeupdate 时由它独立兜底
+      player.armTail(this._audio)
     },
 
     /** 统一设置音源并记录最后一次赋值，供 onError 判断是否为旧源 */
@@ -351,20 +349,10 @@ Component({
         this.collapse()
         return
       }
-      if (!this.rebuildSource()) {
-        // 配置还没落地/曲目暂时找不到：保留会话与“已暂停”入口，
-        // 等 App.onShow 拉到真实配置后由 audio-session.onConfigReady 续播。
-        storage.patchMeta({ lastTrackPlaying: false })
-        this.setData({ playing: false })
-        this.sync(true)
-        return
-      }
-      try {
-        this.armLoadingGuard()
-        this._audio.play()
-      } catch (e) {
-        this.disarmLoadingGuard()
-        // 起播失败同样保留会话，交给 onError / 用户点按重试收口
+      // 曲末推进统一交给播放器：单曲循环回环 / 列表循环换下一首，口径只有一份。
+      // 推进失败（配置未落地 / 曲目找不到）时保留会话与“已暂停”入口，
+      // 等 App.onShow 拉到真实配置后由 audio-session.onConfigReady 续播。
+      if (!player.advance()) {
         storage.patchMeta({ lastTrackPlaying: false })
         this.setData({ playing: false })
         this.sync(true)
@@ -715,6 +703,9 @@ Component({
           this.applyTimerPreference(audioTimer.total())
           this.armLoadingGuard()
           audio.play()
+          // 这条直调 BAM 的续播也是起播入口：同样要排自动缓存（与 player.play/resume 同口径）
+          const current = player.trackOf(storage.getMeta().lastTrackId)
+          if (current) player.scheduleAutoCache(current)
           // 续播成功后再起表：失败/立刻暂停都不该触发“3 秒后收起”
           this.armResumePeek()
         } else {
@@ -733,9 +724,8 @@ Component({
     },
 
     /**
-     * 手动下一首：收藏连播时按收藏队列，其余按配置列表循环。
-     * 切歌后立刻续播并同步 meta —— 入睡页抽屉、三个页面的迷你条必须看到同一首，
-     * 所以这里不维护第二份“当前曲目”，只认 meta + 播放器。
+     * 手动下一首：统一交给播放器（列表循环优先队列快照，其余按配置列表）。
+     * 两个入口不能各自算一遍下一首——audio-dock 与迷你条必须切到同一首。
      */
     next() {
       this.clearStopArm()
@@ -744,57 +734,23 @@ Component({
         this.rejectLocked()
         return
       }
-      const audio = this._audio
-      if (!audio) return
-      const cfg = getConfig()
-      const tracks = (cfg.audio || []).filter((track) => track && track.id && track.url)
-      const meta = storage.getMeta()
-      const track = nextTrackManual(tracks, meta.lastTrackId, storage.getFavorites(), meta.audioQueueMode)
-      if (!track) {
+      if (!this._audio) return
+      if (!player.next()) {
         if (this._pageVisible) wx.showToast({ title: '只有一个音源', icon: 'none' })
         return
       }
-      // 用户主动点播即视为重试：先解黑名单再取缓存，避免上一轮失败后一直走远程
-      cache.clearBad(track.url)
-      const cached = cache.peek(track.url, (cfg.cache && cfg.cache.ttlDays) || 7, track.url)
-      playerState.clearFallback()
-      // 主动切歌允许中断后自动恢复；倒计时按当前档位继续跑
-      audioSession.markUserPlay()
-      audio.title = '睡点 · ' + track.title
-      audio.epname = '环境音'
-      audio.singer = '睡点'
+      // 切歌后保住播放条 3 秒，让用户看到曲名已经换了
+      this.clearCollapseTimer()
       this.setData({
         playing: true,
         loading: true,
-        title: track.title,
-        category: track.category || '',
         miniExpanded: true,
         collapsed: false,
         collapsing: false
       })
-      storage.patchMeta({
-        lastTrackId: track.id,
-        lastTrackTitle: track.title,
-        lastTrackCategory: track.category || '',
-        lastTrackActive: true,
-        lastTrackPlaying: true
-      })
-      this.setAudioSrc(cached || track.url)
       this.armLoadingGuard()
-      try {
-        audio.play()
-        // 切歌后同样保住播放条 3 秒，让用户看到曲名已经换了
-        this.armResumePeek()
-      } catch (e) {
-        this.clearPeek()
-        this.disarmLoadingGuard()
-        this.setData({ playing: false, loading: false })
-        storage.patchMeta({ lastTrackPlaying: false })
-        if (this._pageVisible) wx.showToast({ title: '切换失败，请重试', icon: 'none' })
-        return
-      }
+      this.armResumePeek()
       this.applyTimerPreference(audioTimer.total())
-      events.track('audio_play', track.id)
       this.syncTimer()
       // play 事件不保证到达（部分基础库/自动化环境）：切歌后主动把入口拉起来，
       // 否则「停止→再切歌」会留在隐藏态，用户以为没反应。
