@@ -103,8 +103,14 @@ function createApp(options) {
 
   const store =
     options.configStore || createConfigStore({ db, fileConfig: config.app, logger })
-  // 后台密码：数据库凭据（改密后）优先，未落库时回退 env（首次引导）
-  const auth = createAdminAuth(Object.assign({}, config.admin, { credentials: options.adminCredentials }))
+  // 后台密码：数据库凭据（改密后）优先，未落库时回退 env（首次引导）；
+  // 凭据读取失败时 adminAuthDisabled=true —— 后台登录 fail-closed，不回退 env 密码。
+  const auth = createAdminAuth(
+    Object.assign({}, config.admin, {
+      credentials: options.adminCredentials,
+      disabled: !!options.adminAuthDisabled
+    })
+  )
   const secretBox = options.secretBox || createSecretBox(config.security.key)
   const storageSettings =
     options.storageSettings ||

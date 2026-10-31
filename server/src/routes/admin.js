@@ -6,6 +6,7 @@ const multer = require('multer')
 const { wrap } = require('../lib/http')
 const { rateLimited, invalidBody, apiError, dbUnavailable } = require('../lib/errors')
 const { orphanKeys } = require('../lib/cos-keys')
+const { detectAudioType, detectImageType, verifyContent } = require('../lib/file-signature')
 const { makeCredential, MIN_PASSWORD_LENGTH, MAX_PASSWORD_LENGTH } = require('../services/admin-auth')
 const cos = require('../services/cos')
 
@@ -18,13 +19,6 @@ const AUDIO_TYPES = {
   'audio/wav': 'wav',
   'audio/x-wav': 'wav',
   'audio/ogg': 'ogg'
-}
-
-function fileExtension(file) {
-  const byMime = AUDIO_TYPES[file.mimetype]
-  if (byMime) return byMime
-  const ext = path.extname(file.originalname || '').replace('.', '').toLowerCase()
-  return /^[a-z0-9]{2,5}$/.test(ext) ? ext : 'mp3'
 }
 
 function readOpenid(value) {
@@ -60,14 +54,6 @@ const IMAGE_TYPES = {
   'image/webp': 'webp'
 }
 
-function imageExtension(file) {
-  const byMime = IMAGE_TYPES[file.mimetype]
-  if (byMime) return byMime
-  const ext = path.extname(file.originalname || '').replace('.', '').toLowerCase()
-  if (ext === 'jpeg') return 'jpg'
-  return ['jpg', 'png', 'webp'].indexOf(ext) >= 0 ? ext : 'jpg'
-}
-
 function createImageUploader() {
   return multer({
     storage: multer.memoryStorage(),
@@ -83,6 +69,25 @@ function createImageUploader() {
       callback(error)
     }
   })
+}
+
+/** 上传文件的真实类型必须与允许的格式一致：只信扩展名/MIME 不足以拦住伪装内容 */
+function assertAudioContent(file) {
+  const detected = detectAudioType(file.buffer)
+  const checked = verifyContent(file.buffer, detected, ['mp3', 'm4a', 'aac', 'wav', 'ogg'])
+  if (!checked.ok) {
+    throw apiError('INVALID_FILE_CONTENT', checked.reason, 400)
+  }
+  return checked.detected
+}
+
+function assertImageContent(file) {
+  const detected = detectImageType(file.buffer)
+  const checked = verifyContent(file.buffer, detected, ['jpg', 'png', 'webp'])
+  if (!checked.ok) {
+    throw apiError('INVALID_FILE_CONTENT', checked.reason, 400)
+  }
+  return checked.detected
 }
 
 function createAdminRoute(options) {
@@ -105,9 +110,29 @@ function createAdminRoute(options) {
   const imageUpload = createImageUploader()
 
   // 上传在 multer 解析文件之前限流，避免 25MB 文件先落内存再被拒
+  // 同时限制并发数：multer.memoryStorage 会把文件整个读进内存，
+  // 几个并发大文件就能把容器内存打满。
+  const MAX_CONCURRENT_UPLOADS = 2
+  let uploadsInFlight = 0
   function gateUpload(req, res, next) {
-    if (!limitUpload || limitUpload(req.ip || 'unknown')) return next()
-    next(rateLimited())
+    if (limitUpload && !limitUpload(req.ip || 'unknown')) {
+      next(rateLimited())
+      return
+    }
+    if (uploadsInFlight >= MAX_CONCURRENT_UPLOADS) {
+      next(apiError('UPLOAD_BUSY', '已有上传在进行，请等它结束后再试', 429))
+      return
+    }
+    uploadsInFlight += 1
+    let released = false
+    const release = function () {
+      if (released) return
+      released = true
+      uploadsInFlight = Math.max(0, uploadsInFlight - 1)
+    }
+    res.on('finish', release)
+    res.on('close', release)
+    next()
   }
 
   // 上传审计（best-effort）：失败不阻断上传结果，但要留日志
@@ -122,8 +147,11 @@ function createAdminRoute(options) {
    * 保存成功后回收被替换的自家 COS 对象（背景图 / 小程序码）。
    * - 只删 lib/cos-keys.js 白名单目录，音频不在内（可能共用/历史地址）；
    * - 异步执行、失败只记日志：清理失败不影响本次保存结果；
-   * - 上传后未保存的情况不会触发，线上引用不会被提前删掉。
+   * - 上传后未保存的情况不会触发，线上引用不会被提前删掉；
+   * - **延迟回收**：客户端最多缓存 10 分钟配置，立刻删除会让还没刷新的小程序
+   *   拿到已失效的图片地址（404）。这里留一段宽限期再物理删除。
    */
+  const RECYCLE_GRACE_MS = 30 * 60 * 1000
   function removeReplacedUploads(prevConfig, nextConfig) {
     if (!prevConfig || !nextConfig || typeof storage.getRaw !== 'function') return
     Promise.resolve()
@@ -131,15 +159,20 @@ function createAdminRoute(options) {
       .then((settings) => {
         if (!settings || !settings.bucket || !settings.secretId || !settings.secretKey) return
         const keys = orphanKeys(settings, prevConfig, nextConfig)
-        return keys.reduce(
-          (chain, key) =>
-            chain.then(() =>
-              cos.deleteObject(settings, key).catch((e) => {
-                log.error('[cos] delete replaced object failed:', key, e.code || e.message)
-              })
-            ),
-          Promise.resolve()
-        )
+        if (!keys.length) return
+        const timer = setTimeout(() => {
+          keys.reduce(
+            (chain, key) =>
+              chain.then(() =>
+                cos.deleteObject(settings, key).catch((e) => {
+                  log.error('[cos] delete replaced object failed:', key, e.code || e.message)
+                })
+              ),
+            Promise.resolve()
+          )
+        }, RECYCLE_GRACE_MS)
+        // 定时器不能吊住进程（容器重启时直接放弃回收即可）
+        if (typeof timer.unref === 'function') timer.unref()
       })
       .catch((e) => log.error('[cos] cleanup replaced objects failed:', e.code || e.message))
   }
@@ -154,11 +187,45 @@ function createAdminRoute(options) {
     wrap(async (req, res) => {
       if (!limitLogin(req.ip || 'unknown')) throw rateLimited()
 
+      // 凭据读取失败时后台登录整体关闭：不回退 env 密码，也不发 Cookie
+      if (auth.disabled) {
+        throw apiError(
+          'ADMIN_AUTH_UNAVAILABLE',
+          '后台登录暂不可用：服务端未能读取数据库凭据，请查看服务端日志',
+          503
+        )
+      }
+
       const password = req.body && req.body.password
       if (typeof password !== 'string' || !password) throw invalidBody('请输入密码')
-      if (!auth.checkPassword(password)) throw apiError('UNAUTHORIZED', '密码不正确', 401)
+      if (!auth.checkPassword(password)) {
+        // 登录失败要留痕：暴力尝试必须可追溯（不记密码本身）
+        if (db.logAdminAction) {
+          try {
+            await db.logAdminAction('admin_login_failed', '-', {
+              requestId: req.id || '',
+              ip: req.ip || 'unknown',
+              at: now()
+            })
+          } catch (e) {
+            log.error('[audit] admin_login_failed failed:', e.message)
+          }
+        }
+        throw apiError('UNAUTHORIZED', '密码不正确', 401)
+      }
 
       res.cookie(auth.COOKIE_NAME, auth.issue(), auth.cookieOptions())
+      if (db.logAdminAction) {
+        try {
+          await db.logAdminAction('admin_login', '-', {
+            requestId: req.id || '',
+            source: typeof auth.credentialSource === 'function' ? auth.credentialSource() : 'env',
+            at: now()
+          })
+        } catch (e) {
+          log.error('[audit] admin_login failed:', e.message)
+        }
+      }
       res.json({ ok: true })
     })
   )
@@ -253,6 +320,7 @@ function createAdminRoute(options) {
       res.json({
         config: current.config,
         updatedAt: current.updatedAt,
+        revision: current.revision || 0,
         source: current.source,
         storage: db.mode
       })
@@ -272,8 +340,11 @@ function createAdminRoute(options) {
       }
       let saved = null
       try {
-        // baseUpdatedAt 由后台在载入配置时记录；不一致返回 409，避免并发保存互相覆盖
+        // baseRevision 是发布版本（单调递增），由存储层做原子 CAS：
+        // 两个并发保存只有一个能成功，另一个拿到 409 CONFIG_CONFLICT。
+        // baseUpdatedAt 是旧后台的时间戳口径，仅在没有 revision 时兜底。
         saved = await store.save(req.body, {
+          expectedRevision: req.body && req.body.baseRevision,
           expectedUpdatedAt: req.body && req.body.baseUpdatedAt
         })
       } catch (error) {
@@ -286,6 +357,8 @@ function createAdminRoute(options) {
           const config = saved.config || {}
           await db.logAdminAction('admin_config_save', '-', {
             version: config.version,
+            revision: saved.revision || 0,
+            requestId: req.id || '',
             audioCount: (config.audio || []).length,
             backgroundCount: (config.backgrounds || []).length,
             defaultBackgroundId: config.defaultBackgroundId || '',
@@ -298,6 +371,7 @@ function createAdminRoute(options) {
       res.json({
         config: saved.config,
         updatedAt: saved.updatedAt,
+        revision: saved.revision || 0,
         source: saved.source,
         storage: db.mode
       })
@@ -423,7 +497,28 @@ function createAdminRoute(options) {
         log.error('[db] admin user query failed:', req.id || '', e.message)
         throw dbUnavailable()
       }
+      // 最小化投影：后台只展示日期/入睡/起床/时长，
+      // 不下发完整睡眠段（每段的起止、来源与编辑时间属于不必要的敏感明细）。
+      records = records.map((record) => ({
+        day: record.day,
+        bedAt: record.bedAt,
+        wakeAt: record.wakeAt,
+        durationMin: record.durationMin
+      }))
       records.sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : 0))
+      // 敏感读取也要留痕：谁在什么时候查了哪个用户的云端记录
+      if (db.logAdminAction) {
+        try {
+          await db.logAdminAction('admin_user_query', openidTag(openid), {
+            requestId: req.id || '',
+            recordCount: records.length,
+            eventCount,
+            at: now()
+          })
+        } catch (e) {
+          log.error('[audit] admin_user_query failed:', e.message)
+        }
+      }
       res.json({
         openid,
         count: records.length,
@@ -461,6 +556,10 @@ function createAdminRoute(options) {
         deletedRecords: result.records,
         deletedUnlocks: result.unlocks,
         deletedEvents: result.events,
+        deletedReminders: result.reminders,
+        deletedFeedback: result.feedback,
+        deletedFavorites: result.favorites,
+        deletedBackgroundUses: result.backgroundUses,
         erasedAt: result.erasedAt
       }
       log.log(
@@ -488,6 +587,10 @@ function createAdminRoute(options) {
         deleted: result.records,
         deletedUnlocks: result.unlocks,
         deletedEvents: result.events,
+        deletedReminders: result.reminders,
+        deletedFeedback: result.feedback,
+        deletedFavorites: result.favorites,
+        deletedBackgroundUses: result.backgroundUses,
         erasedAt: result.erasedAt
       })
     })
@@ -523,7 +626,22 @@ function createAdminRoute(options) {
     '/admin/storage',
     auth.requireAuth,
     wrap(async (req, res) => {
-      res.json(await storage.save(req.body))
+      const saved = await storage.save(req.body)
+      // COS 凭证变更属于高风险操作：必须留痕（不记 SecretKey 明文）
+      if (db.logAdminAction) {
+        try {
+          await db.logAdminAction('admin_storage_save', '-', {
+            requestId: req.id || '',
+            bucket: (saved && saved.bucket) || '',
+            region: (saved && saved.region) || '',
+            configured: !!(saved && saved.configured),
+            at: now()
+          })
+        } catch (e) {
+          log.error('[audit] admin_storage_save failed:', e.message)
+        }
+      }
+      res.json(saved)
     })
   )
 
@@ -553,6 +671,9 @@ function createAdminRoute(options) {
     wrap(async (req, res) => {
       if (!req.file) throw invalidBody('没有收到音频文件')
 
+      // 先验内容再验存储：伪装文件不必等到 COS 配置齐全才被拒
+      const realType = assertAudioContent(req.file)
+
       const settings = await storage.getRaw()
       if (!settings || !settings.bucket || !settings.secretId || !settings.secretKey) {
         throw apiError('STORAGE_NOT_CONFIGURED', '请先在“存储与上传”里配置 COS', 400)
@@ -565,7 +686,7 @@ function createAdminRoute(options) {
         '-' +
         crypto.randomBytes(4).toString('hex') +
         '.' +
-        fileExtension(req.file)
+        realType
 
       try {
         await cos.uploadBuffer(settings, {
@@ -602,6 +723,9 @@ function createAdminRoute(options) {
     wrap(async (req, res) => {
       if (!req.file) throw invalidBody('没有收到图片文件')
 
+      // 先验内容再验存储：伪装文件不必等到 COS 配置齐全才被拒
+      const realType = assertImageContent(req.file)
+
       const settings = await storage.getRaw()
       if (!settings || !settings.bucket || !settings.secretId || !settings.secretKey) {
         throw apiError('STORAGE_NOT_CONFIGURED', '请先在“存储与上传”里配置 COS', 400)
@@ -615,7 +739,7 @@ function createAdminRoute(options) {
         '-' +
         crypto.randomBytes(4).toString('hex') +
         '.' +
-        imageExtension(req.file)
+        realType
 
       try {
         await cos.uploadBuffer(settings, {
@@ -647,6 +771,9 @@ function createAdminRoute(options) {
     wrap(async (req, res) => {
       if (!req.file) throw invalidBody('没有收到图片文件')
 
+      // 先验内容再验存储：伪装文件不必等到 COS 配置齐全才被拒
+      const realType = assertImageContent(req.file)
+
       const settings = await storage.getRaw()
       if (!settings || !settings.bucket || !settings.secretId || !settings.secretKey) {
         throw apiError('STORAGE_NOT_CONFIGURED', '请先在“存储与上传”里配置 COS', 400)
@@ -660,7 +787,7 @@ function createAdminRoute(options) {
         '-' +
         crypto.randomBytes(4).toString('hex') +
         '.' +
-        imageExtension(req.file)
+        realType
 
       try {
         await cos.uploadBuffer(settings, {

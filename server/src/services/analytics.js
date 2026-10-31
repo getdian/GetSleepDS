@@ -42,11 +42,12 @@ function createAnalytics(options) {
     // 与产品“本周”一致：北京时间周一 00:00 起，而不是滚动 7 天
     const weekStart = weekStartKey(today)
 
-    const [events, totals, current] = await Promise.all([
+    const [eventPage, totals, current] = await Promise.all([
       db.listEvents(start),
       db.adminStats(now),
       store.get()
     ])
+    const events = (eventPage && eventPage.items) || []
 
     const days = new Map()
     for (let i = 0; i < 14; i += 1) {
@@ -70,7 +71,8 @@ function createAnalytics(options) {
     const top = new Map()
     const sources = new Map()
     const adSlots = new Map()
-    const unlockFailReasons = new Map()
+    // 本周失败原因：加载失败率必须与它的分子分母同口径（此前分子取 14 天、分母取本周）
+    const weekUnlockFailReasons = new Map()
 
     events.forEach((event) => {
       const bucket = days.get(dayKey(event.ts))
@@ -93,8 +95,6 @@ function createAnalytics(options) {
       if (event.type === 'audio_unlock') bucket.unlocks += 1
       if (event.type === 'audio_unlock_fail') {
         bucket.unlockFails += 1
-        const reason = String(event.target || 'unknown').split('|')[0] || 'unknown'
-        unlockFailReasons.set(reason, (unlockFailReasons.get(reason) || 0) + 1)
       }
       if (event.type === 'audio_interrupt' && String(event.target || '').indexOf('begin') === 0) {
         bucket.interrupts += 1
@@ -124,7 +124,11 @@ function createAnalytics(options) {
         if (event.type === 'checkin') weekCheckins += 1
         if (event.type === 'audio_play') weekPlays += 1
         if (event.type === 'audio_unlock') weekUnlocks += 1
-        if (event.type === 'audio_unlock_fail') weekUnlockFails += 1
+        if (event.type === 'audio_unlock_fail') {
+          weekUnlockFails += 1
+          const weekReason = String(event.target || 'unknown').split('|')[0] || 'unknown'
+          weekUnlockFailReasons.set(weekReason, (weekUnlockFailReasons.get(weekReason) || 0) + 1)
+        }
         if (event.type === 'audio_interrupt' && String(event.target || '').indexOf('begin') === 0) {
           weekInterrupts += 1
         }
@@ -160,12 +164,13 @@ function createAnalytics(options) {
     })
     const adShows = adBySlot.reduce((sum, item) => sum + item.shows, 0)
     const adErrors = adBySlot.reduce((sum, item) => sum + item.errors, 0)
-    const unlockFailByReason = Array.from(unlockFailReasons.entries())
+    const unlockFailByReason = Array.from(weekUnlockFailReasons.entries())
       // 同频时按原因名稳定排序，后台不会因 Map 插入顺序不同而跳来跳去
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
       .map((entry) => ({ reason: entry[0], count: entry[1] }))
+    // 加载失败率：分子分母都取本周，口径与页面文案一致
     const unlockLoadErrors =
-      (unlockFailReasons.get('error') || 0) + (unlockFailReasons.get('unavailable') || 0)
+      (weekUnlockFailReasons.get('error') || 0) + (weekUnlockFailReasons.get('unavailable') || 0)
     const unlockAttempts = weekUnlocks + unlockLoadErrors
     const unlockLoadFailureRate = unlockAttempts
       ? Math.round((unlockLoadErrors / unlockAttempts) * 100)
@@ -225,8 +230,13 @@ function createAnalytics(options) {
       topSources,
       unlockFailReasons: unlockFailByReason,
       unlockLoadFailureRate,
-      // listEvents 在 memory/PG 两端都硬上限 20000；达到上限时趋势与 Top 榜可能偏低
-      truncated: events.length >= 20000
+      // 取样上限由存储层如实回报：触达上限时全部事件指标都是样本，必须让运营看见
+      truncated: !!(eventPage && eventPage.truncated),
+      coverage: {
+        since: start,
+        oldestAt: (eventPage && eventPage.oldestAt) || 0,
+        eventCount: events.length
+      }
     }
   }
 

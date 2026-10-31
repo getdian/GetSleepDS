@@ -1,4 +1,6 @@
 const { Pool } = require('pg')
+const { apiError } = require('../lib/errors')
+const { MAX_UPDATED_FUTURE_MS } = require('../lib/validate')
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS audio_unlocks (
@@ -59,8 +61,12 @@ ALTER TABLE sleep_records ADD COLUMN IF NOT EXISTS total_duration_min INTEGER;
 CREATE TABLE IF NOT EXISTS app_config (
     key          TEXT PRIMARY KEY,
     value        JSONB NOT NULL,
-    updated_at   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    -- 单调递增的发布版本：后台保存用它做原子 CAS（并发保存只允许一个成功），
+    -- updated_at 只用于展示，不能当并发依据（同一毫秒可能相同）。
+    revision     BIGINT NOT NULL DEFAULT 1
 );
+ALTER TABLE app_config ADD COLUMN IF NOT EXISTS revision BIGINT NOT NULL DEFAULT 1;
 
 -- 单日删除墓碑：撤销打卡后阻止其他设备把旧记录传回
 CREATE TABLE IF NOT EXISTS sleep_record_deletions (
@@ -112,11 +118,17 @@ CREATE TABLE IF NOT EXISTS events (
     openid      VARCHAR(64) NOT NULL,
     type        VARCHAR(24) NOT NULL,
     target      VARCHAR(64) NOT NULL DEFAULT '',
+    -- 客户端自带事件 id：网络重试（服务端已提交但响应丢失）时按 (openid, event_id) 去重，
+    -- 否则播放/打卡/分享等计数会被重复放大。旧客户端没有 id 时留空。
+    event_id    VARCHAR(64),
     created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+ALTER TABLE events ADD COLUMN IF NOT EXISTS event_id VARCHAR(64);
 CREATE INDEX IF NOT EXISTS idx_events_created_at ON events (created_at);
 CREATE INDEX IF NOT EXISTS idx_events_type_created ON events (type, created_at);
 CREATE INDEX IF NOT EXISTS idx_events_openid ON events (openid);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_events_openid_event_id
+    ON events (openid, event_id) WHERE event_id IS NOT NULL;
 
 -- 用户反馈：只存用户主动提交的内容。type 三类（SUGGEST/MUSIC/ISSUE），
 -- contact 为可选联系方式（用户自愿填写）；后台标记已处理后 handled_at 非空。
@@ -144,6 +156,44 @@ CREATE TABLE IF NOT EXISTS admin_audit (
 CREATE INDEX IF NOT EXISTS idx_admin_audit_created_at ON admin_audit (created_at DESC);
 `
 
+function subjectRequestAt(value) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : Date.now()
+}
+
+/**
+ * 全量清除与所有用户写入共用的代际判定。
+ * 删除前已经开始的请求即使晚到，也不能凭客户端时间戳把数据写回；
+ * 删除完成后发生的新主动操作不受限制。
+ */
+function assertSubjectWriteAllowed(erasedAt, requestStartedAt) {
+  // 严格小于：与清除同一毫秒开始的请求视为“清除之后的新动作”，
+  // 否则同一毫秒内完成的正常操作会被误判成在途请求。
+  if (erasedAt && subjectRequestAt(requestStartedAt) < erasedAt) {
+    throw apiError('DATA_ERASED', '数据已清除，请刷新后重试', 409)
+  }
+}
+
+/** PG 用户写入的统一深模块：连接、事务、subject 锁和 erasure 判定只在这里出现一次。 */
+async function withSubjectWrite(pool, openid, requestStartedAt, work) {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1)::bigint)', [openid])
+    const result = await client.query('SELECT erased_at FROM user_erasures WHERE openid = $1', [openid])
+    const erasedAt = result.rows.length ? new Date(result.rows[0].erased_at).getTime() : 0
+    assertSubjectWriteAllowed(erasedAt, requestStartedAt)
+    const value = await work(client, erasedAt)
+    await client.query('COMMIT')
+    return value
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
+}
+
 function createMemoryDb() {
   const unlocks = new Map()
   const records = new Map()
@@ -151,6 +201,8 @@ function createMemoryDb() {
   const erasures = new Map()
   const settings = new Map()
   const events = []
+  // 客户端事件 id 去重键（openid|eventId）：网络重试不重复计数
+  const eventIds = new Set()
   const audits = []
   const reminders = new Map()
   const feedback = []
@@ -160,6 +212,14 @@ function createMemoryDb() {
   const bgUses = []
   let feedbackSeq = 0
   let appConfig = null
+
+  /** 去重索引与事件数组保持一致：删除或清理后必须重建，否则 id 会永久占用。 */
+  function syncEventIds() {
+    eventIds.clear()
+    events.forEach((event) => {
+      if (event.id) eventIds.add(event.openid + '|' + event.id)
+    })
+  }
 
   return {
     mode: 'memory',
@@ -172,7 +232,8 @@ function createMemoryDb() {
       return 'ok'
     },
 
-    async saveUnlock(openid, expireAt) {
+    async saveUnlock(openid, expireAt, requestStartedAt) {
+      assertSubjectWriteAllowed(erasures.get(openid) || 0, requestStartedAt)
       unlocks.set(openid, expireAt)
     },
 
@@ -232,7 +293,8 @@ function createMemoryDb() {
       return Array.from(list, ([day, deletedAt]) => ({ day, deletedAt }))
     },
 
-    async saveReminder(openid, reminder) {
+    async saveReminder(openid, reminder, requestStartedAt) {
+      assertSubjectWriteAllowed(erasures.get(openid) || 0, requestStartedAt)
       let bucket = reminders.get(openid)
       if (!bucket) {
         bucket = new Map()
@@ -317,8 +379,18 @@ function createMemoryDb() {
      * 同步的核心：应用删除墓碑、erasure 水位，再按 LWW upsert。
      * 返回 accepted/dropped 以及当前云端全量，供客户端回填。
      */
-    async syncRecords(openid, list, deleteList, nowTs) {
+    async syncRecords(openid, list, deleteList, nowTs, requestStartedAt) {
       const erasedAt = erasures.get(openid) || 0
+      // 清除前已在途的同步：不写入，并把清除水位带回客户端（客户端据此清本机）
+      if (erasedAt && subjectRequestAt(requestStartedAt) < erasedAt) {
+        return {
+          accepted: 0,
+          dropped: (list || []).length,
+          records: [],
+          deletedDays: [],
+          erasedAt
+        }
+      }
       let bucket = records.get(openid)
       if (!bucket) {
         bucket = new Map()
@@ -340,6 +412,12 @@ function createMemoryDb() {
 
       list.forEach((record) => {
         if (record.updatedAt <= erasedAt) {
+          dropped += 1
+          return
+        }
+        // 时间戳超出请求时刻太多：不是可信的新数据（旧设备时钟偏快），直接丢弃，
+        // 否则删除后仍可用未来时间戳把旧记录写回。
+        if (record.updatedAt > subjectRequestAt(requestStartedAt) + MAX_UPDATED_FUTURE_MS) {
           dropped += 1
           return
         }
@@ -376,13 +454,19 @@ function createMemoryDb() {
       deletions.delete(openid)
       const unlockCount = unlocks.delete(openid) ? 1 : 0
       // 收藏与背景使用都带 openid，属用户偏好：全量清除与仅清云端都要一起清
-      audioFavs.delete(openid)
+      const favoriteCount = audioFavs.delete(openid) ? 1 : 0
+      let backgroundUseCount = 0
       for (let i = bgUses.length - 1; i >= 0; i -= 1) {
-        if (bgUses[i].openid === openid) bgUses.splice(i, 1)
+        if (bgUses[i].openid === openid) {
+          bgUses.splice(i, 1)
+          backgroundUseCount += 1
+        }
       }
       // 「删除全部数据」必须连订阅提醒一起清：否则清除后仍会在到点推送，
       // 且 openid/session_id 会继续留存在 sleep_reminders 里直到 7 天清理。
-      const reminderCount = reminders.delete(openid) ? 1 : 0
+      const reminderBucket = reminders.get(openid)
+      const reminderCount = reminderBucket ? reminderBucket.size : 0
+      reminders.delete(openid)
       let eventCount = 0
       for (let i = events.length - 1; i >= 0; i -= 1) {
         if (events[i].openid === openid) {
@@ -399,13 +483,17 @@ function createMemoryDb() {
           feedbackCount += 1
         }
       }
-      erasures.set(openid, erasedAt)
+      // 水位只前进不后退：乱序到达的旧删除请求不能降低已生效的清除边界
+      erasures.set(openid, Math.max(erasures.get(openid) || 0, erasedAt))
+      syncEventIds()
       return {
         records: recordCount,
         unlocks: unlockCount,
         events: eventCount,
         reminders: reminderCount,
         feedback: feedbackCount,
+        favorites: favoriteCount,
+        backgroundUses: backgroundUseCount,
         erasedAt
       }
     },
@@ -422,12 +510,18 @@ function createMemoryDb() {
       deletions.delete(openid)
       const unlockCount = unlocks.delete(openid) ? 1 : 0
       // 收藏与背景使用都带 openid，属用户偏好：全量清除与仅清云端都要一起清
-      audioFavs.delete(openid)
+      const favoriteCount = audioFavs.delete(openid) ? 1 : 0
+      let backgroundUseCount = 0
       for (let i = bgUses.length - 1; i >= 0; i -= 1) {
-        if (bgUses[i].openid === openid) bgUses.splice(i, 1)
+        if (bgUses[i].openid === openid) {
+          bgUses.splice(i, 1)
+          backgroundUseCount += 1
+        }
       }
       // 只删云端副本时，云端的订阅提醒也属于“云端数据”，必须一起清。
-      const reminderCount = reminders.delete(openid) ? 1 : 0
+      const reminderBucket = reminders.get(openid)
+      const reminderCount = reminderBucket ? reminderBucket.size : 0
+      reminders.delete(openid)
       let eventCount = 0
       for (let i = events.length - 1; i >= 0; i -= 1) {
         if (events[i].openid === openid) {
@@ -443,12 +537,15 @@ function createMemoryDb() {
           feedbackCount += 1
         }
       }
+      syncEventIds()
       return {
         records: recordCount,
         unlocks: unlockCount,
         events: eventCount,
         reminders: reminderCount,
         feedback: feedbackCount,
+        favorites: favoriteCount,
+        backgroundUses: backgroundUseCount,
         erasedAt: 0
       }
     },
@@ -460,13 +557,30 @@ function createMemoryDb() {
 
     async getAppConfig() {
       if (!appConfig) return null
-      return { value: JSON.parse(JSON.stringify(appConfig.value)), updatedAt: appConfig.updatedAt }
+      return {
+        value: JSON.parse(JSON.stringify(appConfig.value)),
+        updatedAt: appConfig.updatedAt,
+        revision: appConfig.revision
+      }
     },
 
-    async saveAppConfig(value) {
+    /**
+     * 配置发布：expectedRevision 不为空时做原子 CAS，
+     * 版本不匹配返回 null（调用方转 409），匹配则写入并把 revision +1。
+     */
+    async saveAppConfig(value, options) {
+      const expected =
+        options && options.expectedRevision !== undefined && options.expectedRevision !== null
+          ? Number(options.expectedRevision)
+          : null
+      if (expected !== null) {
+        const current = appConfig ? Number(appConfig.revision) : 0
+        if (current !== expected) return null
+      }
       const updatedAt = Date.now()
-      appConfig = { value: JSON.parse(JSON.stringify(value)), updatedAt }
-      return updatedAt
+      const revision = appConfig ? Number(appConfig.revision) + 1 : 1
+      appConfig = { value: JSON.parse(JSON.stringify(value)), updatedAt, revision }
+      return { updatedAt, revision }
     },
 
     async getSetting(key) {
@@ -481,24 +595,36 @@ function createMemoryDb() {
       return updatedAt
     },
 
-    async insertEvents(openid, list) {
+    async insertEvents(openid, list, requestStartedAt) {
       const now = Date.now()
       const erasedAt = erasures.get(openid) || 0
+      assertSubjectWriteAllowed(erasedAt, requestStartedAt)
       const accepted = list.filter((item) => (item.ts || now) > erasedAt)
+      let inserted = 0
       accepted.forEach((item) => {
+        const id = item.id || ''
+        // 客户端自带 id：同一事件因网络重试重复提交时只计一次
+        if (id) {
+          const key = openid + '|' + id
+          if (eventIds.has(key)) return
+          eventIds.add(key)
+        }
         events.push({
           openid,
+          id,
           type: item.type,
           target: item.target || '',
           ts: item.ts || now
         })
+        inserted += 1
       })
       if (events.length > 50000) events.splice(0, events.length - 50000)
-      return accepted.length
+      return inserted
     },
 
     /** 收藏/取消收藏，返回该曲目的真实收藏人数（不含后台人气基数） */
-    async setAudioFavorite(openid, trackId, on) {
+    async setAudioFavorite(openid, trackId, on, requestStartedAt) {
+      if (on) assertSubjectWriteAllowed(erasures.get(openid) || 0, requestStartedAt)
       let bucket = audioFavs.get(openid)
       if (!bucket) {
         bucket = new Set()
@@ -529,7 +655,8 @@ function createMemoryDb() {
     },
 
     /** 记录一次背景使用，返回该背景的真实累计次数（不含后台基数） */
-    async addBackgroundUse(openid, bgId) {
+    async addBackgroundUse(openid, bgId, requestStartedAt) {
+      assertSubjectWriteAllowed(erasures.get(openid) || 0, requestStartedAt)
       // 内存库重启即清零，不做条数截断：截断会让「累计」计数倒退，与 PG 语义不一致
       bgUses.push({ openid, bgId, ts: Date.now() })
       let count = 0
@@ -554,7 +681,8 @@ function createMemoryDb() {
       return events.filter((event) => event.openid === openid).length
     },
 
-    async insertFeedback(openid, item) {
+    async insertFeedback(openid, item, requestStartedAt) {
+      assertSubjectWriteAllowed(erasures.get(openid) || 0, requestStartedAt)
       const createdAt = item.createdAt || Date.now()
       feedbackSeq += 1
       feedback.push({
@@ -607,12 +735,21 @@ function createMemoryDb() {
       return audits.slice(-count).reverse()
     },
 
+    /**
+     * 看板取事件：返回 { items, truncated, oldestAt }。
+     * truncated 表示「取样上限被触达」，前端据此披露口径，
+     * 避免把样本当成全量。
+     */
     async listEvents(sinceTs) {
-      // 与 PG 实现对齐：最新在前 + 20000 条上限，避免内存模式一次扫全量、PG 模式静默截断
-      return events
+      const matched = events
         .filter((event) => event.ts >= sinceTs)
         .sort((a, b) => b.ts - a.ts)
-        .slice(0, 20000)
+      const items = matched.slice(0, 20000)
+      return {
+        items,
+        truncated: matched.length > items.length,
+        oldestAt: items.length ? items[items.length - 1].ts : 0
+      }
     },
 
     /**
@@ -637,6 +774,7 @@ function createMemoryDb() {
       const removed = events.length - kept.length
       events.length = 0
       kept.forEach((event) => events.push(event))
+      syncEventIds()
       return removed
     },
 
@@ -691,23 +829,16 @@ function createPostgresDb(connectionString) {
       }
     },
 
-    async saveUnlock(openid, expireAt) {
-      // 同一 openid 只保留最新一次解锁：TTL 调小后，旧的长有效期行不能继续赢
-      const client = await pool.connect()
-      try {
-        await client.query('BEGIN')
+    async saveUnlock(openid, expireAt, requestStartedAt) {
+      // 同一 openid 只保留最新一次解锁：TTL 调小后，旧的长有效期行不能继续赢；
+      // 锁与 erasure 判定在 withSubjectWrite 内，删除前已开始的请求不能写回。
+      return withSubjectWrite(pool, openid, requestStartedAt, async (client) => {
         await client.query('DELETE FROM audio_unlocks WHERE openid = $1', [openid])
         await client.query(
           'INSERT INTO audio_unlocks (openid, expire_time) VALUES ($1, to_timestamp($2::bigint / 1000.0))',
           [openid, expireAt]
         )
-        await client.query('COMMIT')
-      } catch (error) {
-        await client.query('ROLLBACK')
-        throw error
-      } finally {
-        client.release()
-      }
+      })
     },
 
     async getUnlock(openid) {
@@ -735,42 +866,44 @@ function createPostgresDb(connectionString) {
       return result.rowCount
     },
 
-    async saveReminder(openid, reminder) {
+    async saveReminder(openid, reminder, requestStartedAt) {
       // 与 memory 实现同口径：sent 幂等不重置，cancelled/failed/expired 允许用户主动重建。
       // 第二条 SELECT 让“已 sent”也返回成功，避免路由把幂等场景误判为写入失败。
-      const result = await pool.query(
-        `WITH ins AS (
-           INSERT INTO sleep_reminders (openid, session_id, fire_at, template_id, page, status, thing_key, time_key)
-           VALUES ($1, $2, $3, $4, $5, 'pending', $6, $7)
-           ON CONFLICT (openid, session_id) DO UPDATE SET
-             fire_at = EXCLUDED.fire_at,
-             template_id = EXCLUDED.template_id,
-             page = EXCLUDED.page,
-             status = 'pending',
-             cancelled_at = NULL,
-             thing_key = EXCLUDED.thing_key,
-             time_key = EXCLUDED.time_key,
-             attempts = 0,
-             retry_at = 0
-           WHERE sleep_reminders.status <> 'sent'
-           RETURNING session_id
-         )
-         SELECT session_id FROM ins
-         UNION ALL
-         SELECT session_id FROM sleep_reminders
-          WHERE openid = $1 AND session_id = $2 AND status = 'sent'
-         LIMIT 1`,
-        [
-          openid,
-          reminder.sessionId,
-          reminder.fireAt,
-          reminder.templateId,
-          reminder.page,
-          reminder.thingKey || '',
-          reminder.timeKey || ''
-        ]
-      )
-      return result.rowCount > 0
+      return withSubjectWrite(pool, openid, requestStartedAt, async (client) => {
+        const result = await client.query(
+          `WITH ins AS (
+             INSERT INTO sleep_reminders (openid, session_id, fire_at, template_id, page, status, thing_key, time_key)
+             VALUES ($1, $2, $3, $4, $5, 'pending', $6, $7)
+             ON CONFLICT (openid, session_id) DO UPDATE SET
+               fire_at = EXCLUDED.fire_at,
+               template_id = EXCLUDED.template_id,
+               page = EXCLUDED.page,
+               status = 'pending',
+               cancelled_at = NULL,
+               thing_key = EXCLUDED.thing_key,
+               time_key = EXCLUDED.time_key,
+               attempts = 0,
+               retry_at = 0
+             WHERE sleep_reminders.status <> 'sent'
+             RETURNING session_id
+           )
+           SELECT session_id FROM ins
+           UNION ALL
+           SELECT session_id FROM sleep_reminders
+            WHERE openid = $1 AND session_id = $2 AND status = 'sent'
+           LIMIT 1`,
+          [
+            openid,
+            reminder.sessionId,
+            reminder.fireAt,
+            reminder.templateId,
+            reminder.page,
+            reminder.thingKey || '',
+            reminder.timeKey || ''
+          ]
+        )
+        return result.rowCount > 0
+      })
     },
 
     async cancelReminder(openid, sessionId) {
@@ -934,7 +1067,7 @@ function createPostgresDb(connectionString) {
      * 同一事务里应用 erasure / 单日墓碑 / LWW upsert，避免清除与在途同步互相覆盖。
      * advisory lock 以 openid 为粒度，单实例之外也能串行化同一用户。
      */
-    async syncRecords(openid, list, deleteList, nowTs) {
+    async syncRecords(openid, list, deleteList, nowTs, requestStartedAt) {
       const client = await pool.connect()
       try {
         await client.query('BEGIN')
@@ -947,6 +1080,17 @@ function createPostgresDb(connectionString) {
         const erasedAt = erasureResult.rows.length
           ? new Date(erasureResult.rows[0].erased_at).getTime()
           : 0
+        // 清除前已在途的同步：不写入，并把清除水位带回客户端（客户端据此清本机）
+        if (erasedAt && subjectRequestAt(requestStartedAt) < erasedAt) {
+          await client.query('COMMIT')
+          return {
+            accepted: 0,
+            dropped: (list || []).length,
+            records: [],
+            deletedDays: [],
+            erasedAt
+          }
+        }
 
         for (let i = 0; i < (deleteList || []).length; i += 1) {
           const item = deleteList[i]
@@ -965,6 +1109,11 @@ function createPostgresDb(connectionString) {
         for (let i = 0; i < list.length; i += 1) {
           const record = list[i]
           if (erasedAt && record.updatedAt <= erasedAt) {
+            dropped += 1
+            continue
+          }
+          // 未来时间戳超出统一偏差上限：旧设备时钟偏快时不能凭未来时间戳写回
+          if (record.updatedAt > subjectRequestAt(requestStartedAt) + MAX_UPDATED_FUTURE_MS) {
             dropped += 1
             continue
           }
@@ -1078,14 +1227,15 @@ function createPostgresDb(connectionString) {
         await client.query(
           `INSERT INTO user_erasures (openid, erased_at)
            VALUES ($1, to_timestamp($2::bigint / 1000.0))
-           ON CONFLICT (openid) DO UPDATE SET erased_at = EXCLUDED.erased_at`,
+           ON CONFLICT (openid) DO UPDATE SET
+             erased_at = GREATEST(user_erasures.erased_at, EXCLUDED.erased_at)`,
           [openid, erasedAt]
         )
         const records = await client.query('DELETE FROM sleep_records WHERE openid = $1', [openid])
         const unlocks = await client.query('DELETE FROM audio_unlocks WHERE openid = $1', [openid])
         // 收藏与背景使用都带 openid，属用户偏好：全量清除与仅清云端都要一起清
-        await client.query('DELETE FROM audio_favorites WHERE openid = $1', [openid])
-        await client.query('DELETE FROM background_uses WHERE openid = $1', [openid])
+        const favorites = await client.query('DELETE FROM audio_favorites WHERE openid = $1', [openid])
+        const backgroundUses = await client.query('DELETE FROM background_uses WHERE openid = $1', [openid])
         const events = await client.query('DELETE FROM events WHERE openid = $1', [openid])
         // 订阅提醒含 openid/session_id 明文，且到点会真的推送：清除全部数据时必须一起删。
         const reminders = await client.query('DELETE FROM sleep_reminders WHERE openid = $1', [openid])
@@ -1099,6 +1249,8 @@ function createPostgresDb(connectionString) {
           events: events.rowCount,
           reminders: reminders.rowCount,
           feedback: feedback.rowCount,
+          favorites: favorites.rowCount,
+          backgroundUses: backgroundUses.rowCount,
           erasedAt
         }
       } catch (error) {
@@ -1118,8 +1270,8 @@ function createPostgresDb(connectionString) {
         const records = await client.query('DELETE FROM sleep_records WHERE openid = $1', [openid])
         const unlocks = await client.query('DELETE FROM audio_unlocks WHERE openid = $1', [openid])
         // 收藏与背景使用都带 openid，属用户偏好：全量清除与仅清云端都要一起清
-        await client.query('DELETE FROM audio_favorites WHERE openid = $1', [openid])
-        await client.query('DELETE FROM background_uses WHERE openid = $1', [openid])
+        const favorites = await client.query('DELETE FROM audio_favorites WHERE openid = $1', [openid])
+        const backgroundUses = await client.query('DELETE FROM background_uses WHERE openid = $1', [openid])
         const events = await client.query('DELETE FROM events WHERE openid = $1', [openid])
         // 只删云端副本时，云端待发送的订阅提醒也属于云端数据。
         const reminders = await client.query('DELETE FROM sleep_reminders WHERE openid = $1', [openid])
@@ -1133,6 +1285,8 @@ function createPostgresDb(connectionString) {
           events: events.rowCount,
           reminders: reminders.rowCount,
           feedback: feedback.rowCount,
+          favorites: favorites.rowCount,
+          backgroundUses: backgroundUses.rowCount,
           erasedAt: 0
         }
       } catch (error) {
@@ -1148,22 +1302,59 @@ function createPostgresDb(connectionString) {
     },
 
     async getAppConfig() {
-      const result = await pool.query("SELECT value, updated_at FROM app_config WHERE key = 'app'")
+      const result = await pool.query(
+        "SELECT value, updated_at, revision FROM app_config WHERE key = 'app'"
+      )
       if (!result.rows.length) return null
       return {
         value: result.rows[0].value,
-        updatedAt: new Date(result.rows[0].updated_at).getTime()
+        updatedAt: new Date(result.rows[0].updated_at).getTime(),
+        revision: Number(result.rows[0].revision) || 1
       }
     },
 
-    async saveAppConfig(value) {
-      const result = await pool.query(
-        `INSERT INTO app_config (key, value) VALUES ('app', $1::jsonb)
-         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()
-         RETURNING updated_at`,
-        [JSON.stringify(value)]
-      )
-      return new Date(result.rows[0].updated_at).getTime()
+    /**
+     * 配置发布：SELECT ... FOR UPDATE 把并发保存串行化，
+     * 版本不匹配返回 null（调用方转 409 CONFIG_CONFLICT）。
+     * 只靠「先读后写」会出现两个请求同时通过检查、后写者覆盖先写者的丢失更新。
+     */
+    async saveAppConfig(value, options) {
+      const expected =
+        options && options.expectedRevision !== undefined && options.expectedRevision !== null
+          ? Number(options.expectedRevision)
+          : null
+      const client = await pool.connect()
+      try {
+        await client.query('BEGIN')
+        const current = await client.query(
+          "SELECT revision FROM app_config WHERE key = 'app' FOR UPDATE"
+        )
+        const currentRevision = current.rows.length ? Number(current.rows[0].revision) : 0
+        if (expected !== null && currentRevision !== expected) {
+          await client.query('ROLLBACK')
+          return null
+        }
+        const nextRevision = currentRevision + 1
+        const saved = await client.query(
+          `INSERT INTO app_config (key, value, updated_at, revision)
+           VALUES ('app', $1::jsonb, now(), $2::bigint)
+           ON CONFLICT (key) DO UPDATE SET
+             value = EXCLUDED.value,
+             updated_at = now(),
+             revision = EXCLUDED.revision`,
+          [JSON.stringify(value), nextRevision]
+        )
+        await client.query('COMMIT')
+        return {
+          updatedAt: new Date(saved.rows[0].updated_at).getTime(),
+          revision: Number(saved.rows[0].revision) || nextRevision
+        }
+      } catch (error) {
+        await client.query('ROLLBACK')
+        throw error
+      } finally {
+        client.release()
+      }
     },
 
     async getSetting(key) {
@@ -1185,7 +1376,7 @@ function createPostgresDb(connectionString) {
       return new Date(result.rows[0].updated_at).getTime()
     },
 
-    async insertEvents(openid, list) {
+    async insertEvents(openid, list, requestStartedAt) {
       if (!list.length) return 0
       const client = await pool.connect()
       try {
@@ -1193,24 +1384,29 @@ function createPostgresDb(connectionString) {
         await client.query('SELECT pg_advisory_xact_lock(hashtext($1)::bigint)', [openid])
         const erasure = await client.query('SELECT erased_at FROM user_erasures WHERE openid = $1', [openid])
         const erasedAt = erasure.rows.length ? new Date(erasure.rows[0].erased_at).getTime() : 0
+        assertSubjectWriteAllowed(erasedAt, requestStartedAt)
         const accepted = list.filter((item) => (item.ts || Date.now()) > erasedAt)
+        let inserted = 0
         if (accepted.length) {
           const placeholders = []
           const values = []
           accepted.forEach((item, index) => {
-            const offset = index * 4
+            const offset = index * 5
             placeholders.push(
-              `($${offset + 1}, $${offset + 2}, $${offset + 3}, to_timestamp($${offset + 4}::bigint / 1000.0))`
+              `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, to_timestamp($${offset + 5}::bigint / 1000.0))`
             )
-            values.push(openid, item.type, item.target || '', item.ts)
+            values.push(openid, item.id || null, item.type, item.target || '', item.ts)
           })
-          await client.query(
-            `INSERT INTO events (openid, type, target, created_at) VALUES ${placeholders.join(', ')}`,
+          // 客户端事件 id 唯一索引兜底：重试批次里已入库的事件被直接忽略，不重复计数
+          const insertedRows = await client.query(
+            `INSERT INTO events (openid, event_id, type, target, created_at) VALUES ${placeholders.join(', ')}
+             ON CONFLICT DO NOTHING`,
             values
           )
+          inserted = insertedRows.rowCount
         }
         await client.query('COMMIT')
-        return accepted.length
+        return inserted
       } catch (error) {
         await client.query('ROLLBACK')
         throw error
@@ -1225,15 +1421,17 @@ function createPostgresDb(connectionString) {
     },
 
     /** 收藏/取消收藏，返回该曲目的真实收藏人数（不含后台人气基数） */
-    async setAudioFavorite(openid, trackId, on) {
-      if (on) {
-        await pool.query(
-          `INSERT INTO audio_favorites (openid, track_id) VALUES ($1, $2)
-           ON CONFLICT (openid, track_id) DO NOTHING`,
-          [openid, trackId]
-        )
-      } else {
+    async setAudioFavorite(openid, trackId, on, requestStartedAt) {
+      if (!on) {
         await pool.query('DELETE FROM audio_favorites WHERE openid = $1 AND track_id = $2', [openid, trackId])
+      } else {
+        await withSubjectWrite(pool, openid, requestStartedAt, async (client) => {
+          await client.query(
+            `INSERT INTO audio_favorites (openid, track_id) VALUES ($1, $2)
+             ON CONFLICT (openid, track_id) DO NOTHING`,
+            [openid, trackId]
+          )
+        })
       }
       const result = await pool.query(
         'SELECT count(*)::int AS n FROM audio_favorites WHERE track_id = $1',
@@ -1261,8 +1459,10 @@ function createPostgresDb(connectionString) {
     },
 
     /** 记录一次背景使用，返回该背景的真实累计次数（不含后台基数） */
-    async addBackgroundUse(openid, bgId) {
-      await pool.query('INSERT INTO background_uses (openid, bg_id) VALUES ($1, $2)', [openid, bgId])
+    async addBackgroundUse(openid, bgId, requestStartedAt) {
+      await withSubjectWrite(pool, openid, requestStartedAt, async (client) => {
+        await client.query('INSERT INTO background_uses (openid, bg_id) VALUES ($1, $2)', [openid, bgId])
+      })
       const result = await pool.query(
         'SELECT count(*)::int AS n FROM background_uses WHERE bg_id = $1',
         [bgId]
@@ -1288,15 +1488,17 @@ function createPostgresDb(connectionString) {
       return counts
     },
 
-    async insertFeedback(openid, item) {
+    async insertFeedback(openid, item, requestStartedAt) {
       const createdAt = item.createdAt || Date.now()
-      const result = await pool.query(
-        `INSERT INTO user_feedback (openid, type, content, contact, created_at)
-         VALUES ($1, $2, $3, $4, to_timestamp($5::bigint / 1000.0))
-         RETURNING id, (EXTRACT(EPOCH FROM created_at) * 1000)::bigint AS ts`,
-        [openid, item.type, item.content, item.contact || '', createdAt]
-      )
-      return { id: Number(result.rows[0].id), createdAt: Number(result.rows[0].ts) }
+      return withSubjectWrite(pool, openid, requestStartedAt, async (client) => {
+        const result = await client.query(
+          `INSERT INTO user_feedback (openid, type, content, contact, created_at)
+           VALUES ($1, $2, $3, $4, to_timestamp($5::bigint / 1000.0))
+           RETURNING id, (EXTRACT(EPOCH FROM created_at) * 1000)::bigint AS ts`,
+          [openid, item.type, item.content, item.contact || '', createdAt]
+        )
+        return { id: Number(result.rows[0].id), createdAt: Number(result.rows[0].ts) }
+      })
     },
 
     async listFeedback(limit, onlyOpen) {
@@ -1361,19 +1563,29 @@ function createPostgresDb(connectionString) {
       }))
     },
 
+    /**
+     * 看板取事件：多取一条用于判断是否触达上限，
+     * 返回 { items, truncated, oldestAt }，前端据此披露口径。
+     */
     async listEvents(sinceTs) {
       const result = await pool.query(
         `SELECT openid, type, target, (EXTRACT(EPOCH FROM created_at) * 1000)::bigint AS ts
          FROM events WHERE created_at >= to_timestamp($1::bigint / 1000.0)
-         ORDER BY created_at DESC LIMIT 20000`,
+         ORDER BY created_at DESC LIMIT 20001`,
         [sinceTs]
       )
-      return result.rows.map((row) => ({
+      const rows = result.rows.map((row) => ({
         openid: row.openid,
         type: row.type,
         target: row.target,
         ts: Number(row.ts)
       }))
+      const items = rows.slice(0, 20000)
+      return {
+        items,
+        truncated: rows.length > items.length,
+        oldestAt: items.length ? items[items.length - 1].ts : 0
+      }
     },
 
     async cleanupEvents(beforeTs) {

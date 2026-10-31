@@ -15,7 +15,12 @@ const MAX_SLEEP_MS = 24 * 60 * 60 * 1000
 const MAX_SESSIONS = 8
 const MAX_DAY_SLEEP_MS = 24 * 60 * 60 * 1000
 const MAX_AGE_MS = 400 * 24 * 60 * 60 * 1000
+// 内容时间（入睡/起床、墓碑时间）的未来容差：保留 24 小时，
+// 因为设备时钟与东八区可能差一天，且墓碑按日粒度。
 const MAX_FUTURE_MS = 24 * 60 * 60 * 1000
+// 客户端显式上报的 updatedAt（LWW 与清除水位的判据）只容忍 10 分钟未来偏差：
+// 允许未来 24 小时会让「删除后重传的旧记录」凭未来时间戳绕过清除水位。
+const MAX_UPDATED_FUTURE_MS = 10 * 60 * 1000
 
 function inWindow(value, now) {
   return value >= now - MAX_AGE_MS && value <= now + MAX_FUTURE_MS
@@ -161,8 +166,16 @@ function validateRecords(input, options) {
       continue
     }
 
-    const updatedAt = Number.isFinite(rawUpdatedAt) && rawUpdatedAt > 0 ? rawUpdatedAt : wakeAt
-    if (!inWindow(updatedAt, now)) {
+    const hasExplicitUpdatedAt = Number.isFinite(rawUpdatedAt) && rawUpdatedAt > 0
+    const updatedAt = hasExplicitUpdatedAt ? rawUpdatedAt : wakeAt
+    // 显式上报的 updatedAt 用更紧的未来窗口：它同时是 LWW 与清除水位的判据，
+    // 放得太宽会让「删除后重传的旧记录」凭未来时间戳写回。
+    if (hasExplicitUpdatedAt) {
+      if (updatedAt < now - MAX_AGE_MS || updatedAt > now + MAX_UPDATED_FUTURE_MS) {
+        dropped += 1
+        continue
+      }
+    } else if (!inWindow(updatedAt, now)) {
       dropped += 1
       continue
     }
@@ -235,5 +248,7 @@ module.exports = {
   validateRecords,
   validateDeletions,
   MAX_RECORDS,
-  MAX_SLEEP_MS
+  MAX_SLEEP_MS,
+  MAX_FUTURE_MS,
+  MAX_UPDATED_FUTURE_MS
 }

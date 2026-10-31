@@ -3,10 +3,15 @@ const assert = require('node:assert/strict')
 
 const { createAnalytics, dayKey } = require('../src/services/analytics')
 
-function fakeDeps(events) {
+function fakeDeps(events, options) {
   return {
     db: {
-      listEvents: async () => events,
+      // 存储层如实回报取样上限：truncated 由 db 决定，不再由 JS 猜长度
+      listEvents: async () => ({
+        items: events,
+        truncated: !!(options && options.truncated),
+        oldestAt: events.length ? events[events.length - 1].ts : 0
+      }),
       adminStats: async () => ({ users: 3 })
     },
     store: {
@@ -48,13 +53,14 @@ test('topSources 按 app_open 的 target 聚合并取 Top5', async () => {
   assert.equal(overview.today.checkins, 1)
 })
 
-test('事件量达到 2 万条时标记 truncated', async () => {
+test('存储层报告触达取样上限时标记 truncated', async () => {
   const events = Array.from({ length: 20000 }, (_, i) =>
     eventAt(0, 'app_open', '1001|pages/index/index', 'o-' + (i % 10))
   )
-  const analytics = createAnalytics(fakeDeps(events))
+  const analytics = createAnalytics(fakeDeps(events, { truncated: true }))
   const overview = await analytics.overview(Date.now())
   assert.equal(overview.truncated, true)
+  assert.equal(overview.coverage.eventCount, 20000)
 
   const small = createAnalytics(fakeDeps([eventAt(0, 'app_open', '1001|pages/index/index')]))
   const normal = await small.overview(Date.now())
@@ -118,6 +124,22 @@ test('audio_unlock_fail 按原因聚合，并进入今日/本周', async () => {
     { reason: 'skipped', count: 1 },
     { reason: 'unavailable', count: 1 }
   ])
+})
+
+test('加载失败率的分子分母同口径：上周的失败不计入本周比率', async () => {
+  const now = Date.parse('2026-10-19T10:00:00+08:00') // 周一
+  const events = [
+    // 上周（周一之前）的加载失败
+    { openid: 'o-1', type: 'audio_unlock_fail', target: 'error|a1', ts: Date.parse('2026-10-14T10:00:00+08:00') },
+    // 本周：1 次成功 + 1 次加载失败
+    { openid: 'o-1', type: 'audio_unlock', target: 'a1', ts: Date.parse('2026-10-19T09:00:00+08:00') },
+    { openid: 'o-1', type: 'audio_unlock_fail', target: 'error|a1', ts: Date.parse('2026-10-19T09:30:00+08:00') }
+  ]
+  const analytics = createAnalytics(fakeDeps(events))
+  const overview = await analytics.overview(now)
+  assert.equal(overview.week.unlocks, 1)
+  assert.equal(overview.unlockLoadFailureRate, 50, '分子分母都只算本周')
+  assert.deepEqual(overview.unlockFailReasons, [{ reason: 'error', count: 1 }])
 })
 
 test('add_tip 只统计 show 与 tap，close/auto 不入账', async () => {

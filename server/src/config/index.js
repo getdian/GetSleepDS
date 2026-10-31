@@ -88,6 +88,10 @@ function loadConfig(env) {
   if (isProd && !configuredPassword) {
     throw new Error('生产环境必须配置 ADMIN_PASSWORD，不能依赖启动期临时密码')
   }
+  if (isProd && configuredPassword && configuredPassword.length < 8) {
+    // 与网页改密同一强度下限：否则可以用 1 位密码启动生产后台
+    throw new Error('生产环境 ADMIN_PASSWORD 至少 8 位（与网页改密规则一致）')
+  }
 
   const trustProxy = intEnv(source.TRUST_PROXY, 0, 'TRUST_PROXY', 0, 10)
   if (isProd && source.TRUST_PROXY === undefined) {

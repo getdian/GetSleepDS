@@ -46,11 +46,14 @@ CREATE TABLE IF NOT EXISTS sleep_records (
 );
 
 -- 后台配置持久化：key='app' 为下发配置，key='cos' 为加密后的存储凭证
+-- revision 是单调递增的发布版本，后台保存用它做原子 CAS（并发保存只允许一个成功）
 CREATE TABLE IF NOT EXISTS app_config (
     key          TEXT PRIMARY KEY,
     value        JSONB NOT NULL,
-    updated_at   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    revision     BIGINT NOT NULL DEFAULT 1
 );
+ALTER TABLE app_config ADD COLUMN IF NOT EXISTS revision BIGINT NOT NULL DEFAULT 1;
 
 -- 单日删除墓碑：撤销打卡后阻止其他设备把旧记录传回
 CREATE TABLE IF NOT EXISTS sleep_record_deletions (
@@ -115,11 +118,16 @@ CREATE TABLE IF NOT EXISTS events (
     openid      VARCHAR(64) NOT NULL,
     type        VARCHAR(24) NOT NULL,
     target      VARCHAR(64) NOT NULL DEFAULT '',
+    -- 客户端自带事件 id：网络重试时按 (openid, event_id) 去重，避免计数重复放大
+    event_id    VARCHAR(64),
     created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+ALTER TABLE events ADD COLUMN IF NOT EXISTS event_id VARCHAR(64);
 CREATE INDEX IF NOT EXISTS idx_events_created_at ON events (created_at);
 CREATE INDEX IF NOT EXISTS idx_events_type_created ON events (type, created_at);
 CREATE INDEX IF NOT EXISTS idx_events_openid ON events (openid);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_events_openid_event_id
+    ON events (openid, event_id) WHERE event_id IS NOT NULL;
 
 -- 用户反馈：只存用户主动提交的内容；contact 为可选联系方式（用户自愿填写）
 CREATE TABLE IF NOT EXISTS user_feedback (

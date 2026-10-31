@@ -20,6 +20,7 @@ function createPopularityRoute(options) {
     limitOpenid,
     store,
     logger,
+    now,
     getPath,
     postPath,
     listKey,
@@ -72,6 +73,8 @@ function createPopularityRoute(options) {
     wrap(async (req, res) => {
       if (!limitIp(req.ip || 'unknown')) throw rateLimited()
 
+      // 在任何 await 之前取：全量清除与在途写入交错时按请求代际判定
+      const requestStartedAt = now ? now() : Date.now()
       const code = req.body && req.body.code
       if (!code) throw invalidBody('缺少 code')
 
@@ -88,8 +91,9 @@ function createPopularityRoute(options) {
 
       let real = 0
       try {
-        real = await writeCount(openid, id, req.body)
+        real = await writeCount(openid, id, req.body, requestStartedAt)
       } catch (e) {
+        if (e && e.status) throw e
         log.error('[db] ' + listKey + ' popularity write failed:', req.id || '', e.message)
         throw dbUnavailable()
       }

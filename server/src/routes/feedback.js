@@ -32,6 +32,10 @@ function createFeedbackRoute(options) {
     wrap(async (req, res) => {
       if (!limitIp(req.ip || 'unknown')) throw rateLimited()
 
+      // 请求开始时间必须在换取 openid 之前取：全量清除与在途反馈写入交错时按代际判定，
+      // 否则「已清除」之后联系方式会重新落库。
+      const requestStartedAt = now()
+
       // 服务端总闸：运营在后台关掉后，客户端入口也会隐藏；这里仍然是权威拦截，
       // 避免旧版本客户端继续写入（与 /records/sync 的 features.sync 同口径）。
       if (store) {
@@ -62,13 +66,18 @@ function createFeedbackRoute(options) {
 
       let saved = null
       try {
-        saved = await db.insertFeedback(openid, {
-          type,
-          content,
-          contact,
-          createdAt: now()
-        })
+        saved = await db.insertFeedback(
+          openid,
+          {
+            type,
+            content,
+            contact,
+            createdAt: requestStartedAt
+          },
+          requestStartedAt
+        )
       } catch (e) {
+        if (e && e.status) throw e
         log.error('[db] feedback insert failed:', req.id || '', e.message)
         throw dbUnavailable()
       }

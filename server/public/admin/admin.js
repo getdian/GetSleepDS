@@ -15,9 +15,14 @@
 
   const state = {
     config: null,
-    meta: { source: 'file', updatedAt: 0, storage: 'memory' },
+    meta: { source: 'file', updatedAt: 0, revision: 0, storage: 'memory' },
     storage: null,
     dirty: false,
+    // 草稿修订号：每次编辑 +1。保存时记录提交时的修订号，
+    // 响应回来若发现修订号变了，说明用户在保存期间又改了内容 —— 此时只更新基线，不重渲染。
+    draftRevision: 0,
+    saving: false,
+    reauth: false,
     panel: 'overview',
     preview: null,
     queriedOpenid: '',
@@ -26,7 +31,9 @@
 
   let toastTimer = null
   let confirmTimer = null
-  let bgConfirmTimer = null
+  // 面板请求序号：慢响应晚到时直接丢弃，避免用旧数据覆盖新结果
+  let auditSeq = 0
+  let feedbackSeq = 0
 
   const loginView = $('#login-view')
   const appView = $('#app-view')
@@ -50,6 +57,8 @@
   }
 
   function setDirty(value) {
+    // 每次进入“脏”状态都推进修订号：保存期间是否又发生过编辑，靠它判断
+    if (value) state.draftRevision += 1
     state.dirty = value
     const node = $('#dirty')
     const side = $('#side-save-state')
@@ -59,6 +68,19 @@
     }
     if (side) side.textContent = value ? '有未保存的修改' : '已保存'
     updateSavebar()
+  }
+
+  /**
+   * 统一的错误对象：必须带上 HTTP 状态与业务错误码。
+   * 旧实现只抛 message，导致「配置已被他人更新（409 CONFIG_CONFLICT）」这类
+   * 需要分支处理的错误全部塌缩成普通失败。
+   */
+  function apiError(message, status, code, details) {
+    const error = new Error(message || '请求失败')
+    error.status = status || 0
+    error.code = code || ''
+    error.details = details || null
+    return error
   }
 
   async function api(path, options) {
@@ -74,11 +96,29 @@
       init.body = JSON.stringify(opts.body)
     }
 
-    const res = await fetch(path, init)
+    // 超时保护：没有它时弱网会一直挂着，运营无法判断是「还在保存」还是「已经卡死」
+    const controller = typeof AbortController === 'function' ? new AbortController() : null
+    const timeout = opts.timeout === undefined ? 20000 : opts.timeout
+    let timer = null
+    if (controller) {
+      init.signal = controller.signal
+      if (timeout > 0) {
+        timer = setTimeout(function () {
+          controller.abort()
+        }, timeout)
+      }
+    }
 
-    if (res.status === 401 && path !== '/api/admin/login') {
-      showLogin('登录已过期，请重新登录')
-      throw new Error('未登录')
+    let res = null
+    try {
+      res = await fetch(path, init)
+    } catch (e) {
+      if (e && e.name === 'AbortError') {
+        throw apiError('请求超时，请检查网络后重试', 0, 'TIMEOUT')
+      }
+      throw apiError('网络异常，请检查连接后重试', 0, 'NETWORK_ERROR')
+    } finally {
+      if (timer) clearTimeout(timer)
     }
 
     let data = null
@@ -88,12 +128,19 @@
       data = null
     }
 
+    if (res.status === 401 && path !== '/api/admin/login') {
+      handleUnauthenticated('登录已过期，请重新登录')
+      throw apiError('未登录', 401, 'UNAUTHORIZED')
+    }
+
     if (!res.ok) {
-      const message =
-        data && data.error && data.error.message
-          ? data.error.message
-          : '请求失败（' + res.status + '）'
-      throw new Error(message)
+      const err = (data && data.error) || {}
+      throw apiError(
+        err.message || '请求失败（' + res.status + '）',
+        res.status,
+        err.code || '',
+        err.details || null
+      )
     }
 
     return data || {}
@@ -101,14 +148,34 @@
 
   /* ---------- 视图切换 ---------- */
 
-  function showLogin(message) {
+  /** 清空敏感输入：退出或重新登录时，密码与 SecretKey 不应留在页面上 */
+  function clearSensitiveInputs() {
+    ['#password', '#pw-current', '#pw-new', '#pw-confirm', '#cos-secret-key'].forEach(function (selector) {
+      const node = $(selector)
+      if (node) node.value = ''
+    })
+  }
+
+  /**
+   * @param message 提示文案
+   * @param options { keepDraft } 会话失效时保留表单草稿：
+   *   重新登录后可以继续保存，不会因为一次 401 就丢掉运营正在编辑的内容。
+   */
+  function showLogin(message, options) {
+    const opts = options || {}
     stopPreview()
-    state.config = null
-    state.queriedOpenid = ''
-    const userResult = $('#user-result')
-    if (userResult) userResult.hidden = true
-    const userInput = $('#user-openid')
-    if (userInput) userInput.value = ''
+    if (!opts.keepDraft) {
+      state.config = null
+      state.dirty = false
+      state.draftRevision = 0
+      state.reauth = false
+      clearSensitiveInputs()
+      const userResult = $('#user-result')
+      if (userResult) userResult.hidden = true
+      const userInput = $('#user-openid')
+      if (userInput) userInput.value = ''
+      setDirty(false)
+    }
     $('#boot-view').hidden = true
     loginView.hidden = false
     appView.hidden = true
@@ -122,6 +189,12 @@
     setTimeout(function () {
       $('#password').focus()
     }, 30)
+  }
+
+  /** 会话失效（401）：保留草稿，重新登录后可继续保存 */
+  function handleUnauthenticated(message) {
+    state.reauth = true
+    showLogin(message, { keepDraft: true })
   }
 
   function showApp() {
@@ -179,7 +252,11 @@
       panel.hidden = panel.dataset.panel !== name
     })
     $$('.side-item').forEach(function (item) {
-      item.classList.toggle('is-active', item.dataset.panel === name)
+      const active = item.dataset.panel === name
+      item.classList.toggle('is-active', active)
+      // 读屏用户需要知道当前在哪个面板
+      if (active) item.setAttribute('aria-current', 'page')
+      else item.removeAttribute('aria-current')
     })
     $('#workspace-title').textContent = meta.title
     $('#workspace-sub').textContent = meta.sub
@@ -219,7 +296,9 @@
       : '尚未在后台保存'
     // 内存模式下保存只写进程内存，容器重启会回滚；必须让运营看得见
     const memory = state.meta.storage === 'memory' ? ' · 内存模式，重启后会丢失配置' : ''
-    $('#source-line').textContent = source + ' · ' + updated + memory
+    // 发布版本：并发保存冲突时靠它判断是不是别人的新版本
+    const revision = state.meta.revision ? ' · 版本 ' + state.meta.revision : ''
+    $('#source-line').textContent = source + ' · ' + updated + revision + memory
   }
 
   /* ---------- 看板 ---------- */
@@ -430,9 +509,12 @@
     const data = await api('/api/admin/analytics')
     const note = $('#analytics-note')
     if (note) {
+      const coverage = data.coverage || {}
       note.hidden = !data.truncated
       note.textContent = data.truncated
-        ? '事件量已超过 2 万条：以下趋势与 Top 榜按最近 2 万条统计，可能偏低。'
+        ? '事件量已超过 2 万条：以下全部指标（含今日/本周）都按最近 ' +
+          (coverage.eventCount || 0) +
+          ' 条统计，可能偏低。'
         : ''
     }
     const today = data.today || {}
@@ -501,7 +583,10 @@
 
     // 常用分类做成可直接点的标签：不用记名字，也不会因为输入法差异产生“环境音 ”这种脏分类
     const suggestBox = row.querySelector('.cat-suggests')
-    ;(categories || []).forEach(function (name) {
+    // 新增/上传的行也要有常用分类标签：以前只有首屏渲染时才传分类列表，
+    // 后加的行没有标签，运营只能手打分类（容易打出“环境音 ”这种脏值）
+    const chips = categories && categories.length ? categories : CATEGORY_PRESETS.slice()
+    chips.forEach(function (name) {
       const chip = document.createElement('button')
       chip.type = 'button'
       chip.className = 'cat-chip' + (categoryInput.value === name ? ' is-on' : '')
@@ -648,6 +733,19 @@
       button.classList.remove('confirming')
       button.textContent = '✕'
     })
+    // 背景图行的确认态也要一起撤掉（每行一个计时器）
+    $$('.bg-row', bgList).forEach(function (row) {
+      if (row._confirmTimer) {
+        clearTimeout(row._confirmTimer)
+        row._confirmTimer = null
+      }
+      if (row.dataset.confirm !== '1') return
+      row.dataset.confirm = ''
+      const button = row.querySelector('.remove')
+      if (!button) return
+      button.classList.remove('confirming')
+      button.textContent = '✕'
+    })
   }
 
   function togglePreview(row, button) {
@@ -658,7 +756,10 @@
       return
     }
 
-    if (state.preview && state.preview.url === url) {
+    // 试听状态按「行」而不是 URL 判定：
+    // 两行填同一个地址时，按 URL 判定会去操作上一行的 Audio 却更新当前行的按钮。
+    const rowId = row.dataset.id || url
+    if (state.preview && state.preview.rowId === rowId) {
       if (state.preview.audio.paused) {
         state.preview.audio.play().then(function () {
           button.textContent = '暂停'
@@ -675,7 +776,7 @@
     stopPreview()
 
     const audio = new Audio(url)
-    state.preview = { url: url, audio: audio, button: button }
+    state.preview = { url: url, rowId: rowId, audio: audio, button: button }
     button.textContent = '播放中'
 
     audio.addEventListener('ended', function () {
@@ -1087,7 +1188,8 @@
 
     if (
       !window.confirm(
-        '确认删除 ' + openid + ' 的全部云端数据（睡眠 / 解锁 / 事件）？\n' +
+        '确认删除 ' + openid + ' 的全部云端数据？\n' +
+          '将删除：睡眠记录、解锁状态、收藏、背景使用记录、事件、订阅提醒（含联系方式与待发送提醒）、用户反馈。\n' +
           '这会写入全量清除水位：用户下次同步时，本机旧睡眠记录也会被清除，且不可恢复。'
       )
     ) {
@@ -1100,7 +1202,13 @@
       const result = await api('/api/admin/users/' + encodeURIComponent(openid) + '/records', {
         method: 'DELETE'
       })
-      toast('已删除 ' + (result.deleted || 0) + ' 条云端记录')
+      toast(
+        '已删除：睡眠 ' + (result.deleted || 0) +
+          ' 条 / 解锁 ' + (result.deletedUnlocks || 0) +
+          ' / 事件 ' + (result.deletedEvents || 0) +
+          ' / 提醒 ' + (result.deletedReminders || 0) +
+          ' / 反馈 ' + (result.deletedFeedback || 0)
+      )
       await queryUser()
     } catch (error) {
       toast(error.message || '删除失败', true)
@@ -1117,16 +1225,25 @@
     admin_audio_upload: '上传环境音',
     admin_background_upload: '上传背景图',
     admin_site_qrcode_upload: '上传小程序码',
-    admin_password_change: '修改后台密码'
+    admin_password_change: '修改后台密码',
+    admin_login: '登录后台',
+    admin_login_failed: '登录失败',
+    admin_storage_save: '修改存储凭证',
+    admin_user_query: '查询用户数据',
+    admin_feedback_handled: '标记反馈已处理'
   }
 
   function auditDetailText(item) {
     const details = item.details || {}
     const parts = []
     if (details.version !== undefined) parts.push('版本 v' + details.version)
+    if (details.revision !== undefined) parts.push('发布号 ' + details.revision)
     if (details.audioCount !== undefined) parts.push('环境音 ' + details.audioCount + ' 条')
     if (details.backgroundCount !== undefined) parts.push('背景图 ' + details.backgroundCount + ' 张')
     if (details.deletedRecords !== undefined) parts.push('记录 ' + details.deletedRecords + ' 条')
+    if (details.deletedReminders !== undefined) parts.push('提醒 ' + details.deletedReminders + ' 条')
+    if (details.deletedFeedback !== undefined) parts.push('反馈 ' + details.deletedFeedback + ' 条')
+    if (details.recordCount !== undefined) parts.push('查询 ' + details.recordCount + ' 条')
     if (details.key) parts.push(details.key)
     if (details.title) parts.push(details.title)
     if (item.openidTag && item.openidTag !== '-') parts.push('openid ' + item.openidTag)
@@ -1172,6 +1289,7 @@
   async function loadAudit() {
     const box = $('#audit-list')
     if (!box) return
+    const seq = ++auditSeq
     box.textContent = ''
     const loading = document.createElement('li')
     loading.className = 'empty-line'
@@ -1180,8 +1298,11 @@
 
     try {
       const data = await api('/api/admin/audit?limit=100')
+      // 旧响应晚到时不能再渲染（否则会用旧数据覆盖新数据）
+      if (seq !== auditSeq) return
       renderAudit(data.items || [])
     } catch (error) {
+      if (seq !== auditSeq) return
       box.textContent = ''
       const failed = document.createElement('li')
       failed.className = 'empty-line'
@@ -1275,6 +1396,7 @@
   async function loadFeedback() {
     const box = $('#feedback-list')
     if (!box) return
+    const seq = ++feedbackSeq
     box.textContent = ''
     const loading = document.createElement('div')
     loading.className = 'empty-line'
@@ -1285,8 +1407,11 @@
     try {
       // 服务端上限 200（db.listFeedback 夹取）；面板一次性拉满，不做分页
       const data = await api('/api/admin/feedback?limit=200' + (onlyOpen ? '&onlyOpen=1' : ''))
+      // 旧响应晚到时不能再渲染：否则切了筛选也会看到上一次的结果
+      if (seq !== feedbackSeq) return
       renderFeedback(data)
     } catch (error) {
+      if (seq !== feedbackSeq) return
       box.textContent = ''
       const failed = document.createElement('div')
       failed.className = 'empty-line'
@@ -1352,6 +1477,10 @@
     if (next.length > 64) return setPwStatus('新密码不能超过 64 位', true)
     if (next !== confirm) return setPwStatus('两次输入的新密码不一致', true)
     if (next === current) return setPwStatus('新密码不能与当前密码相同', true)
+    // 改密会让所有会话失效并刷新页面：先逼运营处理未保存内容，避免草稿被静默丢弃
+    if (state.dirty) {
+      return setPwStatus('有未保存的配置修改：请先保存或刷新后再改密', true)
+    }
 
     button.disabled = true
     setPwStatus('')
@@ -1466,31 +1595,44 @@
 
   /* ---------- 上传 ---------- */
 
-  function uploadAudio(file) {
-    if ($$('.audio-row', audioList).length >= 10) {
-      toast('最多 10 条环境音', true)
+  // 上传任务的统一状态：同一时间只允许一个上传。
+  // 原先三个上传入口各自维护进度节点，任一请求结束都会隐藏同一个进度条，
+  // 并发上传还会越过条数上限，最后被服务端整份拒绝。
+  let uploadTask = null
+
+  /**
+   * 统一的上传实现：超时、401、错误提示都收在这里。
+   * @param url 上传地址
+   * @param formData 表单数据
+   * @param options { status, label, timeout, onSuccess }
+   */
+  function uploadFile(url, formData, options) {
+    const opts = options || {}
+    if (uploadTask) {
+      toast('已有上传在进行，请等它结束后再试', true)
       return
     }
-    if (!state.storage || !state.storage.configured) {
-      toast('先在下方配置 COS 存储', true)
-      return
+    uploadTask = { label: opts.label || '文件' }
+
+    const status = opts.status
+    if (status) {
+      status.hidden = false
+      status.textContent = '上传中 0%'
     }
 
-    const status = $('#upload-status')
-    status.hidden = false
-    status.textContent = '上传中 0%'
-
-    const data = new FormData()
-    data.append('file', file)
-    data.append('title', file.name.replace(/\.[^.]+$/, '').slice(0, 30))
-    data.append('category', '环境音')
+    const finish = function () {
+      uploadTask = null
+      if (status) status.hidden = true
+    }
 
     const xhr = new XMLHttpRequest()
-    xhr.open('POST', '/api/admin/audio/upload')
+    xhr.open('POST', url)
     xhr.withCredentials = true
+    // 没有超时的上传在弱网下会一直挂着，运营无法判断是否失败
+    xhr.timeout = opts.timeout || 120000
 
     xhr.upload.onprogress = function (event) {
-      if (!event.lengthComputable) return
+      if (!event.lengthComputable || !status) return
       status.textContent = '上传中 ' + Math.round((event.loaded / event.total) * 100) + '%'
     }
 
@@ -1501,15 +1643,60 @@
       } catch (e) {
         body = null
       }
-
-      status.hidden = true
+      finish()
 
       if (xhr.status === 401) {
-        showLogin('登录已过期，请重新登录')
+        // 会话失效要保留草稿，不能直接清空页面
+        handleUnauthenticated('登录已过期，请重新登录')
         return
       }
 
       if (xhr.status >= 200 && xhr.status < 300 && body) {
+        if (opts.onSuccess) opts.onSuccess(body)
+        return
+      }
+
+      const message =
+        body && body.error && body.error.message ? body.error.message : '上传失败（' + xhr.status + '）'
+      toast(message, true)
+    }
+
+    xhr.ontimeout = function () {
+      finish()
+      toast('上传超时，请检查网络后重试', true)
+    }
+
+    xhr.onerror = function () {
+      finish()
+      toast('上传失败，请检查网络', true)
+    }
+
+    xhr.onabort = function () {
+      finish()
+    }
+
+    xhr.send(formData)
+  }
+
+  function uploadAudio(file) {
+    if ($$('.audio-row', audioList).length >= 10) {
+      toast('最多 10 条环境音', true)
+      return
+    }
+    if (!state.storage || !state.storage.configured) {
+      toast('先在下方配置 COS 存储', true)
+      return
+    }
+
+    const data = new FormData()
+    data.append('file', file)
+    data.append('title', file.name.replace(/\.[^.]+$/, '').slice(0, 30))
+    data.append('category', '环境音')
+
+    uploadFile('/api/admin/audio/upload', data, {
+      status: $('#upload-status'),
+      label: '环境音',
+      onSuccess: function (body) {
         audioList.appendChild(
           buildRow(
             {
@@ -1529,20 +1716,8 @@
         setDirty(true)
         updateJson()
         toast('上传完成，记得点“保存并生效”')
-        return
       }
-
-      const message =
-        body && body.error && body.error.message ? body.error.message : '上传失败（' + xhr.status + '）'
-      toast(message, true)
-    }
-
-    xhr.onerror = function () {
-      status.hidden = true
-      toast('上传失败，请检查网络', true)
-    }
-
-    xhr.send(data)
+    })
   }
 
   function readImage(file) {
@@ -1663,36 +1838,18 @@
   function uploadBackgroundFile(prepared, status) {
     const file = prepared.file
     const fileName = prepared.fileName || file.name || 'background.webp'
-    status.textContent = '上传中 0%'
 
     const data = new FormData()
     data.append('file', file, fileName)
 
-    const xhr = new XMLHttpRequest()
-    xhr.open('POST', '/api/admin/backgrounds/upload')
-    xhr.withCredentials = true
-
-    xhr.upload.onprogress = function (event) {
-      if (!event.lengthComputable) return
-      status.textContent = '上传中 ' + Math.round((event.loaded / event.total) * 100) + '%'
-    }
-
-    xhr.onload = function () {
-      let body = null
-      try {
-        body = JSON.parse(xhr.responseText)
-      } catch (e) {
-        body = null
-      }
-
-      status.hidden = true
-
-      if (xhr.status === 401) {
-        showLogin('登录已过期，请重新登录')
-        return
-      }
-
-      if (xhr.status >= 200 && xhr.status < 300 && body && body.url) {
+    uploadFile('/api/admin/backgrounds/upload', data, {
+      status,
+      label: '背景图',
+      onSuccess: function (body) {
+        if (!body.url) {
+          toast('上传失败（返回内容不完整）', true)
+          return
+        }
         const name = String(prepared.displayName || fileName).replace(/\.[^.]+$/, '').slice(0, 30)
         bgList.appendChild(
           buildBgRow(
@@ -1719,20 +1876,8 @@
             ? '已按原图上传'
             : '上传完成'
         toast(prefix + '，记得点“保存并生效”')
-        return
       }
-
-      const message =
-        body && body.error && body.error.message ? body.error.message : '上传失败（' + xhr.status + '）'
-      toast(message, true)
-    }
-
-    xhr.onerror = function () {
-      status.hidden = true
-      toast('上传失败，请检查网络', true)
-    }
-
-    xhr.send(data)
+    })
   }
 
   /* ---------- 落地页小程序码 ---------- */
@@ -1758,70 +1903,68 @@
       return
     }
 
-    const status = $('#qr-upload-status')
-    status.hidden = false
-    status.textContent = '上传中 0%'
-
     const data = new FormData()
     data.append('file', file, file.name || 'qrcode.png')
 
-    const xhr = new XMLHttpRequest()
-    xhr.open('POST', '/api/admin/site/qrcode')
-    xhr.withCredentials = true
-
-    xhr.upload.onprogress = function (event) {
-      if (!event.lengthComputable) return
-      status.textContent = '上传中 ' + Math.round((event.loaded / event.total) * 100) + '%'
-    }
-
-    xhr.onload = function () {
-      let body = null
-      try {
-        body = JSON.parse(xhr.responseText)
-      } catch (e) {
-        body = null
-      }
-
-      status.hidden = true
-
-      if (xhr.status === 401) {
-        showLogin('登录已过期，请重新登录')
-        return
-      }
-
-      if (xhr.status >= 200 && xhr.status < 300 && body && body.url) {
+    uploadFile('/api/admin/site/qrcode', data, {
+      status: $('#qr-upload-status'),
+      label: '小程序码',
+      onSuccess: function (body) {
+        if (!body.url) {
+          toast('上传失败（返回内容不完整）', true)
+          return
+        }
         applyQrUrl(body.url)
         setDirty(true)
         updateJson()
         toast('上传完成，记得点“保存并生效”')
-        return
       }
-
-      const message =
-        body && body.error && body.error.message ? body.error.message : '上传失败（' + xhr.status + '）'
-      toast(message, true)
-    }
-
-    xhr.onerror = function () {
-      status.hidden = true
-      toast('上传失败，请检查网络', true)
-    }
-
-    xhr.send(data)
+    })
   }
 
   /* ---------- 数据加载 ---------- */
 
-  async function loadAll() {
-    const data = await api('/api/admin/config')
+  /**
+   * 读取服务端当前生效配置（只取数，不碰页面）。
+   * 与 applyConfig 分离是本轮的关键：以前 loadAll 同时做「取数 + 销毁式重渲染」，
+   * 于是 401 恢复、409 冲突重载都会顺手覆盖运营正在编辑的草稿。
+   */
+  async function fetchEffectiveConfig() {
+    return api('/api/admin/config')
+  }
+
+  /** 用服务端版本重绘表单（明确销毁草稿的操作） */
+  function applyConfig(data) {
     state.config = data.config
     state.meta = {
       source: data.source,
       updatedAt: data.updatedAt,
+      revision: data.revision || 0,
       storage: data.storage
     }
     render()
-    showApp()
+  }
+
+  /**
+   * @param options { keepDraft } 保留当前表单内容，只刷新基线（重新登录后继续用）
+   */
+  async function loadAll(options) {
+    const opts = options || {}
+    const data = await fetchEffectiveConfig()
+    if (opts.keepDraft) {
+      // 只更新基线：不重渲染，草稿留在页面上
+      state.meta = {
+        source: data.source,
+        updatedAt: data.updatedAt,
+        revision: data.revision || 0,
+        storage: data.storage
+      }
+      state.config = data.config
+      showApp()
+    } else {
+      applyConfig(data)
+      showApp()
+    }
 
     loadAnalytics().catch(function (error) {
       // 不能静默留“–”：DB 异常时运营会把“加载失败”看成“今天 0 用户”。
@@ -1870,8 +2013,16 @@
         method: 'POST',
         body: { password: $('#password').value }
       })
-      await loadAll()
-      toast('已登录')
+      if (state.dirty) {
+        // 会话过期后重新登录：草稿必须留下，只刷新基线，不能顺手重渲染覆盖
+        await loadAll({ keepDraft: true })
+        state.reauth = false
+        toast('已重新登录，未保存的修改仍在页面上')
+      } else {
+        await loadAll()
+        state.reauth = false
+        toast('已登录')
+      }
     } catch (e) {
       error.textContent = e.message || '登录失败'
       error.hidden = false
@@ -1881,6 +2032,8 @@
   })
 
   $('#logout').addEventListener('click', async function () {
+    // 有未保存内容时先确认：退出会清空草稿（会话失效走的是另一条路径，会保留）
+    if (state.dirty && !window.confirm('有未保存的修改，退出会丢弃这些修改，继续？')) return
     try {
       await api('/api/admin/logout', { method: 'POST' })
     } catch (e) {
@@ -1964,6 +2117,11 @@
     if (file) uploadQrCode(file)
   })
 
+  $('#site-qr-url').addEventListener('input', function (event) {
+    // 手改小程序码地址时预览同步更新（此前只有上传/清除会刷新预览）
+    applyQrUrl(event.target.value.trim())
+  })
+
   $('#site-qr-clear').addEventListener('click', function () {
     // 与删除音频/用户同一套确认口径：清除后落地页会立刻失去扫码入口
     if (
@@ -1979,6 +2137,23 @@
     toast('已清除，保存后落地页回退为搜索提示')
   })
 
+  bgList.addEventListener('input', function (event) {
+    // 手改地址时预览要跟着变：否则运营看到的是旧图，以为没生效
+    if (!event.target.classList || !event.target.classList.contains('bg-url')) return
+    const row = event.target.closest('.bg-row')
+    if (!row) return
+    const preview = row.querySelector('.bg-preview')
+    if (!preview) return
+    const url = event.target.value.trim()
+    if (url) {
+      preview.src = url
+      preview.hidden = false
+    } else {
+      preview.removeAttribute('src')
+      preview.hidden = true
+    }
+  })
+
   bgList.addEventListener('click', function (event) {
     const button = event.target.closest('button')
     if (!button) return
@@ -1990,13 +2165,20 @@
         row.dataset.confirm = '1'
         button.classList.add('confirming')
         button.textContent = '确认'
-        clearTimeout(bgConfirmTimer)
-        bgConfirmTimer = setTimeout(function () {
+        // 计时器按行保存：共用一个全局计时器时，点第二行会清掉第一行的计时器，
+        // 第一行就永久停在「确认」态
+        if (row._confirmTimer) clearTimeout(row._confirmTimer)
+        row._confirmTimer = setTimeout(function () {
+          row._confirmTimer = null
           row.dataset.confirm = ''
           button.classList.remove('confirming')
           button.textContent = '✕'
         }, 3000)
         return
+      }
+      if (row._confirmTimer) {
+        clearTimeout(row._confirmTimer)
+        row._confirmTimer = null
       }
       row.remove()
       $('#bg-empty').hidden = $$('.bg-row', bgList).length > 0
@@ -2042,7 +2224,10 @@
         return
       }
 
-      if (state.preview && state.preview.button === button) stopPreview()
+      // 删除正在试听的行：必须停掉对应音频。
+      // 旧判断比较的是删除按钮与试听按钮（两个不同元素），条件永远不成立，
+      // 结果行没了音频还在放。
+      if (state.preview && state.preview.rowId === (row.dataset.id || '')) stopPreview()
       row.remove()
       renumber()
       resetConfirm()
@@ -2091,69 +2276,123 @@
     updateJson()
   })
 
-  form.addEventListener('submit', async function (event) {
-    event.preventDefault()
+  /** 所有会提交配置表单的按钮：保存期间必须一起禁用，否则可重复提交 */
+  function configSubmitButtons() {
+    return $$('button[type="submit"][form="config-form"]')
+  }
+
+  /**
+   * 并发冲突处理：不覆盖运营的草稿。
+   * 旧实现直接 loadAll() 重载，运营正在编辑的内容会被无声覆盖。
+   */
+  async function handleSaveConflict() {
+    let latest = null
+    try {
+      latest = await fetchEffectiveConfig()
+    } catch (e) {
+      latest = null
+    }
+    if (!latest) {
+      toast('配置已被其他管理员更新（你的修改仍在页面上）。请稍后刷新后重试', true)
+      return false
+    }
+    const overwrite = window.confirm(
+      '配置已被其他管理员更新（当前版本 ' + (latest.revision || 0) + '）。\n' +
+        '你的修改仍保留在页面上，没有被覆盖。\n\n' +
+        '点「确定」：以最新版本为基线，用当前页面的内容覆盖保存（会丢弃对方刚才的改动）\n' +
+        '点「取消」：保留你的修改，稍后手动刷新查看最新版本'
+    )
+    if (!overwrite) {
+      toast('已保留你的修改；刷新后可查看最新版本', true)
+      return false
+    }
+    state.meta.revision = latest.revision || 0
+    state.meta.updatedAt = latest.updatedAt || 0
+    return true
+  }
+
+  async function submitConfig() {
+    // single-flight：保存期间重复提交直接拒绝，避免出现两个 PUT
+    if (state.saving) {
+      toast('正在保存，请稍候', true)
+      return false
+    }
 
     resetConfirm()
     if (state.preview) stopPreview()
 
     const payload = collect()
-    // 乐观并发：带上载入时的 updatedAt。服务端发现已被别人改过会返 409，
-    // 而不是用这份全量表单静默覆盖对方刚保存的环境音/背景图/文案。
+    // 并发基线：revision 是单调递增的发布版本，服务端用它做原子 CAS；
+    // updatedAt 只为兼容旧后台保留。
+    payload.baseRevision = (state.meta && state.meta.revision) || 0
     payload.baseUpdatedAt = (state.meta && state.meta.updatedAt) || 0
     const problem = validatePayload(payload)
     if (problem) {
       toast(problem, true)
-      return
+      return false
     }
 
-    // 背景图面板用 form 的另一个提交按钮（#bg-save）；只禁用 #save 会留下可重复点击的入口
-    const buttons = [$('#save')]
-    if (event.submitter && buttons.indexOf(event.submitter) === -1) {
-      buttons.push(event.submitter)
-    }
+    // 记录提交时的草稿修订号：响应回来后据此判断用户是否又改过内容
+    const submittedRevision = state.draftRevision
+    const buttons = configSubmitButtons()
+    const labels = buttons.map(function (btn) {
+      return btn.textContent
+    })
+    let pendingResave = false
+    state.saving = true
     buttons.forEach(function (btn) {
-      btn.dataset.label = btn.textContent
       btn.disabled = true
       btn.textContent = '保存中…'
     })
 
-    let saveFailed = false
     try {
       const data = await api('/api/admin/config', { method: 'PUT', body: payload })
       state.config = data.config
       state.meta = {
         source: data.source,
         updatedAt: data.updatedAt,
+        revision: data.revision || 0,
         storage: data.storage
       }
-      render()
-      toast('已保存，重新打开小程序即可生效')
-      loadAnalytics().catch(function (error) {
-        toast('看板加载失败：' + ((error && error.message) || '请稍后重试'), true)
-      })
+      if (state.draftRevision === submittedRevision) {
+        // 保存期间没有新的编辑：可以整体重绘，脏状态清除
+        render()
+        setDirty(false)
+        toast('已保存，重新打开小程序即可生效')
+      } else {
+        // 保存期间又改了内容：只更新基线，绝不覆盖新草稿
+        setDirty(true)
+        toast('已保存提交时的内容；你之后的修改还没保存，请再点一次保存', true)
+      }
+      loadAnalytics().catch(function () {})
+      return true
     } catch (e) {
-      saveFailed = true
-      // 409 = 别人刚保存过：继续在旧表单上重试只会连续失败，自动载入最新版本
-      const conflict = e && (e.status === 409 || e.code === 'CONFLICT')
+      const conflict = e && (e.status === 409 || e.code === 'CONFIG_CONFLICT')
       if (conflict) {
-        toast('配置已被他人修改，正在载入最新版本，请确认后重试', true)
-        try {
-          await loadAll()
-        } catch (reloadError) {
-          toast('载入最新配置失败：' + ((reloadError && reloadError.message) || '请刷新页面'), true)
-        }
+        pendingResave = await handleSaveConflict()
       } else {
         toast(e.message || '保存失败', true)
       }
+      return false
     } finally {
-      // 失败态留在按钮上（2.8s 的 toast 消失后用户仍能看到“失败了、可重试”）
-      buttons.forEach(function (btn) {
+      state.saving = false
+      // 按钮文案回到提交前的原文：旧实现把“保存失败 · 重试”当成原文存下来，
+      // 失败一次之后再成功，按钮仍显示失败文案。
+      buttons.forEach(function (btn, index) {
         btn.disabled = false
-        btn.textContent = saveFailed ? '保存失败 · 重试' : btn.dataset.label || '保存并生效'
-        btn.classList.toggle('save-failed', saveFailed)
+        btn.textContent = labels[index] || '保存并生效'
+        btn.classList.remove('save-failed')
       })
+      if (pendingResave) {
+        pendingResave = false
+        submitConfig()
+      }
     }
+  }
+
+  form.addEventListener('submit', function (event) {
+    event.preventDefault()
+    submitConfig()
   })
 
   $('#audit-refresh').addEventListener('click', function () {
@@ -2173,10 +2412,15 @@
   $('#user-query').addEventListener('click', queryUser)
   $('#user-delete').addEventListener('click', deleteUser)
   $('#user-openid').addEventListener('input', function () {
-    // 改过 openid 后，删除按钮必须重新查询才能再启用，避免误删另一用户
+    // 改过 openid 后，删除按钮必须重新查询才能再启用，避免误删另一用户；
+    // 同时把上一个用户的结果收起来：否则旧记录会显示在新 openid 下面。
     state.queriedOpenid = ''
     state.userHasData = false
     $('#user-delete').disabled = true
+    const result = $('#user-result')
+    if (result) result.hidden = true
+    const message = $('#user-msg')
+    if (message) message.textContent = ''
   })
   $('#user-openid').addEventListener('keydown', function (event) {
     if (event.key === 'Enter') {

@@ -54,12 +54,16 @@ function createAdminAuth(options) {
   const envPassword = String(options.password || '')
   const secret = String(options.secret || envPassword)
   const secure = !!options.secureCookie
+  // 凭据「读取失败」与「凭据不存在」必须区别对待：
+  // 读取失败时若回退 env 密码，改过密后旧密码会重新可用（永久后门）。
+  // 因此读取失败一律 fail-closed：后台登录返回 503，C 端不受影响。
+  const disabled = !!options.disabled
   let credentials =
     options.credentials && options.credentials.hash && options.credentials.salt
       ? options.credentials
       : null
 
-  if (!credentials && !envPassword) throw new Error('后台密码未配置')
+  if (!disabled && !credentials && !envPassword) throw new Error('后台密码未配置')
 
   const envHash = sha256(envPassword)
 
@@ -122,6 +126,8 @@ function createAdminAuth(options) {
   }
 
   function checkPassword(input) {
+    // fail-closed：凭据读取失败时任何密码都不接受
+    if (disabled) return false
     if (typeof input !== 'string' || !input) return false
     if (credentials) return verifyCredential(input, credentials)
     return crypto.timingSafeEqual(sha256(input), envHash)
@@ -172,6 +178,12 @@ function createAdminAuth(options) {
   }
 
   function requireAuth(req, res, next) {
+    if (disabled) {
+      res.status(503).json({
+        error: { code: 'ADMIN_AUTH_UNAVAILABLE', message: '后台登录暂不可用：凭据读取失败' }
+      })
+      return
+    }
     if (!isAuthenticated(req)) {
       res.status(401).json({ error: { code: 'UNAUTHORIZED', message: '请先登录' } })
       return
@@ -195,7 +207,8 @@ function createAdminAuth(options) {
     cookieOptions,
     isAuthenticated,
     requireAuth,
-    clearCookie
+    clearCookie,
+    disabled
   }
 }
 

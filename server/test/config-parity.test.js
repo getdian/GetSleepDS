@@ -33,12 +33,34 @@ function assertNoMissing(from, to, label) {
   assert.deepEqual(lack, [], label + ' 缺字段：' + lack.join(', '))
 }
 
+/**
+ * 反向断言：to 里的每个键都能在 from 里找到（豁免清单除外）。
+ * 原先只有正向断言（客户端 ⊆ 服务端），方向写反了：
+ * 服务端新增字段而客户端没加时，测试照样通过 —— 「只写不读」就是这么漏出去的。
+ */
+function assertCovers(from, to, label, exempt) {
+  const skip = exempt || []
+  const lack = keysOf(to).filter(
+    (key) => !Object.prototype.hasOwnProperty.call(from || {}, key) && skip.indexOf(key) < 0
+  )
+  assert.deepEqual(lack, [], label + ' 缺字段：' + lack.join(', '))
+}
+
+/**
+ * 明确豁免：这些配置只服务后台/国际站落地页，小程序运行时不需要。
+ * 写进清单而不是让它悄悄不一致 —— 以后要下发到小程序时从清单里删掉即可。
+ */
+const CLIENT_EXEMPT_KEYS = ['site']
+
 test('文件配置的每个顶层键都必须出现在 normalizeConfig 输出里', () => {
   // web 段曾在这里失败：app.config.json 有 web，normalizeConfig 不返回 → 只写不读
   assertNoMissing(fileConfig, normalized, 'normalizeConfig')
 })
 
 test('客户端 fallback 的键不得落后于服务端归一化结果', () => {
+  // 反向：服务端有、客户端没有 = 客户端会漏读这个字段（豁免清单除外）
+  assertCovers(clientFallback, normalized, 'miniprogram/config/fallback.js', CLIENT_EXEMPT_KEYS)
+  // 正向：客户端不得出现服务端不认识的字段（否则是写错的死字段）
   assertNoMissing(clientFallback, normalized, 'miniprogram/config/fallback.js')
 })
 
@@ -83,4 +105,12 @@ test('比较器自己能抓到漂移（避免测试永远为真）', () => {
   delete drifted.web
   assert.throws(() => assertNoMissing(fileConfig, drifted, 'normalizeConfig'), /缺字段/)
   assert.throws(() => assertNoMissing(clientFallback, drifted, 'fallback'), /缺字段/)
+
+  // 反向比较器也要能抓到「服务端新增字段、客户端没跟」
+  const missingOnClient = Object.assign({}, normalized)
+  missingOnClient.newFeature = { on: true }
+  assert.throws(
+    () => assertCovers(clientFallback, missingOnClient, 'fallback', CLIENT_EXEMPT_KEYS),
+    /缺字段/
+  )
 })

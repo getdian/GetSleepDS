@@ -185,7 +185,7 @@
         <div class="panel-head">
           <div>
             <h2>音频解锁观测</h2>
-            <p class="hint">成功来自 audio_unlock，失败来自 audio_unlock_fail；加载失败率 =（error + unavailable）/（成功 + error + unavailable），不把用户主动关掉视频或广告忙碌算作填充失败。</p>
+            <p class="hint">成功来自 audio_unlock，失败来自 audio_unlock_fail；加载失败率 =（error + unavailable）/（成功 + error + unavailable），不把用户主动关掉视频或广告忙碌算作填充失败。三项均为本周口径。</p>
           </div>
         </div>
         <section class="stats ad-stats">
@@ -241,11 +241,11 @@
             </div>
             <div class="panel-actions">
               <label class="ghost file-label" for="audio-file">上传音频</label>
-              <input id="audio-file" type="file" accept="audio/mpeg,audio/mp4,audio/aac,audio/wav,audio/ogg" hidden>
+              <input id="audio-file" class="file-input" type="file" accept="audio/mpeg,audio/mp4,audio/aac,audio/wav,audio/ogg">
               <button type="button" id="add-audio" class="ghost">+ 添加</button>
             </div>
           </div>
-          <p id="upload-status" class="hint" hidden></p>
+          <p id="upload-status" class="hint" role="status" aria-live="polite" hidden></p>
           <div id="audio-list" class="audio-list"></div>
           <p id="audio-empty" class="empty" hidden>还没有环境音，点右上角添加或上传。</p>
         </section>
@@ -259,11 +259,11 @@
             <div class="panel-actions">
               <button type="submit" form="config-form" class="primary" id="bg-save">保存并生效</button>
               <label class="ghost file-label" for="bg-file">上传背景图</label>
-              <input id="bg-file" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+              <input id="bg-file" class="file-input" type="file" accept="image/jpeg,image/png,image/webp">
               <button type="button" id="add-bg" class="ghost">+ 添加</button>
             </div>
           </div>
-          <p id="bg-upload-status" class="hint" hidden></p>
+          <p id="bg-upload-status" class="hint" role="status" aria-live="polite" hidden></p>
           <div class="grid">
             <label class="field">
               <span>默认背景（免费）</span>
@@ -446,10 +446,10 @@
             <div class="panel-actions">
               <button type="submit" form="config-form" class="primary">保存并生效</button>
               <label class="ghost file-label" for="qr-file">上传小程序码</label>
-              <input id="qr-file" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+              <input id="qr-file" class="file-input" type="file" accept="image/jpeg,image/png,image/webp">
             </div>
           </div>
-          <p id="qr-upload-status" class="hint" hidden></p>
+          <p id="qr-upload-status" class="hint" role="status" aria-live="polite" hidden></p>
           <div class="qr-editor">
             <div class="qr-thumb">
               <img id="site-qr-preview" alt="小程序码预览" hidden>
@@ -520,7 +520,7 @@
         <div class="panel-head">
           <div>
             <h2>用户记录</h2>
-            <p class="hint">按 openid 精确查询、导出核对或删除该用户的云端数据（睡眠记录 / 解锁 / 事件）。删除会写入全量清除水位：用户下次同步时，本机旧睡眠记录也会被清除，且不可恢复。即使当前没有云端数据，删除也会写入水位，用于拦截该用户以后上传的旧记录。</p>
+            <p class="hint">按 openid 精确查询、删除该用户的云端数据（睡眠记录 / 解锁 / 收藏 / 背景使用 / 事件 / 订阅提醒 / 用户反馈）。删除会写入全量清除水位：用户下次同步时，本机旧睡眠记录也会被清除，且不可恢复；删除前已在途的请求不会把数据写回。即使当前没有云端数据，删除也会写入水位，用于拦截该用户以后上传的旧记录。</p>
           </div>
           <span class="badge">客服 / 合规</span>
         </div>
@@ -620,7 +620,7 @@
       </div>
     </main>
 
-    <div id="toast" class="toast" hidden></div>
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
   </div>
 
   <template id="audio-row">

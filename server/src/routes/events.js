@@ -24,6 +24,8 @@ const TYPES = [
 ]
 const MAX_EVENTS = 20
 const MAX_AGE = 7 * 24 * 60 * 60 * 1000
+// 未来时间戳只容忍 10 分钟：过大的未来时间会被删除水位判定绕过（清除后仍可写回）
+const MAX_FUTURE = 10 * 60 * 1000
 
 function createEventsRoute(options) {
   const { config, db, codeToOpenid, limitIp, now, store } = options
@@ -58,11 +60,14 @@ function createEventsRoute(options) {
           return
         }
         const ts = Number(item.ts) || current
-        if (Math.abs(ts - current) > MAX_AGE) {
+        if (ts < current - MAX_AGE || ts > current + MAX_FUTURE) {
           dropped += 1
           return
         }
         events.push({
+          // 客户端自带事件 id：网络重试（服务端已提交但响应丢失）时按 (openid, event_id)
+          // 去重，避免播放/打卡/分享等计数被重复放大。旧客户端没有 id 时留空。
+          id: typeof item.id === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(item.id) ? item.id : '',
           type: item.type,
           target: typeof item.target === 'string' ? item.target.slice(0, 64) : '',
           ts
@@ -75,7 +80,7 @@ function createEventsRoute(options) {
 
       try {
         // 由 DB 在同一事务/锁内重新读取 erasure 水位，避免删除后旧事件被写回。
-        const accepted = await db.insertEvents(openid, events)
+        const accepted = await db.insertEvents(openid, events, current)
         res.json({ accepted, dropped })
       } catch (e) {
         if (e && e.status) throw e

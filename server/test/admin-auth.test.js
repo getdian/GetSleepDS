@@ -48,3 +48,32 @@ test('配置了独立 ADMIN_SECRET 时，旧密码本来就不是签名密钥', 
   assert.equal(auth.verify(forge('independent-secret', 2, exp)), false, '凭据派生后根密钥也不能直接签')
   assert.equal(auth.verify(auth.issue()), true)
 })
+
+test('凭据读取失败时 fail-closed：env 密码不能登录（改密后旧密码不得复活）', () => {
+  const auth = createAdminAuth({ password: 'old-password-123', disabled: true })
+  assert.equal(auth.disabled, true)
+  assert.equal(auth.checkPassword('old-password-123'), false)
+  assert.equal(auth.checkPassword('anything'), false)
+})
+
+test('凭据读取失败时受保护接口返回 503，而不是「请先登录」', () => {
+  const auth = createAdminAuth({ password: 'old-password-123', disabled: true })
+  const res = {
+    statusCode: 0,
+    body: null,
+    status(code) {
+      this.statusCode = code
+      return this
+    },
+    json(payload) {
+      this.body = payload
+    }
+  }
+  let passed = false
+  auth.requireAuth({ headers: {} }, res, () => {
+    passed = true
+  })
+  assert.equal(passed, false)
+  assert.equal(res.statusCode, 503)
+  assert.equal(res.body.error.code, 'ADMIN_AUTH_UNAVAILABLE')
+})

@@ -43,6 +43,10 @@ function createRecordsRoute(options) {
     wrap(async (req, res) => {
       if (!limitIp(req.ip || 'unknown')) throw rateLimited()
 
+      // 请求开始时间必须在任何 await 之前取：全量清除与在途同步交错时，
+      // 服务端用“请求是否早于清除水位”判定，而不是继续信任客户端时间戳。
+      const requestStartedAt = now()
+
       // 服务端总闸：运营在后台关闭云端备份后，任何客户端都不能再写入
       // 注意 /records/erase 不受此限制（合规删除通道必须始终可用）
       if (store) {
@@ -72,8 +76,9 @@ function createRecordsRoute(options) {
       }
       let result = null
       try {
-        result = await db.syncRecords(openid, parsed.records, deletedDays, current)
+        result = await db.syncRecords(openid, parsed.records, deletedDays, current, requestStartedAt)
       } catch (e) {
+        if (e && e.status) throw e
         log.error('[db] records sync failed:', req.id || '', e.message)
         throw dbUnavailable()
       }
@@ -132,6 +137,10 @@ function createRecordsRoute(options) {
         deleted: result.records,
         deletedUnlocks: result.unlocks,
         deletedEvents: result.events,
+        deletedReminders: result.reminders,
+        deletedFeedback: result.feedback,
+        deletedFavorites: result.favorites,
+        deletedBackgroundUses: result.backgroundUses,
         erasedAt: result.erasedAt,
         serverTime: current
       })

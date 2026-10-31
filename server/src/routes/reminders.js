@@ -33,6 +33,8 @@ function createRemindersRoute(options) {
     '/reminders',
     wrap(async (req, res) => {
       if (limitIp && !limitIp(req.ip || 'unknown')) throw rateLimited()
+      // 请求开始时间必须在换取 openid 之前取：全量清除与在途提醒写入交错时按代际判定
+      const requestStartedAt = now()
       const body = req.body || {}
       const code = body.code
       if (!code) throw invalidBody('缺少 code')
@@ -78,8 +80,9 @@ function createRemindersRoute(options) {
           // 模板字段名快照：换模板后已排队任务仍能按原字段发送
           thingKey: reminderConfig.thingKey,
           timeKey: reminderConfig.timeKey
-        })
+        }, requestStartedAt)
       } catch (e) {
+        if (e && e.status) throw e
         log.error('[db] reminder save failed:', req.id || '', e.message)
         throw dbUnavailable()
       }

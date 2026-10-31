@@ -20,8 +20,8 @@
 ## 2. 门禁（提交前必须跑，数字如实转述）
 
 ```bash
-npm test          # 2026-10-27 基线：435 项 / 434 通过 / 0 失败 / 1 skip（PG 用例无 PG_TEST_URL 时 skip）
-npm run check     # 3 页面 / 22 JSON / 17 WXML / 19 WXSS，主包约 679.6 KB
+npm test          # 2026-10-31 基线：547 项 / 545 通过 / 0 失败 / 2 skip（PG 用例无 PG_TEST_URL 时 skip）
+npm run check     # 3 页面 / 22 JSON / 17 WXML / 19 WXSS，主包约 760.8 KB
 ```
 
 - 数字会随改动变化：**以本次输出为准**，不要照抄历史数字宣称通过。
@@ -55,7 +55,7 @@ npm run check     # 3 页面 / 22 JSON / 17 WXML / 19 WXSS，主包约 679.6 KB
 1. **会话只有一个写入口**：`lastTrackActive=false` 只允许 `miniprogram/utils/audio-session.js` 的 `markStopped()` 写（用户停止 / 定时到点 / 权益到期 / 清除数据）。外部中断、系统 `stop`、播放错误、`src` 被清空一律只改 `lastTrackPlaying`。
 2. **可见性**：迷你条/音符 = 会话存活 **或** 仍在出声；只有业务终止才隐藏。冷启动残影（无 `src` + 本进程未起播 + 未出声）才允许清会话。
 3. **中断恢复**：必须注册 `wx.onAudioInterruptionBegin/End` + `App.onHide/onShow` 补偿；只有“小程序内主动暂停/停止”能阻止自动恢复；续播要处理 `src` 被清空（按 `lastTrackId` 重建）与曲末 `seek(0)`。
-4. **循环**：不得只依赖 `onTimeUpdate`（官方口径：仅小程序在前台才回调）；`player-state.armLoop` 定时器兜底曲末回环（tail 1.2s），`claimLoop`/`claimEnded` 保证同一轮只有一个组件 `seek`/重播。
+4. **循环与切歌**：不得只依赖 `onTimeUpdate`（官方口径：仅小程序在前台才回调）；`player-state.armLoop` 定时器兜底曲末动作——**单曲循环**在 tail 1.2s 处 `seek(0)`，**列表循环**在 0.8s 处换下一首（必须早于 `ended`，否则重设 `src` 会丢微信浮窗）；`claimLoop`/`claimEnded` 保证同一轮只有一个组件处理。自动切歌走 `play(next, { auto: true })`，不得重置 10 秒 8 次的重播预算；播放模式切换后必须立即 `player.refreshTail()` 重排定时器。
 5. **用户操作**：UI 停止必须 3 秒内二次点按确认；暂停/停止要清回环定时器；用户暂停后迟到的 `play` 不得抹掉暂停意图（800ms 宽限）。
 6. **错误与坏源**：仍在出声时不得清会话、不得删缓存；坏源黑名单只在 `audio-cache`（`markBad/isBad/clearBad`），`peek` 跳过、重下成功解禁；自动重播 10 秒内最多 8 次。
 7. **可观测**：中断上报 `audio_interrupt`（`begin|trackId` / `end|<秒>s|resume|skip`）；新增事件类型必须同步 `server/src/routes/events.js` 白名单与 `analytics`。

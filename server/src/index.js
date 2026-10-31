@@ -46,17 +46,22 @@ const CLEANUP_INTERVAL = 6 * 60 * 60 * 1000
 async function main() {
   const config = loadConfig(process.env)
   const db = await createDb({ mode: config.dbMode, url: config.databaseUrl })
-  // 后台密码改过之后以库为准（env 只在首次引导时生效）；启动时读一次，改密在进程内热更新。
-  // 库读失败不能阻断启动：回退到 env 密码（即改动前的行为），并打印告警。
+  // 后台密码改过之后以库为准（env 只在首次引导时生效）。
+  // 关键：读失败与「没有凭据」是两种情况 ——
+  // 读失败时绝不能回退 env 密码（改密后旧密码会重新可用），必须 fail-closed。
   let adminCredentials = null
+  let adminAuthDisabled = false
   try {
     // db.getSetting 统一返回 { value, updatedAt }（memory / PG 同形），必须取 value
     const stored = await db.getSetting('admin_credentials')
     adminCredentials = stored && stored.value ? stored.value : null
   } catch (e) {
-    console.warn('[admin] 读取数据库密码凭据失败，暂用环境变量密码：' + e.message)
+    adminAuthDisabled = true
+    console.error(
+      '[admin] 读取数据库密码凭据失败，后台登录已关闭（不回退环境变量密码）：' + e.message
+    )
   }
-  const app = createApp({ config, db, adminCredentials })
+  const app = createApp({ config, db, adminCredentials, adminAuthDisabled })
 
   const server = app.listen(config.port, () => {
     console.log(
